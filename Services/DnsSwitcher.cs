@@ -13,6 +13,39 @@ public static class DnsSwitcher
     private const string BackupFile = "dns-backup.json";
     private const string ActiveFile = "active.json";
 
+    /// <summary>
+    /// Сбрасывает открытые HTTPS-соединения приложений ИИ (Claude, ChatGPT). Без этого приложение продолжает
+    /// ходить по соединениям, открытым через прежний DNS, и не видит новую смену. Работает внутри повышенного
+    /// скрипта: SetTcpEntry требует прав администратора. Только IPv4, только процессы из списка.
+    /// </summary>
+    private const string ResetAiSockets = """
+        try {
+          Add-Type -TypeDefinition @'
+        using System;
+        using System.Runtime.InteropServices;
+        public static class DnexTcp {
+          [StructLayout(LayoutKind.Sequential)]
+          public struct MIB_TCPROW { public int state; public uint localAddr; public uint localPort; public uint remoteAddr; public uint remotePort; }
+          [DllImport("iphlpapi.dll")] public static extern int SetTcpEntry(ref MIB_TCPROW row);
+        }
+        '@
+          $procs = @('claude', 'ChatGPT')
+          foreach ($c in Get-NetTCPConnection -State Established -RemotePort 443 -ErrorAction SilentlyContinue) {
+            if ($c.LocalAddress -match ':' -or $c.RemoteAddress -match ':') { continue }
+            $name = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+            if ($procs -notcontains $name) { continue }
+            $row = New-Object DnexTcp+MIB_TCPROW
+            $row.state = 12  # MIB_TCP_STATE_DELETE_TCB: закрыть соединение
+            $row.localAddr = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($c.LocalAddress).GetAddressBytes(), 0)
+            $row.remoteAddr = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($c.RemoteAddress).GetAddressBytes(), 0)
+            $row.localPort = [uint32]((($c.LocalPort -band 0xFF) -shl 8) -bor ($c.LocalPort -shr 8))
+            $row.remotePort = [uint32]((($c.RemotePort -band 0xFF) -shl 8) -bor ($c.RemotePort -shr 8))
+            $rc = [DnexTcp]::SetTcpEntry([ref]$row)
+            Write-Output ("SOCKET " + $name + " -> " + $c.RemoteAddress + " код " + $rc)
+          }
+        } catch { Write-Output ("WARN сброс соединений: " + $_.Exception.Message) }
+        """;
+
     /// <summary>Сведения о текущем подключении. Файл переживает перезапуск и сбой программы,
     /// поэтому отключиться можно всегда, даже если DNEX закрылась аварийно.</summary>
     public sealed class ActiveConnection
@@ -100,6 +133,7 @@ public static class DnsSwitcher
             sb.AppendLine("} else { Write-Output 'Эта версия Windows не поддерживает DoH, используется обычный DNS' }");
         }
         sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
+        sb.AppendLine(ResetAiSockets); // приложения ИИ переподключаются уже через новый DNS
         sb.AppendLine("Clear-DnsClientCache");
 
         // Запись о подключении сохраняем ДО смены DNS: если что-то упадет посередине, отключение все равно сработает.
@@ -213,6 +247,7 @@ public static class DnsSwitcher
             Clear-DnsClientCache
             ipconfig /flushdns | Out-Null
             """);
+        sb.AppendLine(ResetAiSockets);
 
         var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
         bool left = false;
@@ -230,6 +265,28 @@ public static class DnsSwitcher
         var activePath = Storage.PathOf(ActiveFile);
         if (File.Exists(activePath)) File.Delete(activePath);
         log("Отключено: исходные настройки DNS восстановлены");
+    }
+
+    /// <summary>
+    /// Только чтение: пишет в журнал DNS каждого активного адаптера и записи DoH в Windows.
+    /// Нужно, чтобы после отключения было видно, что осталось в системе. Права администратора не нужны.
+    /// </summary>
+    public static async Task ReportStateAsync(Action<string> log)
+    {
+        try
+        {
+            var (_, output) = await RunPsAsync(
+                "foreach ($a in Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }) {\n" +
+                "  $s = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses\n" +
+                "  Write-Output ('DNS ' + $a.Name + ': ' + ($s -join ', '))\n" +
+                "}\n" +
+                "$d = @(Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue)\n" +
+                "if ($d.Count -gt 0) { foreach ($x in $d) { Write-Output ('DoH ' + $x.ServerAddress + ' ' + $x.DohTemplate) } }\n" +
+                "else { Write-Output 'DoH: записей нет' }");
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()))
+                if (line.Length > 0) log("  " + line);
+        }
+        catch (Exception ex) { log("Не удалось проверить состояние DNS: " + ex.Message); }
     }
 
     /// <summary>Работает ли интернет через системный DNS: резолвим несколько доменов, достаточно одного успеха.</summary>

@@ -14,6 +14,9 @@ public class CheckTarget
     /// <summary>Коды, по которым видно, что запрос дошел до настоящего API. Остальные ответы доступом не считаются.
     /// Пусто — 200 и 401.</summary>
     public List<int> OkStatusCodes { get; set; } = new();
+    /// <summary>Дополнительные хосты сервиса (вход, сайт, CDN). Они не влияют на вердикт «доступен»,
+    /// но проверяются при подключении и попадают в журнал.</summary>
+    public List<string> ExtraHosts { get; set; } = new();
 }
 
 /// <summary>Откуда парсить списки серверов.</summary>
@@ -61,11 +64,14 @@ public class AppSettings
     public List<CheckTarget> Targets { get; set; } = new()
     {
         new() { Name = "ChatGPT", Host = "api.openai.com", Path = "/v1/models",
-                BlockedMarkers = { "unsupported_country" }, OkStatusCodes = { 200, 401 } },
+                BlockedMarkers = { "unsupported_country" }, OkStatusCodes = { 200, 401 },
+                ExtraHosts = { "chatgpt.com", "auth.openai.com", "cdn.oaistatic.com" } },
         new() { Name = "Claude", Host = "api.anthropic.com", Path = "/v1/models",
-                BlockedMarkers = { "Request not allowed" }, BlockedStatusCodes = { 403 }, OkStatusCodes = { 200, 401 } },
+                BlockedMarkers = { "Request not allowed" }, BlockedStatusCodes = { 403 }, OkStatusCodes = { 200, 401 },
+                ExtraHosts = { "claude.ai", "console.anthropic.com" } },
         new() { Name = "Gemini", Host = "generativelanguage.googleapis.com", Path = "/v1beta/models",
-                BlockedMarkers = { "User location is not supported" }, OkStatusCodes = { 200, 401, 403 } },
+                BlockedMarkers = { "User location is not supported" }, OkStatusCodes = { 200, 401, 403 },
+                ExtraHosts = { "gemini.google.com", "accounts.google.com" } },
     };
 
     /// <summary>Стартовые страницы глубокого парсера. Добавляйте свои: сайты, raw-файлы GitHub, t.me/s/канал.</summary>

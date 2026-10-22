@@ -13,6 +13,17 @@ public static class ServiceAccess
 
     private static readonly int[] DefaultOk = { 200, 401 };
 
+    /// <summary>
+    /// Для сайтов сервиса (chatgpt.com, claude.ai и т.п.), а не для API. Сайт за Cloudflare отвечает 403 защиты,
+    /// но открывается в браузере, поэтому 403 здесь доступом не считаем закрытым. Блокируют только маркеры
+    /// региона в теле ответа. Ответ 5xx — сервис не отвечает нормально.
+    /// </summary>
+    public static Result ClassifyWeb(CheckTarget t, int code, string body)
+    {
+        if (t.BlockedMarkers.Any(m => body.Contains(m, StringComparison.OrdinalIgnoreCase))) return Result.Closed;
+        return code >= 200 && code < 500 ? Result.Open : Result.Error;
+    }
+
     public static Result Classify(CheckTarget t, int code, string body)
     {
         if (t.BlockedStatusCodes.Contains(code) ||

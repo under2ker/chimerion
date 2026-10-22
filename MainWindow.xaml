@@ -239,7 +239,7 @@
         </DockPanel>
 
         <!-- ================= ТАБЛИЦА ================= -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+        <Border x:Name="TableCard" Grid.Row="3" Style="{StaticResource Card}" Padding="0" SizeChanged="TableCard_SizeChanged">
             <DockPanel>
                 <!-- Выбранный сервер -->
                 <Border x:Name="SelectionBar" DockPanel.Dock="Top" Padding="16,10"
@@ -283,7 +283,8 @@
 
                         <!-- Статус -->
                         <!-- Обновление одного сервера: полная проверка строки -->
-                        <DataGridTemplateColumn x:Name="ColRefresh" Width="46" CanUserResize="False" CanUserSort="False">
+                        <!-- 52 px: кнопка 30 px плюс отступы ячейки 10 px с каждой стороны -->
+                        <DataGridTemplateColumn x:Name="ColRefresh" Width="52" CanUserResize="False" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Style="{StaticResource RowRefresh}" Click="RowRefresh_Click"
@@ -324,9 +325,8 @@
                                                 <TextBlock x:Name="st" Text="{Binding StatusText}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
                                             </StackPanel>
                                             <!-- Сервер, через который подключено: видно прямо в колонке статуса -->
-                                            <Border Margin="18,3,0,0" Padding="6,0" CornerRadius="4" HorizontalAlignment="Left" Background="#2B3D12"
-                                                    ToolTip="Подключение идет через этот сервер"
-                                                    Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}">
+                                            <Border x:Name="connBadge" Margin="18,3,0,0" Padding="6,0" CornerRadius="4" HorizontalAlignment="Left" Background="#2B3D12"
+                                                    ToolTip="Подключение идет через этот сервер" Visibility="Collapsed">
                                                 <TextBlock Text="подключен" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Lime}"/>
                                             </Border>
                                         </StackPanel>
@@ -345,8 +345,13 @@
                                         </Rectangle>
                                     </Grid>
                                     <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                                            <Setter TargetName="connBadge" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <!-- В узкой колонке текста нет места: только точка. Стоит после бейджа, поэтому побеждает -->
                                         <DataTrigger Binding="{Binding Tag, ElementName=ServerGrid}" Value="compact">
                                             <Setter TargetName="st" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="connBadge" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Ok">
                                             <Setter TargetName="dot" Property="Fill" Value="{StaticResource Ok}"/>
@@ -374,6 +379,10 @@
                                                 <StopStoryboard BeginStoryboardName="sweep"/>
                                             </DataTrigger.ExitActions>
                                         </DataTrigger>
+                                        <!-- В компактном окне при проверке без блика: анимация остается только у пинга -->
+                                        <DataTrigger Binding="{Binding Tag, ElementName=ServerGrid}" Value="compact">
+                                            <Setter TargetName="sheen" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -400,6 +409,10 @@
                                         <DataTrigger Binding="{Binding IsNew}" Value="True">
                                             <Setter TargetName="newBadge" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
+                                        <!-- В компактном окне бейдж не помещается рядом с названием -->
+                                        <DataTrigger Binding="{Binding Tag, ElementName=ServerGrid}" Value="compact">
+                                            <Setter TargetName="newBadge" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -421,12 +434,12 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервисы: плашки -->
-                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="240" SortMemberPath="Summary">
+                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="260" MinWidth="200" SortMemberPath="Summary">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <ItemsControl ItemsSource="{Binding Chips}" ToolTip="{Binding Summary}" VerticalAlignment="Center">
                                         <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>

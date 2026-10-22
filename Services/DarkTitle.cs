@@ -20,5 +20,8 @@ public static class DarkTitle
         if (DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int)) != 0) DwmSetWindowAttribute(hwnd, 19, ref on, sizeof(int));
         int caption = 0x001B1614; // COLORREF (BGR) = #14161B
         DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int));
+        // Скругление всех четырех углов окна (DWMWCP_ROUND = 2), иначе верхний левый угол остается острым
+        int round = 2;
+        DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));
     }
 }
