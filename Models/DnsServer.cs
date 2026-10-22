@@ -54,6 +54,11 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public bool JustAdded { get => _justAdded; set { _justAdded = value; On(); } }
 
+    private bool _isConnected;
+    /// <summary>Сервер, через который сейчас подключено. В таблице он первый. Не сохраняется.</summary>
+    [JsonIgnore]
+    public bool IsConnected { get => _isConnected; set { _isConnected = value; On(); } }
+
     private ServerStatus _status;
     public ServerStatus Status { get => _status; set { _status = value; On(); On(nameof(StatusText)); On(nameof(Rank)); } }
 
