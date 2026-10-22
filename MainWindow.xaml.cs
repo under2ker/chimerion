@@ -43,7 +43,10 @@ public partial class MainWindow : Window
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
         Application.Current.SessionEnding += (_, _) => _exitRequested = true;
         AddPanel.RenderTransform = new TranslateTransform();
-        LogBox.RenderTransform = new TranslateTransform();
+        LogPanel.RenderTransform = new TranslateTransform();
+        _logView = CollectionViewSource.GetDefaultView(_log);
+        _logView.Filter = FilterLog;
+        LogList.ItemsSource = _logView;
         _toastTimer.Tick += (_, _) =>
         {
             _toastTimer.Stop();
@@ -1600,7 +1603,7 @@ public partial class MainWindow : Window
     }
 
     private void AddToggle_Changed(object sender, RoutedEventArgs e) => Reveal(AddPanel, AddToggle.IsChecked == true);
-    private void LogToggle_Changed(object sender, RoutedEventArgs e) => Reveal(LogBox, LogToggle.IsChecked == true);
+    private void LogToggle_Changed(object sender, RoutedEventArgs e) => Reveal(LogPanel, LogToggle.IsChecked == true);
 
     /// <summary>Раскрытие блока: появляется с легким сдвигом; при сворачивании гаснет и выпадает из верстки.</summary>
     private static void Reveal(FrameworkElement el, bool show)
@@ -1727,14 +1730,30 @@ public partial class MainWindow : Window
         finally { _saveLock.Release(); }
     }
 
-    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _logQueue = new();
+    // ---------- Журнал ----------
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<LogEntry> _logQueue = new();
+    private readonly ObservableCollection<LogEntry> _log = new();
+    private ICollectionView? _logView;
+    private int _logFilter; // 0 — все, 1 — предупреждения и ошибки, 2 — только ошибки
     private DispatcherTimer? _logTimer;
-    private const int MaxLogChars = 200_000;
+    private const int MaxLogEntries = 500;
+
+    private bool FilterLog(object o)
+    {
+        if (o is not LogEntry e) return false;
+        return _logFilter switch
+        {
+            1 => e.Level is LogLevel.Warn or LogLevel.Error,
+            2 => e.Level == LogLevel.Error,
+            _ => true,
+        };
+    }
 
     /// <summary>Журнал копится в очереди и выводится пачкой раз в 200 мс — сотни строк от парсера не тормозят интерфейс.</summary>
     private void Log(string msg)
     {
-        _logQueue.Enqueue($"[{DateTime.Now:HH:mm:ss}] {msg}");
+        _logQueue.Enqueue(new LogEntry(DateTime.Now, msg));
         if (Dispatcher.CheckAccess()) EnsureLogTimer(); else Dispatcher.InvokeAsync(EnsureLogTimer);
     }
 
@@ -1752,10 +1771,43 @@ public partial class MainWindow : Window
     {
         _logTimer?.Stop();
         if (_logQueue.IsEmpty) return;
-        var sb = new System.Text.StringBuilder();
-        while (_logQueue.TryDequeue(out var line)) sb.AppendLine(line);
-        LogBox.AppendText(sb.ToString());
-        if (LogBox.Text.Length > MaxLogChars) LogBox.Text = LogBox.Text[^(MaxLogChars / 2)..];
-        LogBox.ScrollToEnd();
+        while (_logQueue.TryDequeue(out var entry)) _log.Add(entry);
+        while (_log.Count > MaxLogEntries) _log.RemoveAt(0);
+        UpdateLogCount();
+        if (_logView?.Cast<object>().LastOrDefault() is { } last) LogList.ScrollIntoView(last);
+    }
+
+    private void UpdateLogCount()
+    {
+        if (_logView == null) return;
+        var shown = _logView.Cast<object>().Count();
+        LogCount.Text = shown == _log.Count ? $"{_log.Count} записей" : $"{shown} из {_log.Count}";
+    }
+
+    private void LogFilter_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string t } && int.TryParse(t, out var i)) _logFilter = i;
+        _logView?.Refresh();
+        UpdateLogCount();
+    }
+
+    private void ClearLog_Click(object sender, RoutedEventArgs e)
+    {
+        _log.Clear();
+        _logQueue.Clear();
+        Log("Журнал очищен");
+    }
+
+    private void CopyLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (_logView == null) return;
+        var text = string.Join(Environment.NewLine, _logView.Cast<LogEntry>().Select(x => $"[{x.TimeText}] {x.Text}"));
+        if (text.Length == 0) return;
+        try
+        {
+            Clipboard.SetText(text);
+            ShowToast("Журнал скопирован");
+        }
+        catch (Exception) { ShowToast("Не удалось скопировать"); }
     }
 }

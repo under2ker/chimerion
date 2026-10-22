@@ -464,10 +464,84 @@
                 <Button Content="Добавить" Click="Add_Click" Style="{StaticResource Primary}" Margin="8,0,0,0"/>
             </StackPanel>
 
-            <TextBox x:Name="LogBox" Height="150" Margin="0,10,0,0" IsReadOnly="True" TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto" FontFamily="Cascadia Mono, Consolas" FontSize="12"
-                     Background="{StaticResource Surface}" Foreground="{StaticResource Muted}" VerticalContentAlignment="Top"
-                     Visibility="Collapsed"/>
+            <!-- Журнал: записи с цветом по уровню, фильтр, копирование и очистка -->
+            <Border x:Name="LogPanel" Style="{StaticResource Card}" Padding="14,12" Margin="0,10,0,0" Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Grid.Row="0" LastChildFill="False">
+                        <Button Content="Копировать" Click="CopyLog_Click" Style="{StaticResource Ghost}" DockPanel.Dock="Right"
+                                ToolTip="Скопировать записи, которые сейчас видны"/>
+                        <Button Content="Очистить" Click="ClearLog_Click" Style="{StaticResource Ghost}" DockPanel.Dock="Right"/>
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                            <TextBlock Text="Журнал" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="LogCount" Margin="12,0,16,0" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                            <Border Padding="3" CornerRadius="9" Background="{StaticResource Surface2}"
+                                    BorderBrush="{StaticResource Border}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource Tab}" GroupName="log" IsChecked="True" Tag="0" Checked="LogFilter_Checked" Content="Все"/>
+                                    <RadioButton Style="{StaticResource Tab}" GroupName="log" Tag="1" Checked="LogFilter_Checked" Content="Предупреждения"/>
+                                    <RadioButton Style="{StaticResource Tab}" GroupName="log" Tag="2" Checked="LogFilter_Checked" Content="Ошибки"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <ListBox x:Name="LogList" Grid.Row="1" Height="200" Margin="0,10,0,0" Background="Transparent" BorderThickness="0"
+                             Focusable="False" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             AutomationProperties.Name="Записи журнала">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.RenderTransform>
+                                        <TranslateTransform x:Name="shift"/>
+                                    </Grid.RenderTransform>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="3"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Background="{Binding Bar}" CornerRadius="2"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding TimeText}" FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                                               Foreground="{StaticResource Muted}" Margin="10,2,14,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Text}" Foreground="{Binding TextBrush}" TextWrapping="Wrap" FontSize="12"/>
+                                    <Grid.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.25"/>
+                                                    <DoubleAnimation Storyboard.TargetName="shift" Storyboard.TargetProperty="Y" From="8" To="0" Duration="0:0:0.25">
+                                                        <DoubleAnimation.EasingFunction>
+                                                            <CubicEase EasingMode="EaseOut"/>
+                                                        </DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Grid.Triggers>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
         </StackPanel>
 
         <!-- ================= УВЕДОМЛЕНИЕ В УГЛУ ================= -->
