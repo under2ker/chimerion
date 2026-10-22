@@ -8,8 +8,11 @@ namespace Dnex.Services;
 /// <summary>Хранение данных в %AppData%\DNEX в виде JSON.</summary>
 public static class Storage
 {
+    // DNEX_DATA_DIR переопределяет папку данных: для тестов и для копии, которая работает с собственными файлами
     public static readonly string Dir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DNEX");
+        Environment.GetEnvironmentVariable("DNEX_DATA_DIR") is { Length: > 0 } custom
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DNEX");
 
     public static readonly JsonSerializerOptions Options = new()
     {

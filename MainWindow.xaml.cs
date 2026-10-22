@@ -500,12 +500,12 @@ public partial class MainWindow : Window
         AppTitle.Visibility = v;
         DnsLine.Visibility = v;
         CompactConnect.Visibility = cv;
-        ConnText.MaxWidth = compact ? 120 : 300;
+        ConnText.MaxWidth = compact ? 200 : 300;
         ConnPill.Margin = compact ? new Thickness(12, 0, 0, 0) : new Thickness(28, 0, 0, 0);
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
         ColStatus.Width = compact ? new DataGridLength(40) : new DataGridLength(128);
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
-        ColPing.Width = compact ? new DataGridLength(64) : new DataGridLength(90);
+        ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
         ServerGrid.RowStyle = compact ? (Style)FindResource("RowCompact") : null;
         ServerGrid.Tag = compact ? "compact" : null; // по нему строки прячут текст статуса (см. XAML)
         ModeButton.Content = compact ? "Полный вид" : "Компактно";
