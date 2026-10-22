@@ -1798,16 +1798,56 @@ public partial class MainWindow : Window
         Log("Журнал очищен");
     }
 
-    private void CopyLog_Click(object sender, RoutedEventArgs e)
+    /// <summary>Выбранные строки, которые сейчас видны, в порядке журнала.</summary>
+    private List<LogEntry> SelectedLog() =>
+        _logView == null ? new() : _logView.Cast<LogEntry>().Where(x => LogList.SelectedItems.Contains(x)).ToList();
+
+    private void CopyEntries(IEnumerable<LogEntry> items, string done)
     {
-        if (_logView == null) return;
-        var text = string.Join(Environment.NewLine, _logView.Cast<LogEntry>().Select(x => $"[{x.TimeText}] {x.Text}"));
+        var text = string.Join(Environment.NewLine, items.Select(x => $"[{x.TimeText}] {x.Text}"));
         if (text.Length == 0) return;
         try
         {
             Clipboard.SetText(text);
-            ShowToast("Журнал скопирован");
+            ShowToast(done);
         }
         catch (Exception) { ShowToast("Не удалось скопировать"); }
+    }
+
+    /// <summary>Кнопка «Копировать»: выбранные строки, а если их нет, все видимые.</summary>
+    private void CopyLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (_logView == null) return;
+        var sel = SelectedLog();
+        if (sel.Count > 0) CopyEntries(sel, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
+        else CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован");
+    }
+
+    /// <summary>Контекстное меню и Ctrl+C: выбранные строки, а если ничего не выбрано, текущая строка.</summary>
+    private void CopyLine_Click(object sender, RoutedEventArgs e)
+    {
+        var sel = SelectedLog();
+        if (sel.Count == 0 && LogList.SelectedItem is LogEntry one) sel.Add(one);
+        if (sel.Count > 0) CopyEntries(sel, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
+    }
+
+    private void CopyAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_logView != null) CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован");
+    }
+
+    /// <summary>Двойной щелчок по строке копирует ее одну.</summary>
+    private void LogList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (LogList.SelectedItem is LogEntry one) CopyEntries(new[] { one }, "Строка скопирована");
+    }
+
+    private void LogList_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            CopyLine_Click(sender, e);
+            e.Handled = true;
+        }
     }
 }

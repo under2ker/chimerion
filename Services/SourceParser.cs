@@ -222,22 +222,55 @@ public static partial class SourceParser
                     }
         }
 
+        // Страница, которая не отвечает, не должна держать весь поиск: у каждой свой жесткий лимит времени.
+        // Если поиск долго ничего не получает, журнал покажет, какие адреса еще в работе.
+        var inflight = new ConcurrentDictionary<string, DateTime>();
+        long lastProgressTicks = DateTime.UtcNow.Ticks;
+        using var finished = new CancellationTokenSource();
+        var monitor = Task.Run(async () =>
+        {
+            while (true)
+            {
+                try { await Task.Delay(TimeSpan.FromSeconds(15), finished.Token); }
+                catch (OperationCanceledException) { return; }
+                var idle = DateTime.UtcNow - new DateTime(Interlocked.Read(ref lastProgressTicks), DateTimeKind.Utc);
+                if (!inflight.IsEmpty && idle > TimeSpan.FromSeconds(30))
+                    log($"Поиск ждет ответа ({inflight.Count} стр.): {string.Join(", ", inflight.Keys.Take(3))}");
+            }
+        });
+
         var workers = Enumerable.Range(0, Math.Clamp(st.CrawlParallelism, 1, 16)).Select(_ => Task.Run(async () =>
         {
             await foreach (var job in queue.Reader.ReadAllAsync(ct))
             {
                 var started = DateTime.Now;
-                try { await ProcessAsync(job, ct); }
+                var url = job.Url.AbsoluteUri;
+                inflight[url] = started;
+                using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                jobCts.CancelAfter(TimeSpan.FromSeconds(45));
+                try { await ProcessAsync(job, jobCts.Token); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    Interlocked.Increment(ref errors);
+                    log($"Страница не ответила за 45 с: {url}");
+                }
+                catch (Exception e) when (!ct.IsCancellationRequested)
+                {
+                    Interlocked.Increment(ref errors);
+                    log($"Ошибка на странице {url}: {e.GetBaseException().Message}");
+                }
                 finally
                 {
+                    inflight.TryRemove(url, out DateTime _);
+                    Volatile.Write(ref lastProgressTicks, DateTime.UtcNow.Ticks);
                     var took = DateTime.Now - started;
-                    if (took.TotalSeconds >= 10) log($"Медленная страница ({took.TotalSeconds:F0} с): {job.Url.AbsoluteUri}");
+                    if (took.TotalSeconds >= 10) log($"Медленная страница ({took.TotalSeconds:F0} с): {url}");
                     if (Interlocked.Decrement(ref outstanding) == 0) queue.Writer.TryComplete();
                 }
             }
         }, ct)).ToArray();
-        await Task.WhenAll(workers);
-
+        try { await Task.WhenAll(workers); }
+        finally { finished.Cancel(); }
         log($"Парсер завершен: страниц {Math.Min(pages, st.CrawlMaxPages)}, ошибок {errors}, серверов {found.Count}");
         return found.Values.ToList();
     }
