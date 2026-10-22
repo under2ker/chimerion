@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
@@ -125,107 +126,117 @@ public static partial class SourceParser
             Math.Min(Volatile.Read(ref pages), st.CrawlMaxPages), st.CrawlMaxPages,
             Math.Max(0, Volatile.Read(ref queued)), found.Count, Volatile.Read(ref errors), current));
 
-        int rounds = 0, maxRounds = st.CrawlDepth + st.TelegramPages + 1;
-        while (level.Count > 0 && rounds++ < maxRounds && pages < st.CrawlMaxPages)
+        // Очередь вместо раундов: страница обработана, ее ссылки сразу уходят в работу, не дожидаясь остальных страниц
+        var queue = Channel.CreateUnbounded<Job>();
+        int outstanding = 0;
+        void Enqueue(Job j)
         {
-            var next = new ConcurrentBag<Job>();
-            var opts = new ParallelOptions
-            {
-                MaxDegreeOfParallelism = Math.Clamp(st.CrawlParallelism, 1, 16),
-                CancellationToken = ct,
-            };
-
-            await Parallel.ForEachAsync(level, opts, async (job, c) =>
-            {
-                if (!visited.TryAdd(job.Url.AbsoluteUri, 0)) return;
-                Interlocked.Decrement(ref queued);
-                if (Interlocked.Increment(ref pages) > st.CrawlMaxPages) return;
-                Report(job.Url.Host);
-
-                string body;
-                bool isHtml;
-                try
-                {
-                    var gate = HostGates.GetOrAdd(job.Url.Host, _ => new SemaphoreSlim(2));
-                    await gate.WaitAsync(c);
-                    try { (body, isHtml) = await DownloadAsync(job.Url, c); }
-                    finally { gate.Release(); }
-                }
-                catch (Exception e) when (!c.IsCancellationRequested)
-                {
-                    Interlocked.Increment(ref errors);
-                    if (job.Depth == 0) log($"«{job.SourceName}»: {e.GetBaseException().Message}");
-                    return;
-                }
-
-                var pageUrl = job.Url.AbsoluteUri;
-                List<DnsServer> items;
-                try
-                {
-                    // Разбор тяжелый (регулярки по всей странице) — уводим с потоков ввода-вывода.
-                    items = await Task.Run(() => job.Type.Equals("json", StringComparison.OrdinalIgnoreCase)
-                        ? SafeParseJson(body, job.SourceName, pageUrl)
-                        : ParseText(body, job.SourceName, pageUrl, isHtml), c);
-                }
-                catch (RegexMatchTimeoutException)
-                {
-                    Interlocked.Increment(ref errors);
-                    return; // слишком тяжелая/вредоносная страница
-                }
-
-                int added = 0;
-                foreach (var it in items)
-                {
-                    if (exclude.Contains(it.Primary) || IsNoise(it)) continue;
-                    if (found.TryAdd(it.Key, it))
-                    {
-                        added++;
-                        onFound?.Invoke(it); // показываем в списке сразу, не дожидаясь конца обхода
-                    }
-                }
-                if (added > 0) { log($"+{added}: {pageUrl}"); Report(job.Url.Host); }
-
-                // Поиск новых сервисов: у найденного DNS-хоста (dns.example.ru) открываем главную сайта —
-                // там обычно инструкция с IPv4-адресами, которых нет в статье, где сервис упомянули.
-                if (job.Depth < st.CrawlDepth)
-                {
-                    foreach (var h in items.Select(i => Uri.TryCreate(i.DohUrl, UriKind.Absolute, out var du) ? du.Host : null)
-                                           .Where(h => h != null).Distinct())
-                    {
-                        var site = BaseHost(h!);
-                        foreach (var home in new[] { $"https://{site}/", $"https://{h}/" })
-                            if (Uri.TryCreate(home, UriKind.Absolute, out var hu) && !IsBlocked(st, hu))
-                                next.Add(new Job(hu, job.Depth + 1, "Новый: " + site, "text"));
-                    }
-                }
-
-                if (!isHtml) return;
-                List<(Uri Link, string Text)> links;
-                try { links = ExtractLinks(body, job.Url).ToList(); }
-                catch (RegexMatchTimeoutException) { return; }
-                foreach (var (link, text) in links)
-                {
-                    // Telegram-каналы и темы форумов (4PDA и др.): листаем страницы, не тратя глубину.
-                    if (IsPaging(job.Url, link))
-                    {
-                        if (job.TgPage < st.TelegramPages)
-                            next.Add(job with { Url = link, TgPage = job.TgPage + 1 });
-                        continue;
-                    }
-                    if (job.Depth >= st.CrawlDepth) continue;
-                    if (ShouldFollow(st, job.Url, link, text))
-                        next.Add(new Job(link, job.Depth + 1, job.SourceName, "text"));
-                }
-            });
-
-            level = next.Where(j => !visited.ContainsKey(j.Url.AbsoluteUri))
-                        .DistinctBy(j => j.Url.AbsoluteUri)
-                        // Сначала страницы, где ключевые слова есть прямо в адресе, — они чаще содержат списки.
-                        .OrderByDescending(j => st.LinkKeywords.Count(k => j.Url.AbsoluteUri.Contains(k, StringComparison.OrdinalIgnoreCase)))
-                        .ToList();
-            Volatile.Write(ref queued, level.Count);
-            Report("следующий уровень");
+            if (visited.ContainsKey(j.Url.AbsoluteUri)) return;
+            Interlocked.Increment(ref outstanding);
+            Interlocked.Increment(ref queued);
+            queue.Writer.TryWrite(j);
         }
+        foreach (var j in level) Enqueue(j);
+        if (outstanding == 0) queue.Writer.TryComplete();
+
+        async Task ProcessAsync(Job job, CancellationToken c)
+        {
+                    if (!visited.TryAdd(job.Url.AbsoluteUri, 0)) return;
+                    Interlocked.Decrement(ref queued);
+                    if (Interlocked.Increment(ref pages) > st.CrawlMaxPages) return;
+                    Report(job.Url.Host);
+
+                    string body;
+                    bool isHtml;
+                    try
+                    {
+                        var gate = HostGates.GetOrAdd(job.Url.Host, _ => new SemaphoreSlim(2));
+                        await gate.WaitAsync(c);
+                        try { (body, isHtml) = await DownloadAsync(job.Url, c); }
+                        finally { gate.Release(); }
+                    }
+                    catch (Exception e) when (!c.IsCancellationRequested)
+                    {
+                        Interlocked.Increment(ref errors);
+                        if (job.Depth == 0) log($"«{job.SourceName}»: {e.GetBaseException().Message}");
+                        return;
+                    }
+
+                    var pageUrl = job.Url.AbsoluteUri;
+                    List<DnsServer> items;
+                    try
+                    {
+                        // Разбор тяжелый (регулярки по всей странице) — уводим с потоков ввода-вывода.
+                        items = await Task.Run(() => job.Type.Equals("json", StringComparison.OrdinalIgnoreCase)
+                            ? SafeParseJson(body, job.SourceName, pageUrl)
+                            : ParseText(body, job.SourceName, pageUrl, isHtml), c);
+                    }
+                    catch (RegexMatchTimeoutException)
+                    {
+                        Interlocked.Increment(ref errors);
+                        return; // слишком тяжелая/вредоносная страница
+                    }
+
+                    int added = 0;
+                    foreach (var it in items)
+                    {
+                        if (exclude.Contains(it.Primary) || IsNoise(it)) continue;
+                        if (found.TryAdd(it.Key, it))
+                        {
+                            added++;
+                            onFound?.Invoke(it); // показываем в списке сразу, не дожидаясь конца обхода
+                        }
+                    }
+                    if (added > 0) { log($"+{added}: {pageUrl}"); Report(job.Url.Host); }
+
+                    // Поиск новых сервисов: у найденного DNS-хоста (dns.example.ru) открываем главную сайта —
+                    // там обычно инструкция с IPv4-адресами, которых нет в статье, где сервис упомянули.
+                    if (job.Depth < st.CrawlDepth)
+                    {
+                        foreach (var h in items.Select(i => Uri.TryCreate(i.DohUrl, UriKind.Absolute, out var du) ? du.Host : null)
+                                               .Where(h => h != null).Distinct())
+                        {
+                            var site = BaseHost(h!);
+                            foreach (var home in new[] { $"https://{site}/", $"https://{h}/" })
+                                if (Uri.TryCreate(home, UriKind.Absolute, out var hu) && !IsBlocked(st, hu))
+                                    Enqueue(new Job(hu, job.Depth + 1, "Новый: " + site, "text"));
+                        }
+                    }
+
+                    if (!isHtml) return;
+                    List<(Uri Link, string Text)> links;
+                    try { links = ExtractLinks(body, job.Url).ToList(); }
+                    catch (RegexMatchTimeoutException) { return; }
+                    foreach (var (link, text) in links)
+                    {
+                        // Telegram-каналы и темы форумов (4PDA и др.): листаем страницы, не тратя глубину.
+                        if (IsPaging(job.Url, link))
+                        {
+                            if (job.TgPage < st.TelegramPages)
+                                Enqueue(job with { Url = link, TgPage = job.TgPage + 1 });
+                            continue;
+                        }
+                        if (job.Depth >= st.CrawlDepth) continue;
+                        if (ShouldFollow(st, job.Url, link, text))
+                            Enqueue(new Job(link, job.Depth + 1, job.SourceName, "text"));
+                    }
+        }
+
+        var workers = Enumerable.Range(0, Math.Clamp(st.CrawlParallelism, 1, 16)).Select(_ => Task.Run(async () =>
+        {
+            await foreach (var job in queue.Reader.ReadAllAsync(ct))
+            {
+                var started = DateTime.Now;
+                try { await ProcessAsync(job, ct); }
+                finally
+                {
+                    var took = DateTime.Now - started;
+                    if (took.TotalSeconds >= 10) log($"Медленная страница ({took.TotalSeconds:F0} с): {job.Url.AbsoluteUri}");
+                    if (Interlocked.Decrement(ref outstanding) == 0) queue.Writer.TryComplete();
+                }
+            }
+        }, ct)).ToArray();
+        await Task.WhenAll(workers);
 
         log($"Парсер завершен: страниц {Math.Min(pages, st.CrawlMaxPages)}, ошибок {errors}, серверов {found.Count}");
         return found.Values.ToList();
