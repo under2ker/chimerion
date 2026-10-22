@@ -469,6 +469,10 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="ToolTip" Value="{Binding LastError}"/>
             <Style.Triggers>
+                <!-- Подключенный сервер: строка подсвечена зеленым. Выделение ниже перекрывает подсветку -->
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter Property="Background" Value="#14200F"/>
+                </DataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource Surface2}"/>
                     <Setter Property="BorderBrush" Value="#3A4150"/>
