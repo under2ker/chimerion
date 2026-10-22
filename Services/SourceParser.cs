@@ -246,20 +246,26 @@ public static partial class SourceParser
 
     private static async Task<List<Uri>> DiscoverAsync(AppSettings st, Action<string> log, CancellationToken ct)
     {
-        var result = new List<Uri>();
-        foreach (var q in st.DiscoveryQueries.Where(q => !string.IsNullOrWhiteSpace(q)))
+        // Запросы к поисковикам независимы: идут параллельно, но не больше трех сразу, чтобы не получить блокировку
+        var queries = st.DiscoveryQueries.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
+        using var gate = new SemaphoreSlim(3);
+        var perQuery = await Task.WhenAll(queries.Select(async q =>
         {
-            ct.ThrowIfCancellationRequested();
-            var urls = await SearchDuckDuckGoAsync(q, ct);
-            if (urls.Count == 0) urls = await SearchBingAsync(q, ct);
-            // Посадочные страницы сервисов (в домене есть dns) — первыми.
-            var take = urls.Where(u => !IsBlocked(st, u))
-                           .OrderByDescending(u => u.Host.Contains("dns", StringComparison.OrdinalIgnoreCase))
-                           .Take(st.DiscoveryResultsPerQuery).ToList();
-            log($"Поиск «{q}»: {take.Count} ссылок");
-            result.AddRange(take);
-        }
-        return result.DistinctBy(u => u.AbsoluteUri).ToList();
+            await gate.WaitAsync(ct);
+            try
+            {
+                var urls = await SearchDuckDuckGoAsync(q, ct);
+                if (urls.Count == 0) urls = await SearchBingAsync(q, ct);
+                // Посадочные страницы сервисов (в домене есть dns) — первыми.
+                var take = urls.Where(u => !IsBlocked(st, u))
+                               .OrderByDescending(u => u.Host.Contains("dns", StringComparison.OrdinalIgnoreCase))
+                               .Take(st.DiscoveryResultsPerQuery).ToList();
+                log($"Поиск «{q}»: {take.Count} ссылок");
+                return take;
+            }
+            finally { gate.Release(); }
+        }));
+        return perQuery.SelectMany(x => x).DistinctBy(u => u.AbsoluteUri).ToList();
     }
 
     private static async Task<List<Uri>> SearchDuckDuckGoAsync(string q, CancellationToken ct)

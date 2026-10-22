@@ -1208,8 +1208,13 @@ public partial class MainWindow : Window
         catch (Exception) { return null; }
     }
 
+    // Флаги декодируются один раз и переиспользуются: плитки и строки обновляются часто
+    private static readonly Dictionary<string, ImageSource> FlagCache = new(StringComparer.OrdinalIgnoreCase);
+
     private static ImageSource? LoadFlag(string path)
     {
+        if (string.IsNullOrEmpty(path)) return null;
+        if (FlagCache.TryGetValue(path, out var cached)) return cached;
         try
         {
             var img = new System.Windows.Media.Imaging.BitmapImage();
@@ -1218,6 +1223,7 @@ public partial class MainWindow : Window
             img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
             img.EndInit();
             img.Freeze();
+            FlagCache[path] = img;
             return img;
         }
         catch (Exception) { return null; }
