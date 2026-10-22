@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         TimeoutBox.Text = settings.TimeoutSeconds.ToString();
         ParallelBox.Text = settings.Parallelism.ToString();
         CloseToTrayBox.IsChecked = settings.CloseToTray;
+        CheckUpdatesBox.IsChecked = settings.CheckUpdates;
         TrayMinutesBox.Text = settings.TrayCheckMinutes.ToString();
         WatchdogBox.Text = settings.WatchdogSeconds.ToString();
         PingBox.Text = settings.PingRefreshMinutes.ToString();
@@ -46,6 +47,7 @@ public partial class SettingsWindow : Window
         _settings.TimeoutSeconds = timeout;
         _settings.Parallelism = parallel;
         _settings.CloseToTray = CloseToTrayBox.IsChecked == true;
+        _settings.CheckUpdates = CheckUpdatesBox.IsChecked == true;
         _settings.TrayCheckMinutes = trayMinutes;
         _settings.WatchdogSeconds = watchdog;
         _settings.PingRefreshMinutes = pingMinutes;

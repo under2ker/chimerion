@@ -95,6 +95,7 @@ public partial class MainWindow : Window
             catch (Exception) { }
             await RefreshConnectionAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
+        if (_settings.CheckUpdates) ScheduleUpdateCheck();
             if (DnsSwitcher.GetActive() is { } a)
                 Log($"Активно подключение «{a.Name}» с {a.Since:dd.MM HH:mm}.");
             SelectBest();
@@ -503,6 +504,25 @@ public partial class MainWindow : Window
 
     private bool _compact;
     private Rect _fullBounds;
+
+    /// <summary>Проверка новой версии через 10 секунд после запуска, чтобы не мешать старту. Только уведомление.</summary>
+    private void ScheduleUpdateCheck()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        timer.Tick += async (_, _) =>
+        {
+            timer.Stop();
+            var info = await UpdateChecker.CheckAsync();
+            if (info == null || _settings.SkippedUpdate == info.Version.ToString()) return;
+            Log($"Доступна версия {info.Version}");
+            UpdateWindow.Show(this, info, () =>
+            {
+                _settings.SkippedUpdate = info.Version.ToString();
+                try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+            });
+        };
+        timer.Start();
+    }
 
     private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);
 
