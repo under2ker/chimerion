@@ -71,12 +71,15 @@ public static class Storage
         }
     }
 
-    public static void Save<T>(string file, T value)
+    public static void Save<T>(string file, T value) => SaveJson(file, JsonSerializer.Serialize(value, Options));
+
+    /// <summary>Записывает уже готовый JSON: без повторной сериализации и без лишней записи на диск.</summary>
+    public static void SaveJson(string file, string json)
     {
         Directory.CreateDirectory(Dir);
         var path = PathOf(file);
         var tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(value, Options));
+        File.WriteAllText(tmp, json);
         File.Move(tmp, path, overwrite: true);
     }
 }
