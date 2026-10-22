@@ -1230,8 +1230,10 @@ public partial class MainWindow : Window
         await Task.Delay(300);
         _savePending = false;
         var snapshot = _servers.ToList();
-        await _saveLock.WaitAsync();
-        try { await Task.Run(() => Storage.Save(ServersFile, snapshot)); }
+        // ConfigureAwait(false): продолжение не ждёт UI-поток. Иначе SaveServersNow при закрытии окна
+        // держит UI-поток в Wait() на замке, который отпускается только в этом продолжении — взаимная блокировка.
+        await _saveLock.WaitAsync().ConfigureAwait(false);
+        try { await Task.Run(() => Storage.Save(ServersFile, snapshot)).ConfigureAwait(false); }
         catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); }
         finally { _saveLock.Release(); }
     }
