@@ -25,7 +25,11 @@ public sealed record ServiceState(string Name, string Host, string ResolvedIp, b
 /// </summary>
 public static class ConnectionProbe
 {
-    private static readonly HttpClient Http = new(new SocketsHttpHandler
+    /// <summary>
+    /// Новый клиент на каждую проверку. Общий клиент держит открытые соединения: после отключения Smart DNS
+    /// запрос шел бы по старому соединению к адресу прокси, и сервис показывался бы доступным.
+    /// </summary>
+    private static HttpClient NewHttp() => new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
         UseCookies = false,
@@ -36,22 +40,23 @@ public static class ConnectionProbe
     public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default)
     {
         var snap = new NetSnapshot();
-        var ipTask = FillPublicIpAsync(snap, ct);
+        using var http = NewHttp();
+        var ipTask = FillPublicIpAsync(snap, http, ct);
         var dnsTask = DnsSwitcher.GetCurrentAsync().ContinueWith(t => snap.SystemDns = t.IsCompletedSuccessfully ? t.Result : "—", ct);
 
         var targets = st.Targets.Where(t => t.Enabled).ToList();
-        var svcTasks = targets.Select(t => ProbeServiceAsync(st, t, ct)).ToList();
+        var svcTasks = targets.Select(t => ProbeServiceAsync(st, t, http, ct)).ToList();
         await Task.WhenAll(svcTasks.Cast<Task>().Append(ipTask).Append(dnsTask));
         snap.Services.AddRange(svcTasks.Select(t => t.Result));
         return snap;
     }
 
-    private static async Task FillPublicIpAsync(NetSnapshot snap, CancellationToken ct)
+    private static async Task FillPublicIpAsync(NetSnapshot snap, HttpClient http, CancellationToken ct)
     {
         try
         {
             // ipinfo.io по HTTPS: внешний IP, страна, провайдер. Ничего, кроме самого запроса, не отправляется.
-            var json = await Http.GetStringAsync("https://ipinfo.io/json", ct);
+            var json = await http.GetStringAsync("https://ipinfo.io/json", ct);
             using var doc = JsonDocument.Parse(json);
             var r = doc.RootElement;
             string Get(string k) => r.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
@@ -61,7 +66,7 @@ public static class ConnectionProbe
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            try { snap.PublicIp = (await Http.GetStringAsync("https://api.ipify.org", ct)).Trim(); } catch (Exception) { }
+            try { snap.PublicIp = (await http.GetStringAsync("https://api.ipify.org", ct)).Trim(); } catch (Exception) { }
         }
     }
 
@@ -87,7 +92,7 @@ public static class ConnectionProbe
         _ => "ошибка соединения",
     };
 
-    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, CancellationToken ct)
+    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct)
     {
         string resolved = "—";
         bool proxied = false;
@@ -108,7 +113,7 @@ public static class ConnectionProbe
         string access;
         try
         {
-            using var resp = await Http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
+            using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
             var body = await ReadLimitedAsync(resp, ct);
             int code = (int)resp.StatusCode;
             access = ServiceAccess.Classify(t, code, body) switch
