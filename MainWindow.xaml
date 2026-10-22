@@ -140,8 +140,8 @@
             <Border Margin="10,0,0,0" Padding="3" CornerRadius="9" Background="{StaticResource Surface}"
                     BorderBrush="{StaticResource Border}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal">
-                    <RadioButton Style="{StaticResource Tab}" GroupName="f" Tag="5" IsChecked="True" Checked="FilterTab_Checked" Content="Рабочие"/>
-                    <RadioButton Style="{StaticResource Tab}" GroupName="f" Tag="0" Checked="FilterTab_Checked" Content="Все"/>
+                    <RadioButton x:Name="WorkingTab" Style="{StaticResource Tab}" GroupName="f" Tag="5" IsChecked="True" Checked="FilterTab_Checked" Content="Рабочие"/>
+                    <RadioButton x:Name="AllTab" Style="{StaticResource Tab}" GroupName="f" Tag="0" Checked="FilterTab_Checked" Content="Все"/>
                 </StackPanel>
             </Border>
 
@@ -183,6 +183,7 @@
                           RowBackground="Transparent" Foreground="{StaticResource Text}" Margin="0,0,0,4"
                           HorizontalScrollBarVisibility="Disabled" CanUserResizeRows="False"
                           SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_DoubleClick"
+                          PreviewMouseLeftButtonDown="ServerGrid_PreviewMouseLeftButtonDown"
                           PreviewKeyDown="Grid_KeyDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu Opened="RowMenu_Opened">
@@ -203,6 +204,38 @@
                     <DataGrid.Columns>
 
                         <!-- Статус -->
+                        <!-- Обновление одного сервера: полная проверка строки -->
+                        <DataGridTemplateColumn x:Name="ColRefresh" Width="46" CanUserResize="False" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Style="{StaticResource RowRefresh}" Click="RowRefresh_Click"
+                                            ToolTip="Обновить этот сервер: проверка ИИ-сервисов и пинг"
+                                            AutomationProperties.Name="Обновить сервер">
+                                        <Path x:Name="icon" Style="{StaticResource RefreshGlyph}" RenderTransformOrigin="0.5,0.5">
+                                            <Path.RenderTransform><RotateTransform/></Path.RenderTransform>
+                                        </Path>
+                                    </Button>
+                                    <DataTemplate.Triggers>
+                                        <!-- Пока сервер проверяется, значок крутится -->
+                                        <DataTrigger Binding="{Binding Status}" Value="Checking">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard x:Name="spin">
+                                                    <Storyboard RepeatBehavior="Forever">
+                                                        <DoubleAnimation Storyboard.TargetName="icon"
+                                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                         From="0" To="360" Duration="0:0:0.9"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="spin"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
                         <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="128" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

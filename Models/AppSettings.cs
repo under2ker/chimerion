@@ -38,6 +38,8 @@ public class AppSettings
 
     /// <summary>Как часто трей сам проверяет ИИ-сервисы (минуты, 1–60).</summary>
     public int TrayCheckMinutes { get; set; } = 5;
+    /// <summary>Как часто обновляется пинг всех серверов в таблице, в шапке и в трее (минуты, 1–60).</summary>
+    public int PingRefreshMinutes { get; set; } = 10;
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
     public int WatchdogSeconds { get; set; } = 60;
 
