@@ -9,7 +9,7 @@
     <AssemblyName>DNEX</AssemblyName>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.9</Version>
+    <Version>0.1.10</Version>
   </PropertyGroup>
 
   <PropertyGroup>
