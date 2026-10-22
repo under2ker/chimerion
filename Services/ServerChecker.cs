@@ -46,8 +46,7 @@ public class ServerChecker
     {
         // Эталонные адреса получаем один раз до старта, а не в каждом потоке.
         await Task.WhenAll(_settings.Targets.Where(t => t.Enabled)
-            .Select(t => _reference.GetOrAdd(t.Host, h => ResolveReferenceAsync(h, ct))
-                                   .ContinueWith(_ => { }, TaskScheduler.Default)));
+            .Select(t => GetReferenceAsync(t.Host).ContinueWith(_ => { }, TaskScheduler.Default)));
 
         int done = 0;
         var opts = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(_settings.Parallelism, 1, 64), CancellationToken = ct };
@@ -139,7 +138,7 @@ public class ServerChecker
         bool compared = false, proxied = false;
         try
         {
-            var refIps = await _reference.GetOrAdd(t.Host, h => ResolveReferenceAsync(h, ct)).ConfigureAwait(false);
+            var refIps = await GetReferenceAsync(t.Host).ConfigureAwait(false);
             compared = true;
             proxied = !ips.Any(refIps.Contains);
         }
@@ -180,6 +179,15 @@ public class ServerChecker
         {
             return await DnsWire.ResolveUdpAsync(IPAddress.Parse(s.Secondary!), host, _timeout, ct);
         }
+    }
+
+    /// <summary>Эталонные IP хоста. Кэш общий на проверку, но не привязан к отмене одного прогона:
+    /// неудачную попытку удаляем из кэша, и следующая повторит её, а не будет отравлена.</summary>
+    private Task<HashSet<IPAddress>> GetReferenceAsync(string host)
+    {
+        var task = _reference.GetOrAdd(host, h => ResolveReferenceAsync(h, CancellationToken.None));
+        if (task.IsFaulted || task.IsCanceled) _reference.TryRemove(new KeyValuePair<string, Task<HashSet<IPAddress>>>(host, task));
+        return task;
     }
 
     private async Task<HashSet<IPAddress>> ResolveReferenceAsync(string host, CancellationToken ct)

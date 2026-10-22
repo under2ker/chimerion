@@ -103,6 +103,7 @@ public static partial class SourceParser
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Cookies = st.HostCookies.ToDictionary(kv => kv.Key, kv => Storage.Unprotect(kv.Value), StringComparer.OrdinalIgnoreCase);
+        HostGates.Clear(); // словарь по хостам не растёт между запусками
         var found = new ConcurrentDictionary<string, DnsServer>();
         var visited = new ConcurrentDictionary<string, byte>();
         var exclude = st.ExcludeIps.ToHashSet();
@@ -122,7 +123,7 @@ public static partial class SourceParser
         int queued = level.Count;
         void Report(string current) => progress?.Report(new CrawlProgress(
             Math.Min(Volatile.Read(ref pages), st.CrawlMaxPages), st.CrawlMaxPages,
-            Volatile.Read(ref queued), found.Count, Volatile.Read(ref errors), current));
+            Math.Max(0, Volatile.Read(ref queued)), found.Count, Volatile.Read(ref errors), current));
 
         int rounds = 0, maxRounds = st.CrawlDepth + st.TelegramPages + 1;
         while (level.Count > 0 && rounds++ < maxRounds && pages < st.CrawlMaxPages)
@@ -296,8 +297,7 @@ public static partial class SourceParser
                 throw new InvalidOperationException($"заблокирован адрес локальной сети: {url.Host}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             // Cookie отправляются только на тот домен, для которого заданы, и только по HTTPS.
-            if (url.Scheme == Uri.UriSchemeHttps &&
-                (Cookies.TryGetValue(url.Host, out var cookie) || Cookies.TryGetValue(BaseHost(url.Host), out cookie)))
+            if (url.Scheme == Uri.UriSchemeHttps && MatchCookie(url.Host, out var cookie))
                 req.Headers.TryAddWithoutValidation("Cookie", cookie);
             resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc && hop < 5)
@@ -354,6 +354,20 @@ public static partial class SourceParser
 
     /// <summary>Cookie для сайтов, где нужен вход (настройка hostCookies в settings.json).</summary>
     private static Dictionary<string, string> Cookies = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cookie только для точного домена из настроек или его поддоменов. Не «родительского» домена:
+    /// иначе cookie одного сайта уходили бы на соседние.</summary>
+    private static bool MatchCookie(string host, out string cookie)
+    {
+        foreach (var kv in Cookies)
+            if (host.Equals(kv.Key, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + kv.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                cookie = kv.Value;
+                return true;
+            }
+        cookie = "";
+        return false;
+    }
 
     private static string BaseHost(string host)
     {
