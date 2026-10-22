@@ -1,0 +1,451 @@
+<Window x:Class="Dnex.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DNEX" Height="820" Width="1280"
+        MinHeight="560" MinWidth="1000" WindowStartupLocation="CenterScreen"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
+        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+    <Grid x:Name="RootGrid" Margin="20,16,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>  <!-- шапка -->
+            <RowDefinition Height="Auto"/>  <!-- проверка подключения -->
+            <RowDefinition Height="Auto"/>  <!-- поиск и действия -->
+            <RowDefinition Height="*"/>     <!-- таблица -->
+            <RowDefinition Height="Auto"/>  <!-- низ -->
+        </Grid.RowDefinitions>
+
+        <!-- ================= ШАПКА ================= -->
+        <Grid x:Name="HeaderGrid" Grid.Row="0" Margin="0,0,0,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <!-- вторая строка — кнопка подключения, видна только в компактном виде -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource Accent}">
+                    <TextBlock Text="D" Foreground="White" FontSize="19" FontWeight="Bold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="AppTitle" Text="DNEX" FontSize="17" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}"/>
+                    <TextBlock x:Name="Subtitle" Text="Smart DNS для ИИ" Style="{StaticResource Label}"/>
+                </StackPanel>
+
+                <!-- Состояние подключения -->
+                <Border x:Name="ConnPill" Margin="28,0,0,0" Padding="14,8" CornerRadius="10"
+                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="ConnDot" Width="9" Height="9" Fill="{StaticResource Idle}" VerticalAlignment="Center"/>
+                        <StackPanel Margin="10,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Image x:Name="ConnFlag" Width="18" Height="13" Margin="0,0,8,0" Stretch="Uniform"
+                                       VerticalAlignment="Center" Visibility="Collapsed"/>
+                                <TextBlock x:Name="ConnText" Text="Не подключено" FontWeight="SemiBold"
+                                           MaxWidth="300" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <TextBlock x:Name="ConnLocation" Style="{StaticResource Label}" FontSize="12"
+                                       MaxWidth="300" TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+                            <TextBlock x:Name="DnsLine" Style="{StaticResource Label}" FontSize="12">
+                                <Run Text="DNS системы"/>
+                                <Run x:Name="CurrentDns" Text="…"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Индикатор работы: крутящийся значок и текст текущего шага -->
+                <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Margin="16,0,0,0" Visibility="Collapsed">
+                    <ContentControl x:Name="BusySpinner" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Text, ElementName=ProgressText}" Style="{StaticResource Label}"
+                               Margin="9,0,0,0" MaxWidth="340" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="ModeButton" Content="Компактно" Click="Mode_Click" Style="{StaticResource Ghost}"
+                        ToolTip="Компактный / полный вид"/>
+                <Button x:Name="SettingsButton" Content="Настройки" Click="Reload_Click" Style="{StaticResource Ghost}"
+                        ToolTip="Перечитать settings.json"/>
+                <Button x:Name="DataButton" Content="Данные" Click="OpenData_Click" Style="{StaticResource Ghost}"
+                        ToolTip="Открыть папку с настройками и списком"/>
+                <Rectangle x:Name="HeaderSep" Width="1" Height="24" Fill="{StaticResource Border}" Margin="12,0"/>
+                <StackPanel x:Name="ApplyActions" Orientation="Horizontal">
+                    <CheckBox x:Name="Watchdog" Content="Следить" IsChecked="True" Margin="0,0,14,0"
+                              ToolTip="Пока подключено, раз в минуту проверять DNS. 3 неудачи подряд — безопасное отключение"/>
+                    <Button x:Name="SwitchButton" Content="Переключить сюда" Click="Switch_Click" Margin="0,0,8,0"
+                            Padding="16,9" Visibility="Collapsed"
+                            ToolTip="Подключиться к выбранному серверу вместо текущего"/>
+                    <Button x:Name="ConnectButton" Content="Подключить" Click="Main_Click" Style="{StaticResource Primary}"
+                            Padding="22,9" Margin="0" MinWidth="140"
+                            ToolTip="Подключиться к выбранному серверу (по умолчанию — к лучшему)"/>
+                </StackPanel>
+            </StackPanel>
+            <!-- Компактный вид: одна крупная кнопка подключения и краткий статус сервисов -->
+            <Button x:Name="CompactConnect" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Padding="16,9"
+                    Style="{StaticResource Primary}" Click="Main_Click" Visibility="Collapsed"
+                    ToolTip="Подключиться к выбранному серверу (по умолчанию — к лучшему)"/>
+        </Grid>
+
+        <!-- ================= ПРОВЕРКА ПОДКЛЮЧЕНИЯ ================= -->
+        <Border x:Name="VerdictCard" Grid.Row="1" Style="{StaticResource Card}" Padding="16,12" Margin="0,0,0,12">
+            <StackPanel>
+                <DockPanel LastChildFill="False">
+                    <TextBlock Text="Проверка подключения" Style="{StaticResource H2}" VerticalAlignment="Center"/>
+                    <Border x:Name="VerdictBadge" Margin="12,0,0,0" Padding="10,3" CornerRadius="6"
+                            Background="{StaticResource Surface2}" VerticalAlignment="Center">
+                        <TextBlock x:Name="VerdictText" Text="ещё не проверялось" FontSize="12" Foreground="{StaticResource Muted}"/>
+                    </Border>
+                    <Button x:Name="CompareToggle" Content="Скрыть" Click="CompareToggle_Click" Style="{StaticResource Ghost}"
+                            DockPanel.Dock="Right" Padding="10,5"/>
+                    <Button x:Name="ProbeButton" Content="Проверить сейчас" Click="Probe_Click" DockPanel.Dock="Right" Padding="12,5"
+                            ToolTip="Внешний IP, DNS, адреса и доступность ИИ-сервисов прямо сейчас"/>
+                </DockPanel>
+                <StackPanel x:Name="CompareGrid" Margin="0,12,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ================= ПОИСК И ДЕЙСТВИЯ ================= -->
+        <DockPanel x:Name="ToolbarCard" Grid.Row="2" Margin="0,0,0,12" LastChildFill="False">
+            <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Width="300" Tag="Поиск: имя, IP, источник"/>
+
+            <Border Margin="10,0,0,0" Padding="3" CornerRadius="9" Background="{StaticResource Surface}"
+                    BorderBrush="{StaticResource Border}" BorderThickness="1">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource Tab}" GroupName="f" Tag="5" IsChecked="True" Checked="FilterTab_Checked" Content="Рабочие"/>
+                    <RadioButton Style="{StaticResource Tab}" GroupName="f" Tag="0" Checked="FilterTab_Checked" Content="Все"/>
+                </StackPanel>
+            </Border>
+
+            <StackPanel x:Name="ListActions" Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="Перепроверить" Click="CheckAll_Click" Style="{StaticResource Ghost}"
+                        ToolTip="Ещё раз проверить все серверы в списке"/>
+                <Button Content="Найти новые серверы" Click="Fetch_Click"
+                        ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
+            </StackPanel>
+            <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}"
+                    DockPanel.Dock="Right" Visibility="Collapsed"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" VerticalAlignment="Center"
+                           MaxWidth="380" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                <ProgressBar x:Name="WorkBar" Width="140" Visibility="Collapsed" AutomationProperties.Name="Прогресс работы"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- ================= ТАБЛИЦА ================= -->
+        <Border Grid.Row="3" Style="{StaticResource Card}" Padding="0">
+            <DockPanel>
+                <!-- Выбранный сервер -->
+                <Border x:Name="SelectionBar" DockPanel.Dock="Top" Padding="16,10"
+                        BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <TextBlock x:Name="StatsText" DockPanel.Dock="Right" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                        <Ellipse x:Name="SelectionIcon" Width="10" Height="10" Fill="{StaticResource Idle}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock x:Name="SelectionTitle" Text="Сервер не выбран" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="SelectionDetails" Style="{StaticResource Label}" TextTrimming="CharacterEllipsis"
+                                       Text="Выберите сервер. Двойной щелчок или Enter — подключиться, правая кнопка — действия."/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <DataGrid x:Name="ServerGrid" AutomationProperties.Name="Список серверов" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
+                          SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          HorizontalGridLinesBrush="#222630" Background="Transparent" BorderThickness="0"
+                          RowBackground="Transparent" Foreground="{StaticResource Text}" Margin="0,0,0,4"
+                          HorizontalScrollBarVisibility="Disabled" CanUserResizeRows="False"
+                          SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_DoubleClick"
+                          PreviewKeyDown="Grid_KeyDown">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu Opened="RowMenu_Opened">
+                            <MenuItem x:Name="MenuConnect" Header="Подключить" Click="MenuConnect_Click" InputGestureText="Enter"/>
+                            <MenuItem Header="Проверить" Click="CheckSelected_Click"/>
+                            <Separator/>
+                            <MenuItem x:Name="MenuSource" Header="Открыть источник" Click="MenuSource_Click"/>
+                            <MenuItem Header="Копировать адрес" Click="MenuCopy_Click" InputGestureText="Ctrl+C"/>
+                            <Separator/>
+                            <MenuItem Header="Удалить" Click="Delete_Click" InputGestureText="Del"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Resources>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#203A66"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#203A66"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
+                    </DataGrid.Resources>
+                    <DataGrid.Columns>
+
+                        <!-- Статус -->
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="128" SortMemberPath="Rank">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid x:Name="stRoot" ClipToBounds="True">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse x:Name="dot" Width="8" Height="8" Fill="{StaticResource Idle}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="st" Text="{Binding StatusText}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <!-- Бегущий блик: виден, пока сервер проверяется -->
+                                        <Rectangle x:Name="sheen" Width="46" HorizontalAlignment="Left" Visibility="Collapsed" IsHitTestVisible="False">
+                                            <Rectangle.Fill>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#00FFFFFF" Offset="0"/>
+                                                    <GradientStop Color="#40FFFFFF" Offset="0.5"/>
+                                                    <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Rectangle.Fill>
+                                            <Rectangle.RenderTransform>
+                                                <TranslateTransform x:Name="sheenT" X="-60"/>
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding JustAdded}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="stRoot" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.35"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Fading}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="stRoot" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Tag, ElementName=ServerGrid}" Value="compact">
+                                            <Setter TargetName="st" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Ok">
+                                            <Setter TargetName="dot" Property="Fill" Value="{StaticResource Ok}"/>
+                                            <Setter TargetName="st" Property="Foreground" Value="{StaticResource Text}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Partial">
+                                            <Setter TargetName="dot" Property="Fill" Value="{StaticResource Warn}"/>
+                                            <Setter TargetName="st" Property="Foreground" Value="{StaticResource Text}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Fail">
+                                            <Setter TargetName="dot" Property="Fill" Value="{StaticResource Bad}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Status}" Value="Checking">
+                                            <Setter TargetName="dot" Property="Fill" Value="{StaticResource Accent}"/>
+                                            <Setter TargetName="sheen" Property="Visibility" Value="Visible"/>
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard x:Name="sweep">
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="sheenT" Storyboard.TargetProperty="X"
+                                                                         From="-60" To="150" Duration="0:0:1.3" RepeatBehavior="Forever"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="sweep"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Сервер: имя + адрес второй строкой -->
+                        <DataGridTemplateColumn Header="СЕРВЕР" Width="2*" MinWidth="220" SortMemberPath="DisplayName">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel x:Name="srvRoot" VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                            <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#173A2A"
+                                                    VerticalAlignment="Center" Visibility="Collapsed">
+                                                <TextBlock Text="новый" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Ok}"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Address}" Style="{StaticResource Label}" FontWeight="Normal"
+                                                   FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding JustAdded}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="srvRoot" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.35"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Fading}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="srvRoot" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsNew}" Value="True">
+                                            <Setter TargetName="newBadge" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Локация DNS-сервера: флаг страны и название места -->
+                        <DataGridTemplateColumn x:Name="ColLocation" Header="ЛОКАЦИЯ" Width="280" MinWidth="160" SortMemberPath="Country">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding LocationTooltip}">
+                                        <Image Source="{Binding Flag}" Width="20" Height="14" Margin="0,0,8,0" Stretch="Uniform" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding LocationCell}" Foreground="{StaticResource Muted}" FontWeight="Normal"
+                                                   MaxWidth="250" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <TextBlock Text="⚠" Foreground="{StaticResource Warn}" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                   Visibility="{Binding HasLocationWarning, Converter={StaticResource BoolToVis}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Сервисы: плашки -->
+                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="230" SortMemberPath="Summary">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <ItemsControl ItemsSource="{Binding Chips}" ToolTip="{Binding Summary}" VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border x:Name="chip" Style="{StaticResource Chip}">
+                                                    <TextBlock x:Name="t" Text="{Binding Name}" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Muted}"/>
+                                                </Border>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="ok">
+                                                        <Setter TargetName="chip" Property="Background" Value="#173A2A"/>
+                                                        <Setter TargetName="t" Property="Foreground" Value="{StaticResource Ok}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="region">
+                                                        <Setter TargetName="chip" Property="Background" Value="#3A2F17"/>
+                                                        <Setter TargetName="t" Property="Foreground" Value="{StaticResource Warn}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding State}" Value="fail">
+                                                        <Setter TargetName="chip" Property="Background" Value="#3A1C20"/>
+                                                        <Setter TargetName="t" Property="Foreground" Value="{StaticResource Bad}"/>
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Пинг -->
+                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="90" SortMemberPath="LatencyMs">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock VerticalAlignment="Center" FontWeight="Normal">
+                                        <Run Text="{Binding PingText, Mode=OneWay}"/>
+                                        <Run Text="мс" Foreground="{StaticResource Muted}" FontSize="12"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Оценка -->
+                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="110" SortMemberPath="Score">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ProgressBar Width="52" Height="4" Maximum="100" Value="{Binding Score, Mode=OneWay}"
+                                                     Foreground="{StaticResource Ok}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Score}" Margin="8,0,0,0" FontWeight="Normal"
+                                                   Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- Стабильность -->
+                        <DataGridTextColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Binding="{Binding Stability}" Width="115">
+                            <DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+                                    <Setter Property="FontWeight" Value="Normal"/>
+                                </Style>
+                            </DataGridTextColumn.ElementStyle>
+                        </DataGridTextColumn>
+
+                        <!-- Источник -->
+                        <DataGridTemplateColumn x:Name="ColSource" Header="ИСТОЧНИК" Width="*" MinWidth="150" SortMemberPath="SourceHost">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <DockPanel ToolTip="{Binding SourceUrl}">
+                                        <Button x:Name="srcBtn" DockPanel.Dock="Right" Content="Открыть ↗" Click="OpenSource_Click"
+                                                Style="{StaticResource Ghost}" Padding="8,3" Margin="6,0,8,0" FontSize="12"
+                                                FontWeight="Normal" ToolTip="Открыть страницу, где найден сервер"/>
+                                        <TextBlock Text="{Binding SourceHost}" Foreground="{StaticResource Muted}" FontWeight="Normal"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    </DockPanel>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding HasSourceUrl}" Value="False">
+                                            <Setter TargetName="srcBtn" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </Border>
+
+        <!-- ================= НИЗ ================= -->
+        <StackPanel x:Name="BottomPanel" Grid.Row="4" Margin="0,12,0,0">
+            <DockPanel LastChildFill="False">
+                <ToggleButton x:Name="AddToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Content="+ Добавить сервер вручную"
+                              Checked="AddToggle_Changed" Unchecked="AddToggle_Changed"/>
+                <ToggleButton x:Name="LogToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0" Content="Журнал"
+                              Checked="LogToggle_Changed" Unchecked="LogToggle_Changed"/>
+                <TextBlock DockPanel.Dock="Right" Style="{StaticResource Label}" VerticalAlignment="Center"
+                           Text="Нерабочие серверы удаляются автоматически после проверки"/>
+            </DockPanel>
+
+            <StackPanel x:Name="AddPanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                <TextBox x:Name="AddName" Width="170" Tag="Название"/>
+                <TextBox x:Name="AddPrimary" Width="140" Margin="8,0,0,0" Tag="Основной IP"/>
+                <TextBox x:Name="AddSecondary" Width="140" Margin="8,0,0,0" Tag="Резервный IP"/>
+                <TextBox x:Name="AddDoh" Width="280" Margin="8,0,0,0" Tag="DoH: https://…/dns-query"/>
+                <Button Content="Добавить" Click="Add_Click" Style="{StaticResource Primary}" Margin="8,0,0,0"/>
+            </StackPanel>
+
+            <TextBox x:Name="LogBox" Height="150" Margin="0,10,0,0" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                     Background="{StaticResource Surface}" Foreground="{StaticResource Muted}" VerticalContentAlignment="Top"
+                     Visibility="Collapsed"/>
+        </StackPanel>
+
+        <!-- ================= УВЕДОМЛЕНИЕ В УГЛУ ================= -->
+        <Border x:Name="Toast" Grid.RowSpan="5" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,0,28" Padding="16,10" CornerRadius="10" Background="{StaticResource Surface2}"
+                BorderBrush="{StaticResource Border}" BorderThickness="1" Opacity="0" IsHitTestVisible="False">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="ToastShift" Y="12"/>
+            </Border.RenderTransform>
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.5" Color="#000000"/>
+            </Border.Effect>
+            <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="ToastDot" Width="8" Height="8" Fill="{StaticResource Ok}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ToastText" FontSize="13"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
