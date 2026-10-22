@@ -387,7 +387,7 @@ public partial class MainWindow : Window
         }
 
         // Строка 1: внешний IP (при Smart DNS не меняется — так и должно быть)
-        host.Children.Add(Line(
+        if (!_compact) host.Children.Add(Line(
             ("Внешний IP  ", B("Muted"), false), (cur.PublicIp, B("Text"), true),
             ($"   ·   {cur.Location}   ·   {cur.Provider}", B("Muted"), false),
             (_before != null && _after != null && _before.PublicIp == _after.PublicIp ? "   ·   не меняется" : "", B("Muted"), false)));
@@ -401,7 +401,7 @@ public partial class MainWindow : Window
             dnsRuns.Add((_after.SystemDns, B("Text"), true));
         }
         else dnsRuns.Add((cur.SystemDns, B("Text"), true));
-        host.Children.Add(Line(dnsRuns.ToArray()));
+        if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
 
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
         var tiles = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Margin = new Thickness(-4, 8, -4, 0) };
@@ -411,7 +411,7 @@ public partial class MainWindow : Window
             bool ok = svc.Access.StartsWith("✓");
             var card = new Border
             {
-                Background = new SolidColorBrush(((SolidColorBrush)B("Surface2")).Color), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 10),
+                Background = new SolidColorBrush(((SolidColorBrush)B("Surface2")).Color), CornerRadius = new CornerRadius(10), Padding = _compact ? new Thickness(6, 8, 6, 8) : new Thickness(14, 10, 14, 10),
                 Margin = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(0, 0, 0, 2),
                 BorderBrush = ok ? B("Ok") : B("Bad"),
             };
@@ -424,7 +424,8 @@ public partial class MainWindow : Window
             head.Children.Add(title);
             var state = new TextBlock { Text = svc.Access.TrimStart('✓', '✗', ' '), Foreground = ok ? B("Ok") : B("Bad"),
                                         HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            DockPanel.SetDock(state, Dock.Right);
+            DockPanel.SetDock(state, _compact ? Dock.Bottom : Dock.Right); // в компактном виде статус под названием
+            if (_compact) state.HorizontalAlignment = HorizontalAlignment.Left;
             head.Children.Insert(0, state);
             sp.Children.Add(head);
             var geo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
@@ -523,7 +524,12 @@ public partial class MainWindow : Window
         Watchdog.Visibility = v;
         // Компактный вид: одна кнопка подключения, плашки сервисов, таблица только со статусом, именем и пингом
         var cv = compact ? Visibility.Visible : Visibility.Collapsed;
-        VerdictCard.Visibility = v;
+        // В компактном виде блок ИИ-сервисов остается: три плитки с логотипом, флагом доступа и статусом, без заголовка
+        VerdictCard.Visibility = Visibility.Visible;
+        VerdictCard.Padding = compact ? new Thickness(8, 8, 8, 6) : new Thickness(16, 12, 16, 12);
+        VerdictHeader.Visibility = v;
+        CompareGrid.Visibility = Visibility.Visible;
+        _compareSig = null; // плитки пересобираются с отступами текущего вида
         SelectionBar.Visibility = v;
         ApplyActions.Visibility = v;
         HeaderSep.Visibility = v;
@@ -563,6 +569,7 @@ public partial class MainWindow : Window
             if (_fullBounds.Width > 0) ResizeTo(_fullBounds.Width, _fullBounds.Height, animate);
         }
         ApplyResponsive();
+        ShowCompare();
         try { Storage.Save("ui.json", new Dictionary<string, bool> { ["compact"] = compact }); } catch (Exception) { }
     }
 
