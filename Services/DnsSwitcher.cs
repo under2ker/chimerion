@@ -80,7 +80,8 @@ public static class DnsSwitcher
         var list = string.Join(",", addrs.Select(a => $"'{a}'"));
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
-        sb.AppendLine("$ifs = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }");
+        // Только физические адаптеры: VPN-туннели и виртуальные сети (Hyper-V, WSL) не трогаем — иначе сломаем их DNS.
+        sb.AppendLine("$ifs = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }");
         if (doh != null)
         {
             sb.AppendLine("if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {");
@@ -105,15 +106,33 @@ public static class DnsSwitcher
         };
         Storage.Save(ActiveFile, active);
 
-        var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        try
         {
-            var l = line.Trim();
-            if (l.StartsWith("ADDED ")) active.DohAddedFor.Add(l[6..]);
-            else log(l);
+            var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var l = line.Trim();
+                if (l.StartsWith("ADDED ")) active.DohAddedFor.Add(l[6..]);
+                else log(l);
+            }
+            Storage.Save(ActiveFile, active);
+            if (code != 0) throw new InvalidOperationException("PowerShell завершился с ошибкой, см. журнал");
         }
-        Storage.Save(ActiveFile, active);
-        if (code != 0) throw new InvalidOperationException("PowerShell завершился с ошибкой, см. журнал");
+        catch (OperationCanceledException)
+        {
+            // Права не выданы (UAC отклонён): скрипт не запускался, DNS не менялся — запись о подключении не нужна.
+            var path = Storage.PathOf(ActiveFile);
+            if (File.Exists(path)) File.Delete(path);
+            throw;
+        }
+        catch (Exception)
+        {
+            // Скрипт мог успеть поменять часть адаптеров: возвращаем всё, что было до подключения.
+            log("Подключение не удалось — возвращаю исходные настройки DNS");
+            try { await RestoreAsync(log); }
+            catch (Exception re) { log("Откат не удался, см. журнал: " + re.Message); }
+            throw;
+        }
         log($"Подключено: {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")})");
     }
 
@@ -122,7 +141,7 @@ public static class DnsSwitcher
     {
         if (File.Exists(Storage.PathOf(BackupFile))) return;
         var (code, json) = await RunPsAsync(
-            "$r = foreach ($a in Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }) {\n" +
+            "$r = foreach ($a in Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }) {\n" +
             "  $p = \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($a.InterfaceGuid)\"\n" +
             "  $ns = (Get-ItemProperty -Path $p -Name NameServer -ErrorAction SilentlyContinue).NameServer\n" +
             "  [pscustomobject]@{ InterfaceIndex = $a.ifIndex; Guid = [string]$a.InterfaceGuid; Name = $a.Name; Static = [string]$ns }\n" +

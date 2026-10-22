@@ -272,8 +272,7 @@ public partial class MainWindow : Window
         SaveServersNow();
         if (_closeConfirmed || DnsSwitcher.GetActive() is not { } a) return;
 
-        var r = MessageBox.Show($"Подключение «{a.Name}» активно.\n\nДа — отключиться и выйти\nНет — выйти, оставив DNS как есть\nОтмена — не выходить",
-            "DNEX", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var r = ClosePrompt.Ask(a.Name);
         if (r == MessageBoxResult.No) return;
         e.Cancel = true;
         if (r == MessageBoxResult.Cancel) return;
@@ -296,6 +295,7 @@ public partial class MainWindow : Window
             if (_after == null && _before == null) _before = now; else _after = now;
             ShowCompare();
         }
+        catch (Exception ex) { Log("Ошибка проверки подключения: " + ex.Message); }
         finally { ProbeButton.IsEnabled = true; }
     }
 
@@ -1230,8 +1230,10 @@ public partial class MainWindow : Window
         await Task.Delay(300);
         _savePending = false;
         var snapshot = _servers.ToList();
-        await _saveLock.WaitAsync();
-        try { await Task.Run(() => Storage.Save(ServersFile, snapshot)); }
+        // ConfigureAwait(false): продолжение не ждёт UI-поток. Иначе SaveServersNow при закрытии окна
+        // держит UI-поток в Wait() на замке, который отпускается только в этом продолжении — взаимная блокировка.
+        await _saveLock.WaitAsync().ConfigureAwait(false);
+        try { await Task.Run(() => Storage.Save(ServersFile, snapshot)).ConfigureAwait(false); }
         catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); }
         finally { _saveLock.Release(); }
     }

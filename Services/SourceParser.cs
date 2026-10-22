@@ -73,6 +73,22 @@ public static partial class SourceParser
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             EnableMultipleHttp2Connections = true,
             ConnectTimeout = TimeSpan.FromSeconds(8),
+            // Адрес проверяем в момент соединения, а не один раз заранее: иначе DNS rebinding
+            // подменит адрес между проверкой и подключением. Публичны только IPv4-адреса.
+            ConnectCallback = async (ctx, ct) =>
+            {
+                var host = ctx.DnsEndPoint.Host;
+                var addrs = IPAddress.TryParse(host, out var lit) ? new[] { lit } : await Dns.GetHostAddressesAsync(host, ct);
+                var ip = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPublic(a.ToString()))
+                         ?? throw new HttpRequestException($"адрес {host} не публичный — запрос отменён");
+                var sock = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    await sock.ConnectAsync(new IPEndPoint(ip, ctx.DnsEndPoint.Port), ct);
+                    return new System.Net.Sockets.NetworkStream(sock, ownsSocket: true);
+                }
+                catch { sock.Dispose(); throw; }
+            },
         })
         { Timeout = TimeSpan.FromSeconds(20) };
         h.DefaultRequestHeaders.UserAgent.ParseAdd(
@@ -87,6 +103,7 @@ public static partial class SourceParser
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Cookies = st.HostCookies.ToDictionary(kv => kv.Key, kv => Storage.Unprotect(kv.Value), StringComparer.OrdinalIgnoreCase);
+        HostGates.Clear(); // словарь по хостам не растёт между запусками
         var found = new ConcurrentDictionary<string, DnsServer>();
         var visited = new ConcurrentDictionary<string, byte>();
         var exclude = st.ExcludeIps.ToHashSet();
@@ -106,7 +123,7 @@ public static partial class SourceParser
         int queued = level.Count;
         void Report(string current) => progress?.Report(new CrawlProgress(
             Math.Min(Volatile.Read(ref pages), st.CrawlMaxPages), st.CrawlMaxPages,
-            Volatile.Read(ref queued), found.Count, Volatile.Read(ref errors), current));
+            Math.Max(0, Volatile.Read(ref queued)), found.Count, Volatile.Read(ref errors), current));
 
         int rounds = 0, maxRounds = st.CrawlDepth + st.TelegramPages + 1;
         while (level.Count > 0 && rounds++ < maxRounds && pages < st.CrawlMaxPages)
@@ -276,12 +293,11 @@ public static partial class SourceParser
         HttpResponseMessage? resp = null;
         for (int hop = 0; ; hop++)
         {
-            if (!await IsSafeTargetAsync(url, ct))
+            if (!IsSafeTarget(url))
                 throw new InvalidOperationException($"заблокирован адрес локальной сети: {url.Host}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             // Cookie отправляются только на тот домен, для которого заданы, и только по HTTPS.
-            if (url.Scheme == Uri.UriSchemeHttps &&
-                (Cookies.TryGetValue(url.Host, out var cookie) || Cookies.TryGetValue(BaseHost(url.Host), out cookie)))
+            if (url.Scheme == Uri.UriSchemeHttps && MatchCookie(url.Host, out var cookie))
                 req.Headers.TryAddWithoutValidation("Cookie", cookie);
             resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc && hop < 5)
@@ -313,28 +329,14 @@ public static partial class SourceParser
         return (body, isHtml);
     }
 
-    private static readonly ConcurrentDictionary<string, Task<bool>> SafeHosts = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Парсер ходит только в интернет: никаких localhost, роутеров и адресов локальной сети,
-    /// даже если на них ведёт ссылка с чужой страницы.</summary>
-    private static Task<bool> IsSafeTargetAsync(Uri u, CancellationToken ct)
+    /// <summary>Парсер ходит только в интернет: по имени отсекаем localhost, .local, .lan и порты не для веба.
+    /// Сами адреса проверяет ConnectCallback в момент соединения (см. CreateHttp).</summary>
+    private static bool IsSafeTarget(Uri u)
     {
-        if (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return Task.FromResult(false);
-        if (!u.IsDefaultPort && u.Port is not (80 or 443 or 8080 or 8443)) return Task.FromResult(false);
-        if (u.IsLoopback || u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
-            u.Host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) || !u.Host.Contains('.'))
-            return Task.FromResult(false);
-        return SafeHosts.GetOrAdd(u.Host, async h =>
-        {
-            try
-            {
-                var addrs = IPAddress.TryParse(h, out var ip) ? new[] { ip } : await Dns.GetHostAddressesAsync(h, ct);
-                return addrs.Length > 0 && addrs.All(a =>
-                    a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? IsPublic(a.ToString())
-                    : !(a.IsIPv6LinkLocal || a.IsIPv6SiteLocal || IPAddress.IsLoopback(a) || a.IsIPv6UniqueLocal));
-            }
-            catch (Exception) { return true; } // не разрешилось — запрос всё равно упадёт сам
-        });
+        if (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return false;
+        if (!u.IsDefaultPort && u.Port is not (80 or 443 or 8080 or 8443)) return false;
+        return !(u.IsLoopback || u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+                 u.Host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) || !u.Host.Contains('.'));
     }
 
     /// <summary>Учитываем кодировку страницы (4PDA и многие старые форумы отдают windows-1251).</summary>
@@ -352,6 +354,20 @@ public static partial class SourceParser
 
     /// <summary>Cookie для сайтов, где нужен вход (настройка hostCookies в settings.json).</summary>
     private static Dictionary<string, string> Cookies = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Cookie только для точного домена из настроек или его поддоменов. Не «родительского» домена:
+    /// иначе cookie одного сайта уходили бы на соседние.</summary>
+    private static bool MatchCookie(string host, out string cookie)
+    {
+        foreach (var kv in Cookies)
+            if (host.Equals(kv.Key, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + kv.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                cookie = kv.Value;
+                return true;
+            }
+        cookie = "";
+        return false;
+    }
 
     private static string BaseHost(string host)
     {
