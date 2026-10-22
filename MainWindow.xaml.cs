@@ -178,6 +178,12 @@ public partial class MainWindow : Window
         }
         var ct = BeginWork();
         int purgeStart = _purgeTotal;
+        // Строка прогресса обновляется не на каждой странице: счетчик времени показывает, что поиск идет
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        string lastProgress = "";
+        var beat = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        beat.Tick += (_, _) => { if (lastProgress.Length > 0) ProgressText.Text = $"{lastProgress} · {clock.Elapsed.ToString(@"m\:ss")}"; };
+        beat.Start();
         try
         {
             Log("Ищу серверы в источниках…");
@@ -188,7 +194,8 @@ public partial class MainWindow : Window
             {
                 WorkBar.Maximum = Math.Max(1, p.Pages + p.Queued);
                 WorkBar.Value = p.Pages;
-                ProgressText.Text = $"Страниц {p.Pages}/{p.MaxPages} · в очереди {p.Queued} · найдено {p.Found} · новых {added.Count} · ошибок {p.Errors} · {p.Current}";
+                lastProgress = $"Страниц {p.Pages}/{p.MaxPages} · в очереди {p.Queued} · найдено {p.Found} · новых {added.Count} · ошибок {p.Errors} · {p.Current}";
+                ProgressText.Text = lastProgress;
             });
             // Найденные адреса появляются в таблице сразу.
             void OnFound(DnsServer s) => Dispatcher.InvokeAsync(() =>
@@ -216,7 +223,7 @@ public partial class MainWindow : Window
                 ShowToast($"Найдено {added.Count} новых, убрано {purged} нерабочих");
         }
         catch (OperationCanceledException) { Log("Поиск остановлен"); }
-        finally { EndWork(); }
+        finally { beat.Stop(); EndWork(); }
     }
 
     // ---------- Проверка ----------
@@ -330,6 +337,15 @@ public partial class MainWindow : Window
     /// Блок «До / После»: строка с внешним IP и DNS, ниже по плитке на каждый ИИ-сервис —
     /// крупно текущий доступ, мельче «было» и адрес, через который идет сервис.
     /// </summary>
+    /// <summary>Логотип ИИ-сервиса по названию из настроек проверки. Null, если логотипа нет.</summary>
+    private static ImageSource? AiLogo(string name) => name switch
+    {
+        "ChatGPT" => Application.Current.TryFindResource("LogoOpenAI") as ImageSource,
+        "Claude" => Application.Current.TryFindResource("LogoClaude") as ImageSource,
+        "Gemini" => Application.Current.TryFindResource("LogoGemini") as ImageSource,
+        _ => null,
+    };
+
     private void ShowCompare(bool disconnected = false)
     {
         Brush B(string k) => (Brush)FindResource(k);
@@ -389,7 +405,11 @@ public partial class MainWindow : Window
             };
             var sp = new StackPanel();
             var head = new DockPanel();
-            head.Children.Add(new TextBlock { Text = svc.Name, FontWeight = FontWeights.SemiBold, FontSize = 14 });
+            var title = new StackPanel { Orientation = Orientation.Horizontal };
+            if (AiLogo(svc.Name) is { } logo)
+                title.Children.Add(new Image { Source = logo, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), Stretch = Stretch.Uniform });
+            title.Children.Add(new TextBlock { Text = svc.Name, FontWeight = FontWeights.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(title);
             var state = new TextBlock { Text = svc.Access.TrimStart('✓', '✗', ' '), Foreground = ok ? B("Ok") : B("Bad"),
                                         HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             DockPanel.SetDock(state, Dock.Right);
