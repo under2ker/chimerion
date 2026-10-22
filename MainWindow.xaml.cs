@@ -75,6 +75,8 @@ public partial class MainWindow : Window
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.LatencyMs), ListSortDirection.Ascending));
+        // Клик по заголовку колонки заменяет правила сортировки: подключенный сервер закрепляем заново
+        ((System.Collections.Specialized.INotifyCollectionChanged)_view.SortDescriptions).CollectionChanged += (_, _) => Dispatcher.BeginInvoke(new Action(PinConnectedFirst));
         ServerGrid.ItemsSource = _view;
 
         _searchDebounce.Tick += (_, _) => { _searchDebounce.Stop(); _view?.Refresh(); UpdateStats(); };
@@ -831,6 +833,17 @@ public partial class MainWindow : Window
         Log($"Добавлен «{s.Name}», проверяю");
         _ = RunChecksAsync(new List<DnsServer> { s });
         _ = ResolveLocationsAsync();
+    }
+
+    /// <summary>Подключенный сервер всегда первый в таблице, какой бы колонкой ни была отсортирована.</summary>
+    private void PinConnectedFirst()
+    {
+        if (_view == null) return;
+        var sd = _view.SortDescriptions;
+        if (sd.Count > 0 && sd[0].PropertyName == nameof(DnsServer.IsConnected)) return;
+        for (int i = sd.Count - 1; i >= 0; i--)
+            if (sd[i].PropertyName == nameof(DnsServer.IsConnected)) sd.RemoveAt(i);
+        sd.Insert(0, new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
     }
 
     // ---------- Строка и пинг ----------
