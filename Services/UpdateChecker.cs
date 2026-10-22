@@ -8,6 +8,11 @@ namespace Dnex.Services;
 /// <summary>Новая версия из GitHub: номер, описание и страница релиза. Ничего не скачивается.</summary>
 public sealed record UpdateInfo(Version Version, string Notes, string PageUrl);
 
+public enum UpdateStatus { UpToDate, Available, Failed }
+
+/// <summary>Итог проверки: последняя версия, есть новая или проверка не удалась.</summary>
+public sealed record UpdateCheck(UpdateStatus Status, UpdateInfo? Info, Version? Latest);
+
 /// <summary>
 /// Проверка наличия новой версии. Только чтение данных о релизе из GitHub API по HTTPS.
 /// Файлы программы не загружаются и не заменяются: пользователь скачивает версию сам.
@@ -18,8 +23,15 @@ public static class UpdateChecker
 
     private static readonly HttpClient Http = CreateClient();
 
-    public static Version CurrentVersion =>
-        Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
+    /// <summary>Версия программы из три части (0.1.16), без служебного четвертого числа сборки.</summary>
+    public static Version CurrentVersion
+    {
+        get
+        {
+            var v = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
+            return new Version(v.Major, v.Minor, v.Build);
+        }
+    }
 
     private static HttpClient CreateClient()
     {
@@ -29,20 +41,36 @@ public static class UpdateChecker
         return c;
     }
 
-    /// <summary>Запрашивает последний релиз. Null, если сеть недоступна, релиз не найден или версия не новее.</summary>
+    /// <summary>Запрашивает последний релиз. Null, если новой версии нет или проверка не удалась (для фоновой проверки).</summary>
     public static async Task<UpdateInfo?> CheckAsync(CancellationToken ct = default)
+    {
+        var r = await CheckDetailedAsync(ct);
+        return r.Status == UpdateStatus.Available ? r.Info : null;
+    }
+
+    /// <summary>Полная проверка с итогом: для кнопки «Проверить обновление» нужно знать, что именно ответил GitHub.</summary>
+    public static async Task<UpdateCheck> CheckDetailedAsync(CancellationToken ct = default)
     {
         try
         {
             using var resp = await Http.GetAsync($"https://api.github.com/repos/{Repo}/releases/latest", ct);
-            if (!resp.IsSuccessStatusCode) return null;
+            if (!resp.IsSuccessStatusCode) return new UpdateCheck(UpdateStatus.Failed, null, null);
             var json = await resp.Content.ReadAsStringAsync(ct);
-            return Parse(json, CurrentVersion);
+            var info = Parse(json, CurrentVersion);
+            if (info != null) return new UpdateCheck(UpdateStatus.Available, info, info.Version);
+            return new UpdateCheck(UpdateStatus.UpToDate, null, TagVersion(json));
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            return null; // нет сети или GitHub недоступен: молча пропускаем, это не ошибка программы
+            return new UpdateCheck(UpdateStatus.Failed, null, null); // нет сети или GitHub недоступен
         }
+    }
+
+    private static Version? TagVersion(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var tag = doc.RootElement.TryGetProperty("tag_name", out var t) ? t.GetString() ?? "" : "";
+        return Version.TryParse(tag.TrimStart('v', 'V'), out var v) ? v : null;
     }
 
     /// <summary>Разбирает ответ GitHub API. Возвращает данные только если релиз новее текущей версии.</summary>

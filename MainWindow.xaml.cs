@@ -515,13 +515,62 @@ public partial class MainWindow : Window
             var info = await UpdateChecker.CheckAsync();
             if (info == null || _settings.SkippedUpdate == info.Version.ToString()) return;
             Log($"Доступна версия {info.Version}");
-            UpdateWindow.Show(this, info, () =>
-            {
-                _settings.SkippedUpdate = info.Version.ToString();
-                try { Storage.Save("settings.json", _settings); } catch (Exception) { }
-            });
+            OpenUpdateWindow(info);
         };
         timer.Start();
+    }
+
+    /// <summary>Окно с новой версией. «Пропустить версию» запоминает номер для фоновой проверки.</summary>
+    private void OpenUpdateWindow(UpdateInfo info)
+    {
+        UpdateWindow.Show(this, info, () =>
+        {
+            _settings.SkippedUpdate = info.Version.ToString();
+            try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+        });
+    }
+
+    /// <summary>Кнопка в полосе заголовка: проверить сейчас и показать результат.</summary>
+    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdateButton.IsEnabled = false;
+        CheckUpdateButton.Content = "Проверяю…";
+        try
+        {
+            var r = await UpdateChecker.CheckDetailedAsync();
+            switch (r.Status)
+            {
+                case UpdateStatus.Available:
+                    Log($"Доступна версия {r.Info!.Version}");
+                    OpenUpdateWindow(r.Info!);
+                    break;
+                case UpdateStatus.UpToDate:
+                    ShowToast($"У вас последняя версия {UpdateChecker.CurrentVersion}");
+                    break;
+                default:
+                    ShowToast("Не удалось проверить: нет связи с GitHub", "Warn");
+                    break;
+            }
+        }
+        finally
+        {
+            CheckUpdateButton.IsEnabled = true;
+            CheckUpdateButton.Content = "Проверить обновление";
+        }
+    }
+
+    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void MaxRestore_Click(object sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    /// <summary>Значок кнопки разворота: квадрат или два квадрата, когда окно развернуто.</summary>
+    protected override void OnStateChanged(EventArgs e)
+    {
+        base.OnStateChanged(e);
+        if (MaxButton != null) MaxButton.Content = WindowState == WindowState.Maximized ? "❐" : "☐";
     }
 
     private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);
