@@ -20,7 +20,7 @@ public class ServerChecker
     private readonly TimeSpan _timeout;
     private readonly ConcurrentDictionary<string, Task<HashSet<IPAddress>>> _reference = new();
 
-    /// <summary>Контекст UI-потока: свойства серверов меняем только в нём,
+    /// <summary>Контекст UI-потока: свойства серверов меняем только в нем,
     /// чтобы живая сортировка/фильтр WPF не получали события из фоновых потоков.</summary>
     private readonly SynchronizationContext? _ui;
 
@@ -78,7 +78,7 @@ public class ServerChecker
         long? best = results.Where(r => r.Ms.HasValue).Select(r => r.Ms).Min();
         long? median = best, jitter = null;
 
-        // Пинг: ещё два замера, медиана и разброс.
+        // Пинг: еще два замера, медиана и разброс.
         if (best is not null && ok > 0)
         {
             var samples = new List<long> { best.Value };
@@ -99,7 +99,7 @@ public class ServerChecker
         if (noProxy && status != ServerStatus.Fail)
         {
             status = ServerStatus.Fail;
-            error = "Не подменяет адреса ИИ-сервисов — обычный DNS";
+            error = "Не подменяет адреса ИИ-сервисов, обычный DNS";
         }
 
         // Адрес прокси Smart DNS: если новый — сбрасываем его страну, чтобы определить заново
@@ -144,7 +144,7 @@ public class ServerChecker
         }
         catch { /* эталон недоступен — подмену не оцениваем */ }
 
-        // Подмены нет — запрос пойдёт на настоящий сервер, HTTPS-проверку можно пропустить.
+        // Подмены нет — запрос пойдет на настоящий сервер, HTTPS-проверку можно пропустить.
         if (compared && !proxied)
             return new($"{t.Name} ✗ (без подмены)", false, ms, true, false, null);
 
@@ -182,7 +182,7 @@ public class ServerChecker
     }
 
     /// <summary>Эталонные IP хоста. Кэш общий на проверку, но не привязан к отмене одного прогона:
-    /// неудачную попытку удаляем из кэша, и следующая повторит её, а не будет отравлена.</summary>
+    /// неудачную попытку удаляем из кэша, и следующая повторит ее, а не будет отравлена.</summary>
     private Task<HashSet<IPAddress>> GetReferenceAsync(string host)
     {
         var task = _reference.GetOrAdd(host, h => ResolveReferenceAsync(h, CancellationToken.None));
@@ -211,7 +211,7 @@ public class ServerChecker
             AllowAutoRedirect = false,
             ConnectTimeout = _timeout,
             UseCookies = false,
-            // Сертификат проверяется штатно (имя хоста = SNI). Прокси с поддельным сертификатом не пройдёт.
+            // Сертификат проверяется штатно (имя хоста = SNI). Прокси с поддельным сертификатом не пройдет.
             SslOptions = { CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck },
             ConnectCallback = async (_, c) =>
             {
@@ -230,17 +230,19 @@ public class ServerChecker
         try
         {
             using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-            // Читаем не больше 64 КБ: для поиска маркера блокировки этого достаточно, а чужой прокси не забьёт память.
+            // Читаем не больше 64 КБ: для поиска маркера блокировки этого достаточно, а чужой прокси не забьет память.
             var buf = new byte[64 * 1024];
             int len = 0, n;
             await using (var st = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
                 while (len < buf.Length && (n = await st.ReadAsync(buf.AsMemory(len), ct).ConfigureAwait(false)) > 0) len += n;
             var body = System.Text.Encoding.UTF8.GetString(buf, 0, len);
             int code = (int)resp.StatusCode;
-            if (t.BlockedStatusCodes.Contains(code) ||
-                t.BlockedMarkers.Any(m => body.Contains(m, StringComparison.OrdinalIgnoreCase)))
-                return (Probe.Blocked, $"HTTP {code}, регион не поддерживается");
-            return (Probe.Ok, $"HTTP {code}");
+            return ServiceAccess.Classify(t, code, body) switch
+            {
+                ServiceAccess.Result.Open => (Probe.Ok, $"HTTP {code}"),
+                ServiceAccess.Result.Closed => (Probe.Blocked, $"HTTP {code}, доступ закрыт"),
+                _ => (Probe.Error, $"HTTP {code}, сервис не отвечает нормально"),
+            };
         }
         catch (Exception e) when (!ct.IsCancellationRequested)
         {

@@ -15,7 +15,7 @@ public static class GeoLocation
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
 
-    // Не больше трёх одновременных запросов: ipinfo не любит всплески.
+    // Не больше трех одновременных запросов: ipinfo не любит всплески.
     private static readonly SemaphoreSlim Gate = new(3, 3);
 
     private static readonly string FlagDir = Path.Combine(Storage.Dir, "flags");
@@ -78,14 +78,14 @@ public static class GeoLocation
         }
     }
 
-    /// <summary>Путь к сохранённому флагу страны, если он уже скачан.</summary>
+    /// <summary>Путь к сохраненному флагу страны, если он уже скачан.</summary>
     public static string? FlagPath(string country)
     {
         var path = Path.Combine(FlagDir, country.ToLowerInvariant() + ".png");
         return File.Exists(path) ? path : null;
     }
 
-    /// <summary>Путь к флагу страны; при первом обращении скачивает PNG и кладёт в кэш.</summary>
+    /// <summary>Путь к флагу страны; при первом обращении скачивает PNG и кладет в кэш.</summary>
     public static async Task<string?> FlagPathAsync(string country, CancellationToken ct)
     {
         var code = country.ToLowerInvariant();
@@ -126,6 +126,21 @@ public static class GeoLocation
         ["HR"] = "Хорватия", ["SI"] = "Словения", ["BA"] = "Босния и Герцеговина", ["MK"] = "Северная Македония",
         ["AL"] = "Албания", ["CY"] = "Кипр", ["MT"] = "Мальта", ["LI"] = "Лихтенштейн", ["MC"] = "Монако",
     };
+
+    /// <summary>Русские названия частых городов (ipinfo отдает английские). Остальные — как есть.</summary>
+    private static readonly Dictionary<string, string> RuCities = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Moscow"] = "Москва", ["Saint Petersburg"] = "Санкт-Петербург", ["Novosibirsk"] = "Новосибирск",
+        ["Yekaterinburg"] = "Екатеринбург", ["Kazan"] = "Казань", ["Pervouralsk"] = "Первоуральск",
+        ["Kyiv"] = "Киев", ["Minsk"] = "Минск", ["Almaty"] = "Алматы", ["Amsterdam"] = "Амстердам",
+        ["Frankfurt am Main"] = "Франкфурт-на-Майне", ["Berlin"] = "Берлин", ["Paris"] = "Париж",
+        ["London"] = "Лондон", ["Helsinki"] = "Хельсинки", ["Stockholm"] = "Стокгольм", ["Warsaw"] = "Варшава",
+        ["Vienna"] = "Вена", ["Zurich"] = "Цюрих", ["Prague"] = "Прага", ["Riga"] = "Рига", ["Tallinn"] = "Таллин",
+        ["Istanbul"] = "Стамбул", ["New York"] = "Нью-Йорк", ["Los Angeles"] = "Лос-Анджелес", ["Buffalo"] = "Буффало",
+        ["Tokyo"] = "Токио", ["Singapore"] = "Сингапур", ["Hong Kong"] = "Гонконг", ["Dubai"] = "Дубай",
+    };
+
+    public static string CityName(string city) => RuCities.TryGetValue(city, out var ru) ? ru : city;
 
     /// <summary>Название страны по коду: по-русски для частых стран, иначе по-английски.</summary>
     public static string CountryName(string code)

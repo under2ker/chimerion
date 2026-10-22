@@ -11,6 +11,9 @@ public class CheckTarget
     public List<string> BlockedMarkers { get; set; } = new();
     /// <summary>HTTP-коды, которые считаются блокировкой (без ключа API нормой является 401).</summary>
     public List<int> BlockedStatusCodes { get; set; } = new();
+    /// <summary>Коды, по которым видно, что запрос дошел до настоящего API. Остальные ответы доступом не считаются.
+    /// Пусто — 200 и 401.</summary>
+    public List<int> OkStatusCodes { get; set; } = new();
 }
 
 /// <summary>Откуда парсить списки серверов.</summary>
@@ -32,6 +35,14 @@ public class AppSettings
     public string ReferenceDohFallback { get; set; } = "https://dns.google/dns-query";
 
     public int TimeoutSeconds { get; set; } = 6;
+
+    /// <summary>Как часто трей сам проверяет ИИ-сервисы (минуты, 1–60).</summary>
+    public int TrayCheckMinutes { get; set; } = 5;
+    /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
+    public int WatchdogSeconds { get; set; } = 60;
+
+    /// <summary>Крестик окна прячет программу в трей (подключение продолжает работать). Выход — из меню трея.</summary>
+    public bool CloseToTray { get; set; } = true;
     public int Parallelism { get; set; } = 24;
 
     /// <summary>Не добавлять эти адреса при парсинге (обычные публичные резолверы).</summary>
@@ -44,11 +55,11 @@ public class AppSettings
     public List<CheckTarget> Targets { get; set; } = new()
     {
         new() { Name = "ChatGPT", Host = "api.openai.com", Path = "/v1/models",
-                BlockedMarkers = { "unsupported_country" } },
+                BlockedMarkers = { "unsupported_country" }, OkStatusCodes = { 200, 401 } },
         new() { Name = "Claude", Host = "api.anthropic.com", Path = "/v1/models",
-                BlockedMarkers = { "Request not allowed" }, BlockedStatusCodes = { 403 } },
+                BlockedMarkers = { "Request not allowed" }, BlockedStatusCodes = { 403 }, OkStatusCodes = { 200, 401 } },
         new() { Name = "Gemini", Host = "generativelanguage.googleapis.com", Path = "/v1beta/models",
-                BlockedMarkers = { "User location is not supported" } },
+                BlockedMarkers = { "User location is not supported" }, OkStatusCodes = { 200, 401, 403 } },
     };
 
     /// <summary>Стартовые страницы глубокого парсера. Добавляйте свои: сайты, raw-файлы GitHub, t.me/s/канал.</summary>
@@ -59,8 +70,8 @@ public class AppSettings
         new() { Name = "Хабр", Url = "https://habr.com/ru/articles/982070/" },
         new() { Name = "Хабр", Url = "https://habr.com/ru/articles/870494/" },
         new() { Name = "4PDA: DNS Club", Url = "https://4pda.to/forum/index.php?showtopic=1117490" },
-        new() { Name = "4PDA: DNS Club — DNS для ИИ", Url = "https://4pda.to/forum/index.php?showtopic=1117490&view=findpost&p=129800546" },
-        new() { Name = "4PDA: DNS Club — DNS и гайды для ИИ", Url = "https://4pda.to/forum/index.php?showtopic=1117490&view=findpost&p=137714684" },
+        new() { Name = "4PDA: DNS Club, DNS для ИИ", Url = "https://4pda.to/forum/index.php?showtopic=1117490&view=findpost&p=129800546" },
+        new() { Name = "4PDA: DNS Club, DNS и гайды для ИИ", Url = "https://4pda.to/forum/index.php?showtopic=1117490&view=findpost&p=137714684" },
         new() { Name = "4PDA: Клубы и общение (ИИ)", Url = "https://4pda.to/forum/index.php?showforum=1243" },
         new() { Name = "4PDA: Искусственный интеллект", Url = "https://4pda.to/forum/index.php?showforum=1240" },
         new() { Name = "Пример: Telegram-канал (замените имя)", Url = "https://t.me/s/CHANNEL_NAME", Enabled = false },
@@ -96,7 +107,7 @@ public class AppSettings
         "DoH сервер для ChatGPT",
         "github dns list chatgpt russia",
     };
-    /// <summary>Cookie для сайтов, где без входа видно не всё. Ключ — домен (например "4pda.to"),
+    /// <summary>Cookie для сайтов, где без входа видно не все. Ключ — домен (например "4pda.to"),
     /// значение — строка Cookie из браузера, где вы залогинены (DevTools → Network → заголовок Cookie).</summary>
     public Dictionary<string, string> HostCookies { get; set; } = new();
 

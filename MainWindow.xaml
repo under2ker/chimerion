@@ -1,7 +1,8 @@
 <Window x:Class="Dnex.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="DNEX" Height="820" Width="1280"
+        xmlns:controls="clr-namespace:Dnex.Controls"
+        Title="DNEX" Icon="/Assets/dnex-logo.png" Height="1040" Width="1600"
         MinHeight="560" MinWidth="1000" WindowStartupLocation="CenterScreen"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
@@ -26,13 +27,12 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/> <!-- статистика в компактном виде -->
             </Grid.RowDefinitions>
 
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Width="36" Height="36" CornerRadius="10" Background="{StaticResource Accent}">
-                    <TextBlock Text="D" Foreground="White" FontSize="19" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
+                <Image Source="/Assets/dnex-logo.png" Width="40" Height="40" Stretch="Uniform" VerticalAlignment="Center"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
                 <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                     <TextBlock x:Name="AppTitle" Text="DNEX" FontSize="17" FontWeight="SemiBold" FontFamily="{StaticResource DisplayFont}"/>
                     <TextBlock x:Name="Subtitle" Text="Smart DNS для ИИ" Style="{StaticResource Label}"/>
@@ -68,29 +68,51 @@
                 </StackPanel>
             </StackPanel>
 
+            <!-- Статистика активного подключения: справа от карточки, видна пока подключено.
+                 Колонка растягивается, поэтому на узком окне блоки переносятся, а кнопки не уезжают. -->
+            <WrapPanel x:Name="HeaderStats" Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                <StackPanel Margin="0,0,14,6">
+                    <TextBlock Text="Пинг" Style="{StaticResource Label}" FontSize="11"/>
+                    <StackPanel Orientation="Horizontal">
+                        <controls:PingBars x:Name="StatPingBars" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="StatPing" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </StackPanel>
+                <Rectangle Width="1" Height="30" Fill="{StaticResource Border}" Margin="0,2,14,8"/>
+                <StackPanel Margin="0,0,14,6">
+                    <TextBlock Text="Стабильность" Style="{StaticResource Label}" FontSize="11"/>
+                    <TextBlock x:Name="StatStab" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Rectangle Width="1" Height="30" Fill="{StaticResource Border}" Margin="0,2,14,8"/>
+                <StackPanel Margin="0,0,0,6">
+                    <TextBlock Text="ИИ доступно" Style="{StaticResource Label}" FontSize="11"/>
+                    <TextBlock x:Name="StatServices" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                </StackPanel>
+            </WrapPanel>
+
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="ModeButton" Content="Компактно" Click="Mode_Click" Style="{StaticResource Ghost}"
                         ToolTip="Компактный / полный вид"/>
-                <Button x:Name="SettingsButton" Content="Настройки" Click="Reload_Click" Style="{StaticResource Ghost}"
-                        ToolTip="Перечитать settings.json"/>
+                <Button x:Name="SettingsButton" Content="Настройки" Click="Settings_Click" Style="{StaticResource Ghost}"
+                        ToolTip="Настройки программы"/>
                 <Button x:Name="DataButton" Content="Данные" Click="OpenData_Click" Style="{StaticResource Ghost}"
                         ToolTip="Открыть папку с настройками и списком"/>
                 <Rectangle x:Name="HeaderSep" Width="1" Height="24" Fill="{StaticResource Border}" Margin="12,0"/>
                 <StackPanel x:Name="ApplyActions" Orientation="Horizontal">
                     <CheckBox x:Name="Watchdog" Content="Следить" IsChecked="True" Margin="0,0,14,0"
-                              ToolTip="Пока подключено, раз в минуту проверять DNS. 3 неудачи подряд — безопасное отключение"/>
+                              ToolTip="Пока подключено, DNS проверяется периодически (интервал задается в настройках). После трех неудач подряд подключение безопасно отключается"/>
                     <Button x:Name="SwitchButton" Content="Переключить сюда" Click="Switch_Click" Margin="0,0,8,0"
                             Padding="16,9" Visibility="Collapsed"
                             ToolTip="Подключиться к выбранному серверу вместо текущего"/>
                     <Button x:Name="ConnectButton" Content="Подключить" Click="Main_Click" Style="{StaticResource Primary}"
                             Padding="22,9" Margin="0" MinWidth="140"
-                            ToolTip="Подключиться к выбранному серверу (по умолчанию — к лучшему)"/>
+                            ToolTip="Подключиться к выбранному серверу. По умолчанию выбирается лучший"/>
                 </StackPanel>
             </StackPanel>
             <!-- Компактный вид: одна крупная кнопка подключения и краткий статус сервисов -->
             <Button x:Name="CompactConnect" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Padding="16,9"
                     Style="{StaticResource Primary}" Click="Main_Click" Visibility="Collapsed"
-                    ToolTip="Подключиться к выбранному серверу (по умолчанию — к лучшему)"/>
+                    ToolTip="Подключиться к выбранному серверу. По умолчанию выбирается лучший"/>
         </Grid>
 
         <!-- ================= ПРОВЕРКА ПОДКЛЮЧЕНИЯ ================= -->
@@ -100,11 +122,11 @@
                     <TextBlock Text="Проверка подключения" Style="{StaticResource H2}" VerticalAlignment="Center"/>
                     <Border x:Name="VerdictBadge" Margin="12,0,0,0" Padding="10,3" CornerRadius="6"
                             Background="{StaticResource Surface2}" VerticalAlignment="Center">
-                        <TextBlock x:Name="VerdictText" Text="ещё не проверялось" FontSize="12" Foreground="{StaticResource Muted}"/>
+                        <TextBlock x:Name="VerdictText" Text="еще не проверялось" FontSize="12" Foreground="{StaticResource Muted}"/>
                     </Border>
                     <Button x:Name="CompareToggle" Content="Скрыть" Click="CompareToggle_Click" Style="{StaticResource Ghost}"
-                            DockPanel.Dock="Right" Padding="10,5"/>
-                    <Button x:Name="ProbeButton" Content="Проверить сейчас" Click="Probe_Click" DockPanel.Dock="Right" Padding="12,5"
+                            DockPanel.Dock="Right"/>
+                    <Button x:Name="ProbeButton" Content="Проверить сейчас" Click="Probe_Click" DockPanel.Dock="Right"
                             ToolTip="Внешний IP, DNS, адреса и доступность ИИ-сервисов прямо сейчас"/>
                 </DockPanel>
                 <StackPanel x:Name="CompareGrid" Margin="0,12,0,0"/>
@@ -125,7 +147,7 @@
 
             <StackPanel x:Name="ListActions" Orientation="Horizontal" DockPanel.Dock="Right">
                 <Button Content="Перепроверить" Click="CheckAll_Click" Style="{StaticResource Ghost}"
-                        ToolTip="Ещё раз проверить все серверы в списке"/>
+                        ToolTip="Еще раз проверить все серверы в списке"/>
                 <Button Content="Найти новые серверы" Click="Fetch_Click"
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
@@ -150,7 +172,7 @@
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock x:Name="SelectionTitle" Text="Сервер не выбран" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                             <TextBlock x:Name="SelectionDetails" Style="{StaticResource Label}" TextTrimming="CharacterEllipsis"
-                                       Text="Выберите сервер. Двойной щелчок или Enter — подключиться, правая кнопка — действия."/>
+                                       Text="Выберите сервер. Двойной щелчок или Enter подключает к нему, правая кнопка открывает действия."/>
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -174,7 +196,7 @@
                         </ContextMenu>
                     </DataGrid.ContextMenu>
                     <DataGrid.Resources>
-                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#203A66"/>
+                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#263F66"/>
                         <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#203A66"/>
                         <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FFFFFF"/>
                     </DataGrid.Resources>
@@ -262,7 +284,7 @@
                                 <DataTemplate>
                                     <StackPanel x:Name="srvRoot" VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                            <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
                                             <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#173A2A"
                                                     VerticalAlignment="Center" Visibility="Collapsed">
                                                 <TextBlock Text="новый" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Ok}"/>
@@ -299,13 +321,13 @@
                         </DataGridTemplateColumn>
 
                         <!-- Локация DNS-сервера: флаг страны и название места -->
-                        <DataGridTemplateColumn x:Name="ColLocation" Header="ЛОКАЦИЯ" Width="280" MinWidth="160" SortMemberPath="Country">
+                        <DataGridTemplateColumn x:Name="ColLocation" Header="ЛОКАЦИЯ" Width="330" MinWidth="160" SortMemberPath="Country">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding LocationTooltip}">
                                         <Image Source="{Binding Flag}" Width="20" Height="14" Margin="0,0,8,0" Stretch="Uniform" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding LocationCell}" Foreground="{StaticResource Muted}" FontWeight="Normal"
-                                                   MaxWidth="250" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                   MaxWidth="290" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <TextBlock Text="⚠" Foreground="{StaticResource Warn}" Margin="6,0,0,0" VerticalAlignment="Center"
                                                    Visibility="{Binding HasLocationWarning, Converter={StaticResource BoolToVis}}"/>
                                     </StackPanel>
@@ -314,7 +336,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервисы: плашки -->
-                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="230" SortMemberPath="Summary">
+                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="240" SortMemberPath="Summary">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <ItemsControl ItemsSource="{Binding Chips}" ToolTip="{Binding Summary}" VerticalAlignment="Center">
@@ -348,25 +370,28 @@
                         </DataGridTemplateColumn>
 
                         <!-- Пинг -->
-                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="90" SortMemberPath="LatencyMs">
+                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="140" SortMemberPath="LatencyMs">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <TextBlock VerticalAlignment="Center" FontWeight="Normal">
-                                        <Run Text="{Binding PingText, Mode=OneWay}"/>
-                                        <Run Text="мс" Foreground="{StaticResource Muted}" FontSize="12"/>
-                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <controls:PingBars Latency="{Binding LatencyMs, Mode=OneWay}" Margin="0,0,7,0"/>
+                                        <TextBlock VerticalAlignment="Center" FontWeight="Normal">
+                                            <Run Text="{Binding PingText, Mode=OneWay}"/>
+                                            <Run Text="мс" Foreground="{StaticResource Muted}" FontSize="12"/>
+                                        </TextBlock>
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
                         <!-- Оценка -->
-                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="110" SortMemberPath="Score">
+                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="130" SortMemberPath="Score">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                        <ProgressBar Width="52" Height="4" Maximum="100" Value="{Binding Score, Mode=OneWay}"
+                                        <ProgressBar ToolTip="{Binding ScoreHint}" Width="52" Height="4" Maximum="100" Value="{Binding Score, Mode=OneWay}"
                                                      Foreground="{StaticResource Ok}" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Score}" Margin="8,0,0,0" FontWeight="Normal"
+                                        <TextBlock Text="{Binding Score}" ToolTip="{Binding ScoreHint}" Margin="8,0,0,0" FontWeight="Normal"
                                                    Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </DataTemplate>
@@ -374,7 +399,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Стабильность -->
-                        <DataGridTextColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Binding="{Binding Stability}" Width="115">
+                        <DataGridTextColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Binding="{Binding Stability}" Width="125">
                             <DataGridTextColumn.ElementStyle>
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Foreground" Value="{StaticResource Muted}"/>
@@ -384,12 +409,12 @@
                         </DataGridTextColumn>
 
                         <!-- Источник -->
-                        <DataGridTemplateColumn x:Name="ColSource" Header="ИСТОЧНИК" Width="*" MinWidth="150" SortMemberPath="SourceHost">
+                        <DataGridTemplateColumn x:Name="ColSource" Header="ИСТОЧНИК" Width="*" MinWidth="170" SortMemberPath="SourceHost">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <DockPanel ToolTip="{Binding SourceUrl}">
                                         <Button x:Name="srcBtn" DockPanel.Dock="Right" Content="Открыть ↗" Click="OpenSource_Click"
-                                                Style="{StaticResource Ghost}" Padding="8,3" Margin="6,0,8,0" FontSize="12"
+                                                Style="{StaticResource Ghost}" Padding="12,6" Margin="6,0,8,0" FontSize="12"
                                                 FontWeight="Normal" ToolTip="Открыть страницу, где найден сервер"/>
                                         <TextBlock Text="{Binding SourceHost}" Foreground="{StaticResource Muted}" FontWeight="Normal"
                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
