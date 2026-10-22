@@ -296,6 +296,7 @@ public partial class MainWindow : Window
             if (_after == null && _before == null) _before = now; else _after = now;
             ShowCompare();
         }
+        catch (Exception ex) { Log("Ошибка проверки подключения: " + ex.Message); }
         finally { ProbeButton.IsEnabled = true; }
     }
 

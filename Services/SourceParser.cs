@@ -73,6 +73,22 @@ public static partial class SourceParser
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             EnableMultipleHttp2Connections = true,
             ConnectTimeout = TimeSpan.FromSeconds(8),
+            // Адрес проверяем в момент соединения, а не один раз заранее: иначе DNS rebinding
+            // подменит адрес между проверкой и подключением. Публичны только IPv4-адреса.
+            ConnectCallback = async (ctx, ct) =>
+            {
+                var host = ctx.DnsEndPoint.Host;
+                var addrs = IPAddress.TryParse(host, out var lit) ? new[] { lit } : await Dns.GetHostAddressesAsync(host, ct);
+                var ip = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPublic(a.ToString()))
+                         ?? throw new HttpRequestException($"адрес {host} не публичный — запрос отменён");
+                var sock = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    await sock.ConnectAsync(new IPEndPoint(ip, ctx.DnsEndPoint.Port), ct);
+                    return new System.Net.Sockets.NetworkStream(sock, ownsSocket: true);
+                }
+                catch { sock.Dispose(); throw; }
+            },
         })
         { Timeout = TimeSpan.FromSeconds(20) };
         h.DefaultRequestHeaders.UserAgent.ParseAdd(
@@ -276,7 +292,7 @@ public static partial class SourceParser
         HttpResponseMessage? resp = null;
         for (int hop = 0; ; hop++)
         {
-            if (!await IsSafeTargetAsync(url, ct))
+            if (!IsSafeTarget(url))
                 throw new InvalidOperationException($"заблокирован адрес локальной сети: {url.Host}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             // Cookie отправляются только на тот домен, для которого заданы, и только по HTTPS.
@@ -313,28 +329,14 @@ public static partial class SourceParser
         return (body, isHtml);
     }
 
-    private static readonly ConcurrentDictionary<string, Task<bool>> SafeHosts = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>Парсер ходит только в интернет: никаких localhost, роутеров и адресов локальной сети,
-    /// даже если на них ведёт ссылка с чужой страницы.</summary>
-    private static Task<bool> IsSafeTargetAsync(Uri u, CancellationToken ct)
+    /// <summary>Парсер ходит только в интернет: по имени отсекаем localhost, .local, .lan и порты не для веба.
+    /// Сами адреса проверяет ConnectCallback в момент соединения (см. CreateHttp).</summary>
+    private static bool IsSafeTarget(Uri u)
     {
-        if (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return Task.FromResult(false);
-        if (!u.IsDefaultPort && u.Port is not (80 or 443 or 8080 or 8443)) return Task.FromResult(false);
-        if (u.IsLoopback || u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
-            u.Host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) || !u.Host.Contains('.'))
-            return Task.FromResult(false);
-        return SafeHosts.GetOrAdd(u.Host, async h =>
-        {
-            try
-            {
-                var addrs = IPAddress.TryParse(h, out var ip) ? new[] { ip } : await Dns.GetHostAddressesAsync(h, ct);
-                return addrs.Length > 0 && addrs.All(a =>
-                    a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? IsPublic(a.ToString())
-                    : !(a.IsIPv6LinkLocal || a.IsIPv6SiteLocal || IPAddress.IsLoopback(a) || a.IsIPv6UniqueLocal));
-            }
-            catch (Exception) { return true; } // не разрешилось — запрос всё равно упадёт сам
-        });
+        if (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return false;
+        if (!u.IsDefaultPort && u.Port is not (80 or 443 or 8080 or 8443)) return false;
+        return !(u.IsLoopback || u.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+                 u.Host.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) || !u.Host.Contains('.'));
     }
 
     /// <summary>Учитываем кодировку страницы (4PDA и многие старые форумы отдают windows-1251).</summary>

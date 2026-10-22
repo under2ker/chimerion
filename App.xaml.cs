@@ -23,7 +23,8 @@ public partial class App : Application
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {e.Exception}\n"); } catch (Exception) { }
-        MessageBox.Show(e.Exception.Message, "DNEX — ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show(e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
+            "DNEX — ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
 }

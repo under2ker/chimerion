@@ -31,7 +31,7 @@ public static class ConnectionProbe
         UseCookies = false,
         ConnectTimeout = TimeSpan.FromSeconds(6),
     })
-    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 256 * 1024 };
+    { Timeout = TimeSpan.FromSeconds(10) };
 
     public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default)
     {
@@ -63,6 +63,16 @@ public static class ConnectionProbe
         {
             try { snap.PublicIp = (await Http.GetStringAsync("https://api.ipify.org", ct)).Trim(); } catch (Exception) { }
         }
+    }
+
+    /// <summary>Читаем не больше 64 КБ: для поиска маркера блокировки этого достаточно, большой ответ не даст ложную ошибку.</summary>
+    private static async Task<string> ReadLimitedAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        var buf = new byte[64 * 1024];
+        int len = 0, n;
+        await using var st = await resp.Content.ReadAsStreamAsync(ct);
+        while (len < buf.Length && (n = await st.ReadAsync(buf.AsMemory(len), ct)) > 0) len += n;
+        return System.Text.Encoding.UTF8.GetString(buf, 0, len);
     }
 
     /// <summary>Понятные короткие причины вместо текста исключений .NET.</summary>
@@ -99,8 +109,7 @@ public static class ConnectionProbe
         try
         {
             using var resp = await Http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
-            var body = await resp.Content.ReadAsStringAsync(ct);
-            if (body.Length > 64 * 1024) body = body[..(64 * 1024)];
+            var body = await ReadLimitedAsync(resp, ct);
             int code = (int)resp.StatusCode;
             access = t.BlockedStatusCodes.Contains(code) || t.BlockedMarkers.Any(m => body.Contains(m, StringComparison.OrdinalIgnoreCase))
                 ? "✗ регион закрыт" : "✓ доступен";
