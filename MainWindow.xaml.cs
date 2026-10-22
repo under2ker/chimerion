@@ -40,7 +40,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         SizeChanged += (_, _) => ApplyResponsive();
 
-        BusySpinner.Content = MakeSpinner(14, (Brush)FindResource("Accent"));
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
         Application.Current.SessionEnding += (_, _) => _exitRequested = true;
         AddPanel.RenderTransform = new TranslateTransform();
@@ -1603,7 +1602,6 @@ public partial class MainWindow : Window
         _working = true;
         ListActions.IsEnabled = ApplyActions.IsEnabled = false;
         StopButton.Visibility = Visibility.Visible;
-        BusyPanel.Visibility = _compact ? Visibility.Collapsed : Visibility.Visible; // в компактном виде шаг показывает кнопка
         UpdateStatusVisuals();
         return _cts.Token;
     }
@@ -1613,7 +1611,6 @@ public partial class MainWindow : Window
         _working = false;
         ListActions.IsEnabled = ApplyActions.IsEnabled = true;
         StopButton.Visibility = Visibility.Collapsed;
-        BusyPanel.Visibility = Visibility.Collapsed;
         ProgressText.Text = "";
         WorkBar.Visibility = Visibility.Collapsed;
         UpdateStatusVisuals();

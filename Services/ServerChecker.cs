@@ -114,11 +114,21 @@ public class ServerChecker
             s.Summary = string.Join(" · ", results.Select(r => r.Part));
             s.LastError = error;
             s.LastChecked = DateTime.Now;
+            bool appeared = status is ServerStatus.Ok or ServerStatus.Partial && s.Status is not (ServerStatus.Ok or ServerStatus.Partial);
             s.Status = status;
+            if (appeared) MarkAppeared(s);
             s.ChecksTotal++;
             if (status != ServerStatus.Fail) { s.ChecksOk++; s.FailStreak = 0; } else s.FailStreak++;
             s.NotifyStability();
         });
+    }
+
+    /// <summary>Сервер впервые стал рабочим: его строка появляется с анимацией, флаг снимается через секунду.</summary>
+    private async void MarkAppeared(DnsServer s)
+    {
+        s.JustAdded = true;
+        await Task.Delay(1200).ConfigureAwait(false);
+        await OnUi(() => s.JustAdded = false);
     }
 
     private async Task<TargetResult> CheckTargetAsync(DnsServer s, CheckTarget t, CancellationToken ct)
