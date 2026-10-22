@@ -6,8 +6,83 @@
         MinHeight="560" MinWidth="1000" WindowStartupLocation="CenterScreen"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
-        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
-    <Grid x:Name="RootGrid" Margin="20,16,20,16">
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
+        WindowStyle="None">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <!-- Кнопки управления окном: свернуть, развернуть, закрыть -->
+        <Style x:Key="CaptionButton" TargetType="Button">
+            <Setter Property="Width" Value="46"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource Surface2}"/>
+                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CaptionClose" TargetType="Button" BasedOn="{StaticResource CaptionButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#C23B47"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Своя полоса заголовка: логотип, кнопка проверки обновления и кнопки окна -->
+        <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="40" Background="#101217">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Margin="14,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False">
+                <Image Source="/Assets/dnex-logo.png" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <TextBlock Text="DNEX" Margin="8,0,0,0" FontSize="12" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <Button Grid.Column="1" x:Name="CheckUpdateButton" Content="Проверить обновление" Click="CheckUpdate_Click"
+                    Style="{StaticResource Ghost}" Padding="12,4" Margin="0,0,8,0" FontSize="12" VerticalAlignment="Center"
+                    WindowChrome.IsHitTestVisibleInChrome="True"
+                    ToolTip="Проверить, есть ли новая версия DNEX на GitHub"/>
+            <Button Grid.Column="2" Content="–" Style="{StaticResource CaptionButton}" Click="Minimize_Click"
+                    WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Свернуть"/>
+            <Button Grid.Column="3" x:Name="MaxButton" Content="☐" Style="{StaticResource CaptionButton}" Click="MaxRestore_Click"
+                    WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Развернуть"/>
+            <Button Grid.Column="4" Content="✕" Style="{StaticResource CaptionClose}" Click="Close_Click"
+                    WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Закрыть"/>
+        </Grid>
+
+    <Grid x:Name="RootGrid" Margin="20,8,20,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- шапка -->
             <RowDefinition Height="Auto"/>  <!-- проверка подключения -->
@@ -578,4 +653,5 @@
             </StackPanel>
         </Border>
     </Grid>
+    </DockPanel>
 </Window>
