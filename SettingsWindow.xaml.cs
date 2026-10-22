@@ -17,6 +17,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => Services.DarkTitle.Apply(this);
         _settings = settings;
         RefDoh.Text = settings.ReferenceDoh;
         TimeoutBox.Text = settings.TimeoutSeconds.ToString();
