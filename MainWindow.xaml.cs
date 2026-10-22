@@ -355,7 +355,8 @@ public partial class MainWindow : Window
     {
         Brush B(string k) => (Brush)FindResource(k);
         var host = CompareGrid;
-        var cur = _after ?? _before;
+        // В компактном виде блок сам показывает последнюю проверку сервисов (фоновую или при подключении)
+        var cur = _after ?? _before ?? (_compact ? _traySnap : null);
         if (cur != null)
         {
             // Пересобираем блок только при новом снимке: иначе плитки перерисовываются на каждое обновление
@@ -370,7 +371,7 @@ public partial class MainWindow : Window
         {
             host.Children.Add(new TextBlock
             {
-                Text = "Нажмите «Подключить», чтобы увидеть сравнение до и после.",
+                Text = _compact ? "Проверяю ИИ-сервисы…" : "Нажмите «Подключить», чтобы увидеть сравнение до и после.",
                 Foreground = B("Muted"), TextWrapping = TextWrapping.Wrap,
             });
             VerdictText.Text = "еще не проверялось";
@@ -570,6 +571,7 @@ public partial class MainWindow : Window
         }
         ApplyResponsive();
         ShowCompare();
+        if (compact) _ = RefreshTrayServicesAsync(); // компактный вид сразу проверяет сервисы
         try { Storage.Save("ui.json", new Dictionary<string, bool> { ["compact"] = compact }); } catch (Exception) { }
     }
 
@@ -1285,6 +1287,7 @@ public partial class MainWindow : Window
         }
         UpdateTrayServices();
         UpdateHeaderStats();
+        if (_compact && snap != null) ShowCompare(); // компактный блок обновляется сам
         _trayTimer.Stop();
         _trayTimer.Start();
     }
@@ -1473,6 +1476,7 @@ public partial class MainWindow : Window
         Show();
         WindowState = WindowState.Normal;
         Activate();
+        if (_compact) _ = RefreshTrayServicesAsync(); // открыли окно — сервисы проверяем заново
     }
 
     private void ExitFromTray()
