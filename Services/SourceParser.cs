@@ -407,9 +407,16 @@ public static partial class SourceParser
         }
     }
 
+    /// <summary>Ссылки Telegram, которые не ведут на превью канала: боты, «поделиться», приглашения. В них нет списков серверов.</summary>
+    private static bool IsTelegramNonChannel(Uri u)
+    {
+        if (u.Host is not ("t.me" or "telegram.me" or "www.t.me")) return false;
+        return !u.AbsolutePath.Trim('/').StartsWith("s/", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool ShouldFollow(AppSettings st, Uri from, Uri link, string text)
     {
-        if (IsBlocked(st, link)) return false;
+        if (IsBlocked(st, link) || IsTelegramNonChannel(link)) return false;
         var path = link.AbsolutePath.ToLowerInvariant();
         if (BinaryExt.Any(path.EndsWith)) return false;
         if (link.Host != from.Host && !st.FollowExternalLinks) return false;
