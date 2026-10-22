@@ -299,6 +299,15 @@ public class DnsServer : INotifyPropertyChanged
 
 public sealed record ServiceChip(string Name, string State)
 {
+    /// <summary>Логотип сервиса для чипа в таблице. Null, если логотипа нет.</summary>
+    public System.Windows.Media.ImageSource? Logo => Name switch
+    {
+        "ChatGPT" => System.Windows.Application.Current?.TryFindResource("LogoOpenAI") as System.Windows.Media.ImageSource,
+        "Claude" => System.Windows.Application.Current?.TryFindResource("LogoClaude") as System.Windows.Media.ImageSource,
+        "Gemini" => System.Windows.Application.Current?.TryFindResource("LogoGemini") as System.Windows.Media.ImageSource,
+        _ => null,
+    };
+
     public static List<ServiceChip> Parse(string summary) =>
         string.IsNullOrWhiteSpace(summary) ? new()
         : summary.Split(" · ", StringSplitOptions.RemoveEmptyEntries).Select(p =>

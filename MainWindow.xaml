@@ -356,7 +356,10 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border x:Name="chip" Style="{StaticResource Chip}">
-                                                    <TextBlock x:Name="t" Text="{Binding Name}" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Muted}"/>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <Image Source="{Binding Logo}" Width="12" Height="12" Margin="0,0,5,0" Stretch="Uniform" VerticalAlignment="Center"/>
+                                                        <TextBlock x:Name="t" Text="{Binding Name}" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Muted}"/>
+                                                    </StackPanel>
                                                 </Border>
                                                 <DataTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding State}" Value="ok">
