@@ -1253,11 +1253,30 @@ public partial class MainWindow : Window
     /// <summary>Запоминает свежий снимок для трея и перезапускает отсчет до следующей проверки.</summary>
     private void SetTraySnapshot(NetSnapshot? snap)
     {
-        if (snap != null) _traySnap = snap;
+        if (snap != null)
+        {
+            _traySnap = snap;
+            SyncActiveSummary(snap);
+        }
         UpdateTrayServices();
         UpdateHeaderStats();
         _trayTimer.Stop();
         _trayTimer.Start();
+    }
+
+    /// <summary>
+    /// Результат проверки подключения пишем в строку активного сервера: таблица показывает то, что видит пользователь
+    /// при подключении, а не старую проверку сервера. Остальные серверы не меняются.
+    /// </summary>
+    private void SyncActiveSummary(NetSnapshot snap)
+    {
+        if (snap.Services.Count == 0) return;
+        var active = DnsSwitcher.GetActive();
+        var srv = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
+        if (srv == null) return;
+        string Mark(ServiceState x) => x.Access.StartsWith("✓") ? "✓" : x.Access.Contains("закрыт") ? "✗ регион" : "✗";
+        srv.Summary = string.Join(" · ", snap.Services.Select(x => $"{x.Name} {Mark(x)}"));
+        srv.Status = snap.Services.All(x => x.Access.StartsWith("✓")) ? ServerStatus.Ok : ServerStatus.Partial;
     }
 
     /// <summary>Строки статистики в шапке справа от карточки подключения: пинг, стабильность, сервисы.</summary>
