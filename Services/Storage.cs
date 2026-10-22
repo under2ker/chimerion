@@ -62,7 +62,7 @@ public static class Storage
         }
         catch
         {
-            // Повреждённый файл не теряем — откладываем копию.
+            // Поврежденный файл не теряем — откладываем копию.
             File.Copy(path, path + ".broken", overwrite: true);
             return createDefault();
         }

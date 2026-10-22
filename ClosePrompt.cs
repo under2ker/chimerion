@@ -6,7 +6,7 @@ namespace Dnex;
 
 /// <summary>
 /// Вопрос при выходе с активным подключением. Системное MessageBox делает «Да» (отключиться) кнопкой
-/// по умолчанию: лишний Enter отключает DNS. Здесь по умолчанию выбрано «Нет» (DNS остаётся как есть),
+/// по умолчанию: лишний Enter отключает DNS. Здесь по умолчанию выбрано «Нет» (DNS остается как есть),
 /// Esc и закрытие окна — «Отмена» (не выходить).
 /// </summary>
 internal static class ClosePrompt
@@ -34,7 +34,7 @@ internal static class ClosePrompt
         });
         sp.Children.Add(new TextBlock
         {
-            Text = "Нет — выйти, оставив DNS как есть\nДа — отключиться и выйти\nОтмена — не выходить",
+            Text = "Нет: выйти, оставив DNS как есть\nДа: отключиться и выйти\nОтмена: не выходить",
             Foreground = (Brush)Application.Current.FindResource("Muted"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 16),
@@ -54,7 +54,7 @@ internal static class ClosePrompt
                 Content = text,
                 MinWidth = 110,
                 Margin = new Thickness(8, 0, 0, 0),
-                Padding = new Thickness(14, 8, 14, 8),
+                Padding = new Thickness(18, 9, 18, 9),
                 IsDefault = isDefault,
                 IsCancel = isCancel,
             };

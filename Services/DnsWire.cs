@@ -96,7 +96,7 @@ public static class DnsWire
                 var r = await udp.ReceiveAsync(cts.Token);
                 if (!r.RemoteEndPoint.Address.Equals(server)) continue;
                 try { return (ParseA(r.Buffer, id), sw.ElapsedMilliseconds); }
-                catch (IdMismatchException) { /* чужой пакет — ждём дальше */ }
+                catch (IdMismatchException) { /* чужой пакет — ждем дальше */ }
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)

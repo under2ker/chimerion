@@ -49,7 +49,7 @@ public static class DnsSwitcher
             "$idx = (Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).ifIndex\n" +
             "$a = Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $idx -contains $_.InterfaceIndex } | ForEach-Object { $_.ServerAddresses }\n" +
             "($a | Select-Object -Unique) -join ', '");
-        return string.IsNullOrWhiteSpace(output) ? "не определён" : output;
+        return string.IsNullOrWhiteSpace(output) ? "не определен" : output;
     }
 
     public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log)
@@ -67,7 +67,7 @@ public static class DnsSwitcher
 
             if (addrs.Count == 0)
             {
-                // Для DoH Windows нужен IP сервера: узнаём его через эталонный резолвер.
+                // Для DoH Windows нужен IP сервера: узнаем его через эталонный резолвер.
                 var (ips, _) = await DnsWire.ResolveDohAsync(settings.ReferenceDoh, u.Host, TimeSpan.FromSeconds(8), CancellationToken.None);
                 addrs.AddRange(ips.Take(2).Select(i => i.ToString()));
                 log($"IP DoH-сервера {u.Host}: {string.Join(", ", addrs)}");
@@ -87,17 +87,17 @@ public static class DnsSwitcher
             sb.AppendLine("if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {");
             foreach (var a in addrs)
             {
-                // Существующую системную запись DoH не трогаем; свою помечаем строкой ADDED, чтобы при отключении удалить только её.
+                // Существующую системную запись DoH не трогаем; свою помечаем строкой ADDED, чтобы при отключении удалить только ее.
                 sb.AppendLine($"  if (-not (Get-DnsClientDohServerAddress -ServerAddress '{a}' -ErrorAction SilentlyContinue)) {{");
                 sb.AppendLine($"    Add-DnsClientDohServerAddress -ServerAddress '{a}' -DohTemplate '{doh}' -AllowFallbackToUdp $false -AutoUpgrade $true; Write-Output 'ADDED {a}' }}");
             }
             sb.AppendLine("  Write-Output 'DoH зарегистрирован'");
-            sb.AppendLine("} else { Write-Output 'Эта версия Windows не поддерживает DoH — используется обычный DNS' }");
+            sb.AppendLine("} else { Write-Output 'Эта версия Windows не поддерживает DoH, используется обычный DNS' }");
         }
         sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
         sb.AppendLine("Clear-DnsClientCache");
 
-        // Запись о подключении сохраняем ДО смены DNS: если что-то упадёт посередине, отключение всё равно сработает.
+        // Запись о подключении сохраняем ДО смены DNS: если что-то упадет посередине, отключение все равно сработает.
         var prev = GetActive();
         var active = new ActiveConnection
         {
@@ -120,15 +120,15 @@ public static class DnsSwitcher
         }
         catch (OperationCanceledException)
         {
-            // Права не выданы (UAC отклонён): скрипт не запускался, DNS не менялся — запись о подключении не нужна.
+            // Права не выданы (UAC отклонен): скрипт не запускался, DNS не менялся — запись о подключении не нужна.
             var path = Storage.PathOf(ActiveFile);
             if (File.Exists(path)) File.Delete(path);
             throw;
         }
         catch (Exception)
         {
-            // Скрипт мог успеть поменять часть адаптеров: возвращаем всё, что было до подключения.
-            log("Подключение не удалось — возвращаю исходные настройки DNS");
+            // Скрипт мог успеть поменять часть адаптеров: возвращаем все, что было до подключения.
+            log("Подключение не удалось, возвращаю исходные настройки DNS");
             try { await RestoreAsync(log); }
             catch (Exception re) { log("Откат не удался, см. журнал: " + re.Message); }
             throw;
@@ -219,7 +219,7 @@ public static class DnsSwitcher
             else if (line.Length > 0) log("  " + line);
         }
         if (code != 0) throw new InvalidOperationException("Ошибка отключения, см. журнал");
-        if (left) throw new InvalidOperationException("DNS сброшен не на всех адаптерах — см. журнал");
+        if (left) throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал");
 
         if (File.Exists(path)) File.Delete(path);
         var activePath = Storage.PathOf(ActiveFile);
@@ -254,7 +254,7 @@ public static class DnsSwitcher
 
     /// <summary>
     /// Запуск PowerShell. Программа работает без прав администратора; права запрашиваются (UAC)
-    /// только на сам скрипт смены DNS. Скрипт передаётся через -EncodedCommand прямо в аргументах,
+    /// только на сам скрипт смены DNS. Скрипт передается через -EncodedCommand прямо в аргументах,
     /// без временного .ps1-файла, который другой процесс мог бы подменить до запуска.
     /// </summary>
     public static async Task<(int Code, string Output)> RunPsAsync(string script, bool elevated = false)
@@ -263,10 +263,10 @@ public static class DnsSwitcher
                                       "WindowsPowerShell", "v1.0", "powershell.exe"); // полный путь — не подхватим чужой powershell.exe из PATH
         if (!elevated || IsAdmin()) return await RunHiddenAsync(powershell, script);
 
-        // Повышенный процесс не даёт перенаправить вывод, поэтому он пишет его в файл в профиле пользователя.
+        // Повышенный процесс не дает перенаправить вывод, поэтому он пишет его в файл в профиле пользователя.
         Directory.CreateDirectory(Storage.Dir);
         var outFile = Path.Combine(Storage.Dir, $"ps-{Guid.NewGuid():N}.log");
-        // Скрипт передаётся внутрь как строка и разбирается через [scriptblock]::Create внутри try:
+        // Скрипт передается внутрь как строка и разбирается через [scriptblock]::Create внутри try:
         // так даже синтаксическая ошибка попадает в журнал, а не теряется молча.
         var inner = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
         var of = outFile.Replace("'", "''");
@@ -294,7 +294,7 @@ public static class DnsSwitcher
         }
         catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
         {
-            throw new OperationCanceledException("Запрос прав администратора отклонён");
+            throw new OperationCanceledException("Запрос прав администратора отклонен");
         }
         finally
         {

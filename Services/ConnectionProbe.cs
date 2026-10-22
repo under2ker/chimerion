@@ -21,7 +21,7 @@ public sealed record ServiceState(string Name, string Host, string ResolvedIp, b
 
 /// <summary>
 /// Smart DNS не меняет внешний IP — это нормально. Подключение видно по другому:
-/// адреса ИИ-сервисов в системе меняются на адреса прокси, и сервис перестаёт отвечать «регион не поддерживается».
+/// адреса ИИ-сервисов в системе меняются на адреса прокси, и сервис перестает отвечать «регион не поддерживается».
 /// </summary>
 public static class ConnectionProbe
 {
@@ -111,8 +111,12 @@ public static class ConnectionProbe
             using var resp = await Http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
             var body = await ReadLimitedAsync(resp, ct);
             int code = (int)resp.StatusCode;
-            access = t.BlockedStatusCodes.Contains(code) || t.BlockedMarkers.Any(m => body.Contains(m, StringComparison.OrdinalIgnoreCase))
-                ? "✗ регион закрыт" : "✓ доступен";
+            access = ServiceAccess.Classify(t, code, body) switch
+            {
+                ServiceAccess.Result.Open => "✓ доступен",
+                ServiceAccess.Result.Closed => "✗ доступ закрыт",
+                _ => "✗ сервис не отвечает",
+            };
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { access = "✗ " + Friendly(e); }
 

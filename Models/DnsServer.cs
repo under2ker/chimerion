@@ -112,7 +112,7 @@ public class DnsServer : INotifyPropertyChanged
     public string LocationNote => string.IsNullOrEmpty(Country) ? ""
         : string.IsNullOrEmpty(Country2) ? "вторая база не ответила"
         : Country2 == Country ? "обе базы совпадают"
-        : $"базы расходятся: ipinfo — {CountryName}, ipwho.is — {CountryName2}";
+        : $"базы расходятся: ipinfo: {CountryName}, ipwho.is: {CountryName2}";
 
     [JsonIgnore]
     public bool HasLocationWarning => !string.IsNullOrEmpty(Country) && !string.IsNullOrEmpty(Country2) && Country2 != Country;
@@ -120,7 +120,7 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Подсказка к месту: сверка баз и оговорка, что это данные IP-баз, а не физическое место.</summary>
     [JsonIgnore]
     public string LocationTooltip => string.IsNullOrEmpty(Country) ? LocationText
-        : $"{LocationText}\n{LocationNote}\nДанные IP-баз, точное физическое место может отличаться";
+        : $"{LocationText}\n{LocationNote}\nПо данным IP-баз. Точное физическое место может отличаться";
 
     /// <summary>Когда геолокацию в последний раз определяли. Через 30 дней — снова.</summary>
     public DateTime? GeoCheckedAt { get; set; }
@@ -133,7 +133,7 @@ public class DnsServer : INotifyPropertyChanged
     public string LocationText => string.IsNullOrEmpty(Country) ? "—"
         : string.IsNullOrEmpty(City) ? CountryName : $"{CountryName}, {City}";
 
-    /// <summary>Адрес прокси Smart DNS: сервер подменяет им адрес ИИ-сервиса. Берётся из проверки.</summary>
+    /// <summary>Адрес прокси Smart DNS: сервер подменяет им адрес ИИ-сервиса. Берется из проверки.</summary>
     public string? ProxyIp { get; set; }
 
     /// <summary>Страна прокси Smart DNS по первой и второй базе.</summary>
@@ -230,6 +230,37 @@ public class DnsServer : INotifyPropertyChanged
 
     [JsonIgnore]
     public string Stability => ChecksTotal == 0 ? "—" : $"{ChecksOk * 100 / ChecksTotal}% ({ChecksTotal})";
+
+    private static readonly HashSet<string> CatalogNames = Catalog.Servers().Select(c => c.Name).ToHashSet();
+
+    /// <summary>Короткая подпись в таблице и трее. Адрес-ссылку не показываем:
+    /// встроенные сервисы — по названию, остальные — тип, страна и конец IP. Полное имя — в подсказке.</summary>
+    [JsonIgnore]
+    public string ShortName
+    {
+        get
+        {
+            var n = DisplayName;
+            if (CatalogNames.Contains(n)) return Clip(n);
+            // Страна и город говорят больше, чем конец IP; адрес и так показан строкой ниже
+            if (!string.IsNullOrEmpty(Country))
+                return Clip(CountryName + (string.IsNullOrEmpty(City) ? "" : ", " + GeoLocation.CityName(City)));
+            return Clip(string.IsNullOrEmpty(DohUrl) ? n : "DoH · " + n);
+        }
+    }
+
+    /// <summary>Обрезает подпись, чтобы не растягивать таблицу и меню.</summary>
+    public static string Clip(string s, int max = 28) => s.Length <= max ? s : s[..(max - 1)] + "…";
+
+    /// <summary>Подсказка к оценке: из чего она складывается и чем отличается от стабильности.</summary>
+    [JsonIgnore]
+    public string ScoreHint =>
+        "Оценка 0–100: совокупное качество сервера.\n" +
+        "• стабильность (доля успешных проверок): до 60 баллов\n" +
+        "• пинг: чем ниже, тем лучше, до 25\n" +
+        "• разброс пинга между замерами, до 15\n" +
+        "«Частично» (работают не все сервисы) снижает оценку.\n" +
+        "Стабильность считается только по доле успешных проверок. Оценка учитывает еще и пинг с разбросом.";
 
     /// <summary>Порядок сортировки: рабочие сверху, нерабочие внизу.</summary>
     [JsonIgnore]

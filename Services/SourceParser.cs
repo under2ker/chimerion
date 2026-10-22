@@ -68,7 +68,7 @@ public static partial class SourceParser
         var h = new HttpClient(new SocketsHttpHandler
         {
             AutomaticDecompression = DecompressionMethods.All,
-            AllowAutoRedirect = false, // переадресации обрабатываем сами: проверяем адрес и не отдаём Cookie чужому сайту
+            AllowAutoRedirect = false, // переадресации обрабатываем сами: проверяем адрес и не отдаем Cookie чужому сайту
             MaxConnectionsPerServer = 4,
             PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             EnableMultipleHttp2Connections = true,
@@ -80,7 +80,7 @@ public static partial class SourceParser
                 var host = ctx.DnsEndPoint.Host;
                 var addrs = IPAddress.TryParse(host, out var lit) ? new[] { lit } : await Dns.GetHostAddressesAsync(host, ct);
                 var ip = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPublic(a.ToString()))
-                         ?? throw new HttpRequestException($"адрес {host} не публичный — запрос отменён");
+                         ?? throw new HttpRequestException($"адрес {host} не публичный, запрос отменен");
                 var sock = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
                 try
                 {
@@ -103,7 +103,7 @@ public static partial class SourceParser
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Cookies = st.HostCookies.ToDictionary(kv => kv.Key, kv => Storage.Unprotect(kv.Value), StringComparer.OrdinalIgnoreCase);
-        HostGates.Clear(); // словарь по хостам не растёт между запусками
+        HostGates.Clear(); // словарь по хостам не растет между запусками
         var found = new ConcurrentDictionary<string, DnsServer>();
         var visited = new ConcurrentDictionary<string, byte>();
         var exclude = st.ExcludeIps.ToHashSet();
@@ -162,7 +162,7 @@ public static partial class SourceParser
                 List<DnsServer> items;
                 try
                 {
-                    // Разбор тяжёлый (регулярки по всей странице) — уводим с потоков ввода-вывода.
+                    // Разбор тяжелый (регулярки по всей странице) — уводим с потоков ввода-вывода.
                     items = await Task.Run(() => job.Type.Equals("json", StringComparison.OrdinalIgnoreCase)
                         ? SafeParseJson(body, job.SourceName, pageUrl)
                         : ParseText(body, job.SourceName, pageUrl, isHtml), c);
@@ -170,7 +170,7 @@ public static partial class SourceParser
                 catch (RegexMatchTimeoutException)
                 {
                     Interlocked.Increment(ref errors);
-                    return; // слишком тяжёлая/вредоносная страница
+                    return; // слишком тяжелая/вредоносная страница
                 }
 
                 int added = 0;
@@ -183,7 +183,7 @@ public static partial class SourceParser
                         onFound?.Invoke(it); // показываем в списке сразу, не дожидаясь конца обхода
                     }
                 }
-                if (added > 0) { log($"+{added} — {pageUrl}"); Report(job.Url.Host); }
+                if (added > 0) { log($"+{added}: {pageUrl}"); Report(job.Url.Host); }
 
                 // Поиск новых сервисов: у найденного DNS-хоста (dns.example.ru) открываем главную сайта —
                 // там обычно инструкция с IPv4-адресами, которых нет в статье, где сервис упомянули.
@@ -227,7 +227,7 @@ public static partial class SourceParser
             Report("следующий уровень");
         }
 
-        log($"Парсер завершён: страниц {Math.Min(pages, st.CrawlMaxPages)}, ошибок {errors}, серверов {found.Count}");
+        log($"Парсер завершен: страниц {Math.Min(pages, st.CrawlMaxPages)}, ошибок {errors}, серверов {found.Count}");
         return found.Values.ToList();
     }
 
@@ -456,7 +456,7 @@ public static partial class SourceParser
     // ---------- Разбор содержимого ----------
 
     /// <summary>
-    /// IP на одной строке — пара основной/резервный. Для HTML-страниц IP берётся только если
+    /// IP на одной строке — пара основной/резервный. Для HTML-страниц IP берется только если
     /// рядом есть слова про DNS, чтобы не собирать случайные числа из статей.
     /// </summary>
     public static List<DnsServer> ParseText(string raw, string sourceName, string pageUrl, bool isHtml)
@@ -560,7 +560,7 @@ public static partial class SourceParser
             .ToList();
     }
 
-    /// <summary>Обычные публичные DNS (не Smart DNS): к ИИ не помогают, в список не берём.</summary>
+    /// <summary>Обычные публичные DNS (не Smart DNS): к ИИ не помогают, в список не берем.</summary>
     private static readonly string[] PlainResolverHosts =
     {
         "dns.google", "dns.google.com", "cloudflare-dns.com", "dns.cloudflare.com", "one.one.one.one",

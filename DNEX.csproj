@@ -12,9 +12,22 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <ApplicationIcon>Assets\dnex.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\dnex-logo.png" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- Тесты живут отдельно и не входят в программу -->
     <Compile Remove="tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Только NotifyIcon для трея; WinForms не импортируется глобально, имена полные -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
   </ItemGroup>
 
   <ItemGroup>

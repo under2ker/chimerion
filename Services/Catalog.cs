@@ -23,7 +23,7 @@ public static class Catalog
         new("Bezmezhau",       "https://github.com/Kam300/KodVsego-SmartDNS",  new[] { "143.20.64.55", "31.58.216.201" },   "https://dns.bezmezhau.com/dns-query"),
     };
 
-    /// <summary>Каждый сервис даёт две записи: обычный DNS по IP и DoH — они проверяются отдельно.</summary>
+    /// <summary>Каждый сервис дает две записи: обычный DNS по IP и DoH — они проверяются отдельно.</summary>
     public static IEnumerable<DnsServer> Servers()
     {
         foreach (var e in Known)
