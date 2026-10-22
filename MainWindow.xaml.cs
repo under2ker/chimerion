@@ -346,14 +346,23 @@ public partial class MainWindow : Window
         _ => null,
     };
 
+    private string? _compareSig;
+
     private void ShowCompare(bool disconnected = false)
     {
         Brush B(string k) => (Brush)FindResource(k);
         var host = CompareGrid;
+        var cur = _after ?? _before;
+        if (cur != null)
+        {
+            // Пересобираем блок только при новом снимке: иначе плитки перерисовываются на каждое обновление
+            var sig = $"{disconnected}|{cur.Taken:O}|{_before?.Taken:O}|{_after?.Taken:O}|{cur.SystemDns}|" +
+                      string.Join(";", cur.Services.Select(x => $"{x.Name}{x.Access}{x.ResolvedIp}{x.Proxied}"));
+            if (sig == _compareSig) return;
+            _compareSig = sig;
+        }
         host.Children.Clear();
         _tileGeo.Clear();
-
-        var cur = _after ?? _before;
         if (cur == null)
         {
             host.Children.Add(new TextBlock
@@ -1680,6 +1689,8 @@ public partial class MainWindow : Window
 
     /// <summary>Сохранение в фоне: снимок списка берется в UI-потоке, запись на диск — вне его.
     /// Частые вызовы схлопываются в одну запись.</summary>
+    private string? _lastServersJson;
+
     private async void SaveServers()
     {
         if (_savePending) return;
@@ -1690,7 +1701,16 @@ public partial class MainWindow : Window
         // ConfigureAwait(false): продолжение не ждет UI-поток. Иначе SaveServersNow при закрытии окна
         // держит UI-поток в Wait() на замке, который отпускается только в этом продолжении — взаимная блокировка.
         await _saveLock.WaitAsync().ConfigureAwait(false);
-        try { await Task.Run(() => Storage.Save(ServersFile, snapshot)).ConfigureAwait(false); }
+        try
+        {
+            await Task.Run(() =>
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(snapshot, Storage.Options);
+                if (json == _lastServersJson) return; // содержимое не менялось: на диск не пишем
+                Storage.SaveJson(ServersFile, json);
+                _lastServersJson = json;
+            }).ConfigureAwait(false);
+        }
         catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); }
         finally { _saveLock.Release(); }
     }
@@ -1698,7 +1718,11 @@ public partial class MainWindow : Window
     private void SaveServersNow()
     {
         _saveLock.Wait();
-        try { Storage.Save(ServersFile, _servers.ToList()); }
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(_servers.ToList(), Storage.Options);
+            if (json != _lastServersJson) { Storage.SaveJson(ServersFile, json); _lastServersJson = json; }
+        }
         catch (Exception) { }
         finally { _saveLock.Release(); }
     }

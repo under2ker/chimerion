@@ -43,14 +43,19 @@ public static class DnsSwitcher
         public string? Static { get; set; }
     }
 
-    public static async Task<string> GetCurrentAsync()
+    /// <summary>DNS системы: читаем сетевые интерфейсы напрямую. Раньше запускался PowerShell, это секунда на каждую проверку.</summary>
+    public static Task<string> GetCurrentAsync() => Task.Run(() =>
     {
-        var (_, output) = await RunPsAsync(
-            "$idx = (Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).ifIndex\n" +
-            "$a = Get-DnsClientServerAddress -AddressFamily IPv4 | Where-Object { $idx -contains $_.InterfaceIndex } | ForEach-Object { $_.ServerAddresses }\n" +
-            "($a | Select-Object -Unique) -join ', '");
-        return string.IsNullOrWhiteSpace(output) ? "не определен" : output;
-    }
+        var addrs = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                     && n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+            .SelectMany(n => n.GetIPProperties().DnsAddresses)
+            .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+            .Select(a => a.ToString())
+            .Distinct()
+            .ToList();
+        return addrs.Count == 0 ? "не определен" : string.Join(", ", addrs);
+    });
 
     public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log)
     {
