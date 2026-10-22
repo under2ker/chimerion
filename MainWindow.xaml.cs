@@ -72,6 +72,8 @@ public partial class MainWindow : Window
         _view.Filter = FilterServer;
         // Рабочие серверы наверху. Сортировка НЕ живая: строки не переставляются при обновлении статуса и пинга.
         // Порядок пересчитывается после пакетной проверки, при смене фильтра и при добавлении сервера.
+        // Подключенный сервер всегда первый, затем рабочие наверху
+        _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.LatencyMs), ListSortDirection.Ascending));
         ServerGrid.ItemsSource = _view;
@@ -714,6 +716,8 @@ public partial class MainWindow : Window
         var activeName = on ? (_servers.FirstOrDefault(x => x.Id == active!.ServerId)?.ShortName ?? DnsServer.Clip(active!.Name)) : null;
         ConnText.Text = on ? $"Подключено · {activeName}" : "Не подключено";
         UpdateTray(on ? _servers.FirstOrDefault(x => x.Id == active!.ServerId) : null, activeName);
+        foreach (var srv in _servers) srv.IsConnected = on && srv.Id == active!.ServerId;
+        _view?.Refresh(); // подключенный сервер поднимается наверх
         UpdateTrayServices();
         UpdateHeaderStats();
         ConnPill.BorderBrush = (System.Windows.Media.Brush)FindResource(on ? "Ok" : "Border");
@@ -835,9 +839,25 @@ public partial class MainWindow : Window
     /// <summary>Кнопка в строке: полная проверка этого сервера (сервисы и пинг).</summary>
     private async void RowRefresh_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not DnsServer s || s.Status == ServerStatus.Checking) return;
-        // Только эта строка: без общего прогресса сверху и без пересортировки списка.
-        // Анимация идет в самой строке, пока статус Checking.
+        if (((FrameworkElement)sender).DataContext is DnsServer s) await CheckOneAsync(s, null);
+    }
+
+    /// <summary>Обновить подключенный сервер: кнопка в шапке, значок крутится, пока идет проверка.</summary>
+    private async void ActiveRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        var active = DnsSwitcher.GetActive();
+        var s = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
+        if (s != null) await CheckOneAsync(s, ActiveRefreshIcon);
+    }
+
+    /// <summary>
+    /// Проверка одного сервера. Только эта строка: без общего прогресса сверху и без пересортировки списка.
+    /// Анимация в самой строке (статус Checking). Если передана иконка, она тоже крутится.
+    /// </summary>
+    private async Task CheckOneAsync(DnsServer s, System.Windows.Shapes.Path? icon)
+    {
+        if (s.Status == ServerStatus.Checking) return;
+        SpinIcon(icon, true);
         try
         {
             await new ServerChecker(_settings).CheckAsync(s, CancellationToken.None);
@@ -846,9 +866,21 @@ public partial class MainWindow : Window
         {
             Log($"Обновление «{s.Name}» не удалось: {ex.Message}");
         }
+        finally
+        {
+            SpinIcon(icon, false);
+        }
         SaveServers();
         UpdateHeaderStats();
         Grid_SelectionChanged(this, null!);
+    }
+
+    private static void SpinIcon(System.Windows.Shapes.Path? icon, bool on)
+    {
+        if (icon?.RenderTransform is not RotateTransform rot) return;
+        rot.BeginAnimation(RotateTransform.AngleProperty, on
+            ? new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever }
+            : null);
     }
 
     /// <summary>

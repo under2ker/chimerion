@@ -88,6 +88,15 @@
                     <TextBlock Text="ИИ доступно" Style="{StaticResource Label}" FontSize="11"/>
                     <TextBlock x:Name="StatServices" Text="—" FontSize="14" FontWeight="SemiBold"/>
                 </StackPanel>
+                <!-- Обновить подключенный сервер: та же проверка, что и кнопка в строке таблицы -->
+                <Button x:Name="ActiveRefresh" Style="{StaticResource RowRefresh}" Click="ActiveRefresh_Click"
+                        Margin="16,0,0,6" VerticalAlignment="Bottom"
+                        ToolTip="Обновить подключенный сервер: проверка ИИ-сервисов и пинг"
+                        AutomationProperties.Name="Обновить подключенный сервер">
+                    <Path x:Name="ActiveRefreshIcon" Style="{StaticResource RefreshGlyph}" RenderTransformOrigin="0.5,0.5">
+                        <Path.RenderTransform><RotateTransform/></Path.RenderTransform>
+                    </Path>
+                </Button>
             </WrapPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
