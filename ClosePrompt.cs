@@ -71,6 +71,7 @@ internal static class ClosePrompt
             MessageBoxResult.Cancel, isCancel: true));
 
         w.Content = root;
+        w.SourceInitialized += (_, _) => Dnex.Services.DarkTitle.Apply(w);
         w.ShowDialog();
         return result;
 

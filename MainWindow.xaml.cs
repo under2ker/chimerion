@@ -146,18 +146,11 @@ public partial class MainWindow : Window
         Filter_Changed(sender, e);
     }
 
-    // Темный заголовок окна Windows 10/11 под темную тему.
-    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
-
+    // Темный заголовок окна Windows 10/11 под цвет программы
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-        int on = 1;
-        if (DwmSetWindowAttribute(hwnd, 20, ref on, sizeof(int)) != 0) DwmSetWindowAttribute(hwnd, 19, ref on, sizeof(int));
-        int caption = 0x001B1614; // COLORREF (BGR) = #14161B
-        DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(int));
+        Services.DarkTitle.Apply(this);
     }
 
     private void UpdateStats()
