@@ -464,6 +464,7 @@
         <Style TargetType="DataGridRow">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="MinHeight" Value="46"/>
+            <Setter Property="RenderTransform"><Setter.Value><TranslateTransform/></Setter.Value></Setter>
             <Setter Property="BorderBrush" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="3,0,0,0"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -479,6 +480,30 @@
                     <Setter Property="BorderBrush" Value="{StaticResource Lime}"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Trigger>
+                <!-- Новый рабочий сервер: строка проявляется и поднимается снизу на место -->
+                <DataTrigger Binding="{Binding JustAdded}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.45"/>
+                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                 From="14" To="0" Duration="0:0:0.45">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                </DataTrigger>
+                <!-- Удаляемый сервер: строка плавно гаснет -->
+                <DataTrigger Binding="{Binding Fading}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                </DataTrigger>
                 <!-- Подключенный сервер: градиент лайм к прозрачности. Стоит после выделения, поэтому виден и у выбранной строки -->
                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
                     <Setter Property="Background">

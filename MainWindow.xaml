@@ -60,12 +60,6 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Индикатор работы: крутящийся значок и текст текущего шага -->
-                <StackPanel x:Name="BusyPanel" Orientation="Horizontal" Margin="16,0,0,0" Visibility="Collapsed">
-                    <ContentControl x:Name="BusySpinner" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Text, ElementName=ProgressText}" Style="{StaticResource Label}"
-                               Margin="9,0,0,0" MaxWidth="340" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                </StackPanel>
             </StackPanel>
 
             <!-- Статистика активного подключения: справа от карточки, видна пока подключено.
@@ -276,24 +270,6 @@
                                         </Rectangle>
                                     </Grid>
                                     <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding JustAdded}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="stRoot" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.35"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Fading}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="stRoot" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding Tag, ElementName=ServerGrid}" Value="compact">
                                             <Setter TargetName="st" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
@@ -332,7 +308,7 @@
                         <DataGridTemplateColumn Header="СЕРВЕР" Width="2*" MinWidth="220" SortMemberPath="DisplayName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <StackPanel x:Name="srvRoot" VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
+                                    <StackPanel VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
                                             <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#173A2A"
@@ -346,24 +322,6 @@
                                         </StackPanel>
                                     </StackPanel>
                                     <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding JustAdded}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="srvRoot" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.35"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Fading}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="srvRoot" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsNew}" Value="True">
                                             <Setter TargetName="newBadge" Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
