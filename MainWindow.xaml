@@ -189,7 +189,7 @@
                 <DataGrid x:Name="ServerGrid" AutomationProperties.Name="Список серверов" AutoGenerateColumns="False" CanUserAddRows="False" IsReadOnly="True"
                           SelectionMode="Extended" HeadersVisibility="Column" GridLinesVisibility="Horizontal"
                           HorizontalGridLinesBrush="#222630" Background="Transparent" BorderThickness="0"
-                          RowBackground="Transparent" Foreground="{StaticResource Text}" Margin="0,0,0,4"
+                          Foreground="{StaticResource Text}" Margin="0,0,0,4"
                           HorizontalScrollBarVisibility="Disabled" CanUserResizeRows="False"
                           SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_DoubleClick"
                           PreviewMouseLeftButtonDown="ServerGrid_PreviewMouseLeftButtonDown"
@@ -249,9 +249,17 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid x:Name="stRoot" ClipToBounds="True">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Ellipse x:Name="dot" Width="8" Height="8" Fill="{StaticResource Idle}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="st" Text="{Binding StatusText}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse x:Name="dot" Width="8" Height="8" Fill="{StaticResource Idle}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="st" Text="{Binding StatusText}" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Сервер, через который подключено: видно прямо в колонке статуса -->
+                                            <Border Margin="18,3,0,0" Padding="6,0" CornerRadius="4" HorizontalAlignment="Left" Background="#2B3D12"
+                                                    ToolTip="Подключение идет через этот сервер"
+                                                    Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="подключен" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Lime}"/>
+                                            </Border>
                                         </StackPanel>
                                         <!-- Бегущий блик: виден, пока сервер проверяется -->
                                         <Rectangle x:Name="sheen" Width="46" HorizontalAlignment="Left" Visibility="Collapsed" IsHitTestVisible="False">
@@ -335,12 +343,6 @@
                                         <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
                                             <TextBlock Text="{Binding Address}" Style="{StaticResource Label}" FontWeight="Normal"
                                                        FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
-                                            <!-- Сервер, через который сейчас подключено -->
-                                            <Border Margin="8,0,0,0" Padding="6,0" CornerRadius="4" Background="#2B3D12"
-                                                    VerticalAlignment="Center" ToolTip="Подключение идет через этот сервер"
-                                                    Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}">
-                                                <TextBlock Text="подключен" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Lime}"/>
-                                            </Border>
                                         </StackPanel>
                                     </StackPanel>
                                     <DataTemplate.Triggers>

@@ -469,10 +469,6 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="ToolTip" Value="{Binding LastError}"/>
             <Style.Triggers>
-                <!-- Подключенный сервер: строка подсвечена зеленым. Выделение ниже перекрывает подсветку -->
-                <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                    <Setter Property="Background" Value="#14200F"/>
-                </DataTrigger>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource Surface2}"/>
                     <Setter Property="BorderBrush" Value="#3A4150"/>
@@ -483,6 +479,18 @@
                     <Setter Property="BorderBrush" Value="{StaticResource Lime}"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Trigger>
+                <!-- Подключенный сервер: градиент лайм к прозрачности. Стоит после выделения, поэтому виден и у выбранной строки -->
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <!-- Лайм у левого края, плавно в прозрачность к правому -->
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#55A3E635" Offset="0"/>
+                                <GradientStop Color="#00A3E635" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                </DataTrigger>
             </Style.Triggers>
         </Style>
 
