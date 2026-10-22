@@ -328,6 +328,8 @@ public partial class MainWindow : Window
         Log($"{title}: IP {n.PublicIp} ({n.Location}, {n.Provider}), DNS {n.SystemDns}");
         foreach (var x in n.Services)
             Log($"  {x.Name}: {x.Host} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
+        foreach (var x in n.Hosts)
+            Log($"  доп. {x.Name} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
     }
 
     /// <summary>
@@ -344,6 +346,9 @@ public partial class MainWindow : Window
     };
 
     private string? _compareSig;
+    /// <summary>Сервисы, у которых раскрыт список серверов. Сохраняется между перерисовками блока.</summary>
+    private readonly HashSet<string> _openHosts = new();
+    private bool _compareDisconnected;
 
     private void ShowCompare(bool disconnected = false)
     {
@@ -361,6 +366,7 @@ public partial class MainWindow : Window
         }
         host.Children.Clear();
         _tileGeo.Clear();
+        _compareDisconnected = disconnected;
         if (cur == null)
         {
             host.Children.Add(new TextBlock
@@ -399,7 +405,9 @@ public partial class MainWindow : Window
         if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
 
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
-        var tiles = new System.Windows.Controls.Primitives.UniformGrid { Rows = 1, Margin = new Thickness(-4, 8, -4, 0) };
+        // Карточки в колонках, по верху: раскрытая карточка растет сама, соседние не вытягиваются
+        var tiles = new Grid { Margin = new Thickness(-4, 8, -4, 0), VerticalAlignment = VerticalAlignment.Top };
+        foreach (var _ in cur.Services) tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foreach (var svc in cur.Services)
         {
             var was = _after != null ? _before?.Services.FirstOrDefault(x => x.Name == svc.Name) : null;
@@ -426,18 +434,44 @@ public partial class MainWindow : Window
             var geo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
             _tileGeo[svc.Name] = geo;
             sp.Children.Add(geo);
-            sp.Children.Add(Line(
-                (svc.Proxied ? "через Smart DNS  " : "напрямую  ", svc.Proxied ? B("Accent") : B("Muted"), false),
-                (svc.ResolvedIp, B("Muted"), false)));
-            if (was != null)
-                sp.Children.Add(Line(("было: ", B("Muted"), false),
-                    ($"{was.Access.TrimStart('✓', '✗', ' ')}, {(was.Proxied ? "через Smart DNS" : "напрямую")}", B("Muted"), false)));
+            if (_compact)
+            {
+                // Компактная карточка: только адрес, без подписи «через Smart DNS» и строки «было»
+                sp.Children.Add(new TextBlock
+                {
+                    Text = svc.ResolvedIp, Foreground = B("Muted"), FontSize = 11,
+                    FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 3, 0, 0),
+                });
+            }
+            else
+            {
+                sp.Children.Add(Line(
+                    (svc.Proxied ? "через Smart DNS  " : "напрямую  ", svc.Proxied ? B("Accent") : B("Muted"), false),
+                    (svc.ResolvedIp, B("Muted"), false)));
+                if (was != null)
+                    sp.Children.Add(Line(("было: ", B("Muted"), false),
+                        ($"{was.Access.TrimStart('✓', '✗', ' ')}, {(was.Proxied ? "через Smart DNS" : "напрямую")}", B("Muted"), false)));
+            }
+            // Кнопка «Серверы»: раскрывает список адресов сервиса ниже блока
+            int hostCount = 1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal));
+            var toggle = new TextBlock
+            {
+                Text = _openHosts.Contains(svc.Name) ? "Скрыть серверы ▴" : $"Серверы ({hostCount}) ▾",
+                Foreground = B("Accent"), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand,
+                Tag = svc.Name, ToolTip = "Адреса сервиса и их статус",
+            };
+            toggle.MouseLeftButtonUp += ToggleHosts_Click;
+            sp.Children.Add(toggle);
+            // Раскрытие внутри карточки: список адресов под кнопкой, в ее колонке
+            if (_openHosts.Contains(svc.Name)) sp.Children.Add(HostsPanel(svc, cur));
             card.Child = sp;
+            Grid.SetColumn(card, tiles.Children.Count);
             AnimateTile(card, (SolidColorBrush)card.Background, tiles.Children.Count,
                 changed: was != null && (was.Access != svc.Access || was.Proxied != svc.Proxied));
             tiles.Children.Add(card);
         }
         host.Children.Add(tiles);
+
         FillServiceGeo(cur);
         _ = ResolveServiceGeoAsync(cur);
 
@@ -453,6 +487,63 @@ public partial class MainWindow : Window
             : ("DNS сменился, но адреса ИИ не подменяются", "Bad");
         VerdictText.Text = v.text;
         VerdictText.Foreground = B(v.color);
+    }
+
+    /// <summary>
+    /// Адреса сервиса внутри его карточки: основной и дополнительные. Колонка узкая, поэтому каждый адрес
+    /// в три строки: имя (переносится по точкам), IP, плашка статуса.
+    /// </summary>
+    private StackPanel HostsPanel(ServiceState svc, NetSnapshot cur)
+    {
+        Brush B(string k) => (Brush)FindResource(k);
+        var mono = new FontFamily("Cascadia Mono, Consolas");
+        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
+        panel.Children.Add(new Border { Height = 1, Background = B("Border"), Margin = new Thickness(0, 0, 0, 8) });
+
+        var entries = new List<ServiceState> { svc };
+        entries.AddRange(cur.Hosts.Where(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal)));
+        foreach (var h in entries)
+        {
+            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
+            // Пробел-ноль после точки: длинное имя переносится по доменным частям, а не обрезается
+            item.Children.Add(new TextBlock
+            {
+                Text = h.Host.Replace(".", ".​"), FontFamily = mono, FontSize = 11,
+                TextWrapping = TextWrapping.Wrap, ToolTip = h.Host,
+            });
+            item.Children.Add(new TextBlock
+            {
+                Text = h.ResolvedIp, FontFamily = mono, FontSize = 11, Margin = new Thickness(0, 2, 0, 0),
+                Foreground = h.Proxied ? B("Accent") : B("Muted"),
+                ToolTip = h.Proxied ? "Адрес прокси Smart DNS" : "Адрес напрямую",
+            });
+
+            // Статус: зеленый — доступен, красный — закрыт, желтый — сервис не отвечает нормально
+            bool isOpen = h.Access.StartsWith("✓");
+            bool isClosed = h.Access.Contains("закрыт");
+            string pillColor = isOpen ? "#173A2A" : isClosed ? "#3A1C20" : "#3A2F17";
+            string pillText = isOpen ? "доступен" : isClosed ? "закрыт" : "не отвечает";
+            string pillFg = isOpen ? "Ok" : isClosed ? "Bad" : "Warn";
+            item.Children.Add(new Border
+            {
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pillColor)),
+                CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 1, 7, 1),
+                HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 0, 0), ToolTip = h.Access,
+                Child = new TextBlock { Text = pillText, FontSize = 11, Foreground = B(pillFg) },
+            });
+            panel.Children.Add(item);
+        }
+        panel.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
+        return panel;
+    }
+
+    /// <summary>Раскрывает или сворачивает список серверов сервиса и перерисовывает блок.</summary>
+    private void ToggleHosts_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string name }) return;
+        if (!_openHosts.Remove(name)) _openHosts.Add(name);
+        _compareSig = null;
+        ShowCompare(_compareDisconnected);
     }
 
     // ---------- Выбранный сервер ----------
@@ -528,6 +619,16 @@ public partial class MainWindow : Window
             _settings.SkippedUpdate = info.Version.ToString();
             try { Storage.Save("settings.json", _settings); } catch (Exception) { }
         });
+    }
+
+    /// <summary>Обрезает содержимое таблицы по скруглению карточки, чтобы прямые углы заголовков не выходили за рамку.</summary>
+    private void TableCard_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Border card || card.Child is not DockPanel content) return;
+        // Радиус карточки 12, рамка 1 px: внутри скругление 11
+        var w = Math.Max(0, card.ActualWidth - 2);
+        var h = Math.Max(0, card.ActualHeight - 2);
+        content.Clip = new RectangleGeometry(new Rect(0, 0, w, h), 11, 11);
     }
 
     /// <summary>Кнопка в полосе заголовка: проверить сейчас и показать результат.</summary>
@@ -789,6 +890,7 @@ public partial class MainWindow : Window
             _before = await ConnectionProbe.TakeAsync(_settings); // «до» = состояние в подключенном виде
             await DnsSwitcher.RestoreAsync(Log);
             Log($"Отключено ({reason})");
+            await DnsSwitcher.ReportStateAsync(Log); // что осталось в системе: DNS адаптеров и записи DoH
             ShowToast("Отключено", "Idle");
             await Task.Delay(500);
             _after = await ConnectionProbe.TakeAsync(_settings);
@@ -1152,6 +1254,10 @@ public partial class MainWindow : Window
         var defaults = new AppSettings().Targets;
         foreach (var t in st.Targets.Where(x => x.OkStatusCodes.Count == 0))
             t.OkStatusCodes = defaults.FirstOrDefault(d => d.Name == t.Name)?.OkStatusCodes.ToList() ?? new();
+        // settings.json без дополнительных хостов: добавляем хосты по умолчанию для известных сервисов
+        foreach (var t in st.Targets.Where(x => x.ExtraHosts.Count == 0))
+            t.ExtraHosts = defaults.FirstOrDefault(d => d.Name == t.Name)?.ExtraHosts.ToList() ?? new();
+        st.Targets.ForEach(t => t.ExtraHosts.RemoveAll(h => Uri.CheckHostName(h) != UriHostNameType.Dns));
         bool changed = false;
         foreach (var k in st.HostCookies.Keys.ToList())
         {

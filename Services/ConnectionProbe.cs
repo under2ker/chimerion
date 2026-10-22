@@ -15,6 +15,8 @@ public sealed class NetSnapshot
     public string SystemDns { get; set; } = "—";
     /// <summary>Сервис → (адрес, на который его резолвит система; доступен ли).</summary>
     public List<ServiceState> Services { get; } = new();
+    /// <summary>Дополнительные хосты сервисов (вход, сайт, CDN). Не входят в счетчики «N из M», только в журнал.</summary>
+    public List<ServiceState> Hosts { get; } = new();
 }
 
 public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access);
@@ -46,8 +48,14 @@ public static class ConnectionProbe
 
         var targets = st.Targets.Where(t => t.Enabled).ToList();
         var svcTasks = targets.Select(t => ProbeServiceAsync(st, t, http, ct)).ToList();
-        await Task.WhenAll(svcTasks.Cast<Task>().Append(ipTask).Append(dnsTask));
+        // Дополнительные хосты: тот же ответ API-признаков, но имя с хостом, чтобы строка в журнале было понятно
+        var hostTasks = targets.SelectMany(t => t.ExtraHosts.Select(h => ProbeServiceAsync(st, new CheckTarget
+        {
+            Name = $"{t.Name}: {h}", Host = h, Path = "/", BlockedMarkers = t.BlockedMarkers,
+        }, http, ct, web: true))).ToList();
+        await Task.WhenAll(svcTasks.Cast<Task>().Concat(hostTasks).Append(ipTask).Append(dnsTask));
         snap.Services.AddRange(svcTasks.Select(t => t.Result));
+        snap.Hosts.AddRange(hostTasks.Select(t => t.Result));
         return snap;
     }
 
@@ -92,7 +100,7 @@ public static class ConnectionProbe
         _ => "ошибка соединения",
     };
 
-    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct)
+    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false)
     {
         string resolved = "—";
         bool proxied = false;
@@ -116,7 +124,7 @@ public static class ConnectionProbe
             using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
             var body = await ReadLimitedAsync(resp, ct);
             int code = (int)resp.StatusCode;
-            access = ServiceAccess.Classify(t, code, body) switch
+            access = (web ? ServiceAccess.ClassifyWeb(t, code, body) : ServiceAccess.Classify(t, code, body)) switch
             {
                 ServiceAccess.Result.Open => "✓ доступен",
                 ServiceAccess.Result.Closed => "✗ доступ закрыт",
