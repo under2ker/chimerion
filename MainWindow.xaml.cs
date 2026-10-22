@@ -272,8 +272,7 @@ public partial class MainWindow : Window
         SaveServersNow();
         if (_closeConfirmed || DnsSwitcher.GetActive() is not { } a) return;
 
-        var r = MessageBox.Show($"Подключение «{a.Name}» активно.\n\nДа — отключиться и выйти\nНет — выйти, оставив DNS как есть\nОтмена — не выходить",
-            "DNEX", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var r = ClosePrompt.Ask(a.Name);
         if (r == MessageBoxResult.No) return;
         e.Cancel = true;
         if (r == MessageBoxResult.Cancel) return;
