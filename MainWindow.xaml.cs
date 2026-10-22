@@ -70,17 +70,10 @@ public partial class MainWindow : Window
 
         _view = CollectionViewSource.GetDefaultView(_servers);
         _view.Filter = FilterServer;
-        // Рабочие серверы всплывают наверх прямо во время проверки.
+        // Рабочие серверы наверху. Сортировка НЕ живая: строки не переставляются при обновлении статуса и пинга.
+        // Порядок пересчитывается после пакетной проверки, при смене фильтра и при добавлении сервера.
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.LatencyMs), ListSortDirection.Ascending));
-        if (_view is ICollectionViewLiveShaping live && live.CanChangeLiveSorting)
-        {
-            live.LiveSortingProperties.Add(nameof(DnsServer.Rank));
-            live.LiveSortingProperties.Add(nameof(DnsServer.LatencyMs));
-            live.IsLiveFiltering = true;
-            live.LiveFilteringProperties.Add(nameof(DnsServer.Status));
-            live.IsLiveSorting = true;
-        }
         ServerGrid.ItemsSource = _view;
 
         _searchDebounce.Tick += (_, _) => { _searchDebounce.Stop(); _view?.Refresh(); UpdateStats(); };
@@ -842,7 +835,20 @@ public partial class MainWindow : Window
     /// <summary>Кнопка в строке: полная проверка этого сервера (сервисы и пинг).</summary>
     private async void RowRefresh_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is DnsServer s) await RunChecksAsync(new List<DnsServer> { s });
+        if (((FrameworkElement)sender).DataContext is not DnsServer s || s.Status == ServerStatus.Checking) return;
+        // Только эта строка: без общего прогресса сверху и без пересортировки списка.
+        // Анимация идет в самой строке, пока статус Checking.
+        try
+        {
+            await new ServerChecker(_settings).CheckAsync(s, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Log($"Обновление «{s.Name}» не удалось: {ex.Message}");
+        }
+        SaveServers();
+        UpdateHeaderStats();
+        Grid_SelectionChanged(this, null!);
     }
 
     /// <summary>

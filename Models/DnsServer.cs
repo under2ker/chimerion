@@ -206,7 +206,7 @@ public class DnsServer : INotifyPropertyChanged
     public long? JitterMs { get => _jitterMs; set { _jitterMs = value; On(); On(nameof(PingText)); } }
 
     [JsonIgnore]
-    public string PingText => LatencyMs is null ? "—" : JitterMs is null ? $"{LatencyMs}" : $"{LatencyMs} ±{JitterMs}";
+    public string PingText => LatencyMs is null ? "—" : $"{LatencyMs}";
 
     /// <summary>Итоговая оценка 0–100: доля успешных проверок, пинг, разброс, свежесть.</summary>
     [JsonIgnore]
