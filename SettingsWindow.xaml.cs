@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
         CloseToTrayBox.IsChecked = settings.CloseToTray;
         TrayMinutesBox.Text = settings.TrayCheckMinutes.ToString();
         WatchdogBox.Text = settings.WatchdogSeconds.ToString();
+        PingBox.Text = settings.PingRefreshMinutes.ToString();
 
         var v = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"DNEX {v?.Major}.{v?.Minor}.{v?.Build}";
@@ -38,6 +39,7 @@ public partial class SettingsWindow : Window
         if (!int.TryParse(ParallelBox.Text, out var parallel) || parallel < 1 || parallel > 64) { ErrorText.Text = "Проверок одновременно: от 1 до 64"; return; }
         if (!int.TryParse(TrayMinutesBox.Text, out var trayMinutes) || trayMinutes < 1 || trayMinutes > 60) { ErrorText.Text = "Проверка в трее: от 1 до 60 минут"; return; }
         if (!int.TryParse(WatchdogBox.Text, out var watchdog) || watchdog < 15 || watchdog > 600) { ErrorText.Text = "Сторож DNS: от 15 до 600 секунд"; return; }
+        if (!int.TryParse(PingBox.Text, out var pingMinutes) || pingMinutes < 1 || pingMinutes > 60) { ErrorText.Text = "Обновление пинга: от 1 до 60 минут"; return; }
 
         _settings.ReferenceDoh = doh;
         _settings.TimeoutSeconds = timeout;
@@ -45,6 +47,7 @@ public partial class SettingsWindow : Window
         _settings.CloseToTray = CloseToTrayBox.IsChecked == true;
         _settings.TrayCheckMinutes = trayMinutes;
         _settings.WatchdogSeconds = watchdog;
+        _settings.PingRefreshMinutes = pingMinutes;
         try
         {
             Storage.Save("settings.json", _settings);

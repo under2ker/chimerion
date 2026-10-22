@@ -154,6 +154,21 @@ public class ServerChecker
                    state == Probe.Ok ? null : $"{t.Name}: {note}", proxied ? ips[0].ToString() : null);
     }
 
+    /// <summary>Только пинг, без проверки сервисов: три DNS-запроса, медиана и разброс. Null, если сервер не ответил ни разу.</summary>
+    public async Task<(long Median, long? Jitter)?> MeasurePingAsync(DnsServer s, CancellationToken ct)
+    {
+        var host = _settings.Targets.FirstOrDefault(t => t.Enabled)?.Host ?? "api.openai.com";
+        var samples = new List<long>();
+        for (int i = 0; i < 3; i++)
+        {
+            try { samples.Add((await ResolveViaAsync(s, host, ct).ConfigureAwait(false)).Ms); }
+            catch (Exception) when (!ct.IsCancellationRequested) { }
+        }
+        if (samples.Count == 0) return null;
+        samples.Sort();
+        return (samples[samples.Count / 2], samples.Count > 1 ? samples[^1] - samples[0] : null);
+    }
+
     public async Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(s.DohUrl))

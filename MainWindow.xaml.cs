@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -53,6 +54,8 @@ public partial class MainWindow : Window
         _settings = LoadSettings();
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
+        _pingTimer.Tick += async (_, _) => await RefreshPingsAsync();
+        _pingTimer.Start();
         _servers = new ObservableCollection<DnsServer>(Storage.LoadOrCreate(ServersFile, () => new List<DnsServer>()));
         foreach (var s in _servers.Where(s => s.Status == ServerStatus.Checking))
             s.Status = ServerStatus.Unknown;
@@ -823,10 +826,84 @@ public partial class MainWindow : Window
         _ = ClearJustAddedLaterAsync(s);
         SaveServers();
         AddName.Clear(); AddPrimary.Clear(); AddSecondary.Clear(); AddDoh.Clear();
+        // Новый сервер еще не проверен, фильтр «Рабочие» его скрыл бы: показываем все и выбираем добавленный
+        AllTab.IsChecked = true;
+        SearchBox.Clear();
+        _view?.Refresh();
         ServerGrid.SelectedItem = s;
         ServerGrid.ScrollIntoView(s);
-        Log($"Добавлен «{s.Name}»");
+        Log($"Добавлен «{s.Name}», проверяю");
+        _ = RunChecksAsync(new List<DnsServer> { s });
         _ = ResolveLocationsAsync();
+    }
+
+    // ---------- Строка и пинг ----------
+
+    /// <summary>Кнопка в строке: полная проверка этого сервера (сервисы и пинг).</summary>
+    private async void RowRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is DnsServer s) await RunChecksAsync(new List<DnsServer> { s });
+    }
+
+    /// <summary>
+    /// Клик без Ctrl и Shift выбирает одну строку. Протаскивание мышью список не выделяет:
+    /// событие перехватывается до того, как таблица начнет выделение диапазоном.
+    /// Кнопки в строке (обновить, открыть источник) работают как обычно.
+    /// </summary>
+    private void ServerGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None || e.ClickCount > 1) return;
+        if (FindParent<Button>(e.OriginalSource as DependencyObject) != null) return;
+        var row = FindParent<DataGridRow>(e.OriginalSource as DependencyObject);
+        if (row?.Item is not DnsServer s) return;
+        e.Handled = true;
+        ServerGrid.SelectedItems.Clear();
+        ServerGrid.SelectedItem = s;
+        ServerGrid.Focus();
+    }
+
+    /// <summary>Пинг всех серверов в таблице: тот же DNS-запрос, что и при проверке. Раз в N минут из настроек.</summary>
+    private bool _pinging;
+    private readonly DispatcherTimer _pingTimer = new() { Interval = TimeSpan.FromMinutes(10) };
+
+    private async Task RefreshPingsAsync()
+    {
+        if (_pinging) return;
+        var list = _servers.Where(s => s.Status != ServerStatus.Checking).ToList();
+        if (list.Count == 0) return;
+        _pinging = true;
+        var checker = new ServerChecker(_settings);
+        var results = new ConcurrentBag<(DnsServer Server, (long Median, long? Jitter) Ping)>();
+        try
+        {
+            await Parallel.ForEachAsync(list, new ParallelOptions { MaxDegreeOfParallelism = 8 }, async (s, ct) =>
+            {
+                var ping = await checker.MeasurePingAsync(s, ct).ConfigureAwait(false);
+                if (ping is { } p) results.Add((s, p));
+            });
+            // После await мы снова в потоке интерфейса: свойства трогаем без диспетчера
+            foreach (var (s, p) in results)
+            {
+                s.LatencyMs = p.Median;
+                s.JitterMs = p.Jitter;
+            }
+            UpdateHeaderStats();
+            Grid_SelectionChanged(this, null!); // строка выбранного сервера под таблицей тоже показывает пинг
+            var active = DnsSwitcher.GetActive();
+            if (active != null)
+            {
+                var srv = _servers.FirstOrDefault(x => x.Id == active.ServerId);
+                UpdateTray(srv, srv?.ShortName ?? DnsServer.Clip(active.Name));
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("Обновление пинга не удалось: " + ex.Message);
+        }
+        finally
+        {
+            _pinging = false;
+        }
     }
 
     // ---------- Автоочистка ----------
@@ -909,6 +986,7 @@ public partial class MainWindow : Window
         // Проверка значений из файла: без отрицательных/огромных лимитов, только https для эталонного DNS.
         st.TimeoutSeconds = Math.Clamp(st.TimeoutSeconds, 2, 30);
         st.Parallelism = Math.Clamp(st.Parallelism, 1, 64);
+        st.PingRefreshMinutes = Math.Clamp(st.PingRefreshMinutes, 1, 60);
         st.CrawlDepth = Math.Clamp(st.CrawlDepth, 0, 5);
         st.CrawlMaxPages = Math.Clamp(st.CrawlMaxPages, 1, 5000);
         st.CrawlParallelism = Math.Clamp(st.CrawlParallelism, 1, 16);
@@ -1273,6 +1351,7 @@ public partial class MainWindow : Window
     {
         _trayTimer.Interval = TimeSpan.FromMinutes(Math.Clamp(_settings.TrayCheckMinutes, 1, 60));
         _watchdog.Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.WatchdogSeconds, 15, 600));
+        _pingTimer.Interval = TimeSpan.FromMinutes(Math.Clamp(_settings.PingRefreshMinutes, 1, 60));
     }
 
     private void ShowFromTray()

@@ -37,6 +37,9 @@
                         <TextBlock Text="от 1 до 64. Больше значит быстрее, но выше нагрузка на сеть" Style="{StaticResource Label}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                 </Grid>
+                <TextBlock Text="Обновлять пинг серверов, мин" Style="{StaticResource Label}" Margin="0,14,0,0"/>
+                <TextBox x:Name="PingBox" Width="120" HorizontalAlignment="Left" Margin="0,4,0,0"/>
+                <TextBlock Text="от 1 до 60. Пинг обновляется в таблице, в шапке и в трее" Style="{StaticResource Label}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
 
