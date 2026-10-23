@@ -17,6 +17,18 @@ public class CheckTarget
     /// <summary>Дополнительные хосты сервиса (вход, сайт, CDN). Они не влияют на вердикт «доступен»,
     /// но проверяются при подключении и попадают в журнал.</summary>
     public List<string> ExtraHosts { get; set; } = new();
+    /// <summary>Подпись настоящего ответа API: строки, одна из которых должна быть в теле при коде из OkStatusCodes.
+    /// Без нее ответ мог прийти от чужого прокси или заглушки, и доступ не засчитывается.</summary>
+    public List<string> OkMarkers { get; set; } = new();
+    /// <summary>Сайт сервиса для второй проверки («chatgpt.com/»): если сайт закрыт, сервис не считается доступным,
+    /// даже когда API ответил. Пусто — проверяется только API.</summary>
+    public string? WebCheck { get; set; }
+    /// <summary>API без ключа отвечает одинаково и из закрытого региона, и через прокси (так у Gemini).
+    /// Тогда доступ подтверждается только подменой адреса: без нее сервис считается недоступным.</summary>
+    public bool RequiresProxy { get; set; }
+    /// <summary>Владельцы сетей самого сервиса (поле org в ipinfo). Адрес, который не совпал с эталоном,
+    /// но принадлежит сервису, подменой не считается: у Google и Cloudflare много адресов в разных регионах.</summary>
+    public List<string> OwnerOrgs { get; set; } = new();
 }
 
 /// <summary>Откуда парсить списки серверов.</summary>
@@ -63,14 +75,21 @@ public class AppSettings
 
     public List<CheckTarget> Targets { get; set; } = new()
     {
+        // Признаки сняты с живых ответов. ChatGPT и Claude из закрытого региона отвечают 403 с текстом блокировки,
+        // через прокси 401 с ошибкой ключа. Gemini без ключа в обоих случаях отвечает 403 PERMISSION_DENIED,
+        // поэтому для него доступ подтверждают подмена адреса и сайт (через помеченный прокси Google дает капчу).
         new() { Name = "ChatGPT", Host = "api.openai.com", Path = "/v1/models",
                 BlockedMarkers = { "unsupported_country" }, OkStatusCodes = { 200, 401 },
+                OkMarkers = { "invalid_request_error", "invalid_api_key" }, WebCheck = "chatgpt.com/", OwnerOrgs = { "OpenAI", "Cloudflare" },
                 ExtraHosts = { "chatgpt.com", "auth.openai.com", "cdn.oaistatic.com" } },
         new() { Name = "Claude", Host = "api.anthropic.com", Path = "/v1/models",
                 BlockedMarkers = { "Request not allowed" }, BlockedStatusCodes = { 403 }, OkStatusCodes = { 200, 401 },
-                ExtraHosts = { "claude.ai", "console.anthropic.com" } },
+                OkMarkers = { "authentication_error" }, WebCheck = "claude.ai/new", OwnerOrgs = { "Anthropic" },
+                ExtraHosts = { "claude.ai" } },
         new() { Name = "Gemini", Host = "generativelanguage.googleapis.com", Path = "/v1beta/models",
                 BlockedMarkers = { "User location is not supported" }, OkStatusCodes = { 200, 401, 403 },
+                OkMarkers = { "PERMISSION_DENIED", "API_KEY_INVALID" }, WebCheck = "gemini.google.com/app", RequiresProxy = true,
+                OwnerOrgs = { "Google" },
                 ExtraHosts = { "gemini.google.com", "accounts.google.com" } },
     };
 

@@ -136,6 +136,15 @@
             <Setter Property="Foreground" Value="{StaticResource Muted}"/>
         </Style>
 
+        <!-- Важное действие рядом с основным: светлая заливка, заметная синяя рамка и белый текст,
+             чтобы кнопка не терялась на темной карточке -->
+        <Style x:Key="Strong" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#2C3446"/>
+            <Setter Property="BorderBrush" Value="#4C6FAE"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
         <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Foreground" Value="{StaticResource Bad}"/>
         </Style>

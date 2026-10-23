@@ -82,10 +82,19 @@ public class ServerChecker
         if (best is not null && ok > 0)
         {
             var samples = new List<long> { best.Value };
-            for (int i = 0; i < 2; i++)
+            try
             {
-                try { samples.Add((await ResolveViaAsync(s, targets[0].Host, ct).ConfigureAwait(false)).Ms); }
-                catch (Exception) when (!ct.IsCancellationRequested) { }
+                for (int i = 0; i < 2; i++)
+                {
+                    try { samples.Add((await ResolveViaAsync(s, targets[0].Host, ct).ConfigureAwait(false)).Ms); }
+                    catch (Exception) when (!ct.IsCancellationRequested) { }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // «Стоп» во время замеров: строка не должна остаться в состоянии «Проверка…»
+                await OnUi(() => s.Status = ServerStatus.Unknown);
+                throw;
             }
             samples.Sort();
             median = samples[samples.Count / 2];
@@ -119,6 +128,11 @@ public class ServerChecker
             if (appeared) MarkAppeared(s);
             s.ChecksTotal++;
             if (status != ServerStatus.Fail) { s.ChecksOk++; s.FailStreak = 0; } else s.FailStreak++;
+            // Стабильность по каждому ИИ отдельно: для списка «лучший для ChatGPT, Claude, Gemini, для всех»
+            s.ServiceChecks++;
+            for (int i = 0; i < targets.Count; i++)
+                if (results[i].Ok) s.ServiceOk[targets[i].Name] = s.ServiceOk.GetValueOrDefault(targets[i].Name) + 1;
+            if (targets.Count > 0 && ok == targets.Count) s.AllOk++;
             s.NotifyStability();
         });
     }
@@ -151,17 +165,49 @@ public class ServerChecker
             var refIps = await GetReferenceAsync(t.Host).ConfigureAwait(false);
             compared = true;
             proxied = !ips.Any(refIps.Contains);
+            // Адрес не совпал с эталоном, но это сеть самого сервиса (у Google много адресов): подмены нет
+            if (proxied && await GeoLocation.IsOwnedByAsync(ips[0].ToString(), t.OwnerOrgs, ct).ConfigureAwait(false))
+                proxied = false;
         }
-        catch { /* эталон недоступен — подмену не оцениваем */ }
+        catch (Exception) when (!ct.IsCancellationRequested) { /* эталон недоступен — подмену не оцениваем */ }
 
         // Подмены нет — запрос пойдет на настоящий сервер, HTTPS-проверку можно пропустить.
         if (compared && !proxied)
             return new($"{t.Name} ✗ (без подмены)", false, ms, true, false, null);
 
         var (state, note) = await ProbeHttpsAsync(ips[0], t, ct).ConfigureAwait(false);
+
+        // API ответил: проверяем сайт сервиса через этот же сервер. Если сайт закрыт (регион, капча Google),
+        // пользоваться сервисом в браузере нельзя, и доступ не засчитывается.
+        if (state == Probe.Ok && SplitWebCheck(t) is { } web)
+        {
+            try
+            {
+                var (webIps, _) = await ResolveViaAsync(s, web.Host, ct).ConfigureAwait(false);
+                if (webIps.Count > 0)
+                {
+                    var (webState, webNote) = await ProbeHttpsAsync(webIps[0], web, ct, isWeb: true).ConfigureAwait(false);
+                    if (webState == Probe.Blocked) (state, note) = (Probe.Blocked, $"сайт {web.Host}: {webNote}");
+                }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { /* сайт не проверили — остается результат API */ }
+        }
+
         var mark = state switch { Probe.Ok => "✓", Probe.Blocked => "✗ регион", _ => "✗" };
         return new($"{t.Name} {mark}", state == Probe.Ok, ms, compared, proxied,
                    state == Probe.Ok ? null : $"{t.Name}: {note}", proxied ? ips[0].ToString() : null);
+    }
+
+    /// <summary>Сайт для второй проверки из настройки WebCheck («chatgpt.com/» → хост и путь). Null, если не задан.</summary>
+    internal static CheckTarget? SplitWebCheck(CheckTarget t)
+    {
+        if (string.IsNullOrWhiteSpace(t.WebCheck)) return null;
+        var v = t.WebCheck.Trim();
+        int slash = v.IndexOf('/');
+        var host = slash < 0 ? v : v[..slash];
+        var path = slash < 0 ? "/" : v[slash..];
+        if (Uri.CheckHostName(host) != UriHostNameType.Dns) return null;
+        return new CheckTarget { Name = t.Name, Host = host, Path = path };
     }
 
     /// <summary>Только пинг, без проверки сервисов: три DNS-запроса, медиана и разброс. Null, если сервер не ответил ни разу.</summary>
@@ -228,7 +274,7 @@ public class ServerChecker
     }
 
     /// <summary>HTTPS-запрос к сервису через конкретный IP с правильным SNI и проверкой сертификата.</summary>
-    private async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct)
+    private async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct, bool isWeb = false)
     {
         using var handler = new SocketsHttpHandler
         {
@@ -262,7 +308,9 @@ public class ServerChecker
                 while (len < buf.Length && (n = await st.ReadAsync(buf.AsMemory(len), ct).ConfigureAwait(false)) > 0) len += n;
             var body = System.Text.Encoding.UTF8.GetString(buf, 0, len);
             int code = (int)resp.StatusCode;
-            return ServiceAccess.Classify(t, code, body) switch
+            var verdict = isWeb ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())
+                                : ServiceAccess.Classify(t, code, body);
+            return verdict switch
             {
                 ServiceAccess.Result.Open => (Probe.Ok, $"HTTP {code}"),
                 ServiceAccess.Result.Closed => (Probe.Blocked, $"HTTP {code}, доступ закрыт"),

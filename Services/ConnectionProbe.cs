@@ -17,6 +17,8 @@ public sealed class NetSnapshot
     public List<ServiceState> Services { get; } = new();
     /// <summary>Дополнительные хосты сервисов (вход, сайт, CDN). Не входят в счетчики «N из M», только в журнал.</summary>
     public List<ServiceState> Hosts { get; } = new();
+    /// <summary>Резолверы, которые на самом деле дошли до тестового сервера (тест утечки). Пусто, если тест не запускался.</summary>
+    public List<ResolverInfo> Resolvers { get; } = new();
 }
 
 public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access);
@@ -31,15 +33,23 @@ public static class ConnectionProbe
     /// Новый клиент на каждую проверку. Общий клиент держит открытые соединения: после отключения Smart DNS
     /// запрос шел бы по старому соединению к адресу прокси, и сервис показывался бы доступным.
     /// </summary>
-    private static HttpClient NewHttp() => new(new SocketsHttpHandler
+    private static HttpClient NewHttp()
     {
-        AllowAutoRedirect = false,
-        UseCookies = false,
-        ConnectTimeout = TimeSpan.FromSeconds(6),
-    })
-    { Timeout = TimeSpan.FromSeconds(10) };
+        var http = new HttpClient(new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            UseCookies = false,
+            ConnectTimeout = TimeSpan.FromSeconds(6),
+        })
+        { Timeout = TimeSpan.FromSeconds(10) };
+        // Сайты за Cloudflare по-разному отвечают запросу без браузерной подписи; так ответ ближе к тому, что видит браузер
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DNEX/0.1");
+        return http;
+    }
 
-    public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default)
+    /// <summary>Снимок состояния. leakTest — еще и тест утечки DNS: при подключении, отключении и по кнопке,
+    /// но не в проверке по таймеру, чтобы не нагружать чужой тестовый сервис.</summary>
+    public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false)
     {
         var snap = new NetSnapshot();
         using var http = NewHttp();
@@ -51,9 +61,11 @@ public static class ConnectionProbe
         // Дополнительные хосты: тот же ответ API-признаков, но имя с хостом, чтобы строка в журнале было понятно
         var hostTasks = targets.SelectMany(t => t.ExtraHosts.Select(h => ProbeServiceAsync(st, new CheckTarget
         {
-            Name = $"{t.Name}: {h}", Host = h, Path = "/", BlockedMarkers = t.BlockedMarkers,
+            Name = $"{t.Name}: {h}", Host = h, Path = "/", BlockedMarkers = t.BlockedMarkers, OwnerOrgs = t.OwnerOrgs,
         }, http, ct, web: true))).ToList();
-        await Task.WhenAll(svcTasks.Cast<Task>().Concat(hostTasks).Append(ipTask).Append(dnsTask));
+        var leakTask = leakTest ? LeakTest.RunAsync() : Task.FromResult(new List<ResolverInfo>());
+        await Task.WhenAll(svcTasks.Cast<Task>().Concat(hostTasks).Append(ipTask).Append(dnsTask).Append(leakTask));
+        snap.Resolvers.AddRange(leakTask.Result);
         snap.Services.AddRange(svcTasks.Select(t => t.Result));
         snap.Hosts.AddRange(hostTasks.Select(t => t.Result));
         return snap;
@@ -103,7 +115,7 @@ public static class ConnectionProbe
     private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false)
     {
         string resolved = "—";
-        bool proxied = false;
+        bool proxied = false, compared = false;
         try
         {
             // Через системный резолвер — то есть ровно так, как будет работать браузер.
@@ -113,6 +125,9 @@ public static class ConnectionProbe
             {
                 var (real, _) = await DnsWire.ResolveDohAsync(st.ReferenceDoh, t.Host, TimeSpan.FromSeconds(6), ct);
                 proxied = ips.Length > 0 && !ips.Any(real.Contains);
+                // Не совпал с эталоном, но принадлежит самому сервису (у Google много адресов): подмены нет
+                if (proxied && await GeoLocation.IsOwnedByAsync(resolved, t.OwnerOrgs, ct)) proxied = false;
+                compared = true;
             }
             catch (Exception) { }
         }
@@ -121,18 +136,44 @@ public static class ConnectionProbe
         string access;
         try
         {
-            using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
-            var body = await ReadLimitedAsync(resp, ct);
-            int code = (int)resp.StatusCode;
-            access = (web ? ServiceAccess.ClassifyWeb(t, code, body) : ServiceAccess.Classify(t, code, body)) switch
+            var result = await ProbeAsync(http, t, web, ct);
+            access = result switch
             {
                 ServiceAccess.Result.Open => "✓ доступен",
                 ServiceAccess.Result.Closed => "✗ доступ закрыт",
                 _ => "✗ сервис не отвечает",
             };
+
+            if (!web && result == ServiceAccess.Result.Open)
+            {
+                // API без ключа отвечает одинаково из закрытого региона и через прокси (Gemini):
+                // без подмены адреса доступ не подтвержден
+                if (t.RequiresProxy && compared && !proxied)
+                    access = "✗ без подмены адреса доступ не подтвердить";
+                // Сайт сервиса: если он закрыт (регион, капча Google), в браузере сервисом не пользоваться
+                else if (ServerChecker.SplitWebCheck(t) is { } site)
+                {
+                    try
+                    {
+                        if (await ProbeAsync(http, site, web: true, ct) == ServiceAccess.Result.Closed)
+                            access = $"✗ сайт {site.Host} закрыт";
+                    }
+                    catch (Exception) when (!ct.IsCancellationRequested) { /* сайт не ответил — остается результат API */ }
+                }
+            }
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { access = "✗ " + Friendly(e); }
 
         return new ServiceState(t.Name, t.Host, resolved, proxied, access);
+    }
+
+    /// <summary>Один запрос к API или сайту и вердикт по ответу. Для сайта учитывается адрес редиректа.</summary>
+    private static async Task<ServiceAccess.Result> ProbeAsync(HttpClient http, CheckTarget t, bool web, CancellationToken ct)
+    {
+        using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
+        var body = await ReadLimitedAsync(resp, ct);
+        int code = (int)resp.StatusCode;
+        return web ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())
+                   : ServiceAccess.Classify(t, code, body);
     }
 }

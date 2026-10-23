@@ -27,6 +27,10 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>DNS-over-HTTPS адрес, например https://example/dns-query.</summary>
     public string? DohUrl { get => _dohUrl; set { _dohUrl = value?.Trim(); On(); On(nameof(Address)); } }
 
+    /// <summary>IPv6-адреса этого же сервера (из источника или DoH). При подключении DNS ставится и для IPv6,
+    /// и запросы по IPv6 не уходят мимо сервера к DNS роутера.</summary>
+    public List<string> Ipv6 { get; set; } = new();
+
     public string Source { get; set; } = "вручную";
 
     /// <summary>Страница, на которой сервер найден (кнопка 🔗 в списке).</summary>
@@ -38,6 +42,10 @@ public class DnsServer : INotifyPropertyChanged
 
     [JsonIgnore]
     public string SourceHost => HasSourceUrl ? new Uri(SourceUrl!).Host : Source;
+
+    /// <summary>Откуда взят сервер, коротко для колонки таблицы: «github.com › main». Полный путь — над таблицей и в подсказке.</summary>
+    [JsonIgnore]
+    public string SourcePrettyShort => SourceLabel.Compact(HasSourceUrl ? SourceUrl : null, Source);
     public DateTime AddedAt { get; set; } = DateTime.Now;
 
     /// <summary>Найден за последние 7 дней — в таблице помечается «новый».</summary>
@@ -54,6 +62,18 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public bool JustAdded { get => _justAdded; set { _justAdded = value; On(); } }
 
+    private bool _isFavorite;
+    /// <summary>Сервер в избранном: вкладка «Избранные», а сторож при замене сервера выбирает его при равной стабильности.</summary>
+    public bool IsFavorite { get => _isFavorite; set { if (_isFavorite == value) return; _isFavorite = value; On(); } }
+
+    private string? _bestFor;
+    /// <summary>Бейдж в таблице: «лучший для всех» или «лучший: Claude». Считается из стабильности, не сохраняется.</summary>
+    [JsonIgnore]
+    public string? BestFor { get => _bestFor; set { if (_bestFor == value) return; _bestFor = value; On(); On(nameof(IsBest)); } }
+
+    [JsonIgnore]
+    public bool IsBest => _bestFor != null;
+
     private bool _isConnected;
     /// <summary>Сервер, через который сейчас подключено. В таблице он первый. Не сохраняется.</summary>
     [JsonIgnore]
@@ -67,11 +87,13 @@ public class DnsServer : INotifyPropertyChanged
 
     private string _summary = "";
     /// <summary>Итог по сервисам: «ChatGPT ✓ · Claude ✗ …».</summary>
-    public string Summary { get => _summary; set { _summary = value; On(); On(nameof(Chips)); } }
+    public string Summary { get => _summary; set { _summary = value; _chips = null; On(); On(nameof(Chips)); } }
 
-    /// <summary>Сервисы для таблицы: ChatGPT / Claude / Gemini с состоянием (ok / region / fail).</summary>
+    private List<ServiceChip>? _chips;
+    /// <summary>Сервисы для таблицы: ChatGPT / Claude / Gemini с состоянием (ok / region / fail).
+    /// Разбирается один раз на каждое изменение Summary: список нужен таблице и выбору лучших каждые полсекунды.</summary>
     [JsonIgnore]
-    public List<ServiceChip> Chips => ServiceChip.Parse(_summary);
+    public List<ServiceChip> Chips => _chips ??= ServiceChip.Parse(_summary);
 
     /// <summary>Короткое имя без повтора адреса: «trofimovsky.ru: 1.2.3.4» → «trofimovsky.ru».</summary>
     [JsonIgnore]
@@ -94,7 +116,7 @@ public class DnsServer : INotifyPropertyChanged
         get
         {
             if (!string.IsNullOrEmpty(Primary))
-                return string.IsNullOrEmpty(Secondary) ? Primary : $"{Primary}, {Secondary}";
+                return (string.IsNullOrEmpty(Secondary) ? Primary : $"{Primary}, {Secondary}") + (Ipv6.Count > 0 ? " · IPv6" : "");
             return Uri.TryCreate(DohUrl, UriKind.Absolute, out var u) ? $"DoH · {u.Host}" : "—";
         }
     }
@@ -112,15 +134,23 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string CountryName2 => string.IsNullOrEmpty(Country2) ? "" : GeoLocation.CountryName(Country2);
 
-    /// <summary>Сравнение двух баз: совпали, расходятся или вторая не ответила.</summary>
+    /// <summary>Итог сверки IP-баз: что ответила каждая и как выбрана страна. Пусто у данных старых версий.</summary>
+    public string? GeoVotes { get; set; }
+
+    /// <summary>Базы определили страну по-разному, и даже третья не дала большинства.</summary>
+    public bool GeoDisputed { get; set; }
+
+    /// <summary>Сравнение баз: совпали, страна выбрана большинством или вторая не ответила.</summary>
     [JsonIgnore]
     public string LocationNote => string.IsNullOrEmpty(Country) ? ""
+        : !string.IsNullOrEmpty(GeoVotes) ? GeoVotes
         : string.IsNullOrEmpty(Country2) ? "вторая база не ответила"
         : Country2 == Country ? "обе базы совпадают"
         : $"базы расходятся: ipinfo: {CountryName}, ipwho.is: {CountryName2}";
 
     [JsonIgnore]
-    public bool HasLocationWarning => !string.IsNullOrEmpty(Country) && !string.IsNullOrEmpty(Country2) && Country2 != Country;
+    public bool HasLocationWarning => !string.IsNullOrEmpty(GeoVotes) ? GeoDisputed
+        : !string.IsNullOrEmpty(Country) && !string.IsNullOrEmpty(Country2) && Country2 != Country;
 
     /// <summary>Подсказка к месту: сверка баз и оговорка, что это данные IP-баз, а не физическое место.</summary>
     [JsonIgnore]
@@ -182,6 +212,14 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public ImageSource? Flag { get => _flag; set { _flag = value; On(); } }
 
+    /// <summary>Записывает место по итогу сверки IP-баз и отмечает время проверки.</summary>
+    public void SetLocation(GeoLocation.GeoResult r)
+    {
+        GeoVotes = r.Votes;
+        GeoDisputed = r.Disputed;
+        SetLocation(r.Country, r.City, r.Second);
+    }
+
     /// <summary>Записывает место и отмечает проверку времени.</summary>
     public void SetLocation(string? country, string? city, string? country2 = null)
     {
@@ -203,6 +241,21 @@ public class DnsServer : INotifyPropertyChanged
     public int ChecksTotal { get; set; }
     /// <summary>Сколько последних проверок подряд провалено.</summary>
     public int FailStreak { get; set; }
+
+    /// <summary>Успешные проверки по каждому ИИ-сервису отдельно (имя → число). Делится на ServiceChecks.</summary>
+    public Dictionary<string, int> ServiceOk { get; set; } = new();
+    /// <summary>Проверки, в которых считались сервисы по отдельности (счет начат с версии 0.1.19).</summary>
+    public int ServiceChecks { get; set; }
+    /// <summary>Проверки, в которых работали сразу все сервисы.</summary>
+    public int AllOk { get; set; }
+
+    /// <summary>Стабильность по сервису в процентах. Null, если по нему еще не было проверок.</summary>
+    public int? ServiceStability(string service) =>
+        ServiceChecks == 0 ? null : ServiceOk.GetValueOrDefault(service) * 100 / ServiceChecks;
+
+    /// <summary>Стабильность «все сервисы сразу» в процентах. Null, если проверок еще не было.</summary>
+    [JsonIgnore]
+    public int? AllStability => ServiceChecks == 0 ? null : AllOk * 100 / ServiceChecks;
     /// <summary>Сервер ни разу не подменил адрес ИИ-сервиса — это обычный резолвер, а не Smart DNS.</summary>
     public bool NoProxy { get; set; }
 
