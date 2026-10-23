@@ -41,7 +41,8 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => ApplyResponsive();
 
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
-        Application.Current.SessionEnding += (_, _) => _exitRequested = true;
+        // Выключение или перезагрузка Windows: выходим без вопроса и без отключения, чтобы DNS остался после перезагрузки
+        Application.Current.SessionEnding += (_, _) => { _sessionEnding = true; _exitRequested = true; };
         AddPanel.RenderTransform = new TranslateTransform();
         LogPanel.RenderTransform = new TranslateTransform();
         _logView = CollectionViewSource.GetDefaultView(_log);
@@ -107,6 +108,9 @@ public partial class MainWindow : Window
             if (stale.Count > 0) await RunChecksAsync(stale);
         };
         _watchdog.Tick += Watchdog_Tick;
+        WatchVpn();
+        _undoTimer.Tick += (_, _) => UndoTick();
+        PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
     }
 
@@ -129,6 +133,7 @@ public partial class MainWindow : Window
             3 => s.Status == ServerStatus.Fail,
             4 => s.Status == ServerStatus.Unknown,
             5 => s.Status is ServerStatus.Ok or ServerStatus.Partial or ServerStatus.Checking,
+            6 => s.IsFavorite,
             _ => true,
         };
     }
@@ -162,6 +167,165 @@ public partial class MainWindow : Window
         StatsText.Text = $"{_servers.Count(s => s.Status == ServerStatus.Ok)} работают   ·   " +
                          $"{_servers.Count(s => s.Status == ServerStatus.Partial)} частично   ·   " +
                          $"показано {shown} из {_servers.Count}";
+        UpdateTopList();
+    }
+
+    // ---------- Лучшие по стабильности ----------
+
+    private string? _topSig;
+
+    /// <summary>Лучший сервер категории и его стабильность по сервису.</summary>
+    private sealed record TopPick(string Title, string Key, DnsServer? Best, int? Stability);
+
+    /// <summary>
+    /// Лучший сервер отдельно для каждого ИИ и для всех сразу: самая высокая стабильность по сервису,
+    /// при равенстве больше проверок и ниже пинг. Кандидат должен работать с сервисом сейчас и не быть мусором.
+    /// </summary>
+    private List<TopPick> PickBest()
+    {
+        var names = _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList();
+        var cats = names.Select(n => (Title: n, Key: n,
+                Stab: (Func<DnsServer, int?>)(s => s.ServiceStability(n)),
+                Works: (Func<DnsServer, bool>)(s => s.Chips.Any(c => c.Name == n && c.State == "ok"))))
+            .ToList();
+        if (names.Count > 1)
+            cats.Add((names.Count == 3 ? "Все три" : "Все сразу", "*", s => s.AllStability, s => s.Status == ServerStatus.Ok));
+
+        var picks = new List<TopPick>();
+        foreach (var c in cats)
+        {
+            var best = _servers.Where(s => !s.IsJunk && s.ServiceChecks > 0 && c.Works(s) && c.Stab(s) is > 0)
+                .OrderByDescending(s => c.Stab(s)).ThenByDescending(s => s.ServiceChecks).ThenBy(s => s.LatencyMs ?? long.MaxValue)
+                .FirstOrDefault();
+            picks.Add(new TopPick(c.Title, c.Key, best, best == null ? null : c.Stab(best)));
+        }
+        return picks;
+    }
+
+    /// <summary>Бейджи «лучший …» в таблице и блок «Лучшие по стабильности». Блок перестраивается, только если выбор изменился.</summary>
+    private void UpdateTopList()
+    {
+        var picks = PickBest();
+
+        // Лучший для всех важнее, чем лучший для одного сервиса
+        foreach (var s in _servers)
+        {
+            var mine = picks.Where(p => p.Best == s).ToList();
+            s.BestFor = mine.Count == 0 ? null
+                      : mine.Any(p => p.Key == "*") ? "лучший для всех"
+                      : "лучший: " + string.Join(", ", mine.Select(p => p.Title));
+        }
+
+        // Флаг грузится позже выбора: его появление тоже повод перестроить блок
+        var sig = string.Join("|", picks.Select(p => $"{p.Key}:{p.Best?.Id}:{p.Stability}:{p.Best?.ServiceChecks}:{p.Best?.LatencyMs}:{p.Best?.IsConnected}:{p.Best?.Flag != null}"));
+        if (sig == _topSig) return;
+        _topSig = sig;
+        BuildTopRows(picks);
+    }
+
+    /// <summary>
+    /// Рамка «Лучшие по стабильности» справа от проверки подключения: заголовок и по строке на категорию.
+    /// В строке: логотип, для кого и сервер с флагом; справа стабильность по сервису крупно, ниже пинг и число проверок.
+    /// </summary>
+    private void BuildTopRows(List<TopPick> picks)
+    {
+        Brush B(string k) => (Brush)FindResource(k);
+        TopRows.Children.Clear();
+        TopRows.Children.Add(new TextBlock { Text = "Лучшие по стабильности", Style = (Style)FindResource("H2") });
+        TopRows.Children.Add(new TextBlock
+        {
+            Text = "отдельно для каждого сервиса · щелчок выбирает сервер", Foreground = B("Muted"), FontSize = 12,
+            Margin = new Thickness(0, 2, 0, 8),
+        });
+
+        if (picks.All(p => p.Best == null))
+        {
+            TopRows.Children.Add(new TextBlock
+            {
+                Text = "Пока нет данных. Список заполнится после проверки серверов: кнопка «Перепроверить».",
+                Foreground = B("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0),
+            });
+            return;
+        }
+
+        for (int i = 0; i < picks.Count; i++)
+        {
+            var p = picks[i];
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            // Логотип сервиса; у «Все три» три маленьких логотипа
+            var logos = (p.Key == "*" ? _settings.Targets.Where(t => t.Enabled).Select(t => AiLogo(t.Name)) : new[] { AiLogo(p.Key) })
+                .Where(l => l != null).ToList();
+            var logoPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
+                                             HorizontalAlignment = HorizontalAlignment.Center }; // одиночный и тройной по одной оси
+            int size = logos.Count > 1 ? 12 : 20;
+            foreach (var logo in logos)
+                logoPanel.Children.Add(new Image { Source = logo, Width = size, Height = size, Margin = new Thickness(0, 0, logos.Count > 1 ? 2 : 0, 0), Stretch = Stretch.Uniform });
+            g.Children.Add(logoPanel);
+
+            // Для кого и сервер
+            var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            mid.Children.Add(new TextBlock { Text = p.Title, Foreground = B("Muted"), FontSize = 11 });
+            var server = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
+            if (p.Best is { } s)
+            {
+                if (s.Flag != null)
+                    server.Children.Add(new Image { Source = s.Flag, Width = 18, Height = 12, Margin = new Thickness(0, 0, 6, 0), Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center });
+                server.Children.Add(new TextBlock { Text = s.ShortName, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 270, VerticalAlignment = VerticalAlignment.Center });
+                if (s.IsConnected) // точка, а не слово: в узкой рамке подпись обрезалась
+                    server.Children.Add(new TextBlock { Text = "  ●", Foreground = B("Lime"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Сейчас подключен" });
+            }
+            else server.Children.Add(new TextBlock { Text = "нет рабочего сервера", Foreground = B("Muted") });
+            mid.Children.Add(server);
+            Grid.SetColumn(mid, 1);
+            g.Children.Add(mid);
+
+            // Стабильность по сервису крупно, ниже пинг и число проверок
+            if (p.Best is { } b)
+            {
+                var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+                right.Children.Add(new TextBlock
+                {
+                    Text = $"{p.Stability}%", FontSize = 16, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Right,
+                    Foreground = p.Stability >= 90 ? B("Ok") : p.Stability >= 60 ? B("Warn") : B("Bad"),
+                });
+                right.Children.Add(new TextBlock
+                {
+                    Text = (b.LatencyMs is { } ms ? $"{ms} мс · " : "") + $"{b.ServiceChecks} пров.",
+                    Foreground = B("Muted"), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right,
+                });
+                Grid.SetColumn(right, 2);
+                g.Children.Add(right);
+            }
+
+            var row = new Border
+            {
+                Child = g, Padding = new Thickness(8, 4, 8, 4), CornerRadius = new CornerRadius(8),
+                Background = Brushes.Transparent, Tag = p.Best, Cursor = p.Best != null ? Cursors.Hand : null,
+                ToolTip = p.Best == null ? null
+                    : $"{p.Best.DisplayName}\n{p.Best.Address}\nСтабильность по сервису {p.Stability}% за {p.Best.ServiceChecks} проверок\nЩелчок выбирает сервер в списке",
+            };
+            row.MouseEnter += (_, _) => row.Background = B("Surface2");
+            row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+            row.MouseLeftButtonUp += TopRow_Click;
+            // Тонкая линия между строками
+            TopRows.Children.Add(i == 0 ? row : new Border
+            {
+                BorderBrush = B("Border"), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 2, 0, 0),
+                Margin = new Thickness(0, 2, 0, 0), Child = row,
+            });
+        }
+    }
+
+    private void TopRow_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: DnsServer s }) return;
+        ServerGrid.SelectedItem = s;
+        ServerGrid.ScrollIntoView(s);
+        ServerGrid.Focus();
     }
 
     // ---------- Источники ----------
@@ -285,15 +449,31 @@ public partial class MainWindow : Window
             Hide();
             return;
         }
-        _cts?.Cancel();
         SaveServersNow();
-        if (_closeConfirmed || DnsSwitcher.GetActive() is not { } a) return;
+        // Windows завершает сеанс: не спрашиваем и не отключаем. Статический DNS сохраняется на адаптере,
+        // файл подключения остается, и после перезагрузки DNEX продолжает с того же сервера.
+        if (_sessionEnding || _closeConfirmed || DnsSwitcher.GetActive() is not { } a) { _cts?.Cancel(); return; }
 
         var r = ClosePrompt.Ask(a.Name);
-        if (r == MessageBoxResult.No) return;
+        if (r == MessageBoxResult.Cancel)
+        {
+            // Передумал: программа работает дальше, текущая проверка или поиск не прерываются
+            e.Cancel = true;
+            _exitRequested = false;
+            return;
+        }
+        _cts?.Cancel();
+        if (r == MessageBoxResult.No) return; // выход с сохранением DNS: без проверок
         e.Cancel = true;
-        if (r == MessageBoxResult.Cancel) return;
-        await DisconnectAsync("выход из программы");
+        // Выход с отключением: только возврат DNS, без проверок подключения
+        if (!await DisconnectAsync("выход из программы", probe: false))
+        {
+            _exitRequested = false;
+            MessageBox.Show("Отключиться не удалось, поэтому программа не закрыта: иначе DNS остался бы измененным.\n" +
+                            "Подробности в журнале. Попробуйте еще раз или выберите выход с сохранением DNS.",
+                "DNEX", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         _closeConfirmed = true;
         Close();
     }
@@ -308,7 +488,7 @@ public partial class MainWindow : Window
         VerdictText.Text = "проверяю…";
         try
         {
-            var now = await ConnectionProbe.TakeAsync(_settings);
+            var now = await ConnectionProbe.TakeAsync(_settings, leakTest: true);
             if (_after == null && _before == null) _before = now; else _after = now;
             ShowCompare();
             SetTraySnapshot(now);
@@ -330,6 +510,10 @@ public partial class MainWindow : Window
             Log($"  {x.Name}: {x.Host} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
         foreach (var x in n.Hosts)
             Log($"  доп. {x.Name} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
+        foreach (var r in n.Resolvers)
+            Log($"  резолвер: {r.Ip} · {r.Org} · {r.Place}");
+        if (LeakTest.LooksLikeLeak(n.Resolvers))
+            Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
     }
 
     /// <summary>
@@ -346,6 +530,9 @@ public partial class MainWindow : Window
     };
 
     private string? _compareSig;
+    /// <summary>Снимок, по которому построены плитки. Опоздавший результат поиска стран для старого снимка их не трогает.</summary>
+    private NetSnapshot? _shownSnap;
+    private readonly HashSet<string> _geoPending = new();
     /// <summary>Сервисы, у которых раскрыт список серверов. Сохраняется между перерисовками блока.</summary>
     private readonly HashSet<string> _openHosts = new();
     private bool _compareDisconnected;
@@ -367,6 +554,7 @@ public partial class MainWindow : Window
         host.Children.Clear();
         _tileGeo.Clear();
         _compareDisconnected = disconnected;
+        _shownSnap = cur;
         if (cur == null)
         {
             host.Children.Add(new TextBlock
@@ -404,9 +592,21 @@ public partial class MainWindow : Window
         else dnsRuns.Add((cur.SystemDns, B("Text"), true));
         if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
 
+        // Строка 3: резолверы, которые на самом деле дошли до тестового сервера (тест утечки)
+        if (!_compact && cur.Resolvers.Count > 0)
+        {
+            static string Country(string place) => place.Split(',').Last().Trim();
+            static string Org(string org) => org.Length <= 30 ? org : org[..29] + "…";
+            var runs = new List<(string, Brush, bool)> { ("Резолверы  ", B("Muted"), false) };
+            runs.Add((string.Join("   ·   ", cur.Resolvers.Select(r => $"{r.Ip} ({Org(r.Org)}{(r.Place.Length > 0 ? ", " + Country(r.Place) : "")})")), B("Text"), true));
+            if (LeakTest.LooksLikeLeak(cur.Resolvers))
+                runs.Add(("   ⚠ запросы уходят к разным резолверам: часть идет мимо сервера", B("Warn"), true));
+            host.Children.Add(Line(runs.ToArray()));
+        }
+
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
         // Карточки в колонках, по верху: раскрытая карточка растет сама, соседние не вытягиваются
-        var tiles = new Grid { Margin = new Thickness(-4, 8, -4, 0), VerticalAlignment = VerticalAlignment.Top };
+        var tiles = new Grid { Margin = new Thickness(-4, _compact ? 0 : 8, -4, 0), VerticalAlignment = VerticalAlignment.Top };
         foreach (var _ in cur.Services) tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foreach (var svc in cur.Services)
         {
@@ -414,37 +614,41 @@ public partial class MainWindow : Window
             bool ok = svc.Access.StartsWith("✓");
             var card = new Border
             {
-                Background = new SolidColorBrush(((SolidColorBrush)B("Surface2")).Color), CornerRadius = new CornerRadius(10), Padding = _compact ? new Thickness(6, 8, 6, 8) : new Thickness(14, 10, 14, 10),
+                Background = new SolidColorBrush(((SolidColorBrush)B("Surface2")).Color), CornerRadius = new CornerRadius(10), Padding = _compact ? new Thickness(8, 5, 8, 5) : new Thickness(14, 10, 14, 10),
                 Margin = new Thickness(4, 0, 4, 0), BorderThickness = new Thickness(0, 0, 0, 2),
                 BorderBrush = ok ? B("Ok") : B("Bad"),
             };
             var sp = new StackPanel();
             var head = new DockPanel();
             var title = new StackPanel { Orientation = Orientation.Horizontal };
+            int logoSize = _compact ? 15 : 18;
             if (AiLogo(svc.Name) is { } logo)
-                title.Children.Add(new Image { Source = logo, Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), Stretch = Stretch.Uniform });
-            title.Children.Add(new TextBlock { Text = svc.Name, FontWeight = FontWeights.SemiBold, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+                title.Children.Add(new Image { Source = logo, Width = logoSize, Height = logoSize, Margin = new Thickness(0, 0, _compact ? 6 : 8, 0), Stretch = Stretch.Uniform });
+            title.Children.Add(new TextBlock { Text = svc.Name, FontWeight = FontWeights.SemiBold, FontSize = _compact ? 13 : 14, VerticalAlignment = VerticalAlignment.Center });
             head.Children.Add(title);
             var state = new TextBlock { Text = svc.Access.TrimStart('✓', '✗', ' '), Foreground = ok ? B("Ok") : B("Bad"),
-                                        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            DockPanel.SetDock(state, _compact ? Dock.Bottom : Dock.Right); // в компактном виде статус под названием
-            if (_compact) state.HorizontalAlignment = HorizontalAlignment.Left;
-            head.Children.Insert(0, state);
-            sp.Children.Add(head);
-            var geo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+                                        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+                                        FontSize = _compact ? 12 : 13, TextTrimming = TextTrimming.CharacterEllipsis };
+            var geo = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             _tileGeo[svc.Name] = geo;
-            sp.Children.Add(geo);
             if (_compact)
             {
-                // Компактная карточка: только адрес, без подписи «через Smart DNS» и строки «было»
-                sp.Children.Add(new TextBlock
-                {
-                    Text = svc.ResolvedIp, Foreground = B("Muted"), FontSize = 11,
-                    FontFamily = new FontFamily("Cascadia Mono, Consolas"), Margin = new Thickness(0, 3, 0, 0),
-                });
+                // Компактная карточка в две строки: название; флаг страны доступа и статус. Адрес в подсказке
+                sp.Children.Add(head);
+                var row2 = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+                row2.Children.Add(geo);
+                state.HorizontalAlignment = HorizontalAlignment.Left;
+                row2.Children.Add(state);
+                sp.Children.Add(row2);
+                card.ToolTip = $"{svc.Access.TrimStart('✓', '✗', ' ')}\n{svc.Host} → {svc.ResolvedIp}{(svc.Proxied ? " (через Smart DNS)" : " (напрямую)")}";
             }
             else
             {
+                DockPanel.SetDock(state, Dock.Right);
+                head.Children.Insert(0, state);
+                sp.Children.Add(head);
+                geo.Margin = new Thickness(0, 8, 0, 0);
+                sp.Children.Add(geo);
                 sp.Children.Add(Line(
                     (svc.Proxied ? "через Smart DNS  " : "напрямую  ", svc.Proxied ? B("Accent") : B("Muted"), false),
                     (svc.ResolvedIp, B("Muted"), false)));
@@ -452,18 +656,20 @@ public partial class MainWindow : Window
                     sp.Children.Add(Line(("было: ", B("Muted"), false),
                         ($"{was.Access.TrimStart('✓', '✗', ' ')}, {(was.Proxied ? "через Smart DNS" : "напрямую")}", B("Muted"), false)));
             }
-            // Кнопка «Серверы»: раскрывает список адресов сервиса ниже блока
-            int hostCount = 1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal));
-            var toggle = new TextBlock
+            // Кнопка «Серверы» раскрывает список адресов сервиса в его колонке. В компактном окне ее нет: там мало места
+            if (!_compact)
             {
-                Text = _openHosts.Contains(svc.Name) ? "Скрыть серверы ▴" : $"Серверы ({hostCount}) ▾",
-                Foreground = B("Accent"), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand,
-                Tag = svc.Name, ToolTip = "Адреса сервиса и их статус",
-            };
-            toggle.MouseLeftButtonUp += ToggleHosts_Click;
-            sp.Children.Add(toggle);
-            // Раскрытие внутри карточки: список адресов под кнопкой, в ее колонке
-            if (_openHosts.Contains(svc.Name)) sp.Children.Add(HostsPanel(svc, cur));
+                int hostCount = 1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal));
+                var toggle = new TextBlock
+                {
+                    Text = _openHosts.Contains(svc.Name) ? "Скрыть серверы ▴" : $"Серверы ({hostCount}) ▾",
+                    Foreground = B("Accent"), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand,
+                    Tag = svc.Name, ToolTip = "Адреса сервиса и их статус",
+                };
+                toggle.MouseLeftButtonUp += ToggleHosts_Click;
+                sp.Children.Add(toggle);
+                if (_openHosts.Contains(svc.Name)) sp.Children.Add(HostsPanel(svc, cur));
+            }
             card.Child = sp;
             Grid.SetColumn(card, tiles.Children.Count);
             AnimateTile(card, (SolidColorBrush)card.Background, tiles.Children.Count,
@@ -560,6 +766,7 @@ public partial class MainWindow : Window
         UpdateSwitchButton();
         var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
         Brush B(string k) => (Brush)FindResource(k);
+        SelectionSource.Visibility = Visibility.Collapsed;
         if (sel.Count == 0)
         {
             SelectionIcon.Fill = B("Idle");
@@ -576,13 +783,53 @@ public partial class MainWindow : Window
         }
         var s = sel[0];
         SelectionIcon.Fill = B(s.Status switch { ServerStatus.Ok => "Ok", ServerStatus.Partial => "Warn", ServerStatus.Fail => "Bad", _ => "Accent" });
-        SelectionTitle.Text = s.DisplayName;
+        // Название как в таблице (страна и город или имя из каталога), а не сайт, где сервер найден
+        SelectionTitle.Text = s.ShortName;
+        SelectionTitle.ToolTip = s.Name;
+        ShowSelectionSource(s);
         var parts = new List<string> { s.Address };
         if (!string.IsNullOrEmpty(s.DohUrl) && !string.IsNullOrEmpty(s.Primary)) parts.Add(s.DohUrl!);
         parts.Add(s.StatusText.ToLowerInvariant());
         if (s.LatencyMs != null) parts.Add($"пинг {s.PingText} мс");
         if (s.ChecksTotal > 0) parts.Add($"стабильность {s.Stability}");
         SelectionDetails.Text = string.Join("   ·   ", parts);
+    }
+
+    /// <summary>
+    /// Источник выбранного сервера «хлебными крошками»: «источник  github.com › MAECTRO › magicdns › commits › main».
+    /// Сайт выделен цветом, путь светлее, разделители приглушены. Полная ссылка в подсказке, щелчок открывает страницу.
+    /// </summary>
+    private void ShowSelectionSource(DnsServer s)
+    {
+        Brush B(string k) => (Brush)FindResource(k);
+        SelectionSource.Inlines.Clear();
+        var parts = s.HasSourceUrl ? SourceLabel.Parts(s.SourceUrl) : new List<string>();
+        SelectionSource.Inlines.Add(new System.Windows.Documents.Run("источник  ") { Foreground = B("Muted") });
+        if (parts.Count == 0)
+        {
+            SelectionSource.Inlines.Add(new System.Windows.Documents.Run(s.Source) { Foreground = B("Text") });
+            SelectionSource.Cursor = null;
+            SelectionSource.ToolTip = null;
+        }
+        else
+        {
+            SelectionSource.Inlines.Add(new System.Windows.Documents.Run(parts[0]) { Foreground = B("Accent") });
+            foreach (var part in parts.Skip(1))
+            {
+                SelectionSource.Inlines.Add(new System.Windows.Documents.Run("  ›  ") { Foreground = B("Muted") });
+                SelectionSource.Inlines.Add(new System.Windows.Documents.Run(part) { Foreground = B("Text") });
+            }
+            SelectionSource.Cursor = Cursors.Hand;
+            SelectionSource.ToolTip = $"{s.SourceUrl}\nЩелчок открывает страницу, где найден сервер";
+        }
+        SelectionSource.Tag = s;
+        SelectionSource.Visibility = Visibility.Visible;
+    }
+
+    private void SelectionSource_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (SelectionSource.Tag is DnsServer { HasSourceUrl: true } s)
+            Process.Start(new ProcessStartInfo(new Uri(s.SourceUrl!).AbsoluteUri) { UseShellExecute = true }); // только http/https — проверено в HasSourceUrl
     }
 
     private static T? FindParent<T>(DependencyObject? d) where T : DependencyObject
@@ -616,8 +863,16 @@ public partial class MainWindow : Window
     {
         UpdateWindow.Show(this, info, () =>
         {
+            var before = _settings.SkippedUpdate;
             _settings.SkippedUpdate = info.Version.ToString();
             try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+            OfferUndo($"Версия {info.Version} пропущена", () =>
+            {
+                _settings.SkippedUpdate = before;
+                try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+                Log($"Версия {info.Version} снова будет предлагаться");
+                return Task.CompletedTask;
+            });
         });
     }
 
@@ -690,11 +945,13 @@ public partial class MainWindow : Window
         var cv = compact ? Visibility.Visible : Visibility.Collapsed;
         // В компактном виде блок ИИ-сервисов остается: три плитки с логотипом, флагом доступа и статусом, без заголовка
         VerdictCard.Visibility = Visibility.Visible;
-        VerdictCard.Padding = compact ? new Thickness(8, 8, 8, 6) : new Thickness(16, 12, 16, 12);
+        VerdictCard.Padding = compact ? new Thickness(6, 6, 6, 6) : new Thickness(16, 12, 16, 12);
         VerdictHeader.Visibility = v;
         CompareGrid.Visibility = Visibility.Visible;
+        CompareGrid.Margin = compact ? new Thickness(0) : new Thickness(0, 12, 0, 0); // в компактном виде без шапки блока: без пустого отступа
         _compareSig = null; // плитки пересобираются с отступами текущего вида
         SelectionBar.Visibility = v;
+        ColFav.Visibility = v;  // узкое окно: звездочка через меню строки
         ApplyActions.Visibility = v;
         HeaderSep.Visibility = v;
         Subtitle.Visibility = v;
@@ -757,6 +1014,9 @@ public partial class MainWindow : Window
         ColSource.Visibility = full && w >= 1540 ? Visibility.Visible : Visibility.Collapsed;
         ColStab.Visibility = ColScore.Visibility = full && w >= 1360 ? Visibility.Visible : Visibility.Collapsed;
 
+        // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
+        TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
+
         if (!full) return; // компактный вид шапку раскладывает сам
 
         // Шапка: ниже 1480 кнопки действий и статистика уходят на вторую строку.
@@ -797,7 +1057,7 @@ public partial class MainWindow : Window
     /// <summary>Главная кнопка: не подключено → подключить к выбранному (или к лучшему); подключено → отключить.</summary>
     private async void Main_Click(object sender, RoutedEventArgs e)
     {
-        if (DnsSwitcher.GetActive() != null) { await DisconnectAsync("по запросу"); return; }
+        if (DnsSwitcher.GetActive() != null) { await DisconnectByUserAsync(); return; }
         SelectBest();
         if (ServerGrid.SelectedItem is DnsServer s) await ConnectToAsync(s);
         else Log("Рабочих серверов нет. Нажмите «Найти новые серверы».");
@@ -814,9 +1074,15 @@ public partial class MainWindow : Window
         if (ServerGrid.SelectedItem is DnsServer s && DnsSwitcher.GetActive()?.ServerId != s.Id) await ConnectToAsync(s);
     }
 
-    private async Task ConnectToAsync(DnsServer s)
+    /// <summary>Подключение к серверу. auto — вызывает сторож: без вопросов и окон, только журнал и уведомления.
+    /// Возвращает true, если после смены DNS сайты открываются.</summary>
+    private async Task<bool> ConnectToAsync(DnsServer s, bool auto = false)
     {
-        if (_busyConn) return;
+        if (_busyConn) return false;
+        bool connected = false;
+        // Для отмены: к какому серверу было подключение до этого (если было)
+        var prevActive = DnsSwitcher.GetActive();
+        var prevServer = prevActive == null ? null : _servers.FirstOrDefault(x => x.Id == prevActive.ServerId);
         _busyConn = true;
         BeginWork();
         SetConnectContent("Подключаю…");
@@ -829,10 +1095,10 @@ public partial class MainWindow : Window
                 ProgressText.Text = $"Проверяю «{s.DisplayName}»…";
                 await new ServerChecker(_settings).CheckAsync(s, CancellationToken.None);
             }
-            if (s.Status == ServerStatus.Fail &&
+            if (s.Status == ServerStatus.Fail && (auto ||
                 MessageBox.Show($"«{s.Name}» сейчас не работает:\n{s.LastError}\n\nВсе равно подключиться?", "DNEX",
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
-                return;
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes))
+                return false;
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
             ProgressText.Text = "Запоминаю состояние до подключения…";
@@ -852,18 +1118,21 @@ public partial class MainWindow : Window
                 Log("После подключения сайты не открываются. Откатываю настройки.");
                 await DnsSwitcher.RestoreAsync(Log);
                 ShowToast("Откат: сервер не отвечает", "Bad");
-                MessageBox.Show("Сервер не отвечает системе: настройки DNS возвращены как были.", "DNEX",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (!auto)
+                    MessageBox.Show("Сервер не отвечает системе: настройки DNS возвращены как были.", "DNEX",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             else
             {
                 // Снимок «после» — по нему видно, действительно ли трафик ИИ пошел через Smart DNS.
                 ProgressText.Text = "Проверяю результат подключения…";
-                _after = await ConnectionProbe.TakeAsync(_settings);
+                _after = await ConnectionProbe.TakeAsync(_settings, leakTest: true);
                 ShowCompare();
                 SetTraySnapshot(_after);
                 LogSnapshot("После подключения", _after);
-                ShowToast($"Подключено · {s.DisplayName}");
+                ShowToast($"Подключено · {s.DisplayName}\n{RestartHint}");
+                Log(RestartHint);
+                connected = true;
             }
         }
         catch (Exception ex) { Log("Ошибка подключения: " + ex.Message); }
@@ -873,29 +1142,102 @@ public partial class MainWindow : Window
             EndWork();
             await RefreshConnectionAsync();
         }
+        if (connected) ReportSystemIssues(auto);
+        if (connected && !auto)
+        {
+            var target = s;
+            if (prevServer != null && prevServer != s)
+                OfferUndo($"Переключено на {s.DisplayName}", hint: RestartHint, undo: async () =>
+                {
+                    if (!StillConnectedTo(target)) return;
+                    await ConnectToAsync(prevServer);
+                });
+            else if (prevActive == null)
+                OfferUndo($"Подключено к {s.DisplayName}", hint: RestartHint, undo: async () =>
+                {
+                    if (!StillConnectedTo(target)) return;
+                    await DisconnectByUserAsync();
+                });
+        }
+        return connected;
     }
 
-    private async void Disconnect_Click(object sender, RoutedEventArgs e) => await DisconnectAsync("по запросу");
-
-    private async Task DisconnectAsync(string reason)
+    /// <summary>
+    /// После подключения: что в системе мешает DNS из DNEX (VPN, безопасный DNS браузера, прокси, hosts,
+    /// чужие DNS на других адаптерах). Пишет в журнал и показывает, что отключить. Сторожу окно не показывается.
+    /// </summary>
+    private void ReportSystemIssues(bool quiet)
     {
-        if (_busyConn) return;
+        var addrs = DnsSwitcher.GetActive()?.Addresses ?? new List<string>();
+        var issues = SystemCheck.Run(addrs);
+        if (issues.Count == 0) { Log("Помех в системе не найдено"); return; }
+        foreach (var i in issues) Log($"Помеха: {i.Title}. {i.Fix}");
+        if (quiet) { ShowToast($"Найдено помех: {issues.Count}, подробности в журнале", "Warn"); return; }
+        MessageBox.Show(
+            "Подключение работает, но в системе есть то, что может ему мешать. Для стабильной работы:\n\n" +
+            string.Join("\n\n", issues.Select(i => $"• {i.Title}\n{i.Fix}")),
+            "DNEX: что отключить", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private async void Disconnect_Click(object sender, RoutedEventArgs e) => await DisconnectByUserAsync();
+
+    /// <summary>Отключение по действию пользователя: после него можно отменить и подключиться обратно.</summary>
+    private async Task DisconnectByUserAsync()
+    {
+        var active = DnsSwitcher.GetActive();
+        var srv = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
+        if (await DisconnectAsync("по запросу") && srv != null)
+            OfferUndo($"Отключено от {srv.DisplayName}", hint: RestartHint, undo: async () =>
+            {
+                if (DnsSwitcher.GetActive() != null) { Log("Отмена не выполнена: подключение уже изменилось"); return; }
+                await ConnectToAsync(srv);
+            });
+    }
+
+    /// <summary>Отмена подключения безопасна, только пока подключение то же самое: его мог сменить сторож или пользователь.</summary>
+    private bool StillConnectedTo(DnsServer s)
+    {
+        if (DnsSwitcher.GetActive()?.ServerId == s.Id) return true;
+        Log("Отмена не выполнена: подключение уже изменилось");
+        return false;
+    }
+
+    /// <summary>
+    /// Отключение: сначала возвращаются исходные DNS, проверки идут потом. probe=false при выходе из программы:
+    /// только возврат DNS, без проверок. Возвращает true, если исходные DNS восстановлены.
+    /// </summary>
+    private async Task<bool> DisconnectAsync(string reason, bool probe = true)
+    {
+        if (_busyConn) return false;
         _busyConn = true;
+        bool restored = false;
         BeginWork();
         try
         {
             SetConnectContent("Отключаю…");
             ProgressText.Text = "Отключаю…";
+            // «До» — последняя проверка в подключенном виде. Новая шла бы через DNS, который мог уже умереть,
+            // и задержала бы возврат интернета на десятки секунд
+            _before = _after ?? _traySnap;
             _after = null;
-            _before = await ConnectionProbe.TakeAsync(_settings); // «до» = состояние в подключенном виде
             await DnsSwitcher.RestoreAsync(Log);
+            restored = true;
             Log($"Отключено ({reason})");
-            await DnsSwitcher.ReportStateAsync(Log); // что осталось в системе: DNS адаптеров и записи DoH
-            ShowToast("Отключено", "Idle");
-            await Task.Delay(500);
-            _after = await ConnectionProbe.TakeAsync(_settings);
-            ShowCompare(disconnected: true);
-            LogSnapshot("После отключения", _after);
+            ShowToast($"Отключено\n{RestartHint}", "Idle");
+            Log(RestartHint);
+            if (probe)
+            {
+                _ = DnsSwitcher.ReportStateAsync(Log); // что осталось в системе: в журнал, уведомление его не ждет
+                await Task.Delay(500);
+                try
+                {
+                    using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                    _after = await ConnectionProbe.TakeAsync(_settings, limit.Token, leakTest: true);
+                    ShowCompare(disconnected: true);
+                    LogSnapshot("После отключения", _after);
+                }
+                catch (OperationCanceledException) { Log("Проверка после отключения не уложилась в 20 секунд"); }
+            }
         }
         catch (Exception ex) { Log("Ошибка отключения: " + ex.Message); }
         finally
@@ -904,6 +1246,7 @@ public partial class MainWindow : Window
             EndWork();
             await RefreshConnectionAsync();
         }
+        return restored;
     }
 
     /// <summary>Обновляет плашку и кнопки по фактическому состоянию (файл подключения + системный DNS).</summary>
@@ -931,27 +1274,106 @@ public partial class MainWindow : Window
         _watchdogFails = 0;
         if (on) _watchdog.Start(); else _watchdog.Stop();
         UpdateConnectionLocation();
+        UpdateTopList(); // флаги и страны появились: блок «Лучшие по стабильности» перерисуется с ними
         UpdateStatusVisuals();
     }
 
-    /// <summary>Сторож: пока подключено, проверяет сервер. 3 неудачи подряд — безопасное отключение,
-    /// чтобы компьютер не остался без интернета из-за умершего сервера.</summary>
+    private bool _watchNoNet;
+
+    /// <summary>
+    /// Сторож, пока подключено:
+    /// 1) сети нет вообще (сон, загрузка, смена Wi-Fi) — ждет, неудачей это не считается;
+    /// 2) DNS системы сбросила другая программа или Windows — возвращает подключение;
+    /// 3) DNS не отвечает 3 раза подряд — переключает на следующий лучший по стабильности сервер.
+    ///    Отключается и возвращает исходные DNS, только если замена не нашлась.
+    /// </summary>
     private async void Watchdog_Tick(object? sender, EventArgs e)
     {
         if (Watchdog.IsChecked != true || _busyConn) return;
         var active = DnsSwitcher.GetActive();
         if (active == null) { _watchdog.Stop(); return; }
 
+        if (!await SystemCheck.NetworkUpAsync())
+        {
+            if (!_watchNoNet) Log("Сторож: нет сети, жду. Подключение не трогаю");
+            _watchNoNet = true;
+            _watchdogFails = 0;
+            return;
+        }
+        _watchNoNet = false;
+
+        // Защита от сброса: на адаптерах должны стоять адреса подключения
+        var current = await DnsSwitcher.GetCurrentAddressesAsync();
+        var mine = active.Addresses.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
+        if (mine.Count > 0 && !mine.Any(current.Contains))
+        {
+            Log($"Сторож: DNS системы сброшен ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
+            HideUndo();
+            if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is { } same && await ConnectToAsync(same, auto: true))
+                ShowToast($"DNS был сброшен. Подключение «{same.DisplayName}» возвращено", "Warn");
+            else
+                ShowToast("DNS был сброшен, вернуть подключение не удалось: подробности в журнале", "Bad");
+            return;
+        }
+
         bool ok = await DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8));
         if (ok) { _watchdogFails = 0; return; }
         _watchdogFails++;
         Log($"Сторож: DNS не отвечает ({_watchdogFails}/3)");
-        if (_watchdogFails >= 3)
+        if (_watchdogFails < 3) return;
+        _watchdogFails = 0;
+        await SwitchToNextBestAsync(active);
+    }
+
+    /// <summary>Сервер умер: пробуем до трех следующих по стабильности (при равенстве избранные и с меньшим пингом).</summary>
+    private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active)
+    {
+        HideUndo(); // подключение меняется без пользователя: прежняя отмена больше не про то же состояние
+        var next = _servers
+            .Where(s => s.Id != active.ServerId && !s.IsJunk && s.Status == ServerStatus.Ok)
+            .OrderByDescending(s => s.AllStability ?? (s.ChecksTotal == 0 ? 0 : s.ChecksOk * 100 / s.ChecksTotal))
+            .ThenByDescending(s => s.IsFavorite)
+            .ThenBy(s => s.LatencyMs ?? long.MaxValue)
+            .Take(3)
+            .ToList();
+        foreach (var s in next)
         {
-            await DisconnectAsync("сервер перестал отвечать");
-            MessageBox.Show($"Сервер «{active.Name}» перестал отвечать. DNEX отключилась и вернула исходные настройки DNS.",
-                "DNEX", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Log($"Сторож: «{active.Name}» не отвечает. Переключаюсь на следующий по стабильности: «{s.DisplayName}»");
+            if (await ConnectToAsync(s, auto: true))
+            {
+                ShowToast($"Сервер не отвечал. Переключено на {s.DisplayName}", "Warn");
+                return;
+            }
         }
+        Log("Сторож: замена не нашлась. Отключаюсь и возвращаю исходные DNS");
+        await DisconnectAsync("сервер перестал отвечать, замена не нашлась");
+        MessageBox.Show($"Сервер «{active.Name}» перестал отвечать, и рабочей замены не нашлось. DNEX отключилась и вернула исходные настройки DNS.",
+            "DNEX", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    // ---------- VPN ----------
+
+    private HashSet<string> _vpnSeen = new();
+
+    /// <summary>Следит за сетью: если при подключенном DNEX включили VPN, предупреждает.</summary>
+    private void WatchVpn()
+    {
+        _vpnSeen = SystemCheck.ActiveVpns().ToHashSet();
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => Dispatcher.BeginInvoke(OnNetworkChanged);
+    }
+
+    private void OnNetworkChanged()
+    {
+        var now = SystemCheck.ActiveVpns().ToHashSet();
+        var added = now.Except(_vpnSeen).ToList();
+        _vpnSeen = now;
+        if (added.Count == 0 || DnsSwitcher.GetActive() == null) return;
+        var text = $"Включен VPN: {string.Join(", ", added)}. Пока он работает, DNS из DNEX может не действовать";
+        Log(text);
+        ShowToast(text, "Warn");
+        // Окно может быть спрятано в трей: уведомление Windows видно всегда
+        _tray?.ShowBalloonTip(8000, "DNEX: включен VPN", "Пока VPN работает, DNS из DNEX может не действовать. Отключите VPN или DNEX.",
+            System.Windows.Forms.ToolTipIcon.Warning);
     }
 
     private void Grid_DoubleClick(object sender, MouseButtonEventArgs e)
@@ -971,8 +1393,147 @@ public partial class MainWindow : Window
         else if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control) { MenuCopy_Click(sender, e); e.Handled = true; }
     }
 
+    // ---------- Отмена действий ----------
+
+    private static readonly TimeSpan UndoTime = TimeSpan.FromSeconds(8);
+    private Func<Task>? _undo;
+    private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private DateTime _undoDeadline;
+    private TimeSpan _undoLeft;
+    private bool _undoPaused;
+
+    /// <summary>
+    /// Панель «Отменить» на 8 секунд: что сделано, вторая строка с пояснением, полоска и секунды до исчезновения.
+    /// Отменить можно кнопкой или Ctrl+Z. Новое действие заменяет предыдущее. Уведомление справа внизу при этом
+    /// не показывается, чтобы внизу не висели две панели.
+    /// </summary>
+    private void OfferUndo(string text, Func<Task> undo, string? hint = null)
+    {
+        _undo = undo;
+        UndoText.Text = text;
+        SetUndoHint(hint);
+        HideToast();
+        UndoBar.Visibility = Visibility.Visible;
+        UndoBar.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(180)));
+        _undoPaused = false;
+        StartUndoCountdown(UndoTime);
+    }
+
+    private void SetUndoHint(string? hint)
+    {
+        UndoHint.Text = hint ?? "";
+        UndoHint.Visibility = string.IsNullOrWhiteSpace(hint) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void StartUndoCountdown(TimeSpan left)
+    {
+        _undoDeadline = DateTime.Now + left;
+        UndoTimeScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(left.TotalSeconds / UndoTime.TotalSeconds, 0, new Duration(left)));
+        UndoSeconds.Text = $"{Math.Ceiling(left.TotalSeconds)} с";
+        _undoTimer.Start();
+    }
+
+    private void UndoTick()
+    {
+        var left = _undoDeadline - DateTime.Now;
+        if (left <= TimeSpan.Zero) { HideUndo(); return; }
+        UndoSeconds.Text = $"{Math.Ceiling(left.TotalSeconds)} с";
+    }
+
+    // Под мышью отсчет стоит: можно спокойно прочитать и нажать
+    private void UndoBar_MouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_undo == null || _undoPaused) return;
+        _undoPaused = true;
+        _undoLeft = _undoDeadline - DateTime.Now;
+        _undoTimer.Stop();
+        var now = UndoTimeScale.ScaleX;
+        UndoTimeScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        UndoTimeScale.ScaleX = now;
+    }
+
+    private void UndoBar_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (_undo == null || !_undoPaused) return;
+        _undoPaused = false;
+        StartUndoCountdown(_undoLeft > TimeSpan.FromSeconds(1.5) ? _undoLeft : TimeSpan.FromSeconds(1.5));
+    }
+
+    private void HideUndo()
+    {
+        _undo = null;
+        _undoPaused = false;
+        _undoTimer.Stop();
+        if (UndoBar.Visibility != Visibility.Visible) return;
+        var fade = new DoubleAnimation(0, Motion(160));
+        fade.Completed += (_, _) => { if (_undo == null) UndoBar.Visibility = Visibility.Collapsed; };
+        UndoBar.BeginAnimation(UIElement.OpacityProperty, fade);
+    }
+
+    private async Task RunUndoAsync()
+    {
+        // Во время подключения или отключения отмена подождет: иначе две смены DNS пошли бы одновременно
+        if (_busyConn) { Log("Отменить можно после окончания подключения или отключения"); return; }
+        var undo = _undo;
+        HideUndo();
+        if (undo == null) return;
+        try { await undo(); }
+        catch (Exception ex) { Log("Отменить не удалось: " + ex.Message); }
+    }
+
+    private async void Undo_Click(object sender, RoutedEventArgs e) => await RunUndoAsync();
+    private void UndoClose_Click(object sender, RoutedEventArgs e) => HideUndo();
+
+    /// <summary>Ctrl+Z во всем окне. В поле ввода работает его собственная отмена текста.</summary>
+    private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _undo != null && Keyboard.FocusedElement is not TextBox)
+        {
+            e.Handled = true;
+            await RunUndoAsync();
+        }
+    }
+
+    /// <summary>Звездочка в строке: добавить сервер в избранное или убрать.</summary>
+    private void Fav_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DnsServer s }) ToggleFavorite(new[] { s });
+        e.Handled = true;
+    }
+
+    private static string Names(IReadOnlyList<DnsServer> list) =>
+        list.Count <= 3 ? string.Join(", ", list.Select(s => s.DisplayName)) : $"{list.Count} серверов";
+
+    private void MenuFav_Click(object sender, RoutedEventArgs e) =>
+        ToggleFavorite(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
+
+    /// <summary>Если среди выбранных есть не избранные — все добавляются, иначе все убираются.</summary>
+    private void ToggleFavorite(IReadOnlyList<DnsServer> list)
+    {
+        if (list.Count == 0) return;
+        var was = list.Select(s => (s, s.IsFavorite)).ToList();
+        bool add = list.Any(s => !s.IsFavorite);
+        foreach (var s in list) s.IsFavorite = add;
+        OfferUndo(add ? $"В избранное: {Names(list)}" : $"Убрано из избранного: {Names(list)}", () =>
+        {
+            foreach (var (srv, fav) in was) srv.IsFavorite = fav;
+            SaveServers();
+            if (_filterIndex == 6) _view?.Refresh();
+            Log("Отменено изменение избранного");
+            return Task.CompletedTask;
+        });
+        Log(add ? $"В избранное: {string.Join(", ", list.Select(s => s.DisplayName))}"
+                : $"Убрано из избранного: {string.Join(", ", list.Select(s => s.DisplayName))}");
+        SaveServers();
+        if (_filterIndex == 6) _view?.Refresh();
+        UpdateStats();
+    }
+
     private void RowMenu_Opened(object sender, RoutedEventArgs e)
     {
+        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
+        MenuFav.Header = picked.Count > 0 && picked.All(s => s.IsFavorite) ? "Убрать из избранного" : "В избранное";
         var s = ServerGrid.SelectedItem as DnsServer;
         bool isActive = s != null && DnsSwitcher.GetActive()?.ServerId == s.Id;
         MenuConnect.Header = DnsSwitcher.GetActive() == null ? "Подключить" : "Переключить сюда";
@@ -1028,6 +1589,17 @@ public partial class MainWindow : Window
         _servers.Add(s);
         _ = ClearJustAddedLaterAsync(s);
         SaveServers();
+        Log($"Добавлен сервер: {s.DisplayName}");
+        OfferUndo($"Добавлен сервер {s.DisplayName}", () =>
+        {
+            if (DnsSwitcher.GetActive()?.ServerId == s.Id) { Log("Отмена не выполнена: к этому серверу уже подключено"); return Task.CompletedTask; }
+            _servers.Remove(s);
+            _known.Remove(s.Key);
+            SaveServers();
+            UpdateStats();
+            Log($"Добавление отменено: {s.DisplayName}");
+            return Task.CompletedTask;
+        });
         AddName.Clear(); AddPrimary.Clear(); AddSecondary.Clear(); AddDoh.Clear();
         // Новый сервер еще не проверен, фильтр «Рабочие» его скрыл бы: показываем все и выбираем добавленный
         AllTab.IsChecked = true;
@@ -1173,12 +1745,19 @@ public partial class MainWindow : Window
     /// адреса ИИ (это обычный DNS) — после первой проверки; нерабочие — после 2 неудач подряд.
     /// Текущий подключенный сервер не трогаем никогда.
     /// </summary>
+    /// <summary>Серверы, возвращенные отменой автоочистки: до перезапуска программы они не убираются снова.</summary>
+    private readonly HashSet<Guid> _purgeKeep = new();
+
     private int AutoPurge(bool silent = false)
     {
         var activeId = DnsSwitcher.GetActive()?.ServerId;
-        var junk = _servers.Where(s => s.Id != activeId && s.Status != ServerStatus.Checking &&
+        var junk = _servers.Where(s => s.Id != activeId && s.Status != ServerStatus.Checking && !_purgeKeep.Contains(s.Id) &&
                                        (SourceParser.IsNoise(s) || s.IsJunk)).ToList();
         if (junk.Count == 0) return 0;
+        // Для отмены: места в списке и прежние отметки в мусоре
+        var undoInfo = junk.Select(s => (Server: s, Index: _servers.IndexOf(s),
+                                         Junk: _junk.TryGetValue(s.Key, out var t) ? t : (DateTime?)null))
+                           .OrderBy(r => r.Index).ToList();
         foreach (var s in junk)
         {
             _known.Remove(s.Key);
@@ -1189,7 +1768,27 @@ public partial class MainWindow : Window
         if (silent) foreach (var s in junk) _servers.Remove(s);
         else _ = FadeOutAndRemoveAsync(junk);
         SaveServers();
-        if (!silent) Log($"Автоочистка: убрано нерабочих {junk.Count}, осталось {_servers.Count - junk.Count}");
+        if (!silent)
+        {
+            Log($"Автоочистка: убрано нерабочих {junk.Count}, осталось {_servers.Count - junk.Count}");
+            OfferUndo($"Убрано нерабочих серверов: {junk.Count}", () =>
+            {
+                foreach (var r in undoInfo)
+                {
+                    r.Server.Fading = false;                 // строка, которая еще гаснет, остается в списке
+                    _purgeKeep.Add(r.Server.Id);             // возвращенные не убираются снова до перезапуска
+                    if (!_servers.Contains(r.Server)) _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
+                    _known.Add(r.Server.Key);
+                    if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
+                }
+                try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
+                _purgeTotal -= undoInfo.Count;
+                SaveServers();
+                UpdateStats();
+                Log($"Автоочистка отменена: возвращено {undoInfo.Count}");
+                return Task.CompletedTask;
+            });
+        }
         return junk.Count;
     }
 
@@ -1208,9 +1807,29 @@ public partial class MainWindow : Window
         var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
         if (sel.Count == 0) return;
         if (sel.Count > 1 && MessageBox.Show($"Удалить {sel.Count} серверов?", "DNEX", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        // Для отмены: место в списке и прежняя отметка в мусоре (удаленный сервер поиск больше не добавляет)
+        var removed = sel.Select(s => (Server: s, Index: _servers.IndexOf(s),
+                                       Junk: _junk.TryGetValue(s.Key, out var t) ? t : (DateTime?)null))
+                         .OrderBy(r => r.Index).ToList();
         foreach (var s in sel) { _servers.Remove(s); _known.Remove(s.Key); _junk[s.Key] = DateTime.Now; }
         try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
         SaveServers();
+        Log($"Удалено: {Names(sel)}");
+        OfferUndo(sel.Count == 1 ? $"Удален сервер {sel[0].DisplayName}" : $"Удалено серверов: {sel.Count}", () =>
+        {
+            foreach (var r in removed)
+            {
+                if (_servers.Contains(r.Server)) continue;
+                _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
+                _known.Add(r.Server.Key);
+                if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
+            }
+            try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
+            SaveServers();
+            UpdateStats();
+            Log($"Удаление отменено: {Names(removed.Select(r => r.Server).ToList())}");
+            return Task.CompletedTask;
+        });
     }
 
     private void Grid_CellEditEnding(object? sender, DataGridCellEditEndingEventArgs e) =>
@@ -1257,7 +1876,18 @@ public partial class MainWindow : Window
         // settings.json без дополнительных хостов: добавляем хосты по умолчанию для известных сервисов
         foreach (var t in st.Targets.Where(x => x.ExtraHosts.Count == 0))
             t.ExtraHosts = defaults.FirstOrDefault(d => d.Name == t.Name)?.ExtraHosts.ToList() ?? new();
-        st.Targets.ForEach(t => t.ExtraHosts.RemoveAll(h => Uri.CheckHostName(h) != UriHostNameType.Dns));
+        st.Targets.ForEach(t => t.ExtraHosts.RemoveAll(h => Uri.CheckHostName(h) != UriHostNameType.Dns
+                                                         || h == "console.anthropic.com")); // переехал на platform.claude.com
+        // settings.json до версии 0.1.19: подпись настоящего ответа API, сайт для второй проверки, признак Gemini
+        foreach (var t in st.Targets)
+        {
+            var d = defaults.FirstOrDefault(x => x.Name == t.Name);
+            if (d == null) continue;
+            if (t.OkMarkers.Count == 0) t.OkMarkers = d.OkMarkers.ToList();
+            if (t.OwnerOrgs.Count == 0) t.OwnerOrgs = d.OwnerOrgs.ToList();
+            t.WebCheck ??= d.WebCheck;
+            t.RequiresProxy |= d.RequiresProxy;
+        }
         bool changed = false;
         foreach (var k in st.HostCookies.Keys.ToList())
         {
@@ -1291,8 +1921,9 @@ public partial class MainWindow : Window
                 row.Children.Add(new Image { Source = flag, Width = 20, Height = 14, Margin = new Thickness(0, 0, 6, 0), Stretch = Stretch.Uniform });
             var name = CountryOfIp(s.ResolvedIp);
             var warn = _ipCountry.TryGetValue(s.ResolvedIp, out var r) && r.First != null && r.Second != null && r.First != r.Second;
-            row.Children.Add(new TextBlock { Text = warn ? name + " ⚠" : name, Foreground = muted, FontWeight = FontWeights.SemiBold,
-                                            ToolTip = warn ? "Базы определяют страну по-разному" : null });
+            row.ToolTip = warn ? name + "\nБазы определяют страну по-разному" : name;
+            if (_compact) continue; // компактная плитка: только флаг, название страны в подсказке
+            row.Children.Add(new TextBlock { Text = warn ? name + " ⚠" : name, Foreground = muted, FontWeight = FontWeights.SemiBold });
         }
     }
 
@@ -1301,7 +1932,7 @@ public partial class MainWindow : Window
 
     private string CountryOfIp(string ip)
     {
-        if (!GeoLocation.IsPublicIPv4(ip)) return "локальный адрес";
+        if (!GeoLocation.IsPublicIp(ip)) return "локальный адрес";
         if (!_ipCountry.TryGetValue(ip, out var r)) return "определяется…";
         if (r.First == null && r.Second == null) return "неизвестно";
         if (r.First != null && r.Second != null && r.First != r.Second)
@@ -1313,15 +1944,21 @@ public partial class MainWindow : Window
     {
         foreach (var s in cur.Services)
         {
-            if (!s.Proxied || !GeoLocation.IsPublicIPv4(s.ResolvedIp) || _ipCountry.ContainsKey(s.ResolvedIp)) continue;
-            var (first, _) = await GeoLocation.LookupAsync(s.ResolvedIp, CancellationToken.None);
-            var second = await GeoLocation.LookupSecondAsync(s.ResolvedIp, CancellationToken.None);
-            _ipCountry[s.ResolvedIp] = (first, second);
+            if (!s.Proxied || !GeoLocation.IsPublicIp(s.ResolvedIp) || _ipCountry.ContainsKey(s.ResolvedIp)) continue;
+            if (!_geoPending.Add(s.ResolvedIp)) continue; // этот адрес уже определяется другим вызовом
+            // Страна голосованием баз; вторая страна в паре только когда большинства нет (тогда плитка покажет обе)
+            try
+            {
+                var r = await GeoLocation.ResolveAsync(s.ResolvedIp, CancellationToken.None);
+                if (r == null) continue;                             // сеть или лимит: определим при следующей перерисовке
+                _ipCountry[s.ResolvedIp] = (r.Country, r.Disputed ? r.Second : r.Country);
+            }
+            finally { _geoPending.Remove(s.ResolvedIp); }
         }
         // Флаги нужных стран: скачиваем один раз, потом берем из кэша
         foreach (var code in _ipCountry.Values.Select(r => r.First ?? r.Second).Where(c => c != null).Distinct())
             await GeoLocation.FlagPathAsync(code!, CancellationToken.None);
-        FillServiceGeo(cur);
+        if (ReferenceEquals(cur, _shownSnap)) FillServiceGeo(cur);
     }
 
     // ---------- Локация DNS-сервера ----------
@@ -1351,24 +1988,25 @@ public partial class MainWindow : Window
 
         // Нет данных, данные старше 30 дней или вторая база еще не сверяла (повторим при следующем запуске)
         var todo = _servers.Where(s => s.GeoCheckedAt == null || DateTime.Now - s.GeoCheckedAt > TimeSpan.FromDays(30)
-                                       || (s.Country != null && s.Country2 == null)).ToList();
+                                       || (s.Country != null && s.Country2 == null)
+                                       || (s.Country != null && s.GeoVotes == null)).ToList(); // данные до сверки тремя базами
         // Прокси Smart DNS, которому еще не определили страну (адрес появляется после проверки)
         var proxyTodo = _servers.Where(s => !string.IsNullOrEmpty(s.ProxyIp) && s.ProxyCountry == null).ToList();
 
         await Task.WhenAll(todo.Select(ResolveOneAsync).Concat(proxyTodo.Select(ResolveProxyAsync)));
         if (todo.Count > 0 || proxyTodo.Count > 0) SaveServers();   // страны должны пережить перезапуск
         UpdateConnectionLocation();
+        UpdateTopList(); // флаги и страны появились: блок «Лучшие по стабильности» перерисуется с ними
     }
 
     /// <summary>Страна адреса прокси Smart DNS — той локации, через которую на самом деле идет доступ к ИИ.</summary>
     private async Task ResolveProxyAsync(DnsServer s)
     {
         var ip = s.ProxyIp!;
-        if (!GeoLocation.IsPublicIPv4(ip)) { s.SetProxyLocation(null, null); return; }
-        var (c1, _) = await GeoLocation.LookupAsync(ip, CancellationToken.None);
-        if (c1 == null) return;                                    // сеть или лимит — попробуем позже
-        var c2 = await GeoLocation.LookupSecondAsync(ip, CancellationToken.None);
-        s.SetProxyLocation(c1, c2);
+        if (!GeoLocation.IsPublicIp(ip)) { s.SetProxyLocation(null, null); return; }
+        var r = await GeoLocation.ResolveAsync(ip, CancellationToken.None);
+        if (r == null) return;                                     // сеть или лимит — попробуем позже
+        s.SetProxyLocation(r.Country, r.Second);
     }
 
     private async Task ResolveOneAsync(DnsServer s)
@@ -1377,18 +2015,25 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(ip) && Uri.TryCreate(s.DohUrl, UriKind.Absolute, out var u))
             ip = await HostIpAsync(u.Host);
         if (string.IsNullOrEmpty(ip)) return;                        // адрес не узнали — попробуем в следующий раз
-        if (!GeoLocation.IsPublicIPv4(ip)) { s.SetLocation(null, null); return; }
+        if (!GeoLocation.IsPublicIp(ip)) { s.SetLocation(null, null); return; }
 
-        var (country, city) = await GeoLocation.LookupAsync(ip, CancellationToken.None);
-        if (country == null) return;                                 // сеть или лимит сервиса — попробуем позже
-        var country2 = await GeoLocation.LookupSecondAsync(ip, CancellationToken.None);
-        s.SetLocation(country, city, country2);
-        if (await GeoLocation.FlagPathAsync(country, CancellationToken.None) is { } path)
+        var r = await GeoLocation.ResolveAsync(ip, CancellationToken.None);
+        if (r?.Country == null) return;                              // сеть или лимит сервиса — попробуем позже
+        s.SetLocation(r);
+        if (await GeoLocation.FlagPathAsync(r.Country, CancellationToken.None) is { } path)
             s.Flag = LoadFlag(path);
     }
 
-    private static async Task<string?> HostIpAsync(string host)
+    /// <summary>IPv4 хоста для геолокации. Сначала через эталонный DoH: системный DNS может быть подменен
+    /// подключенным Smart DNS или провайдером. Если эталон недоступен, через системный.</summary>
+    private async Task<string?> HostIpAsync(string host)
     {
+        try
+        {
+            var (ips, _) = await DnsWire.ResolveDohAsync(_settings.ReferenceDoh, host, TimeSpan.FromSeconds(6), CancellationToken.None);
+            if (ips.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) is { } ip) return ip.ToString();
+        }
+        catch (Exception) { }
         try
         {
             var addrs = await Dns.GetHostAddressesAsync(host);
@@ -1436,6 +2081,7 @@ public partial class MainWindow : Window
     private System.Windows.Forms.NotifyIcon? _tray;
     private System.Windows.Forms.ToolStripLabel? _trayStatus;
     private bool _exitRequested;
+    private bool _sessionEnding;
     private TrayPingStrip? _trayPing;
     private System.Windows.Forms.ToolStripLabel? _trayStab;
     private TrayServiceStrip? _traySvc;
@@ -1455,7 +2101,13 @@ public partial class MainWindow : Window
         }
         UpdateTrayServices();
         UpdateHeaderStats();
-        if (_compact && snap != null) ShowCompare(); // компактный блок обновляется сам
+        if (snap != null)
+        {
+            bool connected = DnsSwitcher.GetActive() != null;
+            // Пока подключено, проверка каждые 5 минут обновляет и блок «Проверка подключения» в полном виде
+            if (connected && !_compact && !_busyConn) _after = snap;
+            if (_compact || connected) ShowCompare();
+        }
         _trayTimer.Stop();
         _trayTimer.Start();
     }
@@ -1472,7 +2124,9 @@ public partial class MainWindow : Window
         if (srv == null) return;
         string Mark(ServiceState x) => x.Access.StartsWith("✓") ? "✓" : x.Access.Contains("закрыт") ? "✗ регион" : "✗";
         srv.Summary = string.Join(" · ", snap.Services.Select(x => $"{x.Name} {Mark(x)}"));
-        srv.Status = snap.Services.All(x => x.Access.StartsWith("✓")) ? ServerStatus.Ok : ServerStatus.Partial;
+        srv.Status = snap.Services.All(x => x.Access.StartsWith("✓")) ? ServerStatus.Ok
+                   : snap.Services.Any(x => x.Access.StartsWith("✓")) ? ServerStatus.Partial
+                   : ServerStatus.Fail;
     }
 
     /// <summary>Строки статистики в шапке справа от карточки подключения: пинг, стабильность, сервисы.</summary>
@@ -1561,7 +2215,13 @@ public partial class MainWindow : Window
             Visible = true,
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
-        _trayTimer.Tick += async (_, _) => await RefreshTrayServicesAsync();
+        _trayTimer.Tick += async (_, _) =>
+        {
+            // Проверка по таймеру (по умолчанию каждые 5 минут) нужна, пока DNEX подключена. Без подключения
+            // таймер обновляет только компактный блок, если он открыт. После выхода из программы проверок нет.
+            if (DnsSwitcher.GetActive() == null && !(_compact && IsVisible)) return;
+            await RefreshTrayServicesAsync();
+        };
         UpdateTrayServices();
     }
 
@@ -1621,6 +2281,7 @@ public partial class MainWindow : Window
     /// <summary>Настройки программы. После сохранения файл перечитывается.</summary>
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
+        var before = System.Text.Json.JsonSerializer.Serialize(_settings, Storage.Options); // для отмены
         var w = new SettingsWindow(_settings) { Owner = this };
         w.ShowDialog();
         if (w.Saved)
@@ -1628,6 +2289,14 @@ public partial class MainWindow : Window
             _settings = LoadSettings();
             ApplyTimerSettings();
             Log("Настройки сохранены");
+            OfferUndo("Настройки сохранены", () =>
+            {
+                Storage.SaveJson("settings.json", before);
+                _settings = LoadSettings();
+                ApplyTimerSettings();
+                Log("Сохранение настроек отменено");
+                return Task.CompletedTask;
+            });
         }
     }
 
@@ -1750,8 +2419,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Короткое уведомление в углу; само гаснет через пару секунд.</summary>
+    /// <summary>
+    /// Приложения Claude и ChatGPT (Electron) держат открытые соединения и свой кэш адресов, поэтому после смены DNS
+    /// могут продолжать ходить по старым адресам. Программа их не трогает: закрытие чужих соединений обрывало бы
+    /// и другие программы. Пользователь перезапускает приложения сам.
+    /// </summary>
+    private const string RestartHint = "Если Claude или ChatGPT открыты, перезапустите их: приложения помнят старые адреса";
+
     private void ShowToast(string text, string colorKey = "Ok")
     {
+        // Внизу одна панель: если видна отмена, уведомление становится ее второй строкой
+        if (_undo != null && UndoBar.Visibility == Visibility.Visible)
+        {
+            SetUndoHint(text.Replace("\n", " · "));
+            return;
+        }
         ToastText.Text = text;
         ToastDot.Fill = (Brush)FindResource(colorKey);
         Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
@@ -1763,6 +2445,14 @@ public partial class MainWindow : Window
         });
         _toastTimer.Stop();
         _toastTimer.Start();
+    }
+
+    /// <summary>Убирает уведомление справа внизу сразу: его место заняла панель отмены.</summary>
+    private void HideToast()
+    {
+        _toastTimer.Stop();
+        Toast.BeginAnimation(UIElement.OpacityProperty, null);
+        Toast.Opacity = 0;
     }
 
     /// <summary>Плавный переход размера окна; при запуске — сразу.</summary>
@@ -1817,7 +2507,7 @@ public partial class MainWindow : Window
         var list = items.ToList();
         foreach (var s in list) s.Fading = true;
         await Task.Delay(320);
-        foreach (var s in list) _servers.Remove(s);
+        foreach (var s in list) if (s.Fading) _servers.Remove(s); // отмена успела вернуть строку: ее не трогаем
         SaveServers();
     }
 
@@ -1844,8 +2534,13 @@ public partial class MainWindow : Window
 
     // ---------- Служебное ----------
 
+    private int _workDepth;
+
+    /// <summary>Начало долгой работы. Вложенная работа (подключение во время проверки или поиска) получает
+    /// токен внешней: «Стоп» по-прежнему останавливает проверку, а кнопки включаются только после конца обеих.</summary>
     private CancellationToken BeginWork()
     {
+        if (_workDepth++ > 0 && _cts != null) return _cts.Token;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         _working = true;
@@ -1857,6 +2552,8 @@ public partial class MainWindow : Window
 
     private void EndWork()
     {
+        if (_workDepth > 0) _workDepth--;
+        if (_workDepth > 0) return; // внешняя работа еще идет
         _working = false;
         ListActions.IsEnabled = ApplyActions.IsEnabled = true;
         StopButton.Visibility = Visibility.Collapsed;
@@ -1879,19 +2576,21 @@ public partial class MainWindow : Window
         _savePending = true;
         await Task.Delay(300);
         _savePending = false;
-        var snapshot = _servers.ToList();
+        // Сериализация в UI-потоке: серверы меняются только в нем, поэтому фоновый поток получает готовую строку,
+        // а не живые объекты, которые в этот момент могут меняться (иначе «Collection was modified»)
+        string json;
+        try { json = System.Text.Json.JsonSerializer.Serialize(_servers.ToList(), Storage.Options); }
+        catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); return; }
         // ConfigureAwait(false): продолжение не ждет UI-поток. Иначе SaveServersNow при закрытии окна
         // держит UI-поток в Wait() на замке, который отпускается только в этом продолжении — взаимная блокировка.
         await _saveLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            await Task.Run(() =>
+            if (json != _lastServersJson) // содержимое не менялось: на диск не пишем
             {
-                var json = System.Text.Json.JsonSerializer.Serialize(snapshot, Storage.Options);
-                if (json == _lastServersJson) return; // содержимое не менялось: на диск не пишем
-                Storage.SaveJson(ServersFile, json);
+                await Task.Run(() => Storage.SaveJson(ServersFile, json)).ConfigureAwait(false);
                 _lastServersJson = json;
-            }).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); }
         finally { _saveLock.Release(); }
@@ -1972,9 +2671,18 @@ public partial class MainWindow : Window
 
     private void ClearLog_Click(object sender, RoutedEventArgs e)
     {
+        var saved = _log.ToList();
         _log.Clear();
         _logQueue.Clear();
         Log("Журнал очищен");
+        OfferUndo($"Журнал очищен: {saved.Count} строк", () =>
+        {
+            // Записи, появившиеся после очистки, остаются в конце
+            var since = _log.ToList();
+            _log.Clear();
+            foreach (var entry in saved.Concat(since)) _log.Add(entry);
+            return Task.CompletedTask;
+        });
     }
 
     /// <summary>Выбранные строки, которые сейчас видны, в порядке журнала.</summary>

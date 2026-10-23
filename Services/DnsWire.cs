@@ -61,6 +61,7 @@ public static class DnsWire
             p += 2;
             if (p + len > d.Length) throw new FormatException("Обрезанный DNS-ответ");
             if (type == 1 && len == 4) list.Add(new IPAddress(d.AsSpan(p, 4)));
+            else if (type == 28 && len == 16) list.Add(new IPAddress(d.AsSpan(p, 16))); // AAAA: адрес IPv6
             p += len;
         }
         return list;
@@ -108,12 +109,12 @@ public static class DnsWire
     private static readonly HttpClient DohHttp = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     public static async Task<(List<IPAddress> Ips, long Ms)> ResolveDohAsync(
-        string template, string host, TimeSpan timeout, CancellationToken ct)
+        string template, string host, TimeSpan timeout, CancellationToken ct, ushort qtype = 1)
     {
         var url = template.Split('{')[0]; // поддержка шаблонов вида .../dns-query{?dns}
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
-        using var content = new ByteArrayContent(BuildQuery(host, 0));
+        using var content = new ByteArrayContent(BuildQuery(host, 0, qtype)); // 1 — IPv4 (A), 28 — IPv6 (AAAA)
         content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
         using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
         req.Headers.Accept.ParseAdd("application/dns-message");

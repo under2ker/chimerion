@@ -21,6 +21,10 @@ public static partial class SourceParser
     [GeneratedRegex(@"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b", RegexOptions.None, 2000)]
     private static partial Regex Ipv4Rx();
 
+    // Кандидаты в IPv6: группы шестнадцатеричных цифр через двоеточие. Точная проверка — IPAddress.TryParse и IsPublic6
+    [GeneratedRegex(@"(?<![0-9A-Fa-f:.])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:.])", RegexOptions.None, 2000)]
+    private static partial Regex Ipv6Rx();
+
     [GeneratedRegex(@"https://[^\s""'<>]+?/dns-query[^\s""'<>]*", RegexOptions.IgnoreCase, 2000)]
     private static partial Regex DohRx();
 
@@ -533,13 +537,27 @@ public static partial class SourceParser
         {
             var line = lines[i];
             var ips = Ipv4Rx().Matches(line).Select(m => m.Value).Where(IsPublic).Distinct().ToList();
-            if (ips.Count > 0 && (!isHtml || HasDnsContext(lines, i)))
+            var ips6 = Ipv6Rx().Matches(line).Select(m => m.Value).Where(IsPublic6).Select(v => IPAddress.Parse(v).ToString()).Distinct().ToList();
+            bool context = !isHtml || HasDnsContext(lines, i);
+            if (ips.Count > 0 && context)
             {
                 list.Add(new DnsServer
                 {
                     Name = host,
                     Primary = ips[0],
                     Secondary = ips.Count > 1 ? ips[1] : null,
+                    Ipv6 = ips6.Take(2).ToList(), // IPv6 в той же строке — это адреса того же сервера
+                    Source = sourceName,
+                    SourceUrl = pageUrl,
+                });
+            }
+            else if (ips6.Count > 0 && context)
+            {
+                list.Add(new DnsServer
+                {
+                    Name = host,
+                    Primary = ips6[0],
+                    Secondary = ips6.Count > 1 ? ips6[1] : null,
                     Source = sourceName,
                     SourceUrl = pageUrl,
                 });
@@ -662,6 +680,14 @@ public static partial class SourceParser
     }
 
     /// <summary>Отсекаем частные, служебные и мусорные адреса.</summary>
+    /// <summary>Глобальный IPv6 (2000::/3), кроме адресов для документации (2001:db8::/32).</summary>
+    public static bool IsPublic6(string ip)
+    {
+        if (!IPAddress.TryParse(ip, out var a) || a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetworkV6) return false;
+        var b = a.GetAddressBytes();
+        return (b[0] & 0xE0) == 0x20 && !(b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x0d && b[3] == 0xb8);
+    }
+
     public static bool IsPublic(string ip)
     {
         if (!IPAddress.TryParse(ip, out var a) || a.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)

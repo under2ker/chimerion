@@ -32,6 +32,9 @@ public static class GeoLocation
             || (b[0] == 192 && b[1] == 168));
     }
 
+    /// <summary>Публичный адрес для геолокации: IPv4 вне частных сетей или глобальный IPv6.</summary>
+    public static bool IsPublicIp(string ip) => IsPublicIPv4(ip) || SourceParser.IsPublic6(ip);
+
     /// <summary>Код страны и город по IP. Оба null, если сервис недоступен или лимит исчерпан.</summary>
     public static async Task<(string? Country, string? City)> LookupAsync(string ip, CancellationToken ct)
     {
@@ -76,6 +79,93 @@ public static class GeoLocation
         {
             Gate.Release();
         }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> OrgCache = new();
+
+    /// <summary>Владелец сети адреса по ipinfo («AS15169 Google LLC»). Кэш на время работы программы.
+    /// Null, если база не ответила (тогда не кэшируем и спросим в следующий раз).</summary>
+    public static async Task<string?> OrgAsync(string ip, CancellationToken ct)
+    {
+        if (OrgCache.TryGetValue(ip, out var cached)) return cached;
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var json = await Http.GetStringAsync($"https://ipinfo.io/{ip}/json", ct);
+            using var doc = JsonDocument.Parse(json);
+            var org = doc.RootElement.TryGetProperty("org", out var o) ? o.GetString() ?? "" : "";
+            OrgCache[ip] = org;
+            return org;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>Адрес принадлежит сети самого сервиса (по списку владельцев из настроек).</summary>
+    public static async Task<bool> IsOwnedByAsync(string ip, IReadOnlyCollection<string> owners, CancellationToken ct)
+    {
+        if (owners.Count == 0 || !IsPublicIp(ip)) return false;
+        var org = await OrgAsync(ip, ct);
+        return org != null && owners.Any(o => org.Contains(o, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Код страны по третьей базе (country.is). Спрашиваем, только когда первые две расходятся или одна молчит.</summary>
+    public static async Task<string?> LookupThirdAsync(string ip, CancellationToken ct)
+    {
+        await Gate.WaitAsync(ct);
+        try
+        {
+            var json = await Http.GetStringAsync($"https://api.country.is/{ip}", ct);
+            using var doc = JsonDocument.Parse(json);
+            var code = doc.RootElement.TryGetProperty("country", out var c) ? c.GetString() : null;
+            return string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToUpperInvariant();
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>Итог сверки баз: выбранная страна, город (только если его база в большинстве), ответ второй базы,
+    /// подпись для подсказки и признак, что большинства нет.</summary>
+    public sealed record GeoResult(string? Country, string? City, string? Second, string Votes, bool Disputed);
+
+    /// <summary>
+    /// Страна по IP голосованием баз. ipinfo и ipwho.is спрашиваем всегда; если они расходятся или одна молчит,
+    /// спрашиваем country.is. Побеждает страна, которую назвали две базы. Без большинства берем ipinfo
+    /// и помечаем результат как спорный. Null, если не ответила ни одна база (сеть или лимит: повторим позже).
+    /// </summary>
+    public static async Task<GeoResult?> ResolveAsync(string ip, CancellationToken ct)
+    {
+        var (c1, city) = await LookupAsync(ip, ct);
+        var c2 = await LookupSecondAsync(ip, ct);
+        string? c3 = c1 != null && c1 == c2 ? null : await LookupThirdAsync(ip, ct);
+
+        var answers = new List<(string Base, string Code)>();
+        if (c1 != null) answers.Add(("ipinfo", c1));
+        if (c2 != null) answers.Add(("ipwho.is", c2));
+        if (c3 != null) answers.Add(("country.is", c3));
+        if (answers.Count == 0) return null;
+
+        var top = answers.GroupBy(a => a.Code)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key == c1 ? 0 : 1).First();
+        bool unanimous = answers.All(a => a.Code == top.Key);
+        bool majority = top.Count() >= 2;
+        var list = string.Join(", ", answers.Select(a => $"{a.Base}: {CountryName(a.Code)}"));
+        var votes = unanimous
+            ? (answers.Count > 1 ? $"базы совпадают ({list})" : $"ответила одна база ({list})")
+            : majority ? $"страна выбрана большинством баз ({list})" : $"базы расходятся ({list})";
+        return new GeoResult(top.Key, top.Key == c1 ? city : null, c2, votes, !majority && answers.Count > 1);
     }
 
     /// <summary>Путь к сохраненному флагу страны, если он уже скачан.</summary>

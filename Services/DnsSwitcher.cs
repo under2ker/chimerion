@@ -13,39 +13,6 @@ public static class DnsSwitcher
     private const string BackupFile = "dns-backup.json";
     private const string ActiveFile = "active.json";
 
-    /// <summary>
-    /// Сбрасывает открытые HTTPS-соединения приложений ИИ (Claude, ChatGPT). Без этого приложение продолжает
-    /// ходить по соединениям, открытым через прежний DNS, и не видит новую смену. Работает внутри повышенного
-    /// скрипта: SetTcpEntry требует прав администратора. Только IPv4, только процессы из списка.
-    /// </summary>
-    private const string ResetAiSockets = """
-        try {
-          Add-Type -TypeDefinition @'
-        using System;
-        using System.Runtime.InteropServices;
-        public static class DnexTcp {
-          [StructLayout(LayoutKind.Sequential)]
-          public struct MIB_TCPROW { public int state; public uint localAddr; public uint localPort; public uint remoteAddr; public uint remotePort; }
-          [DllImport("iphlpapi.dll")] public static extern int SetTcpEntry(ref MIB_TCPROW row);
-        }
-        '@
-          $procs = @('claude', 'ChatGPT')
-          foreach ($c in Get-NetTCPConnection -State Established -RemotePort 443 -ErrorAction SilentlyContinue) {
-            if ($c.LocalAddress -match ':' -or $c.RemoteAddress -match ':') { continue }
-            $name = (Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue).ProcessName
-            if ($procs -notcontains $name) { continue }
-            $row = New-Object DnexTcp+MIB_TCPROW
-            $row.state = 12  # MIB_TCP_STATE_DELETE_TCB: закрыть соединение
-            $row.localAddr = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($c.LocalAddress).GetAddressBytes(), 0)
-            $row.remoteAddr = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($c.RemoteAddress).GetAddressBytes(), 0)
-            $row.localPort = [uint32]((($c.LocalPort -band 0xFF) -shl 8) -bor ($c.LocalPort -shr 8))
-            $row.remotePort = [uint32]((($c.RemotePort -band 0xFF) -shl 8) -bor ($c.RemotePort -shr 8))
-            $rc = [DnexTcp]::SetTcpEntry([ref]$row)
-            Write-Output ("SOCKET " + $name + " -> " + $c.RemoteAddress + " код " + $rc)
-          }
-        } catch { Write-Output ("WARN сброс соединений: " + $_.Exception.Message) }
-        """;
-
     /// <summary>Сведения о текущем подключении. Файл переживает перезапуск и сбой программы,
     /// поэтому отключиться можно всегда, даже если DNEX закрылась аварийно.</summary>
     public sealed class ActiveConnection
@@ -56,14 +23,28 @@ public static class DnsSwitcher
         public string? DohTemplate { get; set; }
         /// <summary>Адреса, для которых DNEX сама зарегистрировала DoH, — только их и удаляем при отключении.</summary>
         public List<string> DohAddedFor { get; set; } = new();
+        /// <summary>Адаптеры (GUID), на которых DNEX на время подключения выключила IPv6: у сервера нет IPv6,
+        /// а DNS роутера по IPv6 вел бы запросы мимо сервера. При отключении IPv6 включается обратно.</summary>
+        public List<string> Ipv6Disabled { get; set; } = new();
         public DateTime Since { get; set; } = DateTime.Now;
     }
 
+    private static ActiveConnection? _activeCache;
+    private static DateTime _activeStamp;
+
+    /// <summary>Текущее подключение. Файл перечитывается, только если изменилось время его записи:
+    /// метод вызывается из UI-потока много раз на каждое действие.</summary>
     public static ActiveConnection? GetActive()
     {
-        if (!File.Exists(Storage.PathOf(ActiveFile))) return null;
-        var a = Storage.LoadOrCreate<ActiveConnection?>(ActiveFile, () => null);
-        return a is { Addresses.Count: > 0 } ? a : null;
+        var path = Storage.PathOf(ActiveFile);
+        if (!File.Exists(path)) { _activeCache = null; _activeStamp = default; return null; }
+        var stamp = File.GetLastWriteTimeUtc(path);
+        if (_activeCache == null || stamp != _activeStamp)
+        {
+            _activeCache = Storage.LoadOrCreate<ActiveConnection?>(ActiveFile, () => null);
+            _activeStamp = stamp;
+        }
+        return _activeCache is { Addresses.Count: > 0 } ? _activeCache : null;
     }
 
     private sealed class AdapterBackup
@@ -74,6 +55,8 @@ public static class DnsSwitcher
         public string? Name { get; set; }
         /// <summary>Статически заданные DNS (пусто — адреса от DHCP).</summary>
         public string? Static { get; set; }
+        /// <summary>Статически заданные DNS для IPv6 (пусто — от роутера). В копиях старых версий нет.</summary>
+        public string? Static6 { get; set; }
     }
 
     /// <summary>DNS системы: читаем сетевые интерфейсы напрямую. Раньше запускался PowerShell, это секунда на каждую проверку.</summary>
@@ -90,11 +73,25 @@ public static class DnsSwitcher
         return addrs.Count == 0 ? "не определен" : string.Join(", ", addrs);
     });
 
+    /// <summary>Все DNS-адреса работающих адаптеров, IPv4 и IPv6. Служебные fec0::/10, которые Windows
+    /// подставляет без настроенного IPv6 DNS, не считаются. Нужны сторожу для проверки сброса DNS.</summary>
+    public static Task<List<IPAddress>> GetCurrentAddressesAsync() => Task.Run(() =>
+        System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                     && n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+            .SelectMany(n => n.GetIPProperties().DnsAddresses)
+            .Where(a => !a.IsIPv6SiteLocal)
+            .Distinct()
+            .ToList());
+
     public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log)
     {
         var addrs = new List<string>();
         if (IPAddress.TryParse(s.Primary, out var p)) addrs.Add(p.ToString());
         if (IPAddress.TryParse(s.Secondary, out var sec)) addrs.Add(sec.ToString());
+        foreach (var v in s.Ipv6)
+            if (IPAddress.TryParse(v, out var a6) && a6.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && !addrs.Contains(a6.ToString()))
+                addrs.Add(a6.ToString());
 
         string? doh = null;
         if (!string.IsNullOrWhiteSpace(s.DohUrl))
@@ -110,16 +107,51 @@ public static class DnsSwitcher
                 addrs.AddRange(ips.Take(2).Select(i => i.ToString()));
                 log($"IP DoH-сервера {u.Host}: {string.Join(", ", addrs)}");
             }
+
+            // IPv6 DoH-сервера: с ним DNS ставится и для IPv6, и IPv6 на адаптере выключать не нужно
+            if (!addrs.Any(IsV6))
+            {
+                try
+                {
+                    var (ips6, _) = await DnsWire.ResolveDohAsync(settings.ReferenceDoh, u.Host, TimeSpan.FromSeconds(6), CancellationToken.None, qtype: 28);
+                    var v6 = ips6.Where(i => i.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6).Take(2).Select(i => i.ToString()).ToList();
+                    if (v6.Count > 0) { addrs.AddRange(v6); log($"IPv6 DoH-сервера {u.Host}: {string.Join(", ", v6)}"); }
+                }
+                catch (Exception) { /* IPv6 нет или эталон не ответил: тогда IPv6 на адаптере выключается ниже */ }
+            }
+        }
+        // IPv6-адреса сервера ставим, только если у компьютера есть IPv6-интернет: иначе Windows ждала бы ответа
+        // от недоступного адреса. Без него DNS ставится для IPv4, а IPv6 на адаптере выключается на время подключения.
+        if (addrs.Any(IsV6) && !HasGlobalIpv6())
+        {
+            addrs.RemoveAll(IsV6);
+            if (addrs.Count == 0) throw new InvalidOperationException("Сервер работает только по IPv6, а IPv6-интернета на компьютере нет");
+            log("IPv6-интернета нет: DNS ставится только для IPv4");
         }
         if (addrs.Count == 0) throw new InvalidOperationException("У сервера нет IP-адреса");
 
         await EnsureBackupAsync(log);
 
+        var prev = GetActive();
+        bool hasV6 = addrs.Any(IsV6);
         var list = string.Join(",", addrs.Select(a => $"'{a}'"));
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
         // Только физические адаптеры: VPN-туннели и виртуальные сети (Hyper-V, WSL) не трогаем — иначе сломаем их DNS.
         sb.AppendLine("$ifs = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }");
+        // Переход с сервера без IPv6 на сервер с IPv6: включаем IPv6 обратно до смены DNS, иначе его DNS не поставить
+        if (hasV6 && prev?.Ipv6Disabled.Count > 0)
+        {
+            sb.AppendLine($"foreach ($g in @({string.Join(",", prev.Ipv6Disabled.Select(g => $"'{g.Replace("'", "")}'"))})) {{");
+            sb.AppendLine("""
+                  try {
+                    Get-NetAdapter -IncludeHidden | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g } | ForEach-Object {
+                      Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
+                      Write-Output ('V6ON ' + $g); Write-Output ('IPv6 включен обратно: ' + $_.Name) }
+                  } catch { Write-Output ('WARN IPv6: ' + $_.Exception.Message) }
+                }
+                """);
+        }
         if (doh != null)
         {
             sb.AppendLine("if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {");
@@ -133,15 +165,32 @@ public static class DnsSwitcher
             sb.AppendLine("} else { Write-Output 'Эта версия Windows не поддерживает DoH, используется обычный DNS' }");
         }
         sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
-        sb.AppendLine(ResetAiSockets); // приложения ИИ переподключаются уже через новый DNS
+        if (!hasV6)
+        {
+            // У сервера нет IPv6, а роутер раздает DNS по IPv6: Windows отправляла бы часть запросов туда, мимо сервера.
+            // На время подключения выключаем IPv6 только на таких адаптерах и запоминаем их (строка V6OFF).
+            sb.AppendLine("""
+                foreach ($i in $ifs) {
+                  try {
+                    $v6dns = @((Get-DnsClientServerAddress -InterfaceIndex $i.ifIndex -AddressFamily IPv6 -ErrorAction SilentlyContinue).ServerAddresses | Where-Object { $_ -and $_ -notlike 'fec0:*' })
+                    $b = Get-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+                    if ($v6dns.Count -gt 0 -and $b -and $b.Enabled) {
+                      Disable-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
+                      Write-Output ('V6OFF ' + ([string]$i.InterfaceGuid).ToUpper())
+                      Write-Output ('IPv6 на время подключения выключен: ' + $i.Name + ' (DNS роутера по IPv6 вел запросы мимо сервера)')
+                    }
+                  } catch { Write-Output ('WARN IPv6 ' + $i.Name + ': ' + $_.Exception.Message) }
+                }
+                """);
+        }
         sb.AppendLine("Clear-DnsClientCache");
 
         // Запись о подключении сохраняем ДО смены DNS: если что-то упадет посередине, отключение все равно сработает.
-        var prev = GetActive();
         var active = new ActiveConnection
         {
             ServerId = s.Id, Name = s.Name, Addresses = addrs, DohTemplate = doh?.Replace("''", "'"),
-            DohAddedFor = prev?.DohAddedFor ?? new(),
+            DohAddedFor = prev?.DohAddedFor.ToList() ?? new(),
+            Ipv6Disabled = prev?.Ipv6Disabled.ToList() ?? new(),
         };
         Storage.Save(ActiveFile, active);
 
@@ -152,6 +201,8 @@ public static class DnsSwitcher
             {
                 var l = line.Trim();
                 if (l.StartsWith("ADDED ")) active.DohAddedFor.Add(l[6..]);
+                else if (l.StartsWith("V6OFF ")) { if (!active.Ipv6Disabled.Contains(l[6..])) active.Ipv6Disabled.Add(l[6..]); }
+                else if (l.StartsWith("V6ON ")) active.Ipv6Disabled.Remove(l[5..]);
                 else log(l);
             }
             Storage.Save(ActiveFile, active);
@@ -159,9 +210,14 @@ public static class DnsSwitcher
         }
         catch (OperationCanceledException)
         {
-            // Права не выданы (UAC отклонен): скрипт не запускался, DNS не менялся — запись о подключении не нужна.
-            var path = Storage.PathOf(ActiveFile);
-            if (File.Exists(path)) File.Delete(path);
+            // Права не выданы (UAC отклонен): скрипт не запускался, DNS не менялся. Если до этого было подключение,
+            // его DNS по-прежнему стоит на адаптерах: возвращаем запись о нем, иначе отключить его будет нечем.
+            if (prev != null) Storage.Save(ActiveFile, prev);
+            else
+            {
+                var path = Storage.PathOf(ActiveFile);
+                if (File.Exists(path)) File.Delete(path);
+            }
             throw;
         }
         catch (Exception)
@@ -183,7 +239,9 @@ public static class DnsSwitcher
             "$r = foreach ($a in Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }) {\n" +
             "  $p = \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($a.InterfaceGuid)\"\n" +
             "  $ns = (Get-ItemProperty -Path $p -Name NameServer -ErrorAction SilentlyContinue).NameServer\n" +
-            "  [pscustomobject]@{ InterfaceIndex = $a.ifIndex; Guid = [string]$a.InterfaceGuid; Name = $a.Name; Static = [string]$ns }\n" +
+            "  $p6 = \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip6\\Parameters\\Interfaces\\$($a.InterfaceGuid)\"\n" +
+            "  $ns6 = (Get-ItemProperty -Path $p6 -Name NameServer -ErrorAction SilentlyContinue).NameServer\n" +
+            "  [pscustomobject]@{ InterfaceIndex = $a.ifIndex; Guid = [string]$a.InterfaceGuid; Name = $a.Name; Static = [string]$ns; Static6 = [string]$ns6 }\n" +
             "}\n" +
             "ConvertTo-Json -InputObject @($r) -Compress");
         if (code != 0) throw new InvalidOperationException("Не удалось сохранить исходные настройки DNS: " + json);
@@ -213,6 +271,20 @@ public static class DnsSwitcher
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine($"$ours = @({string.Join(",", ours.Select(Q))})");
+        // IPv6, выключенный на время подключения, включаем первым: иначе его DNS не вернуть
+        sb.AppendLine($"$v6off = @({string.Join(",", (active?.Ipv6Disabled ?? new()).Select(g => Q(g.ToUpperInvariant())))})");
+        sb.AppendLine("""
+            foreach ($g in $v6off) {
+              try {
+                Get-NetAdapter -IncludeHidden | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g } | ForEach-Object {
+                  Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
+                  Write-Output "RESULT $($_.Name) → IPv6 включен обратно" }
+              } catch { Write-Output "WARN IPv6: $($_.Exception.Message)" }
+            }
+            """);
+        sb.AppendLine("$backup6 = @{}");
+        foreach (var a in backup.Where(a => System.Guid.TryParse(a.Guid?.Trim('{', '}'), out _)))
+            sb.AppendLine($"$backup6[{Q(System.Guid.Parse(a.Guid!.Trim('{', '}')).ToString("B").ToUpperInvariant())}] = {Q(string.Join(",", Ips(a.Static6)))}");
         sb.AppendLine("$backup = @{}");
         foreach (var a in backup.Where(a => System.Guid.TryParse(a.Guid?.Trim('{', '}'), out _)))
             sb.AppendLine($"$backup[{Q(System.Guid.Parse(a.Guid!.Trim('{', '}')).ToString("B").ToUpperInvariant())}] = {Q(string.Join(",", Ips(a.Static)))}");
@@ -223,22 +295,26 @@ public static class DnsSwitcher
         sb.AppendLine("""
             foreach ($a in Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue) {
               $g = ([string]$a.InterfaceGuid).ToUpper()
-              $cur = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+              $cur = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
               $hasOurs = @($cur | Where-Object { $ours -contains $_ }).Count -gt 0
               if ($backup.ContainsKey($g)) { $want = $backup[$g] }
               elseif ($byIndex.ContainsKey([int]$a.ifIndex)) { $want = $byIndex[[int]$a.ifIndex] }
               elseif ($hasOurs) { $want = '' }
               else { continue }
+              $want6 = if ($backup6.ContainsKey($g)) { $backup6[$g] } else { '' }
               # Если в «исходных» почему-то оказались адреса DNEX — не возвращаем их, а ставим автоматические.
               if ($want -and @($want -split ',' | Where-Object { $ours -contains $_ }).Count -gt 0) { $want = '' }
+              if ($want6 -and @($want6 -split ',' | Where-Object { $ours -contains $_ }).Count -gt 0) { $want6 = '' }
               try {
-                if ($want) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses ($want -split ',') -ErrorAction Stop }
-                else { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop }
+                # Сначала автоматические DNS для IPv4 и IPv6, потом исходные статические, если они были
+                Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop
+                $all = @(@($want -split ',') + @($want6 -split ',') | Where-Object { $_ })
+                if ($all.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $all -ErrorAction Stop }
               } catch { Write-Output "WARN $($a.Name): $($_.Exception.Message)" }
               foreach ($ip in $ours) {
                 Remove-Item "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$g\DohInterfaceSettings\Doh\$ip" -Recurse -ErrorAction SilentlyContinue
               }
-              $after = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+              $after = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
               $mode = if ($want) { 'исходные' } else { 'автоматически (DHCP)' }
               Write-Output "RESULT $($a.Name) → $($mode): $($after -join ', ')"
               if (@($after | Where-Object { $ours -contains $_ }).Count -gt 0) { Write-Output "LEFT $($a.Name)" }
@@ -247,7 +323,6 @@ public static class DnsSwitcher
             Clear-DnsClientCache
             ipconfig /flushdns | Out-Null
             """);
-        sb.AppendLine(ResetAiSockets);
 
         var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
         bool left = false;
@@ -288,6 +363,24 @@ public static class DnsSwitcher
         }
         catch (Exception ex) { log("Не удалось проверить состояние DNS: " + ex.Message); }
     }
+
+    /// <summary>Есть ли у компьютера настоящий IPv6-интернет: глобальный адрес на работающем адаптере (туннели не считаются).</summary>
+    private static bool HasGlobalIpv6()
+    {
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                         && n.NetworkInterfaceType is not (System.Net.NetworkInformation.NetworkInterfaceType.Loopback
+                                                          or System.Net.NetworkInformation.NetworkInterfaceType.Tunnel))
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Any(u => u.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && SourceParser.IsPublic6(u.Address.ToString()));
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException) { return false; }
+    }
+
+    private static bool IsV6(string a) =>
+        IPAddress.TryParse(a, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
 
     /// <summary>Работает ли интернет через системный DNS: резолвим несколько доменов, достаточно одного успеха.</summary>
     public static async Task<bool> SystemDnsWorksAsync(IEnumerable<string> hosts, TimeSpan timeout)
