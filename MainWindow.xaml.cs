@@ -534,7 +534,9 @@ public partial class MainWindow : Window
     private NetSnapshot? _shownSnap;
     private readonly HashSet<string> _geoPending = new();
     /// <summary>Сервисы, у которых раскрыт список серверов. Сохраняется между перерисовками блока.</summary>
-    private readonly HashSet<string> _openHosts = new();
+    private System.Windows.Controls.Primitives.Popup? _hostsPopup;
+    private string? _hostsPopupFor;      // сервис, чьи адреса открыты
+    private DateTime _hostsClosedAt;     // щелчок по той же кнопке закрывает панель, а не открывает заново
     private bool _compareDisconnected;
 
     private void ShowCompare(bool disconnected = false)
@@ -555,6 +557,7 @@ public partial class MainWindow : Window
         _tileGeo.Clear();
         _compareDisconnected = disconnected;
         _shownSnap = cur;
+        if (_hostsPopup != null) _hostsPopup.IsOpen = false;
         if (cur == null)
         {
             host.Children.Add(new TextBlock
@@ -669,19 +672,19 @@ public partial class MainWindow : Window
                     sp.Children.Add(Line(("было: ", B("Muted"), false),
                         ($"{was.Access.TrimStart('✓', '✗', ' ')}, {(was.Proxied ? "через Smart DNS" : "напрямую")}", B("Muted"), false)));
             }
-            // Кнопка «Серверы» раскрывает список адресов сервиса в его колонке. В компактном окне ее нет: там мало места
+            // Кнопка «Серверы» открывает адреса сервиса всплывающей панелью под карточкой: карточка не растет
+            // и таблица не уезжает. В компактном окне кнопки нет: там мало места
             if (!_compact)
             {
                 int hostCount = 1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal));
                 var toggle = new TextBlock
                 {
-                    Text = _openHosts.Contains(svc.Name) ? "Скрыть серверы ▴" : $"Серверы ({hostCount}) ▾",
+                    Text = $"Серверы ({hostCount}) ▾",
                     Foreground = B("Accent"), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand,
-                    Tag = svc.Name, ToolTip = "Адреса сервиса и их статус",
+                    Tag = svc, ToolTip = "Адреса сервиса и их статус",
                 };
                 toggle.MouseLeftButtonUp += ToggleHosts_Click;
                 sp.Children.Add(toggle);
-                if (_openHosts.Contains(svc.Name)) sp.Children.Add(HostsPanel(svc, cur));
             }
             card.Child = sp;
             Grid.SetColumn(card, tiles.Children.Count);
@@ -709,60 +712,99 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Адреса сервиса внутри его карточки: основной и дополнительные. Колонка узкая, поэтому каждый адрес
-    /// в три строки: имя (переносится по точкам), IP, плашка статуса.
+    /// Адреса сервиса: основной и дополнительные. На адрес две строки: имя и плашка статуса, ниже IP
+    /// (синий — адрес прокси Smart DNS, серый — напрямую). Причина статуса в подсказке.
     /// </summary>
     private StackPanel HostsPanel(ServiceState svc, NetSnapshot cur)
     {
         Brush B(string k) => (Brush)FindResource(k);
         var mono = new FontFamily("Cascadia Mono, Consolas");
-        var panel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        panel.Children.Add(new Border { Height = 1, Background = B("Border"), Margin = new Thickness(0, 0, 0, 8) });
-
+        var panel = new StackPanel();
         var entries = new List<ServiceState> { svc };
         entries.AddRange(cur.Hosts.Where(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal)));
-        foreach (var h in entries)
+        for (int i = 0; i < entries.Count; i++)
         {
-            var item = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            // Пробел-ноль после точки: длинное имя переносится по доменным частям, а не обрезается
-            item.Children.Add(new TextBlock
-            {
-                Text = h.Host.Replace(".", ".​"), FontFamily = mono, FontSize = 11,
-                TextWrapping = TextWrapping.Wrap, ToolTip = h.Host,
-            });
-            item.Children.Add(new TextBlock
-            {
-                Text = h.ResolvedIp, FontFamily = mono, FontSize = 11, Margin = new Thickness(0, 2, 0, 0),
-                Foreground = h.Proxied ? B("Accent") : B("Muted"),
-                ToolTip = h.Proxied ? "Адрес прокси Smart DNS" : "Адрес напрямую",
-            });
-
-            // Статус: зеленый — доступен, красный — закрыт, желтый — сервис не отвечает нормально
+            var h = entries[i];
             bool isOpen = h.Access.StartsWith("✓");
             bool isClosed = h.Access.Contains("закрыт");
             string pillColor = isOpen ? "#173A2A" : isClosed ? "#3A1C20" : "#3A2F17";
-            string pillText = isOpen ? "доступен" : isClosed ? "закрыт" : "не отвечает";
+            string pillText = isOpen ? "доступен" : isClosed ? "закрыт" : h.Access.Contains("подтвержден") ? "не подтвержден" : "не отвечает";
             string pillFg = isOpen ? "Ok" : isClosed ? "Bad" : "Warn";
-            item.Children.Add(new Border
+
+            var top = new DockPanel();
+            var pill = new Border
             {
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pillColor)),
-                CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 1, 7, 1),
-                HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 3, 0, 0), ToolTip = h.Access,
+                CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 0, 7, 1), Margin = new Thickness(10, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center, ToolTip = h.Note ?? h.Access,
                 Child = new TextBlock { Text = pillText, FontSize = 11, Foreground = B(pillFg) },
+            };
+            DockPanel.SetDock(pill, Dock.Right);
+            top.Children.Add(pill);
+            top.Children.Add(new TextBlock
+            {
+                Text = h.Host, FontFamily = mono, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center, ToolTip = h.Host,
             });
-            panel.Children.Add(item);
+
+            var row = new StackPanel { Margin = new Thickness(0, i == 0 ? 0 : 8, 0, 0) };
+            row.Children.Add(top);
+            row.Children.Add(new TextBlock
+            {
+                Text = h.ResolvedIp + (h.Proxied ? "  · через Smart DNS" : "  · напрямую"), FontFamily = mono, FontSize = 11,
+                Margin = new Thickness(0, 2, 0, 0), Foreground = h.Proxied ? B("Accent") : B("Muted"),
+            });
+            panel.Children.Add(row);
         }
-        panel.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)));
         return panel;
     }
 
-    /// <summary>Раскрывает или сворачивает список серверов сервиса и перерисовывает блок.</summary>
+    /// <summary>
+    /// Открывает адреса сервиса всплывающей панелью под его карточкой, шириной в карточку. Щелчок мимо или Esc закрывает.
+    /// Длинный список прокручивается внутри панели.
+    /// </summary>
     private void ToggleHosts_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement { Tag: string name }) return;
-        if (!_openHosts.Remove(name)) _openHosts.Add(name);
-        _compareSig = null;
-        ShowCompare(_compareDisconnected);
+        if (sender is not TextBlock { Tag: ServiceState svc } toggle || _shownSnap is not { } cur) return;
+        // Щелчок по кнопке открытой панели: панель уже закрылась от щелчка мимо, заново не открываем
+        if (_hostsPopupFor == svc.Name && DateTime.Now - _hostsClosedAt < TimeSpan.FromMilliseconds(300)) return;
+        if (_hostsPopup != null) _hostsPopup.IsOpen = false;
+        if (toggle.Parent is not FrameworkElement { Parent: FrameworkElement card }) return;
+
+        Brush B(string k) => (Brush)FindResource(k);
+        var content = new StackPanel();
+        content.Children.Add(new TextBlock
+        {
+            Text = $"{svc.Name} · адреса и доступ", Foreground = B("Muted"), FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 8),
+        });
+        content.Children.Add(new ScrollViewer
+        {
+            Content = HostsPanel(svc, cur), MaxHeight = 300, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Padding = new Thickness(0, 0, 4, 0),
+        });
+        var frame = new Border
+        {
+            Child = content, Background = B("Surface2"), BorderBrush = B("Border"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 12), Margin = new Thickness(8, 0, 8, 12),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 18, ShadowDepth = 0, Opacity = 0.5, Color = Colors.Black },
+        };
+        var popup = new System.Windows.Controls.Primitives.Popup
+        {
+            Child = frame, PlacementTarget = card, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+            HorizontalOffset = -8, VerticalOffset = 4, Width = card.ActualWidth + 16, StaysOpen = false,
+            AllowsTransparency = true, PopupAnimation = System.Windows.Controls.Primitives.PopupAnimation.Fade,
+        };
+        popup.Closed += (_, _) =>
+        {
+            toggle.Text = toggle.Text.Replace("Скрыть серверы ▴", $"Серверы ({1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal))}) ▾");
+            _hostsClosedAt = DateTime.Now;
+        };
+        popup.KeyDown += (_, k) => { if (k.Key == Key.Escape) popup.IsOpen = false; };
+        _hostsPopup = popup;
+        _hostsPopupFor = svc.Name;
+        toggle.Text = "Скрыть серверы ▴";
+        popup.IsOpen = true;
     }
 
     // ---------- Выбранный сервер ----------
