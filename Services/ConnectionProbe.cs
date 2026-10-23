@@ -21,7 +21,8 @@ public sealed class NetSnapshot
     public List<ResolverInfo> Resolvers { get; } = new();
 }
 
-public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access);
+/// <summary>Состояние сервиса. Access — короткий статус для плитки, Note — причина подробно (подсказка и журнал).</summary>
+public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access, string? Note = null);
 
 /// <summary>
 /// Smart DNS не меняет внешний IP — это нормально. Подключение видно по другому:
@@ -134,6 +135,7 @@ public static class ConnectionProbe
         catch (Exception) when (!ct.IsCancellationRequested) { resolved = "не резолвится"; }
 
         string access;
+        string? note = null;
         try
         {
             var result = await ProbeAsync(http, t, web, ct);
@@ -149,14 +151,20 @@ public static class ConnectionProbe
                 // API без ключа отвечает одинаково из закрытого региона и через прокси (Gemini):
                 // без подмены адреса доступ не подтвержден
                 if (t.RequiresProxy && compared && !proxied)
-                    access = "✗ без подмены адреса доступ не подтвердить";
+                {
+                    access = "✗ не подтвержден";
+                    note = "Без подмены адреса доступ не подтвердить: без ключа API сервис отвечает одинаково из любого региона";
+                }
                 // Сайт сервиса: если он закрыт (регион, капча Google), в браузере сервисом не пользоваться
                 else if (ServerChecker.SplitWebCheck(t) is { } site)
                 {
                     try
                     {
                         if (await ProbeAsync(http, site, web: true, ct) == ServiceAccess.Result.Closed)
-                            access = $"✗ сайт {site.Host} закрыт";
+                        {
+                            access = "✗ доступ закрыт";
+                            note = $"API отвечает, но сайт {site.Host} закрыт: страница «недоступно в регионе» или капча Google";
+                        }
                     }
                     catch (Exception) when (!ct.IsCancellationRequested) { /* сайт не ответил — остается результат API */ }
                 }
@@ -164,7 +172,7 @@ public static class ConnectionProbe
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { access = "✗ " + Friendly(e); }
 
-        return new ServiceState(t.Name, t.Host, resolved, proxied, access);
+        return new ServiceState(t.Name, t.Host, resolved, proxied, access, note);
     }
 
     /// <summary>Один запрос к API или сайту и вердикт по ответу. Для сайта учитывается адрес редиректа.</summary>

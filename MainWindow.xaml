@@ -438,22 +438,23 @@
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
-                                        <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
-                                            <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#173A2A"
+                                        <!-- Бейджи справа: в узкой колонке обрезается текст, а не бейдж -->
+                                        <DockPanel>
+                                            <Border x:Name="newBadge" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#173A2A"
                                                     VerticalAlignment="Center" Visibility="Collapsed">
                                                 <TextBlock Text="новый" FontSize="12" FontWeight="Normal" Foreground="{StaticResource Ok}"/>
                                             </Border>
-                                        </StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                            <TextBlock Text="{Binding Address}" Style="{StaticResource Label}" FontWeight="Normal"
-                                                       FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis" MaxWidth="180"/>
-                                            <!-- Лучший по стабильности: для всех сразу или для отдельного ИИ (см. блок над таблицей) -->
-                                            <Border x:Name="bestBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#2B3D12"
+                                            <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
+                                        <DockPanel Margin="0,2,0,0">
+                                            <!-- Лучший по стабильности: для всех сразу или для отдельного ИИ (см. рамку над таблицей) -->
+                                            <Border x:Name="bestBadge" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="#2B3D12"
                                                     VerticalAlignment="Center" Visibility="Collapsed" ToolTip="Самая высокая стабильность по данным проверок">
                                                 <TextBlock Text="{Binding BestFor}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource Lime}"/>
                                             </Border>
-                                        </StackPanel>
+                                            <TextBlock Text="{Binding Address}" Style="{StaticResource Label}" FontWeight="Normal"
+                                                       FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis"/>
+                                        </DockPanel>
                                     </StackPanel>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsNew}" Value="True">

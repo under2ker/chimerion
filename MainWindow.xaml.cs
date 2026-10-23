@@ -507,12 +507,12 @@ public partial class MainWindow : Window
     {
         Log($"{title}: IP {n.PublicIp} ({n.Location}, {n.Provider}), DNS {n.SystemDns}");
         foreach (var x in n.Services)
-            Log($"  {x.Name}: {x.Host} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
+            Log($"  {x.Name}: {x.Host} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}{(x.Note != null ? ". " + x.Note : "")}");
         foreach (var x in n.Hosts)
             Log($"  доп. {x.Name} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
         foreach (var r in n.Resolvers)
             Log($"  резолвер: {r.Ip} · {r.Org} · {r.Place}");
-        if (LeakTest.LooksLikeLeak(n.Resolvers))
+        if (DnsSwitcher.GetActive() != null && LeakTest.LooksLikeLeak(n.Resolvers))
             Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
     }
 
@@ -592,16 +592,27 @@ public partial class MainWindow : Window
         else dnsRuns.Add((cur.SystemDns, B("Text"), true));
         if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
 
-        // Строка 3: резолверы, которые на самом деле дошли до тестового сервера (тест утечки)
-        if (!_compact && cur.Resolvers.Count > 0)
+        // Строка 3: резолверы, которые на самом деле дошли до тестового сервера (тест утечки). Только при подключении:
+        // без него сравнивать не с чем, а провайдер и так отвечает через несколько своих серверов
+        if (!_compact && cur.Resolvers.Count > 0 && !disconnected && DnsSwitcher.GetActive() != null)
         {
             static string Country(string place) => place.Split(',').Last().Trim();
-            static string Org(string org) => org.Length <= 30 ? org : org[..29] + "…";
+            // Один владелец — одна запись: адреса его серверов в подсказке
+            var groups = cur.Resolvers.GroupBy(r => LeakTest.CleanOrg(r.Org), StringComparer.OrdinalIgnoreCase).ToList();
             var runs = new List<(string, Brush, bool)> { ("Резолверы  ", B("Muted"), false) };
-            runs.Add((string.Join("   ·   ", cur.Resolvers.Select(r => $"{r.Ip} ({Org(r.Org)}{(r.Place.Length > 0 ? ", " + Country(r.Place) : "")})")), B("Text"), true));
-            if (LeakTest.LooksLikeLeak(cur.Resolvers))
-                runs.Add(("   ⚠ запросы уходят к разным резолверам: часть идет мимо сервера", B("Warn"), true));
-            host.Children.Add(Line(runs.ToArray()));
+            runs.Add((string.Join("   ·   ", groups.Select(g =>
+            {
+                var name = g.Key.Length <= 32 ? g.Key : g.Key[..31] + "…";
+                var place = g.First().Place;
+                return place.Length > 0 ? $"{name} ({Country(place)})" : name;
+            })), B("Text"), true));
+            bool leak = groups.Count > 1;
+            runs.Add((leak ? "   ⚠ часть запросов идет мимо сервера" : "   ✓ все запросы через сервер", leak ? B("Warn") : B("Ok"), true));
+            var line = Line(runs.ToArray());
+            line.TextTrimming = TextTrimming.CharacterEllipsis;
+            line.TextWrapping = TextWrapping.NoWrap;
+            line.ToolTip = string.Join("\n", cur.Resolvers.Select(r => $"{r.Ip} · {r.Org} · {r.Place}"));
+            host.Children.Add(line);
         }
 
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
@@ -628,7 +639,9 @@ public partial class MainWindow : Window
             head.Children.Add(title);
             var state = new TextBlock { Text = svc.Access.TrimStart('✓', '✗', ' '), Foreground = ok ? B("Ok") : B("Bad"),
                                         HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
-                                        FontSize = _compact ? 12 : 13, TextTrimming = TextTrimming.CharacterEllipsis };
+                                        FontSize = _compact ? 12 : 13, TextTrimming = TextTrimming.CharacterEllipsis,
+                                        MaxWidth = _compact ? 120 : 150, Margin = new Thickness(_compact ? 0 : 8, 0, 0, 0),
+                                        ToolTip = svc.Note };
             var geo = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             _tileGeo[svc.Name] = geo;
             if (_compact)
