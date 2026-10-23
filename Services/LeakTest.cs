@@ -88,5 +88,18 @@ public static class LeakTest
 
     /// <summary>Похоже на утечку: ответили резолверы разных владельцев сетей.</summary>
     public static bool LooksLikeLeak(IReadOnlyCollection<ResolverInfo> list) =>
-        list.Select(r => r.Org).Where(o => o.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+        list.Select(r => CleanOrg(r.Org)).Where(o => o.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
+
+    private static readonly System.Text.RegularExpressions.Regex LegalForm = new(
+        @"\b(join-?stock company|joint-?stock company|public joint stock company|jsc|pjsc|llc|ltd\.?|limited|inc\.?|corp\.?|gmbh|b\.?v\.?|d\.o\.o\.?|s\.r\.o\.?|oo+o|ao|zao|pao)\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>Название владельца без юридической формы и кавычек: «Join-stock company "Internet Exchange"MSK-IX"» → «Internet Exchange MSK-IX».</summary>
+    public static string CleanOrg(string org)
+    {
+        var s = LegalForm.Replace(org.Replace('"', ' ').Replace('«', ' ').Replace('»', ' '), " ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"(^|\s)[.,]+(?=\s|$)", " "); // точки и запятые, оставшиеся от «d.o.o.»
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim(' ', ',', '.', '-');
+        return s.Length == 0 ? org.Trim() : s;
+    }
 }

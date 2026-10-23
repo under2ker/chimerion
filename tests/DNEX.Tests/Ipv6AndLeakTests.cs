@@ -41,6 +41,21 @@ public class Ipv6AndLeakTests
         Assert.True(LeakTest.LooksLikeLeak(two));
     }
 
+    [Theory]
+    [InlineData("Join-stock company \"Internet Exchange\"MSK-IX\"", "Internet Exchange MSK-IX")]
+    [InlineData("Edge Technology Plus d.o.o. Beograd", "Edge Technology Plus Beograd")]
+    [InlineData("Baykov Ilya Sergeevich", "Baykov Ilya Sergeevich")]
+    [InlineData("Google LLC", "Google")]
+    public void CleanOrg_DropsLegalFormAndQuotes(string raw, string expected) => Assert.Equal(expected, LeakTest.CleanOrg(raw));
+
+    [Fact]
+    public void Leak_SameOwnerDifferentSpelling_IsNotLeak()
+    {
+        var list = new[] { new ResolverInfo("2a0c::103", "Join-stock company \"Internet Exchange\"MSK-IX\"", "RU"),
+                           new ResolverInfo("193.232.231.49", "Join-stock company \"Internet Exchange\"MSK-IX\"", "RU") };
+        Assert.False(LeakTest.LooksLikeLeak(list));
+    }
+
     [Fact]
     public void DnsWire_ParsesAaaaAnswer()
     {
