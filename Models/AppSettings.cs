@@ -112,10 +112,11 @@ public class AppSettings
     // ---------- Глубокий парсер ----------
 
     /// <summary>Сколько переходов по ссылкам делать от стартовой страницы.</summary>
-    public int CrawlDepth { get; set; } = 2;
+    public int CrawlDepth { get; set; } = 3;
     /// <summary>Предел загруженных страниц за один запуск.</summary>
-    public int CrawlMaxPages { get; set; } = 500;
-    public int CrawlParallelism { get; set; } = 6;
+    public int CrawlMaxPages { get; set; } = 1500;
+    /// <summary>Сколько страниц загружается одновременно. С одного сайта все равно не больше двух запросов сразу.</summary>
+    public int CrawlParallelism { get; set; } = 12;
     /// <summary>Сколько страниц Telegram-канала листать назад (?before=…).</summary>
     public int TelegramPages { get; set; } = 80; // хватит на всю тему DNS Club (~78 стр.)
     /// <summary>Переходить только по ссылкам, где в адресе или тексте есть одно из слов.</summary>
@@ -123,13 +124,14 @@ public class AppSettings
     {
         "dns", "днс", "doh", "chatgpt", "openai", "gpt", "gemini", "claude", "grok", "нейросет", "ии-", "-ai", "ai-",
         "без-vpn", "bez-vpn", "smart", "proxy", "геоблок", "unblock", "club", "клуб",
+        "resolver", "nameserver", "частн", "private", "нейро", "dns-", "-dns", "doh",
     };
     /// <summary>Сайты, с которых можно уходить по ссылкам на другие домены (агрегаторы, статьи).</summary>
     public bool FollowExternalLinks { get; set; } = true;
 
     /// <summary>Автопоиск новых источников через поисковик (DuckDuckGo HTML, без API-ключа).</summary>
     public bool DiscoveryEnabled { get; set; } = true;
-    public int DiscoveryResultsPerQuery { get; set; } = 8;
+    public int DiscoveryResultsPerQuery { get; set; } = 12;
     public List<string> DiscoveryQueries { get; set; } = new()
     {
         "DNS для ChatGPT в России",
@@ -137,6 +139,12 @@ public class AppSettings
         "smart DNS Gemini Claude Россия",
         "DoH сервер для ChatGPT",
         "github dns list chatgpt russia",
+        "smart dns для ИИ сервисов",
+        "DNS для Claude в России",
+        "DNS для Gemini без VPN",
+        "частный DNS для ChatGPT Android",
+        "DoH сервер для нейросетей",
+        "список DNS для обхода блокировки ИИ",
     };
     /// <summary>Cookie для сайтов, где без входа видно не все. Ключ — домен (например "4pda.to"),
     /// значение — строка Cookie из браузера, где вы залогинены (DevTools → Network → заголовок Cookie).</summary>
@@ -147,5 +155,8 @@ public class AppSettings
     {
         "youtube.com", "www.youtube.com", "vk.com", "facebook.com", "twitter.com", "x.com", "instagram.com",
         "apps.apple.com", "play.google.com", "duckduckgo.com",
+        // Энциклопедии, справки и новости: статьи про DNS вообще, списков Smart DNS там нет (видно по журналу обхода)
+        "wikipedia.org", "wikimedia.org", "wiktionary.org", "microsoft.com", "techcrunch.com", "forbes.ru", "vedomosti.ru",
+        "straitstimes.com", "bbc.com", "reuters.com", "theverge.com", "wired.com", "cloudflare.com", "one.one.one.one",
     };
 }

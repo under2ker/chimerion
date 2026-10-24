@@ -66,6 +66,19 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Сервер в избранном: вкладка «Избранные», а сторож при замене сервера выбирает его при равной стабильности.</summary>
     public bool IsFavorite { get => _isFavorite; set { if (_isFavorite == value) return; _isFavorite = value; On(); } }
 
+    private int _focusRank;
+    /// <summary>Место в порядке «сначала лучшие для одного сервиса» (меньше — выше). Считается в окне, не сохраняется.</summary>
+    [JsonIgnore]
+    public int FocusRank { get => _focusRank; set { if (_focusRank == value) return; _focusRank = value; On(); } }
+
+    /// <summary>Плашки сервисов перерисовать: сменился сервис, по которому выстроен список.</summary>
+    public void RefreshChips() { _chips = null; On(nameof(Chips)); On(nameof(StabilityShown)); }
+
+    /// <summary>Стабильность для колонки таблицы: когда список выстроен по одному сервису — по нему, иначе общая.</summary>
+    [JsonIgnore]
+    public string StabilityShown => ServiceChip.Focus is { } f && ServiceChecks > 0
+        ? $"{ServiceStability(f)}% ({ServiceChecks})" : Stability;
+
     private string? _bestFor;
     /// <summary>Бейдж в таблице: «лучший для всех» или «лучший: Claude». Считается из стабильности, не сохраняется.</summary>
     [JsonIgnore]
@@ -154,8 +167,11 @@ public class DnsServer : INotifyPropertyChanged
 
     /// <summary>Подсказка к месту: сверка баз и оговорка, что это данные IP-баз, а не физическое место.</summary>
     [JsonIgnore]
-    public string LocationTooltip => string.IsNullOrEmpty(Country) ? LocationText
-        : $"{LocationText}\n{LocationNote}\nПо данным IP-баз. Точное физическое место может отличаться";
+    public string LocationTooltip => (string.IsNullOrEmpty(Country) ? LocationText
+        : $"{LocationText}\n{LocationNote}\nПо данным IP-баз. Точное физическое место может отличаться")
+        + string.Concat(EgressBy.OrderBy(kv => kv.Key).Select(kv =>
+            $"\nИИ видят, {kv.Key}: {GeoLocation.CountryName(kv.Value.Country)}" +
+            (EgressCityByIp.TryGetValue(kv.Value.Ip, out var c) && c.Length > 0 ? ", " + GeoLocation.CityName(c) : "") + $" ({kv.Value.Ip})"));
 
     /// <summary>Когда геолокацию в последний раз определяли. Через 30 дней — снова.</summary>
     public DateTime? GeoCheckedAt { get; set; }
@@ -175,6 +191,16 @@ public class DnsServer : INotifyPropertyChanged
     public string? ProxyCountry { get; set; }
     public string? ProxyCountry2 { get; set; }
 
+    /// <summary>
+    /// Настоящий выход в интернет по каждому ИИ (имя сервиса → адрес и страна, которые видит сервис). Может отличаться
+    /// от страны прокси: прокси пересылает трафик дальше (keyoneday в России выходит через Cloudflare во Франции).
+    /// </summary>
+    public Dictionary<string, Egress> EgressBy { get; set; } = new();
+    /// <summary>Город выхода по адресу (страну дает сам trace Cloudflare, город — IP-база).</summary>
+    public Dictionary<string, string> EgressCityByIp { get; set; } = new();
+
+    public void NotifyEgress() { On(nameof(LocationCell)); On(nameof(LocationTooltip)); }
+
     [JsonIgnore]
     public string ProxyCountryName => string.IsNullOrEmpty(ProxyCountry) ? "" : GeoLocation.CountryName(ProxyCountry);
 
@@ -187,7 +213,12 @@ public class DnsServer : INotifyPropertyChanged
             var server = string.IsNullOrEmpty(Country) ? "—" : CountryName;
             var proxy = !string.IsNullOrEmpty(ProxyCountry) ? ProxyCountryName
                       : string.IsNullOrEmpty(ProxyIp) ? "нет подмены" : "…";
-            return $"{server} › SmartDNS: {proxy}";
+            // Выход не там, где прокси: ИИ видят именно выход (так ChatGPT называет Францию у российского сервера)
+            var seen = EgressBy.Values.Select(e => e.Country).Distinct().ToList();
+            var egress = seen.Count == 0 ? ""
+                       : seen.Count > 1 ? " → ИИ видят разные страны"
+                       : seen[0] != ProxyCountry ? $" → ИИ видят: {GeoLocation.CountryName(seen[0])}" : "";
+            return $"{server} › SmartDNS: {proxy}{egress}";
         }
     }
 
@@ -284,7 +315,10 @@ public class DnsServer : INotifyPropertyChanged
 
     /// <summary>Мусор: не подменяет адреса или стабильно не работает.</summary>
     [JsonIgnore]
-    public bool IsJunk => NoProxy || FailStreak >= 2 || (ChecksTotal >= 3 && ChecksOk == 0);
+    public bool IsJunk => NoProxy || FailStreak >= 2 || (ChecksTotal >= 3 && ChecksOk == 0)
+        // Ни разу не заработал и с последней проверки прошло больше трех дней: такие копились в списке тысячами.
+        // Если поиск найдет его снова через сутки, он вернется на проверку
+        || (ChecksTotal >= 1 && ChecksOk == 0 && Status == ServerStatus.Fail && LastChecked is { } lc && DateTime.Now - lc > TimeSpan.FromDays(3));
 
     [JsonIgnore]
     public string Stability => ChecksTotal == 0 ? "—" : $"{ChecksOk * 100 / ChecksTotal}% ({ChecksTotal})";
@@ -344,7 +378,7 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string Key => !string.IsNullOrEmpty(Primary) ? Primary : (DohUrl ?? Name).ToLowerInvariant();
 
-    public void NotifyStability() { On(nameof(Stability)); On(nameof(Score)); On(nameof(Rank)); }
+    public void NotifyStability() { On(nameof(Stability)); On(nameof(StabilityShown)); On(nameof(Score)); On(nameof(Rank)); }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void On([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
@@ -352,6 +386,12 @@ public class DnsServer : INotifyPropertyChanged
 
 public sealed record ServiceChip(string Name, string State)
 {
+    /// <summary>Сервис, по которому выстроен список (после проверки только его). Null — порядок для всех сервисов.</summary>
+    public static string? Focus { get; set; }
+
+    /// <summary>Плашка другого сервиса, когда список выстроен по одному: приглушается, чтобы выделялся нужный.</summary>
+    public bool Dim => Focus != null && Name != Focus;
+
     /// <summary>Логотип сервиса для чипа в таблице. Null, если логотипа нет.</summary>
     public System.Windows.Media.ImageSource? Logo => Name switch
     {
@@ -366,7 +406,8 @@ public sealed record ServiceChip(string Name, string State)
         : summary.Split(" · ", StringSplitOptions.RemoveEmptyEntries).Select(p =>
         {
             var name = p.Split(' ', ':')[0];
-            var state = p.Contains('✓') ? "ok" : p.Contains("регион") ? "region" : "fail";
+            // «капча» — желтым, как «регион»: доступ есть, но мешает проверка Google, а не блокировка сервиса
+            var state = p.Contains('✓') ? "ok" : p.Contains("регион") || p.Contains("капча") ? "region" : "fail";
             return new ServiceChip(name, state);
         }).ToList();
 }

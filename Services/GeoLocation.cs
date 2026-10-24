@@ -81,21 +81,27 @@ public static class GeoLocation
         }
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> OrgCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string?>> OrgTasks = new();
 
-    /// <summary>Владелец сети адреса по ipinfo («AS15169 Google LLC»). Кэш на время работы программы.
-    /// Null, если база не ответила (тогда не кэшируем и спросим в следующий раз).</summary>
+    /// <summary>Владелец сети адреса по ipinfo («AS15169 Google LLC»). Кэш на время работы программы; одновременные
+    /// вопросы про один адрес (десятки серверов с одним прокси) ждут один запрос. Неудачу не кэшируем.</summary>
     public static async Task<string?> OrgAsync(string ip, CancellationToken ct)
     {
-        if (OrgCache.TryGetValue(ip, out var cached)) return cached;
+        var task = OrgTasks.GetOrAdd(ip, FetchOrgAsync);
+        var org = await task.WaitAsync(ct);
+        if (org == null) OrgTasks.TryRemove(new KeyValuePair<string, Task<string?>>(ip, task));
+        return org;
+    }
+
+    private static async Task<string?> FetchOrgAsync(string ip)
+    {
+        var ct = CancellationToken.None; // запрос общий для всех ждущих: отмена одного не должна обрывать остальных
         await Gate.WaitAsync(ct);
         try
         {
             var json = await Http.GetStringAsync($"https://ipinfo.io/{ip}/json", ct);
             using var doc = JsonDocument.Parse(json);
-            var org = doc.RootElement.TryGetProperty("org", out var o) ? o.GetString() ?? "" : "";
-            OrgCache[ip] = org;
-            return org;
+            return doc.RootElement.TryGetProperty("org", out var o) ? o.GetString() ?? "" : "";
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {

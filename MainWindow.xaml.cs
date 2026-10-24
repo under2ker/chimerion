@@ -75,8 +75,9 @@ public partial class MainWindow : Window
         _view.Filter = FilterServer;
         // Рабочие серверы наверху. Сортировка НЕ живая: строки не переставляются при обновлении статуса и пинга.
         // Порядок пересчитывается после пакетной проверки, при смене фильтра и при добавлении сервера.
-        // Подключенный сервер всегда первый, затем рабочие наверху
+        // Подключенный сервер всегда первый, затем избранные, затем рабочие наверху
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
+        _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsFavorite), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.LatencyMs), ListSortDirection.Ascending));
         // Клик по заголовку колонки заменяет правила сортировки: подключенный сервер закрепляем заново
@@ -87,14 +88,26 @@ public partial class MainWindow : Window
         _statsTimer.Tick += (_, _) => UpdateStats();
         _servers.CollectionChanged += (_, _) => _statsTimer.Start();
 
+        // Запуск из автозагрузки Windows: окно не показываем, работает значок в трее
+        if (AutoStart.StartedHidden) { Opacity = 0; ShowInTaskbar = false; }
+
         Loaded += async (_, _) =>
         {
+            if (AutoStart.StartedHidden)
+            {
+                Hide();
+                Opacity = 1;
+                ShowInTaskbar = true;
+                Log("Запуск вместе с Windows: программа в трее");
+            }
             Log($"Данные: {Storage.Dir}. Серверов в списке: {_servers.Count}");
             UpdateStats();
             ShowCompare();
             try { if (Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) SetCompact(true, animate: false); }
             catch (Exception) { }
             await RefreshConnectionAsync();
+            _ = AutoStart.RefreshPathAsync(Log);
+            await EnsureConnectionAfterStartAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
         if (_settings.CheckUpdates) ScheduleUpdateCheck();
             if (DnsSwitcher.GetActive() is { } a)
@@ -109,6 +122,8 @@ public partial class MainWindow : Window
         };
         _watchdog.Tick += Watchdog_Tick;
         WatchVpn();
+        TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
+        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
@@ -157,6 +172,49 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         Services.DarkTitle.Apply(this);
+        // Своя рамка (WindowStyle=None): без этого развернутое окно занимает весь экран вместе с местом под панелью
+        // задач, и нижняя строка (добавление сервера, журнал, обновление) уходит под панель
+        System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle)?.AddHook(MaxSizeHook);
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MINMAXINFO { public POINT Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MONITORINFO { public int Size; public RECT Monitor, Work; public uint Flags; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+
+    /// <summary>WM_GETMINMAXINFO: при разворачивании окно занимает рабочую область своего монитора (без панели задач).</summary>
+    private IntPtr MaxSizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_GETMINMAXINFO = 0x0024;
+        if (msg != WM_GETMINMAXINFO) return IntPtr.Zero;
+        var monitor = MonitorFromWindow(hwnd, 2); // MONITOR_DEFAULTTONEAREST
+        var info = new MONITORINFO { Size = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info)) return IntPtr.Zero;
+        var mmi = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+        mmi.MaxPosition.X = info.Work.Left - info.Monitor.Left;
+        mmi.MaxPosition.Y = info.Work.Top - info.Monitor.Top;
+        mmi.MaxSize.X = info.Work.Right - info.Work.Left;
+        mmi.MaxSize.Y = info.Work.Bottom - info.Work.Top;
+        // Минимальный размер окна из MinWidth/MinHeight, в пикселях экрана
+        var dpi = VisualTreeHelper.GetDpi(this);
+        mmi.MinTrackSize.X = (int)Math.Ceiling(MinWidth * dpi.DpiScaleX);
+        mmi.MinTrackSize.Y = (int)Math.Ceiling(MinHeight * dpi.DpiScaleY);
+        System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, true);
+        handled = true;
+        return IntPtr.Zero;
     }
 
     private void UpdateStats()
@@ -358,14 +416,39 @@ public partial class MainWindow : Window
                 lastProgress = $"Страниц {p.Pages}/{p.MaxPages} · в очереди {p.Queued} · найдено {p.Found} · новых {added.Count} · ошибок {p.Errors} · {p.Current}";
                 ProgressText.Text = lastProgress;
             });
+            // Найденные серверы проверяются сразу, пока поиск продолжается, а не после всего обхода.
+            // Одновременно не больше трети обычного числа проверок: обход тоже занимает сеть, а перегрузка дала бы
+            // ложные таймауты
+            var checker = new ServerChecker(_settings);
+            using var checkGate = new SemaphoreSlim(Math.Clamp(_settings.Parallelism / 3, 4, 12));
+            var checks = new List<Task>();
+            int checkedCount = 0;
+            async Task CheckFoundAsync(DnsServer srv)
+            {
+                try
+                {
+                    await checkGate.WaitAsync(ct);
+                    try { await checker.CheckAsync(srv, ct); }
+                    finally { checkGate.Release(); }
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { Log($"Проверка {srv.DisplayName}: {ex.GetBaseException().Message}"); }
+                finally { Interlocked.Increment(ref checkedCount); }
+            }
+
             // Найденные адреса появляются в таблице сразу.
             void OnFound(DnsServer s) => Dispatcher.InvokeAsync(() =>
             {
-                if (_junk.ContainsKey(s.Key) || !_known.Add(s.Key)) return;
+                // Сервер из мусора, найденный снова через сутки и позже, проверяем заново: мог не пройти проверку
+                // из-за сбоя сети. Свежий мусор (меньше суток) пропускаем
+                if (_junk.TryGetValue(s.Key, out var junkAt) && DateTime.Now - junkAt < TimeSpan.FromHours(24)) return;
+                if (!_known.Add(s.Key)) return;
+                _junk.Remove(s.Key);
                 s.JustAdded = true;
                 _servers.Add(s);
                 _ = ClearJustAddedLaterAsync(s);
                 added.Add(s);
+                checks.Add(CheckFoundAsync(s));
             });
 
             var found = await SourceParser.FetchAllAsync(_settings, Log, progress, OnFound, ct);
@@ -373,10 +456,17 @@ public partial class MainWindow : Window
             Log($"Готово: найдено {found.Count}, новых {added.Count}");
             SaveServers();
 
-            if (added.Count > 0)
+            if (checks.Count > 0)
             {
-                EndWork();
-                await RunChecksAsync(added);
+                // Обход закончен: ждем проверки, которые еще идут
+                var all = Task.WhenAll(checks.ToArray());
+                while (!all.IsCompleted)
+                {
+                    lastProgress = $"Проверка найденных: {Volatile.Read(ref checkedCount)} из {checks.Count}";
+                    ProgressText.Text = lastProgress;
+                    await Task.WhenAny(all, Task.Delay(500));
+                }
+                await FinishChecksAsync(added, before: null);
             }
             _ = ResolveLocationsAsync();
             int purged = _purgeTotal - purgeStart;
@@ -395,14 +485,40 @@ public partial class MainWindow : Window
     private async void CheckSelected_Click(object sender, RoutedEventArgs e) =>
         await RunChecksAsync(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
 
-    private async Task RunChecksAsync(List<DnsServer> list)
+    /// <summary>Меню у «Перепроверить»: полная, глубокая или только один сервис.</summary>
+    private void RecheckMenu_Click(object sender, RoutedEventArgs e)
     {
+        var menu = new ContextMenu { PlacementTarget = RecheckMenuButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        MenuItem Item(string header, string hint, ServerChecker.CheckOptions opt)
+        {
+            var mi = new MenuItem { Header = header, ToolTip = hint };
+            mi.Click += async (_, _) => await RunChecksAsync(_view!.Cast<DnsServer>().ToList(), opt);
+            return mi;
+        }
+        menu.Items.Add(Item("Полная проверка", "API и сайт каждого сервиса, один проход", ServerChecker.CheckOptions.Full));
+        menu.Items.Add(Item("Глубокая проверка", "Три прохода подряд; у каждого сервиса проверяются все адреса: сайт, вход, CDN",
+            new ServerChecker.CheckOptions(Deep: true)));
+        menu.Items.Add(new Separator());
+        foreach (var t in _settings.Targets.Where(t => t.Enabled))
+        {
+            var mi = Item($"Только {t.Name}", $"Проверить только {t.Name}. Статусы остальных сервисов остаются, стабильность не меняется",
+                new ServerChecker.CheckOptions(Only: new[] { t.Name }));
+            if (AiLogo(t.Name) is { } logo) mi.Icon = new Image { Source = logo, Width = 14, Height = 14 };
+            menu.Items.Add(mi);
+        }
+        menu.IsOpen = true;
+    }
+
+    private async Task RunChecksAsync(List<DnsServer> list, ServerChecker.CheckOptions? options = null)
+    {
+        var opt = options ?? ServerChecker.CheckOptions.Full;
         if (list.Count == 0) { Log("Нечего проверять"); return; }
         if (CurrentDns.Text.Contains("127.0.0.1") || CurrentDns.Text.Contains("::1"))
             Log("ВНИМАНИЕ: системный DNS указывает на 127.0.0.1, похоже, включен VPN или прокси-клиент. " +
                 "ИИ может открываться и без Smart DNS, поэтому результаты проверки будут завышены. Отключите VPN на время проверки.");
         var ct = BeginWork();
-        var checker = new ServerChecker(_settings);
+        var before = SnapshotCounters(list);
+        var checker = new ServerChecker(_settings, opt);
         WorkBar.Visibility = Visibility.Visible;
         WorkBar.Maximum = list.Count;
         WorkBar.Value = 0;
@@ -412,24 +528,72 @@ public partial class MainWindow : Window
             ProgressText.Text = $"Проверено {n} из {list.Count} · работают {list.Count(s => s.Status == ServerStatus.Ok)}";
             _statsTimer.Start();
         });
-        Log($"Проверка {list.Count} серверов…");
+        var mode = opt.Deep ? "глубокая проверка" : opt.Only != null ? "только " + string.Join(", ", opt.Only) : "проверка";
+        Log($"{char.ToUpper(mode[0]) + mode[1..]} {list.Count} серверов…");
         try
         {
-            await checker.CheckManyAsync(list, progress, ct);
+            for (int round = 1; round <= opt.Rounds; round++)
+            {
+                if (opt.Rounds > 1) Log($"Проход {round} из {opt.Rounds}");
+                await checker.CheckManyAsync(list, progress, ct);
+            }
         }
         catch (OperationCanceledException) { Log("Проверка остановлена"); }
-        finally
+        finally { EndWork(); }
+        // Проверка одного сервиса выстраивает список по нему, полная и глубокая — для всех сервисов
+        var focus = opt.Only is { Count: 1 } only ? only.First() : null;
+        if (focus != _rankFor) SetRankFocus(focus);
+        await FinishChecksAsync(list, before);
+        if (focus != null)
         {
-            EndWork();
-            SaveServers();
-            _ = ResolveLocationsAsync();      // после проверки появился адрес прокси — определим его страну
-            _view?.Refresh();
-            Log($"Итог: работают {list.Count(s => s.Status == ServerStatus.Ok)}, " +
-                $"частично {list.Count(s => s.Status == ServerStatus.Partial)}, " +
-                $"не работают {list.Count(s => s.Status == ServerStatus.Fail)}");
-            AutoPurge();
-            SelectBest();
+            // Наверх списка — лучший для этого сервиса
+            var top = _view?.Cast<DnsServer>().FirstOrDefault(s => !s.IsConnected && s.Chips.Any(c => c.Name == focus && c.State == "ok"));
+            if (top != null) { ServerGrid.SelectedItem = top; ServerGrid.ScrollIntoView(top); }
         }
+    }
+
+    /// <summary>Счетчики стабильности до проверки: если проверку испортил сбой сети, они возвращаются.</summary>
+    private sealed record CheckCounters(ServerStatus Status, int Total, int Ok, int FailStreak, int ServiceChecks, int AllOk, Dictionary<string, int> ServiceOk);
+
+    private static Dictionary<DnsServer, CheckCounters> SnapshotCounters(IEnumerable<DnsServer> list) =>
+        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk)));
+
+    /// <summary>
+    /// После пакетной проверки: сохранение, итог, автоочистка. Защита от ложного карантина: если сети нет
+    /// или разом перестала отвечать большая часть серверов, которые до проверки работали (от 5 штук и от 60%),
+    /// это сбой сети, а не серверов. Тогда автоочистка пропускается, а счетчики стабильности этой проверки
+    /// откатываются, чтобы следующая проверка не отправила рабочие серверы в мусор.
+    /// </summary>
+    private async Task FinishChecksAsync(List<DnsServer> list, Dictionary<DnsServer, CheckCounters>? before)
+    {
+        bool networkUp = await SystemCheck.NetworkUpAsync();
+        var wereWorking = before?.Where(kv => kv.Value.Status is ServerStatus.Ok or ServerStatus.Partial).Select(kv => kv.Key).ToList() ?? new();
+        int broke = wereWorking.Count(s => s.Status == ServerStatus.Fail);
+        bool outage = !networkUp || (wereWorking.Count >= 5 && broke * 100 / wereWorking.Count >= 60);
+
+        if (outage)
+        {
+            foreach (var (s, c) in before ?? new())
+            {
+                s.ChecksTotal = c.Total; s.ChecksOk = c.Ok; s.FailStreak = c.FailStreak;
+                s.ServiceChecks = c.ServiceChecks; s.AllOk = c.AllOk; s.ServiceOk = new(c.ServiceOk);
+                s.NotifyStability();
+            }
+            Log(networkUp
+                ? $"Похоже на сбой сети: из {wereWorking.Count} работавших серверов разом перестали отвечать {broke}. Автоочистка пропущена, стабильность не изменена. Проверьте сеть и нажмите «Перепроверить»"
+                : "Сеть пропала во время проверки. Автоочистка пропущена, стабильность не изменена. Когда сеть вернется, нажмите «Перепроверить»");
+            ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
+        }
+
+        SaveServers();
+        _ = ResolveLocationsAsync();      // после проверки появился адрес прокси — определим его страну
+        ApplyFocusRanks();                // порядок «лучшие для сервиса» по свежим результатам
+        _view?.Refresh();
+        Log($"Итог: работают {list.Count(s => s.Status == ServerStatus.Ok)}, " +
+            $"частично {list.Count(s => s.Status == ServerStatus.Partial)}, " +
+            $"не работают {list.Count(s => s.Status == ServerStatus.Fail)}");
+        if (!outage) AutoPurge();
+        SelectBest();
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();
@@ -475,7 +639,9 @@ public partial class MainWindow : Window
             return;
         }
         _closeConfirmed = true;
-        Close();
+        // Закрываем после выхода из обработчика: если отключение завершилось сразу, окно еще в процессе закрытия,
+        // и повторный Close() бросал InvalidOperationException (сбой из error.log от 23.10)
+        _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 
     // ---------- Подключение / отключение ----------
@@ -512,6 +678,8 @@ public partial class MainWindow : Window
             Log($"  доп. {x.Name} → {x.ResolvedIp} {(x.Proxied ? "(через Smart DNS)" : "(напрямую)")}, {x.Access}");
         foreach (var r in n.Resolvers)
             Log($"  резолвер: {r.Ip} · {r.Org} · {r.Place}");
+        if (n.Egress is { } eg)
+            Log($"  ИИ видят выход: {GeoLocation.CountryName(eg.Country)}{(string.IsNullOrEmpty(n.EgressCity) ? "" : ", " + n.EgressCity)} ({eg.Ip}, {n.EgressOrg})");
         if (DnsSwitcher.GetActive() != null && LeakTest.LooksLikeLeak(n.Resolvers))
             Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
     }
@@ -594,6 +762,25 @@ public partial class MainWindow : Window
         }
         else dnsRuns.Add((cur.SystemDns, B("Text"), true));
         if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
+
+        // Откуда ИИ видят соединение, по каждому сервису. Если у сервисов разные страны — показываем каждую
+        var perSvc = cur.Services.Where(x => x.Egress != null).ToList();
+        if (!_compact && perSvc.Select(x => x.Egress!.Country).Distinct().Count() > 1)
+        {
+            host.Children.Add(Line(
+                ("ИИ видят вас из  ", B("Muted"), false),
+                (string.Join("   ·   ", perSvc.Select(x => $"{x.Name}: {GeoLocation.CountryName(x.Egress!.Country)}")), B("Text"), true)));
+        }
+        // Откуда ИИ видят соединение: адрес выхода в интернет. Может отличаться и от DNS-сервера, и от прокси
+        else if (!_compact && (perSvc.FirstOrDefault()?.Egress ?? cur.Egress) is { } eg)
+        {
+            var org = LeakTest.CleanOrg(cur.EgressOrg ?? "");
+            org = System.Text.RegularExpressions.Regex.Replace(org, @"^AS\d+\s*", "");
+            host.Children.Add(Line(
+                ("ИИ видят вас из  ", B("Muted"), false),
+                (GeoLocation.CountryName(eg.Country) + (string.IsNullOrEmpty(cur.EgressCity) ? "" : ", " + GeoLocation.CityName(cur.EgressCity!)), B("Text"), true),
+                ($"   ·   {eg.Ip}{(org.Length > 0 ? ", " + org : "")}", B("Muted"), false)));
+        }
 
         // Строка 3: резолверы, которые на самом деле дошли до тестового сервера (тест утечки). Только при подключении:
         // без него сравнивать не с чем, а провайдер и так отвечает через несколько своих серверов
@@ -884,7 +1071,7 @@ public partial class MainWindow : Window
     private void SelectionSource_Click(object sender, MouseButtonEventArgs e)
     {
         if (SelectionSource.Tag is DnsServer { HasSourceUrl: true } s)
-            Process.Start(new ProcessStartInfo(new Uri(s.SourceUrl!).AbsoluteUri) { UseShellExecute = true }); // только http/https — проверено в HasSourceUrl
+            AutoStart.OpenUrl(new Uri(s.SourceUrl!).AbsoluteUri); // только http/https — проверено в HasSourceUrl
     }
 
     private static T? FindParent<T>(DependencyObject? d) where T : DependencyObject
@@ -959,7 +1146,8 @@ public partial class MainWindow : Window
                     ShowToast($"У вас последняя версия {UpdateChecker.CurrentVersion}");
                     break;
                 default:
-                    ShowToast("Не удалось проверить: нет связи с GitHub", "Warn");
+                    Log("Проверка обновления не удалась: " + r.Reason);
+                    ShowToast($"Не удалось проверить обновление: {r.Reason}", "Warn");
                     break;
             }
         }
@@ -1336,6 +1524,55 @@ public partial class MainWindow : Window
     private bool _watchNoNet;
 
     /// <summary>
+    /// После запуска (обычно вместе с Windows): если было подключение, проверяет, что DNS на месте, и возвращает его.
+    /// Статический DNS обычно переживает перезагрузку, но его сбрасывают обновления Windows, новый адаптер
+    /// (другой Wi-Fi, USB-модем) или другие программы. Сеть после загрузки поднимается не сразу: ждем до 90 секунд.
+    /// </summary>
+    private async Task EnsureConnectionAfterStartAsync()
+    {
+        if (DnsSwitcher.GetActive() is not { } active) return;
+        // Копия данных для тестов и снимков: подключение в ней чужое, DNS этого компьютера не трогаем
+        if (Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1") return;
+        var mine = active.Addresses.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
+        if (mine.Count == 0) return;
+
+        var waitUntil = DateTime.Now.AddSeconds(90);
+        bool waited = false;
+        while (!await SystemCheck.NetworkUpAsync())
+        {
+            if (DateTime.Now > waitUntil)
+            {
+                Log("После запуска сети нет. Подключение проверит сторож, когда сеть появится");
+                return;
+            }
+            if (!waited) Log("Жду сеть, чтобы проверить подключение…");
+            waited = true;
+            await Task.Delay(3000);
+        }
+
+        var current = await DnsSwitcher.GetCurrentAddressesAsync();
+        if (mine.Any(current.Contains))
+        {
+            Log($"DNS «{active.Name}» на месте");
+            return;
+        }
+        Log($"После запуска DNS системы другой ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
+        if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } server)
+        {
+            Log($"Сервера «{active.Name}» больше нет в списке. Подключаюсь к лучшему по стабильности");
+            await SwitchToNextBestAsync(active);
+            return;
+        }
+        if (await ConnectToAsync(server, auto: true))
+        {
+            Log($"Подключение «{server.DisplayName}» возвращено");
+            return;
+        }
+        Log($"«{server.DisplayName}» не отвечает. Ищу замену");
+        await SwitchToNextBestAsync(active);
+    }
+
+    /// <summary>
     /// Сторож, пока подключено:
     /// 1) сети нет вообще (сон, загрузка, смена Wi-Fi) — ждет, неудачей это не считается;
     /// 2) DNS системы сбросила другая программа или Windows — возвращает подключение;
@@ -1574,14 +1811,14 @@ public partial class MainWindow : Window
         {
             foreach (var (srv, fav) in was) srv.IsFavorite = fav;
             SaveServers();
-            if (_filterIndex == 6) _view?.Refresh();
+            _view?.Refresh();
             Log("Отменено изменение избранного");
             return Task.CompletedTask;
         });
         Log(add ? $"В избранное: {string.Join(", ", list.Select(s => s.DisplayName))}"
                 : $"Убрано из избранного: {string.Join(", ", list.Select(s => s.DisplayName))}");
         SaveServers();
-        if (_filterIndex == 6) _view?.Refresh();
+        _view?.Refresh(); // избранные сразу поднимаются наверх
         UpdateStats();
     }
 
@@ -1601,7 +1838,7 @@ public partial class MainWindow : Window
     private void MenuSource_Click(object sender, RoutedEventArgs e)
     {
         if (ServerGrid.SelectedItem is DnsServer { HasSourceUrl: true } s)
-            Process.Start(new ProcessStartInfo(new Uri(s.SourceUrl!).AbsoluteUri) { UseShellExecute = true });
+            AutoStart.OpenUrl(new Uri(s.SourceUrl!).AbsoluteUri);
     }
 
     private void MenuCopy_Click(object sender, RoutedEventArgs e)
@@ -1668,15 +1905,78 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Подключенный сервер всегда первый в таблице, какой бы колонкой ни была отсортирована.</summary>
+    /// <summary>Сверху всегда подключенный сервер, под ним избранные (в порядке «лучшие для сервиса» избранные не поднимаются,
+    /// чтобы наверху были лучшие именно для него); дальше порядок выбранной колонки.</summary>
     private void PinConnectedFirst()
     {
         if (_view == null) return;
         var sd = _view.SortDescriptions;
-        if (sd.Count > 0 && sd[0].PropertyName == nameof(DnsServer.IsConnected)) return;
+        bool favPinned = _rankFor == null;
+        bool ok = sd.Count > 0 && sd[0].PropertyName == nameof(DnsServer.IsConnected)
+                  && (favPinned ? sd.Count > 1 && sd[1].PropertyName == nameof(DnsServer.IsFavorite)
+                                : !sd.Any(d => d.PropertyName == nameof(DnsServer.IsFavorite)));
+        if (ok) return;
         for (int i = sd.Count - 1; i >= 0; i--)
-            if (sd[i].PropertyName == nameof(DnsServer.IsConnected)) sd.RemoveAt(i);
+            if (sd[i].PropertyName is nameof(DnsServer.IsConnected) or nameof(DnsServer.IsFavorite)) sd.RemoveAt(i);
+        if (favPinned) sd.Insert(0, new SortDescription(nameof(DnsServer.IsFavorite), ListSortDirection.Descending));
         sd.Insert(0, new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
     }
+
+    // ---------- Порядок «сначала лучшие для сервиса» ----------
+
+    private string? _rankFor;
+
+    /// <summary>
+    /// Выстраивает список по одному сервису (после проверки только его) или возвращает порядок для всех (null).
+    /// Наверху серверы, где сервис работает, по стабильности именно по нему, при равенстве по пингу; ниже остальные.
+    /// Плашка у вкладок и приглушенные плашки других сервисов показывают, по какому сервису выстроен список.
+    /// </summary>
+    private void SetRankFocus(string? service)
+    {
+        _rankFor = service;
+        ServiceChip.Focus = service;
+        ApplyFocusRanks();
+        foreach (var s in _servers) s.RefreshChips();
+
+        if (_view != null)
+        {
+            var sd = _view.SortDescriptions;
+            sd.Clear();
+            sd.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
+            if (service == null)
+            {
+                sd.Add(new SortDescription(nameof(DnsServer.IsFavorite), ListSortDirection.Descending));
+                sd.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));
+                sd.Add(new SortDescription(nameof(DnsServer.LatencyMs), ListSortDirection.Ascending));
+            }
+            else sd.Add(new SortDescription(nameof(DnsServer.FocusRank), ListSortDirection.Ascending));
+        }
+
+        RankChip.Visibility = service == null ? Visibility.Collapsed : Visibility.Visible;
+        ColStab.Header = service == null ? "СТАБИЛЬНОСТЬ" : $"СТАБ. {service.ToUpperInvariant()}"; // колонка показывает стабильность по сервису
+        if (service != null)
+        {
+            RankChipText.Text = $"Сначала лучшие для {service}";
+            RankChipLogo.Source = AiLogo(service);
+            Log($"Список выстроен по {service}: наверху серверы, где {service} работает стабильнее всего");
+        }
+        _view?.Refresh();
+    }
+
+    /// <summary>Места в порядке «лучшие для сервиса». Считаются заново после каждой проверки.</summary>
+    private void ApplyFocusRanks()
+    {
+        if (_rankFor is not { } svc) return;
+        foreach (var s in _servers)
+        {
+            bool works = s.Chips.Any(c => c.Name == svc && c.State == "ok");
+            int stab = s.ServiceStability(svc) ?? (s.ChecksTotal > 0 ? s.ChecksOk * 100 / s.ChecksTotal : 0);
+            int ping = (int)Math.Min(s.LatencyMs ?? 9999, 9999);
+            s.FocusRank = works ? (100 - stab) * 10_000 + ping : 2_000_000 + s.Rank;
+        }
+    }
+
+    private void RankChipClear_Click(object sender, RoutedEventArgs e) => SetRankFocus(null);
 
     // ---------- Строка и пинг ----------
 
@@ -1820,7 +2120,7 @@ public partial class MainWindow : Window
         }
         try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
         _purgeTotal += junk.Count;
-        if (silent) foreach (var s in junk) _servers.Remove(s);
+        if (silent) using (_view?.DeferRefresh()) foreach (var s in junk) _servers.Remove(s);
         else _ = FadeOutAndRemoveAsync(junk);
         SaveServers();
         if (!silent)
@@ -1828,13 +2128,17 @@ public partial class MainWindow : Window
             Log($"Автоочистка: убрано нерабочих {junk.Count}, осталось {_servers.Count - junk.Count}");
             OfferUndo($"Убрано нерабочих серверов: {junk.Count}", () =>
             {
-                foreach (var r in undoInfo)
+                // Сотни строк возвращаются одним пакетом; таблица пересчитывается один раз после цикла
+                using (_view?.DeferRefresh())
                 {
-                    r.Server.Fading = false;                 // строка, которая еще гаснет, остается в списке
-                    _purgeKeep.Add(r.Server.Id);             // возвращенные не убираются снова до перезапуска
-                    if (!_servers.Contains(r.Server)) _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
-                    _known.Add(r.Server.Key);
-                    if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
+                    foreach (var r in undoInfo)
+                    {
+                        r.Server.Fading = false;             // строка, которая еще гаснет, остается в списке
+                        _purgeKeep.Add(r.Server.Id);         // возвращенные не убираются снова до перезапуска
+                        if (!_servers.Contains(r.Server)) _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
+                        _known.Add(r.Server.Key);
+                        if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
+                    }
                 }
                 try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
                 _purgeTotal -= undoInfo.Count;
@@ -1893,7 +2197,7 @@ public partial class MainWindow : Window
     private void OpenSource_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is DnsServer { HasSourceUrl: true } s)
-            Process.Start(new ProcessStartInfo(new Uri(s.SourceUrl!).AbsoluteUri) { UseShellExecute = true }); // только http/https — проверено в HasSourceUrl
+            AutoStart.OpenUrl(new Uri(s.SourceUrl!).AbsoluteUri); // только http/https — проверено в HasSourceUrl
     }
 
     // ---------- Настройки ----------
@@ -1916,6 +2220,15 @@ public partial class MainWindow : Window
         st.TimeoutSeconds = Math.Clamp(st.TimeoutSeconds, 2, 30);
         st.Parallelism = Math.Clamp(st.Parallelism, 1, 64);
         st.PingRefreshMinutes = Math.Clamp(st.PingRefreshMinutes, 1, 60);
+        // settings.json до 0.1.22 хранил прежние лимиты поиска: поднимаем до новых, если они были ниже
+        var defs = new AppSettings();
+        if (st.CrawlDepth < defs.CrawlDepth) st.CrawlDepth = defs.CrawlDepth;
+        if (st.CrawlMaxPages < defs.CrawlMaxPages) st.CrawlMaxPages = defs.CrawlMaxPages;
+        if (st.DiscoveryResultsPerQuery < defs.DiscoveryResultsPerQuery) st.DiscoveryResultsPerQuery = defs.DiscoveryResultsPerQuery;
+        if (st.CrawlParallelism < defs.CrawlParallelism) st.CrawlParallelism = defs.CrawlParallelism;
+        foreach (var q in defs.DiscoveryQueries.Where(q => !st.DiscoveryQueries.Contains(q))) st.DiscoveryQueries.Add(q);
+        foreach (var k in defs.LinkKeywords.Where(k => !st.LinkKeywords.Contains(k))) st.LinkKeywords.Add(k);
+        foreach (var h in defs.BlockedHosts.Where(h => !st.BlockedHosts.Contains(h))) st.BlockedHosts.Add(h);
         st.CrawlDepth = Math.Clamp(st.CrawlDepth, 0, 5);
         st.CrawlMaxPages = Math.Clamp(st.CrawlMaxPages, 1, 5000);
         st.CrawlParallelism = Math.Clamp(st.CrawlParallelism, 1, 16);
@@ -1971,12 +2284,16 @@ public partial class MainWindow : Window
             row.Visibility = s.Proxied ? Visibility.Visible : Visibility.Collapsed; // напрямую страну не показываем
             if (!s.Proxied) continue;
 
-            var code = CodeOfIp(s.ResolvedIp);
+            // Страна — та, откуда сервис видит соединение (выход), а если выход не определен — страна прокси
+            var proxyName = CountryOfIp(s.ResolvedIp);
+            var code = s.Egress?.Country ?? CodeOfIp(s.ResolvedIp);
             if (code != null && LoadFlag(GeoLocation.FlagPath(code) ?? "") is { } flag)
                 row.Children.Add(new Image { Source = flag, Width = 20, Height = 14, Margin = new Thickness(0, 0, 6, 0), Stretch = Stretch.Uniform });
-            var name = CountryOfIp(s.ResolvedIp);
-            var warn = _ipCountry.TryGetValue(s.ResolvedIp, out var r) && r.First != null && r.Second != null && r.First != r.Second;
-            row.ToolTip = warn ? name + "\nБазы определяют страну по-разному" : name;
+            var name = s.Egress != null ? GeoLocation.CountryName(s.Egress.Country) : proxyName;
+            var warn = s.Egress == null && _ipCountry.TryGetValue(s.ResolvedIp, out var r) && r.First != null && r.Second != null && r.First != r.Second;
+            row.ToolTip = s.Egress != null
+                ? $"{s.Name} видит вас из: {name} ({s.Egress.Ip})\nПрокси Smart DNS: {proxyName} ({s.ResolvedIp})"
+                : warn ? proxyName + "\nБазы определяют страну по-разному" : proxyName + "\nВыход не определен: показана страна прокси";
             if (_compact) continue; // компактная плитка: только флаг, название страны в подсказке
             row.Children.Add(new TextBlock { Text = warn ? name + " ⚠" : name, Foreground = muted, FontWeight = FontWeights.SemiBold });
         }
@@ -2011,7 +2328,8 @@ public partial class MainWindow : Window
             finally { _geoPending.Remove(s.ResolvedIp); }
         }
         // Флаги нужных стран: скачиваем один раз, потом берем из кэша
-        foreach (var code in _ipCountry.Values.Select(r => r.First ?? r.Second).Where(c => c != null).Distinct())
+        foreach (var code in _ipCountry.Values.Select(r => r.First ?? r.Second)
+                     .Concat(cur.Services.Select(x => x.Egress?.Country)).Where(c => c != null).Distinct())
             await GeoLocation.FlagPathAsync(code!, CancellationToken.None);
         if (ReferenceEquals(cur, _shownSnap)) FillServiceGeo(cur);
     }
@@ -2047,9 +2365,20 @@ public partial class MainWindow : Window
                                        || (s.Country != null && s.GeoVotes == null)).ToList(); // данные до сверки тремя базами
         // Прокси Smart DNS, которому еще не определили страну (адрес появляется после проверки)
         var proxyTodo = _servers.Where(s => !string.IsNullOrEmpty(s.ProxyIp) && s.ProxyCountry == null).ToList();
+        // Город выхода (страну дает сам trace Cloudflare)
+        var egressTodo = _servers.SelectMany(s => s.EgressBy.Values.Where(e => !s.EgressCityByIp.ContainsKey(e.Ip)).Select(e => (s, e.Ip)))
+                                 .ToList();
+        var egressCities = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
 
-        await Task.WhenAll(todo.Select(ResolveOneAsync).Concat(proxyTodo.Select(ResolveProxyAsync)));
-        if (todo.Count > 0 || proxyTodo.Count > 0) SaveServers();   // страны должны пережить перезапуск
+        await Task.WhenAll(todo.Select(ResolveOneAsync).Concat(proxyTodo.Select(ResolveProxyAsync))
+            .Concat(egressTodo.Select(async x =>
+            {
+                // Один адрес выхода у многих серверов: город спрашиваем один раз
+                var city = await egressCities.GetOrAdd(x.Ip, async ip => (await GeoLocation.LookupAsync(ip, CancellationToken.None)).City ?? "");
+                x.s.EgressCityByIp[x.Ip] = city;
+                x.s.NotifyEgress();
+            })));
+        if (todo.Count > 0 || proxyTodo.Count > 0 || egressTodo.Count > 0) SaveServers();   // страны должны пережить перезапуск
         UpdateConnectionLocation();
         UpdateTopList(); // флаги и страны появились: блок «Лучшие по стабильности» перерисуется с ними
     }
@@ -2337,6 +2666,7 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         var before = System.Text.Json.JsonSerializer.Serialize(_settings, Storage.Options); // для отмены
+        var autoBefore = AutoStart.IsEnabled();
         var w = new SettingsWindow(_settings) { Owner = this };
         w.ShowDialog();
         if (w.Saved)
@@ -2344,13 +2674,14 @@ public partial class MainWindow : Window
             _settings = LoadSettings();
             ApplyTimerSettings();
             Log("Настройки сохранены");
-            OfferUndo("Настройки сохранены", () =>
+            OfferUndo("Настройки сохранены", async () =>
             {
                 Storage.SaveJson("settings.json", before);
+                if (AutoStart.IsEnabled() != autoBefore && !await AutoStart.SetAsync(autoBefore))
+                    Log("Автозапуск вернуть не удалось: права администратора не выданы");
                 _settings = LoadSettings();
                 ApplyTimerSettings();
                 Log("Сохранение настроек отменено");
-                return Task.CompletedTask;
             });
         }
     }
@@ -2560,6 +2891,14 @@ public partial class MainWindow : Window
     private async Task FadeOutAndRemoveAsync(IEnumerable<DnsServer> items)
     {
         var list = items.ToList();
+        // Большая пачка (сотни строк): без анимации и одним пакетом. Удаление по одной с пересортировкой таблицы
+        // на каждой строке подвешивало программу на минуты (930 строк в прогоне)
+        if (list.Count > 50)
+        {
+            using (_view?.DeferRefresh()) foreach (var s in list) _servers.Remove(s);
+            SaveServers();
+            return;
+        }
         foreach (var s in list) s.Fading = true;
         await Task.Delay(320);
         foreach (var s in list) if (s.Fading) _servers.Remove(s); // отмена успела вернуть строку: ее не трогаем

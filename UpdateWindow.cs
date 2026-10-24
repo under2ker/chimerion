@@ -71,7 +71,7 @@ internal static class UpdateWindow
         var row = new DockPanel { LastChildFill = false };
         var download = MakeButton("Скачать", (Style)res["Primary"], () =>
         {
-            try { Process.Start(new ProcessStartInfo(info.PageUrl) { UseShellExecute = true }); }
+            try { AutoStart.OpenUrl(info.PageUrl); }
             catch (Exception) { }
             w.Close();
         });

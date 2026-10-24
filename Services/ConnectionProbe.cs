@@ -19,10 +19,14 @@ public sealed class NetSnapshot
     public List<ServiceState> Hosts { get; } = new();
     /// <summary>Резолверы, которые на самом деле дошли до тестового сервера (тест утечки). Пусто, если тест не запускался.</summary>
     public List<ResolverInfo> Resolvers { get; } = new();
+    /// <summary>Откуда ИИ видят соединение сейчас (через DNS системы): адрес, страна, город, владелец сети.</summary>
+    public Egress? Egress { get; set; }
+    public string? EgressCity { get; set; }
+    public string? EgressOrg { get; set; }
 }
 
 /// <summary>Состояние сервиса. Access — короткий статус для плитки, Note — причина подробно (подсказка и журнал).</summary>
-public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access, string? Note = null);
+public sealed record ServiceState(string Name, string Host, string ResolvedIp, bool Proxied, string Access, string? Note = null, Egress? Egress = null);
 
 /// <summary>
 /// Smart DNS не меняет внешний IP — это нормально. Подключение видно по другому:
@@ -65,7 +69,17 @@ public static class ConnectionProbe
             Name = $"{t.Name}: {h}", Host = h, Path = "/", BlockedMarkers = t.BlockedMarkers, OwnerOrgs = t.OwnerOrgs,
         }, http, ct, web: true))).ToList();
         var leakTask = leakTest ? LeakTest.RunAsync() : Task.FromResult(new List<ResolverInfo>());
-        await Task.WhenAll(svcTasks.Cast<Task>().Concat(hostTasks).Append(ipTask).Append(dnsTask).Append(leakTask));
+        var egressTask = Task.Run(async () =>
+        {
+            snap.Egress = await EgressTrace.TraceAsync(null, TimeSpan.FromSeconds(6), ct);
+            if (snap.Egress != null)
+            {
+                var (_, city) = await GeoLocation.LookupAsync(snap.Egress.Ip, ct);
+                snap.EgressCity = city;
+                snap.EgressOrg = await GeoLocation.OrgAsync(snap.Egress.Ip, ct);
+            }
+        }, ct);
+        await Task.WhenAll(svcTasks.Cast<Task>().Concat(hostTasks).Append(ipTask).Append(dnsTask).Append(leakTask).Append(egressTask));
         snap.Resolvers.AddRange(leakTask.Result);
         snap.Services.AddRange(svcTasks.Select(t => t.Result));
         snap.Hosts.AddRange(hostTasks.Select(t => t.Result));
@@ -172,7 +186,23 @@ public static class ConnectionProbe
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { access = "✗ " + Friendly(e); }
 
-        return new ServiceState(t.Name, t.Host, resolved, proxied, access, note);
+        // Откуда сервис видит соединение (только основной адрес сервиса, через DNS системы, как браузер)
+        Egress? egress = null;
+        if (!web)
+        {
+            try
+            {
+                var site = EgressTrace.SiteFor(t);
+                var traceHost = EgressTrace.TraceHostFor(t.Name);
+                IPAddress? via = null;
+                if (site != traceHost)
+                    via = (await Dns.GetHostAddressesAsync(site, System.Net.Sockets.AddressFamily.InterNetwork, ct)).FirstOrDefault();
+                if (site == traceHost || via != null)
+                    egress = await EgressTrace.TraceAsync(via, TimeSpan.FromSeconds(6), ct, traceHost);
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { }
+        }
+        return new ServiceState(t.Name, t.Host, resolved, proxied, access, note, egress);
     }
 
     /// <summary>Один запрос к API или сайту и вердикт по ответу. Для сайта учитывается адрес редиректа.</summary>
