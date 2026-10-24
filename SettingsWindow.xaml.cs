@@ -24,6 +24,7 @@ public partial class SettingsWindow : Window
         ParallelBox.Text = settings.Parallelism.ToString();
         CloseToTrayBox.IsChecked = settings.CloseToTray;
         CheckUpdatesBox.IsChecked = settings.CheckUpdates;
+        AutoStartBox.IsChecked = AutoStart.IsEnabled(); // источник правды — автозагрузка Windows, а не файл настроек
         TrayMinutesBox.Text = settings.TrayCheckMinutes.ToString();
         WatchdogBox.Text = settings.WatchdogSeconds.ToString();
         PingBox.Text = settings.PingRefreshMinutes.ToString();
@@ -33,7 +34,7 @@ public partial class SettingsWindow : Window
         DataPathText.Text = Storage.Dir;
     }
 
-    private void Save_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
         var doh = RefDoh.Text.Trim();
         if (!SourceParser.IsValidDoh(doh, out _)) { ErrorText.Text = "Эталонный DoH: нужен https-адрес без логина"; return; }
@@ -48,6 +49,19 @@ public partial class SettingsWindow : Window
         _settings.Parallelism = parallel;
         _settings.CloseToTray = CloseToTrayBox.IsChecked == true;
         _settings.CheckUpdates = CheckUpdatesBox.IsChecked == true;
+        if (AutoStartBox.IsChecked != AutoStart.IsEnabled())
+        {
+            IsEnabled = false; // пока идет запрос прав и планировщик, второй раз не нажать
+            ErrorText.Text = "Настраиваю автозапуск…";
+            var ok = await AutoStart.SetAsync(AutoStartBox.IsChecked == true);
+            IsEnabled = true;
+            ErrorText.Text = "";
+            if (!ok)
+            {
+                ErrorText.Text = "Не удалось изменить автозапуск: права администратора не выданы или планировщик заданий отказал";
+                return;
+            }
+        }
         _settings.TrayCheckMinutes = trayMinutes;
         _settings.WatchdogSeconds = watchdog;
         _settings.PingRefreshMinutes = pingMinutes;
@@ -66,7 +80,7 @@ public partial class SettingsWindow : Window
 
     private void OpenData_Click(object sender, RoutedEventArgs e)
     {
-        try { Process.Start(new ProcessStartInfo(Storage.Dir) { UseShellExecute = true }); }
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Storage.Dir}\"") { UseShellExecute = true }); }
         catch (Exception ex) { ErrorText.Text = "Не удалось открыть папку: " + ex.Message; }
     }
 

@@ -44,6 +44,50 @@ public static partial class SourceParser
     [GeneratedRegex(@"<a\s[^>]*?href\s*=\s*[""']([^""'#]+)[""'][^>]*>(.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline, 2000)]
     private static partial Regex LinkRx();
 
+    // Записи вида tls://dns.example.ru или quic://dns.example.ru — DoT/DoQ, тот же сервер доступен по DoH
+    [GeneratedRegex(@"\b(?:tls|quic|h3)://([a-z0-9][a-z0-9.-]*\.[a-z]{2,})", RegexOptions.IgnoreCase, 2000)]
+    private static partial Regex TlsHostRx();
+
+    // Любое доменное имя: берется только в строках про «частный DNS» / DoT, где адрес публикуют без приставки dns.
+    [GeneratedRegex(@"(?<![\w.@/:-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})(?![\w.-]*[/@])(?![\w-])", RegexOptions.IgnoreCase, 2000)]
+    private static partial Regex AnyHostRx();
+
+    /// <summary>Признаки строки с адресом для «Частного DNS» Android или DoT.</summary>
+    private static readonly string[] PrivateDnsWords =
+    {
+        "частн", "private dns", "dns over tls", "dns-over-tls", "dot:", "dot ", "имя хоста", "hostname", "tls://",
+    };
+
+    /// <summary>Сайты, которые упоминаются рядом с DNS, но сами DNS-серверами не являются.</summary>
+    private static readonly string[] NotDnsHosts =
+    {
+        "github.com", "githubusercontent.com", "t.me", "telegram.org", "youtube.com", "youtu.be", "google.com", "apple.com",
+        "microsoft.com", "wikipedia.org", "vk.com", "4pda.to", "habr.com", "comss.ru", "openai.com", "chatgpt.com",
+        "anthropic.com", "claude.ai", "gemini.google.com", "googleapis.com", "android.com", "play.google.com", "yandex.ru",
+        "github.io", "itch.io", "nip.io", "sslip.io", "last.fm", "gitlab.io", "pages.dev", "vercel.app", "netlify.app",
+    };
+
+    /// <summary>Имя похоже на файл (dns.comss.one.mobileconfig, reset-dns.cmd), а не на адрес сервера.</summary>
+    private static readonly string[] FileExt =
+    {
+        ".mobileconfig", ".cmd", ".bat", ".ps1", ".sh", ".conf", ".cfg", ".json", ".yml", ".yaml", ".md", ".txt",
+        ".html", ".htm", ".php", ".exe", ".apk", ".zip", ".png", ".jpg", ".svg", ".xml", ".ini", ".reg", ".py",
+    };
+
+    private static bool LooksLikeFile(string host) => FileExt.Any(host.EndsWith) || BinaryExt.Any(host.EndsWith);
+
+    /// <summary>Локальные и служебные зоны и расширения кода: такие имена не бывают публичными DNS-серверами.</summary>
+    private static readonly string[] BadTlds = { "lan", "local", "home", "internal", "localdomain", "corp", "py", "map", "ts", "cs", "go", "rs", "lock" };
+
+    /// <summary>Имя точно не адрес Smart DNS: файл, локальная зона, хостинг или известный сайт, а не сервер.</summary>
+    private static bool IsJunkHost(string host)
+    {
+        var h = host.ToLowerInvariant();
+        if (IPAddress.TryParse(h, out _)) return false; // DoH по IP решает список исключений
+        return LooksLikeFile(h) || BadTlds.Contains(h[(h.LastIndexOf('.') + 1)..])
+            || NotDnsHosts.Any(n => h == n || h.EndsWith("." + n));
+    }
+
     private static readonly string[] DnsContextWords =
     {
         "dns", "днс", "doh", "сервер", "server", "primary", "secondary", "основн", "резерв",
@@ -111,21 +155,16 @@ public static partial class SourceParser
         HostGates.Clear(); // словарь по хостам не растет между запусками
         var found = new ConcurrentDictionary<string, DnsServer>();
         var visited = new ConcurrentDictionary<string, byte>();
+        var hostPages = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var exclude = st.ExcludeIps.ToHashSet();
         int pages = 0, errors = 0;
 
         var level = new List<Job>();
         foreach (var s in st.Sources.Where(s => s.Enabled))
             if (TryUri(s.Url, out var u)) level.Add(new Job(Normalize(u), 0, s.Name, s.Type));
+        log($"Источников: {level.Count}, глубина {st.CrawlDepth}, лимит {st.CrawlMaxPages} стр. Поиск новых источников идет параллельно");
 
-        if (st.DiscoveryEnabled)
-        {
-            var discovered = await DiscoverAsync(st, log, ct);
-            level.AddRange(discovered.Select(u => new Job(u, 0, "Поиск: " + u.Host, "text")));
-        }
-        log($"Стартовых страниц: {level.Count}, глубина {st.CrawlDepth}, лимит {st.CrawlMaxPages} стр.");
-
-        int queued = level.Count;
+        int queued = 0;
         void Report(string current) => progress?.Report(new CrawlProgress(
             Math.Min(Volatile.Read(ref pages), st.CrawlMaxPages), st.CrawlMaxPages,
             Math.Max(0, Volatile.Read(ref queued)), found.Count, Volatile.Read(ref errors), current));
@@ -135,13 +174,27 @@ public static partial class SourceParser
         int outstanding = 0;
         void Enqueue(Job j)
         {
-            if (visited.ContainsKey(j.Url.AbsoluteUri)) return;
+            if (visited.ContainsKey(j.Url.AbsoluteUri) || IsAdult(j.Url)) return;
             Interlocked.Increment(ref outstanding);
             Interlocked.Increment(ref queued);
             queue.Writer.TryWrite(j);
         }
+        // Поиск источников (DuckDuckGo, Bing, GitHub) идет одновременно с обходом: пока поисковики отвечают,
+        // известные источники уже обходятся, а найденные страницы встают в очередь по мере ответа.
+        // Лишняя единица в outstanding держит очередь открытой, пока поиск источников не закончен.
+        Interlocked.Increment(ref outstanding);
         foreach (var j in level) Enqueue(j);
-        if (outstanding == 0) queue.Writer.TryComplete();
+        var discovery = Task.Run(async () =>
+        {
+            try
+            {
+                if (st.DiscoveryEnabled)
+                    await DiscoverAsync(st, log, ct, u => Enqueue(new Job(u, 1, "Поиск: " + u.Host, "text")));
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception e) { log("Поиск источников: " + e.GetBaseException().Message); }
+            finally { if (Interlocked.Decrement(ref outstanding) == 0) queue.Writer.TryComplete(); }
+        });
 
         async Task ProcessAsync(Job job, CancellationToken c)
         {
@@ -184,7 +237,9 @@ public static partial class SourceParser
                     int added = 0;
                     foreach (var it in items)
                     {
-                        if (exclude.Contains(it.Primary) || IsNoise(it)) continue;
+                        // Обычные публичные DNS и в виде DoH по IP (https://1.1.1.1/dns-query) — не Smart DNS
+                        var dohHost = Uri.TryCreate(it.DohUrl, UriKind.Absolute, out var du0) ? du0.Host : null;
+                        if (exclude.Contains(it.Primary) || (dohHost != null && (exclude.Contains(dohHost) || IsJunkHost(dohHost))) || IsNoise(it)) continue;
                         if (found.TryAdd(it.Key, it))
                         {
                             added++;
@@ -202,7 +257,7 @@ public static partial class SourceParser
                         {
                             var site = BaseHost(h!);
                             foreach (var home in new[] { $"https://{site}/", $"https://{h}/" })
-                                if (Uri.TryCreate(home, UriKind.Absolute, out var hu) && !IsBlocked(st, hu))
+                                if (!IsPlaceholderHost(site) && Uri.TryCreate(home, UriKind.Absolute, out var hu) && !IsBlocked(st, hu))
                                     Enqueue(new Job(hu, job.Depth + 1, "Новый: " + site, "text"));
                         }
                     }
@@ -221,8 +276,10 @@ public static partial class SourceParser
                             continue;
                         }
                         if (job.Depth >= st.CrawlDepth) continue;
-                        if (ShouldFollow(st, job.Url, link, text))
-                            Enqueue(new Job(link, job.Depth + 1, job.SourceName, "text"));
+                        if (!ShouldFollow(st, job.Url, link, text, job.Depth)) continue;
+                        // Не больше 120 страниц с одного сайта: широкий обход не должен съесть весь лимит
+                        if (hostPages.AddOrUpdate(link.Host, 1, (_, v) => v + 1) > 120) continue;
+                        Enqueue(new Job(link, job.Depth + 1, job.SourceName, "text"));
                     }
         }
 
@@ -251,12 +308,12 @@ public static partial class SourceParser
                 var url = job.Url.AbsoluteUri;
                 inflight[url] = started;
                 using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                jobCts.CancelAfter(TimeSpan.FromSeconds(45));
+                jobCts.CancelAfter(TimeSpan.FromSeconds(30)); // зависшая страница не держит обходчик дольше 30 с
                 try { await ProcessAsync(job, jobCts.Token); }
                 catch (OperationCanceledException) when (!ct.IsCancellationRequested)
                 {
                     Interlocked.Increment(ref errors);
-                    log($"Страница не ответила за 45 с: {url}");
+                    log($"Страница не ответила за 30 с: {url}");
                 }
                 catch (Exception e) when (!ct.IsCancellationRequested)
                 {
@@ -273,7 +330,7 @@ public static partial class SourceParser
                 }
             }
         }, ct)).ToArray();
-        try { await Task.WhenAll(workers); }
+        try { await Task.WhenAll(workers); await discovery; }
         finally { finished.Cancel(); }
         log($"Парсер завершен: страниц {Math.Min(pages, st.CrawlMaxPages)}, ошибок {errors}, серверов {found.Count}");
         return found.Values.ToList();
@@ -281,7 +338,8 @@ public static partial class SourceParser
 
     // ---------- Поиск новых источников ----------
 
-    private static async Task<List<Uri>> DiscoverAsync(AppSettings st, Action<string> log, CancellationToken ct)
+    /// <summary>Новые источники из поисковиков и GitHub. onUrl получает каждую ссылку сразу, как только ответил ее запрос.</summary>
+    private static async Task<List<Uri>> DiscoverAsync(AppSettings st, Action<string> log, CancellationToken ct, Action<Uri>? onUrl = null)
     {
         // Запросы к поисковикам независимы: идут параллельно, но не больше трех сразу, чтобы не получить блокировку
         var queries = st.DiscoveryQueries.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
@@ -291,18 +349,50 @@ public static partial class SourceParser
             await gate.WaitAsync(ct);
             try
             {
-                var urls = await SearchDuckDuckGoAsync(q, ct);
-                if (urls.Count == 0) urls = await SearchBingAsync(q, ct);
+                // Оба поисковика сразу: выдачи у них разные, вместе находится больше сайтов
+                var ddg = SearchDuckDuckGoAsync(q, ct);
+                var bing = SearchBingAsync(q, ct);
+                var urls = (await ddg).Concat(await bing).DistinctBy(u => u.AbsoluteUri).ToList();
                 // Посадочные страницы сервисов (в домене есть dns) — первыми.
                 var take = urls.Where(u => !IsBlocked(st, u))
                                .OrderByDescending(u => u.Host.Contains("dns", StringComparison.OrdinalIgnoreCase))
                                .Take(st.DiscoveryResultsPerQuery).ToList();
                 log($"Поиск «{q}»: {take.Count} ссылок");
+                foreach (var u in take) onUrl?.Invoke(u);
                 return take;
             }
             finally { gate.Release(); }
         }));
-        return perQuery.SelectMany(x => x).DistinctBy(u => u.AbsoluteUri).ToList();
+        // Репозитории GitHub со списками DNS для ИИ-сервисов: обновляются чаще статей
+        var repos = new List<Uri>();
+        foreach (var q in GitHubQueries)
+        {
+            var found = await SearchGitHubAsync(q, ct);
+            repos.AddRange(found);
+            foreach (var u in found) onUrl?.Invoke(u);
+            if (found.Count > 0) log($"GitHub «{q}»: {found.Count} репозиториев");
+        }
+        return perQuery.SelectMany(x => x).Concat(repos).DistinctBy(u => u.AbsoluteUri).ToList();
+    }
+
+    private static readonly string[] GitHubQueries = { "dns chatgpt", "smart dns ai", "dns gemini claude", "ai dns russia" };
+
+    /// <summary>Поиск репозиториев через API GitHub (без входа: 10 запросов в минуту, хватает на четыре запроса).</summary>
+    private static async Task<List<Uri>> SearchGitHubAsync(string q, CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                "https://api.github.com/search/repositories?sort=updated&per_page=8&q=" + Uri.EscapeDataString(q));
+            req.Headers.Accept.ParseAdd("application/vnd.github+json");
+            using var resp = await Http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return new();
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            return doc.RootElement.GetProperty("items").EnumerateArray()
+                .Select(i => i.TryGetProperty("html_url", out var h) ? h.GetString() : null)
+                .Where(h => TryUri(h, out _)).Select(h => new Uri(h!)).ToList();
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return new(); }
     }
 
     private static async Task<List<Uri>> SearchDuckDuckGoAsync(string q, CancellationToken ct)
@@ -327,6 +417,25 @@ public static partial class SourceParser
         catch (Exception) when (!ct.IsCancellationRequested) { return new(); }
     }
 
+    /// <summary>
+    /// Ссылка выдачи Bing бывает переходной (bing.com/ck/a?…&amp;u=a1&lt;base64&gt;): настоящий адрес закодирован в параметре u.
+    /// Без раскодирования обход открывал саму переходную страницу (12–16 с) и дальше не шел. Null, если адрес не достать.
+    /// </summary>
+    public static Uri? UnwrapBing(Uri u)
+    {
+        if (!u.Host.EndsWith("bing.com", StringComparison.OrdinalIgnoreCase)) return u;
+        var code = HttpUtility.ParseQueryString(u.Query)["u"];
+        if (string.IsNullOrEmpty(code) || !code.StartsWith("a1")) return null;
+        try
+        {
+            var b64 = code[2..].Replace('-', '+').Replace('_', '/');
+            b64 = b64.PadRight(b64.Length + (4 - b64.Length % 4) % 4, '=');
+            var target = Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+            return TryUri(target, out var real) && !real.Host.EndsWith("bing.com") ? real : null;
+        }
+        catch (FormatException) { return null; }
+    }
+
     private static async Task<List<Uri>> SearchBingAsync(string q, CancellationToken ct)
     {
         try
@@ -334,7 +443,7 @@ public static partial class SourceParser
             var html = await Http.GetStringAsync("https://www.bing.com/search?setlang=ru&q=" + Uri.EscapeDataString(q), ct);
             var list = new List<Uri>();
             foreach (Match m in Regex.Matches(html, @"<li class=""b_algo""[^>]*>.*?<a[^>]*href=""(https?://[^""]+)""", RegexOptions.Singleline, TimeSpan.FromSeconds(2)))
-                if (TryUri(WebUtility.HtmlDecode(m.Groups[1].Value), out var u)) list.Add(Normalize(u));
+                if (TryUri(WebUtility.HtmlDecode(m.Groups[1].Value), out var u) && UnwrapBing(u) is { } real) list.Add(Normalize(real));
             return list;
         }
         catch (Exception) when (!ct.IsCancellationRequested) { return new(); }
@@ -451,18 +560,70 @@ public static partial class SourceParser
         return !u.AbsolutePath.Trim('/').StartsWith("s/", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ShouldFollow(AppSettings st, Uri from, Uri link, string text)
+    /// <summary>Служебные страницы сайтов: вход, поиск, профили, теги. В них списков серверов не бывает.</summary>
+    private static readonly string[] NavWords =
+    {
+        "login", "logout", "register", "signup", "sign-in", "signin", "auth", "privacy", "terms", "cookie", "search",
+        "/tag/", "/tags/", "/user/", "/users/", "/profile", "/share", "/cart", "/account", "/subscribe", "/rss", "/feed",
+        "/stargazers", "/watchers", "/forks", "/issues", "/pulls", "/actions", "/projects", "/security", "/pulse", "/graphs",
+    };
+
+    private static bool ShouldFollow(AppSettings st, Uri from, Uri link, string text, int depth = 1)
     {
         if (IsBlocked(st, link) || IsTelegramNonChannel(link)) return false;
         var path = link.AbsolutePath.ToLowerInvariant();
         if (BinaryExt.Any(path.EndsWith)) return false;
+        var full = (path + link.Query).ToLowerInvariant();
+        if (NavWords.Any(full.Contains)) return false;
+
+        // Файлы в репозиториях GitHub (уже переведены в raw): это и есть списки
+        if (link.Host == "raw.githubusercontent.com") return true;
+        // GitHub: внутри того же репозитория — по файлам и папкам, без проверки слов
+        if (from.Host == "github.com" && link.Host == "github.com")
+        {
+            var a = from.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var b = link.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return a.Length >= 2 && b.Length >= 2 && a[0] == b[0] && a[1] == b[1]
+                && (b.Length == 2 || b[2] is "tree" or "blob" or "commits" or "releases" or "wiki");
+        }
+        // Стартовая страница: ее сайт обходим широко, по всем ссылкам (лимит страниц на сайт — у вызывающего)
+        if (depth == 0 && link.Host == from.Host) return true;
+
         if (link.Host != from.Host && !st.FollowExternalLinks) return false;
 
+        // Сайт по IP-адресу (https://1.0.0.1/…) — страница обычного резолвера, а не список Smart DNS
+        if (IPAddress.TryParse(link.Host, out _)) return false;
         // Домены с «dns» в имени (magicdns.ru, dns-ai.ru, xbox-dns.ru…) — почти всегда сами сервисы: открываем всегда.
         if (link.Host.Contains("dns", StringComparison.OrdinalIgnoreCase) && link.Host != from.Host) return true;
         var hay = (Uri.UnescapeDataString(link.AbsoluteUri) + " " + text).ToLowerInvariant();
+        // На чужой сайт — только по словам про ИИ и обход блокировок: одно слово «dns» уводило в энциклопедии
+        // и справки (статьи про корневые серверы, Google DNS), где Smart DNS не бывает
+        if (link.Host != from.Host) return StrongWords.Any(hay.Contains);
         return st.LinkKeywords.Any(k => hay.Contains(k.ToLowerInvariant()));
     }
+
+    // Сайты для взрослых, казино и ставки: в прогоне поиск выдал такой сайт, и обход ушел по его страницам.
+    // Списков DNS там не бывает, такие адреса не открываются никогда
+    private static readonly string[] AdultHostWords =
+    {
+        "porn", "porno", "xxx", "sex", "hentai", "xvideo", "xhamster", "erotic", "eroti", "casino", "kazino",
+        "1xbet", "betting", "slots", "vulkan", "escort", "nude", "milf",
+    };
+    private static readonly string[] AdultPathWords = { "porn", "порно", "xxx", "hentai", "sex-", "-sex", "секс", "эрот", "casino", "казино" };
+
+    public static bool IsAdult(Uri u)
+    {
+        var host = u.Host.ToLowerInvariant();
+        if (AdultHostWords.Any(host.Contains)) return true;
+        var rest = Uri.UnescapeDataString(u.PathAndQuery).ToLowerInvariant();
+        return AdultPathWords.Any(rest.Contains);
+    }
+
+    private static readonly string[] StrongWords =
+    {
+        "chatgpt", "openai", "gpt", "gemini", "claude", "нейросет", "нейро", "ии-", "-ai", "ai-", "smart", "doh",
+        "без-vpn", "bez-vpn", "без vpn", "геоблок", "unblock", "обход", "разблок",
+    };
 
     private static bool IsPaging(Uri from, Uri link)
     {
@@ -575,13 +736,22 @@ public static partial class SourceParser
                 });
             }
 
+            // DoT/DoQ-записи (tls://…): тот же сервер, для Windows берем DoH по стандартному пути
+            foreach (Match m in TlsHostRx().Matches(line))
+                AddHost(m.Groups[1].Value);
+
+            // Строка про «Частный DNS» / DoT: адрес там часто без приставки dns. (eu.geohide.ru), берем любой хост
+            if (HasPrivateDnsContext(lines, i))
+                foreach (Match m in AnyHostRx().Matches(line))
+                    AddHost(m.Groups[1].Value);
+
             // Хосты, указанные просто именем (так их публикуют для «Частного DNS» Android / DoT).
             // Для Windows используем DoH по стандартному пути /dns-query.
             if (isHtml && !HasDnsContext(lines, i)) continue;
             foreach (Match m in DnsHostRx().Matches(line))
             {
                 var h = m.Groups[1].Value.ToLowerInvariant().TrimEnd('.');
-                if (h.EndsWith(".png") || h.EndsWith(".txt") || h.EndsWith(".html") || h.EndsWith(".apk")) continue;
+                if (LooksLikeFile(h) || NotDnsHosts.Any(n => h == n || h.EndsWith("." + n))) continue;
                 if (h == host) continue; // ссылка на сам сайт-источник
                 list.Add(new DnsServer
                 {
@@ -593,6 +763,23 @@ public static partial class SourceParser
             }
         }
         return list;
+
+        void AddHost(string raw)
+        {
+            var h = raw.ToLowerInvariant().TrimEnd('.');
+            if (h == host || h.Split('.').Length < 2 || LooksLikeFile(h)) return;
+            if (NotDnsHosts.Any(n => h == n || h.EndsWith("." + n))) return;
+            if (list.Any(x => x.DohUrl == $"https://{h}/dns-query")) return;
+            list.Add(new DnsServer { Name = h, DohUrl = $"https://{h}/dns-query", Source = sourceName, SourceUrl = pageUrl });
+        }
+    }
+
+    private static bool HasPrivateDnsContext(string[] lines, int i)
+    {
+        var from = Math.Max(0, i - 2);
+        var to = Math.Min(lines.Length - 1, i + 1);
+        var ctx = string.Join(" ", lines[from..(to + 1)]).ToLowerInvariant();
+        return PrivateDnsWords.Any(ctx.Contains);
     }
 
     private static bool HasDnsContext(string[] lines, int i)
