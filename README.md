@@ -16,21 +16,21 @@
 
 ## Как это выглядит
 
-![Главное окно](docs/screenshots/main.png)
+![Главное окно](docs/screenshots/chimerion-main.png)
 
 Светлая тема и компактный вид:
 
 <p>
-  <img src="docs/screenshots/main-light.png" width="640" alt="Светлая тема">
-  <img src="docs/screenshots/compact.png" width="190" alt="Компактный вид">
+  <img src="docs/screenshots/chimerion-main-light.png" width="640" alt="Светлая тема">
+  <img src="docs/screenshots/chimerion-compact.png" width="190" alt="Компактный вид">
 </p>
 
 «Telegram и YouTube», «Два DNS» и «Диагностика»:
 
 <p>
-  <img src="docs/screenshots/tools.png" width="270" alt="Telegram и YouTube">
-  <img src="docs/screenshots/split-dns.png" width="270" alt="Два DNS">
-  <img src="docs/screenshots/diagnostics.png" width="270" alt="Диагностика">
+  <img src="docs/screenshots/chimerion-tools.png" width="270" alt="Telegram и YouTube">
+  <img src="docs/screenshots/chimerion-split-dns.png" width="270" alt="Два DNS">
+  <img src="docs/screenshots/chimerion-diagnostics.png" width="270" alt="Диагностика">
 </p>
 
 На снимках выдуманные данные: адреса из диапазона документации `203.0.113.0/24`, названия серверов условные.
