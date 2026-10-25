@@ -30,6 +30,9 @@ internal sealed class TrayRenderer : ToolStripProfessionalRenderer
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
         if (e.Item.Selected && e.Item.Enabled) e.TextColor = Text;
+        // Пункты меню начинаются у самого края, строки статуса над ними с отступом: выравниваем текст по одной линии
+        if (e.Item is ToolStripMenuItem)
+            e.TextRectangle = new Rectangle(e.TextRectangle.X + 8, e.TextRectangle.Y, e.TextRectangle.Width, e.TextRectangle.Height);
         base.OnRenderItemText(e);
     }
 }

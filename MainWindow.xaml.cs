@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Dnex.Models;
 using Dnex.Services;
+using Dnex.Services.Tools;
 
 namespace Dnex;
 
@@ -114,6 +115,11 @@ public partial class MainWindow : Window
         _initStarted = true;
         {
             Log($"Данные: {Storage.Dir}. Серверов в списке: {_servers.Count}");
+            if (Updater.StartedAfterUpdate)
+            {
+                Log($"Программа обновлена до версии {UpdateChecker.CurrentVersion}");
+                ShowToast($"Обновлено до версии {UpdateChecker.CurrentVersion}");
+            }
             UpdateStats();
             ShowCompare();
             try { if (Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) SetCompact(true, animate: false); }
@@ -121,6 +127,7 @@ public partial class MainWindow : Window
             await RefreshConnectionAsync();
             _ = AutoStart.RefreshPathAsync(Log);
             await EnsureConnectionAfterStartAsync();
+            _ = StartToolsAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
             if (_settings.CheckUpdates) ScheduleUpdateCheck();
             if (DnsSwitcher.GetActive() is { } a)
@@ -639,9 +646,9 @@ public partial class MainWindow : Window
         if (!await DisconnectAsync("выход из программы", probe: false))
         {
             _exitRequested = false;
-            MessageBox.Show("Отключиться не удалось, поэтому программа не закрыта: иначе DNS остался бы измененным.\n" +
-                            "Подробности в журнале. Попробуйте еще раз или выберите выход с сохранением DNS.",
-                "DNEX", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DnexDialog.Show("Отключиться не удалось",
+                "Программа не закрыта, иначе DNS остался бы измененным. Подробности в журнале. Попробуйте еще раз или выберите выход с сохранением DNS.",
+                DialogKind.Warn, "Выход");
             return;
         }
         _closeConfirmed = true;
@@ -1109,7 +1116,15 @@ public partial class MainWindow : Window
     /// <summary>Окно с новой версией. «Пропустить версию» запоминает номер для фоновой проверки.</summary>
     private void OpenUpdateWindow(UpdateInfo info)
     {
-        UpdateWindow.Show(this, info, () =>
+        // Версия уже скачана и ждет перезапуска: второй раз не скачиваем
+        if (Updater.Installed == info.Version)
+        {
+            if (DnexDialog.Ask($"Версия {info.Version} уже установлена", "Она заработает после перезапуска программы. Подключение DNS сохранится.",
+                    "Перезапустить", "Позже", DialogKind.Ok, windowTitle: "Обновление"))
+                RestartForUpdate();
+            return;
+        }
+        UpdateWindow.Show(this, info, onRestart: RestartForUpdate, log: Log, onSkip: () =>
         {
             var before = _settings.SkippedUpdate;
             _settings.SkippedUpdate = info.Version.ToString();
@@ -1122,6 +1137,111 @@ public partial class MainWindow : Window
                 return Task.CompletedTask;
             });
         });
+    }
+
+    // ---------- Сторонние программы: TG WS Proxy и zapret ----------
+
+    private readonly List<Tool> _tools = new() { new TgProxyTool(), new ZapretTool() };
+    private bool _restarting;
+
+    private void ToolsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        ToolsToggle.IsChecked = false; // это кнопка, а не переключатель панели: окно открывается отдельно
+        ToolsWindow.Show(_tools, Log, UpdateToolsTray);
+    }
+
+    /// <summary>При запуске DNEX поднимает включенные программы и смотрит, нет ли у них новых версий.</summary>
+    private async Task StartToolsAsync()
+    {
+        foreach (var t in _tools.Where(t => t.State.Enabled && t.IsInstalled))
+        {
+            try
+            {
+                if (!t.IsRunning()) { await t.StartAsync(); Log($"{t.Title}: включено"); }
+            }
+            catch (ToolException ex) { Log($"{t.Title}: не включилось. {ex.Message}"); ShowToast($"{t.Title}: не включилось, подробности в журнале", "Warn"); }
+        }
+        UpdateToolsTray();
+        if (!_settings.CheckUpdates) return;
+        foreach (var t in _tools.Where(t => t.IsInstalled))
+        {
+            try
+            {
+                await t.CheckAsync();
+                if (t.UpdateAvailable)
+                {
+                    Log($"{t.Title}: доступна версия {t.Latest!.Version}, обновить можно в окне «Telegram и YouTube»");
+                    ShowToast($"{t.Title}: доступна версия {t.Latest!.Version}", "Warn");
+                }
+            }
+            catch (ToolException) { /* фоновая проверка: без сети или лимит GitHub — молча */ }
+        }
+    }
+
+    /// <summary>
+    /// Выход из DNEX выключает программы, которые она включала. Не трогаем их при выходе из Windows
+    /// (система и так все закроет) и при перезапуске для обновления.
+    /// </summary>
+    private void StopToolsOnExit()
+    {
+        if (_sessionEnding || _restarting) return;
+        foreach (var t in _tools.Where(t => t.State.Enabled && t.IsInstalled))
+            try { Task.Run(t.StopAsync).Wait(TimeSpan.FromSeconds(10)); } catch (Exception) { }
+    }
+
+    private System.Windows.Forms.ToolStripMenuItem? _trayTg, _trayZapret;
+
+    /// <summary>Пункты трея «Telegram» и «YouTube и Discord»: текст по текущему состоянию.</summary>
+    private void UpdateToolsTray()
+    {
+        void Set(System.Windows.Forms.ToolStripMenuItem? item, Tool t, string name)
+        {
+            if (item == null) return;
+            var foreign = t is TgProxyTool tg && tg.ForeignCopyRunning();
+            var on = foreign || (t.IsInstalled && t.IsRunning());
+            item.Text = foreign ? $"{name}: работает ваша копия" : on ? $"{name}: выключить" : $"{name}: включить";
+            item.Enabled = !foreign;
+        }
+        Set(_trayTg, _tools[0], "Telegram");
+        Set(_trayZapret, _tools[1], "YouTube и Discord");
+    }
+
+    private async Task ToggleToolFromTrayAsync(Tool t)
+    {
+        try
+        {
+            if (t.IsInstalled && t.IsRunning()) { await t.DisableAsync(); Log($"{t.Title}: выключено"); ShowToast($"{t.Title}: выключено"); }
+            else
+            {
+                ShowToast($"{t.Title}: включаю…");
+                await t.EnableAsync(new Progress<string>(_ => { }), CancellationToken.None);
+                Log($"{t.Title}: включено");
+                ShowToast($"{t.Title}: включено");
+            }
+        }
+        catch (ToolException ex) { Log($"{t.Title}: {ex.Message}"); ShowToast($"{t.Title}: {ex.Message}", "Bad"); }
+        UpdateToolsTray();
+    }
+
+    /// <summary>
+    /// Перезапуск после обновления: новая версия стартует и ждет, пока эта копия закроется. Выход без вопроса
+    /// и без отключения: DNS остается, новая копия продолжает с того же подключения (как при выходе из Windows).
+    /// </summary>
+    private void RestartForUpdate()
+    {
+        try { Updater.Restart(); }
+        catch (Exception e)
+        {
+            Log("Не удалось запустить новую версию: " + e.Message);
+            DnexDialog.Show("Не удалось перезапустить", "Закройте программу и запустите ее снова: новая версия уже на месте.", DialogKind.Warn, "Обновление");
+            return;
+        }
+        Log("Перезапуск для обновления");
+        _restarting = true; // Telegram-прокси и zapret не останавливаем: новая копия продолжит с ними
+        _exitRequested = true;
+        _closeConfirmed = true;
+        Close();
+        Application.Current.Shutdown();
     }
 
     /// <summary>Обрезает содержимое таблицы по скруглению карточки, чтобы прямые углы заголовков не выходили за рамку.</summary>
@@ -1345,8 +1465,8 @@ public partial class MainWindow : Window
                 await new ServerChecker(_settings).CheckAsync(s, CancellationToken.None);
             }
             if (s.Status == ServerStatus.Fail && (auto ||
-                MessageBox.Show($"«{s.Name}» сейчас не работает:\n{s.LastError}\n\nВсе равно подключиться?", "DNEX",
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes))
+                !DnexDialog.Ask($"«{s.DisplayName}» сейчас не работает", $"Последняя проверка: {s.LastError}\n\nВсе равно подключиться?",
+                    "Подключиться", windowTitle: "Подключение")))
                 return false;
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
@@ -1368,8 +1488,8 @@ public partial class MainWindow : Window
                 await DnsSwitcher.RestoreAsync(Log);
                 ShowToast("Откат: сервер не отвечает", "Bad");
                 if (!auto)
-                    MessageBox.Show("Сервер не отвечает системе: настройки DNS возвращены как были.", "DNEX",
-                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    DnexDialog.Show("Сервер не отвечает", "После подключения сайты не открывались, поэтому настройки DNS возвращены как были.",
+                        DialogKind.Warn, "Подключение");
             }
             else
             {
@@ -1422,10 +1542,9 @@ public partial class MainWindow : Window
         if (issues.Count == 0) { Log("Помех в системе не найдено"); return; }
         foreach (var i in issues) Log($"Помеха: {i.Title}. {i.Fix}");
         if (quiet) { ShowToast($"Найдено помех: {issues.Count}, подробности в журнале", "Warn"); return; }
-        MessageBox.Show(
-            "Подключение работает, но в системе есть то, что может ему мешать. Для стабильной работы:\n\n" +
+        DnexDialog.Show("Подключение работает, но ему может мешать",
             string.Join("\n\n", issues.Select(i => $"• {i.Title}\n{i.Fix}")),
-            "DNEX: что отключить", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogKind.Warn, "Что отключить");
     }
 
     private async void Disconnect_Click(object sender, RoutedEventArgs e) => await DisconnectByUserAsync();
@@ -1645,8 +1764,8 @@ public partial class MainWindow : Window
         }
         Log("Сторож: замена не нашлась. Отключаюсь и возвращаю исходные DNS");
         await DisconnectAsync("сервер перестал отвечать, замена не нашлась");
-        MessageBox.Show($"Сервер «{active.Name}» перестал отвечать, и рабочей замены не нашлось. DNEX отключилась и вернула исходные настройки DNS.",
-            "DNEX", MessageBoxButton.OK, MessageBoxImage.Warning);
+        DnexDialog.Show($"«{active.Name}» перестал отвечать",
+            "Рабочей замены не нашлось. DNEX отключилась и вернула исходные настройки DNS.", DialogKind.Warn, "Сторож");
     }
 
     // ---------- VPN ----------
@@ -2167,11 +2286,16 @@ public partial class MainWindow : Window
         ServerGrid.ScrollIntoView(best);
     }
 
+    /// <summary>«сервер», «сервера», «серверов» по числу.</summary>
+    private static string ServersWord(int n) =>
+        (n % 100 is >= 11 and <= 14) ? "серверов" : (n % 10) switch { 1 => "сервер", 2 or 3 or 4 => "сервера", _ => "серверов" };
+
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
         var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
         if (sel.Count == 0) return;
-        if (sel.Count > 1 && MessageBox.Show($"Удалить {sel.Count} серверов?", "DNEX", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        if (sel.Count > 1 && !DnexDialog.Ask($"Удалить {sel.Count} {ServersWord(sel.Count)}?", "Удаление можно отменить кнопкой «Отменить» внизу окна.",
+                "Удалить", danger: true, windowTitle: "Удаление")) return;
         // Для отмены: место в списке и прежняя отметка в мусоре (удаленный сервер поиск больше не добавляет)
         var removed = sel.Select(s => (Server: s, Index: _servers.IndexOf(s),
                                        Junk: _junk.TryGetValue(s.Key, out var t) ? t : (DateTime?)null))
@@ -2595,6 +2719,12 @@ public partial class MainWindow : Window
         menu.Items.Add(TrayItem("Открыть", () => ShowFromTray()));
         menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync()));
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        _trayTg = TrayItem("Telegram: включить", () => _ = ToggleToolFromTrayAsync(_tools[0]));
+        _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]));
+        menu.Items.Add(_trayTg);
+        menu.Items.Add(_trayZapret);
+        menu.Opening += (_, _) => UpdateToolsTray(); // состояние могло поменяться само (программу закрыли вручную)
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Выход", ExitFromTray));
 
         _tray = new System.Windows.Forms.NotifyIcon
@@ -2617,7 +2747,7 @@ public partial class MainWindow : Window
 
     private static System.Windows.Forms.ToolStripMenuItem TrayItem(string text, Action onClick)
     {
-        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(10, 8, 10, 8) };
+        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(10, 8, 18, 8) };
         item.Click += (_, _) => onClick();
         return item;
     }
@@ -2717,6 +2847,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        StopToolsOnExit();
         _trayTimer.Stop();
         if (_tray != null)
         {

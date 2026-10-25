@@ -1,7 +1,7 @@
 <Window x:Class="Dnex.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Настройки" Width="600" SizeToContent="Height" ResizeMode="NoResize"
+        Title="DNEX · Настройки" Icon="/Assets/dnex-logo.png" Width="600" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
@@ -101,7 +101,7 @@
                         <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей"/>
                         <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                         <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию при запуске" Margin="0,12,0,0"/>
-                        <TextBlock Text="Только проверка и уведомление: программа не скачивает и не заменяет файлы сама" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                        <TextBlock Text="Программа покажет, что вышло нового. Обновление ставится только по кнопке «Обновить» и заработает после перезапуска" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                         <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows" Margin="0,12,0,0"/>
                         <TextBlock Text="Программа стартует в трее с правами администратора и сразу возвращает DNS, который был включен. Права Windows спросит один раз, при включении" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
 

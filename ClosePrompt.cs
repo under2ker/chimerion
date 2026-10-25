@@ -15,49 +15,10 @@ internal static class ClosePrompt
     {
         var result = MessageBoxResult.Cancel;
         var res = Application.Current.Resources;
-        var w = new Window
-        {
-            Title = "DNEX",
-            Width = 470,
-            SizeToContent = SizeToContent.Height,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStartupLocation = WindowStartupLocation.CenterScreen,
-            Background = (Brush)res["Bg"],
-            Foreground = (Brush)res["Text"],
-            FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
-            FontSize = 13,
-            ShowInTaskbar = false,
-        };
-
+        var w = DnexDialog.CreateWindow("Выход", 470);
         var root = new StackPanel { Margin = new Thickness(26, 24, 26, 22) };
-
-        // Шапка: предупреждающий значок, заголовок и пояснение
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 18) };
-        head.Children.Add(new Border
-        {
-            Width = 36, Height = 36, CornerRadius = new CornerRadius(10),
-            Background = new SolidColorBrush(Color.FromRgb(0x3A, 0x2D, 0x12)),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = "!", FontSize = 18, FontWeight = FontWeights.Bold,
-                Foreground = (Brush)res["Warn"],
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            },
-        });
-        var titles = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        titles.Children.Add(new TextBlock
-        {
-            Text = $"Подключение «{connectionName}» активно",
-            FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
-        });
-        titles.Children.Add(new TextBlock
-        {
-            Text = "Что сделать с DNS при выходе из программы?",
-            Foreground = (Brush)res["Muted"], FontSize = 12, Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap,
-        });
-        head.Children.Add(titles);
-        root.Children.Add(head);
+        root.Children.Add(DnexDialog.Header(DialogKind.Warn, $"Подключение «{connectionName}» активно",
+            "Что сделать с DNS при выходе из программы?"));
 
         // Три варианта: каждый с пояснением, основной подсвечен
         root.Children.Add(MakeOption("Выйти, оставив DNS как есть",
@@ -71,7 +32,6 @@ internal static class ClosePrompt
             MessageBoxResult.Cancel, isCancel: true));
 
         w.Content = root;
-        w.SourceInitialized += (_, _) => Dnex.Services.DarkTitle.Apply(w);
         w.ShowDialog();
         return result;
 

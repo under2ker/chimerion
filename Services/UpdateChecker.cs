@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace Dnex.Services;
 
-/// <summary>Новая версия из GitHub: номер, описание и страница релиза. Ничего не скачивается.</summary>
+/// <summary>Новая версия из GitHub: номер, описание и страница релиза. Установку делает Updater.</summary>
 public sealed record UpdateInfo(Version Version, string Notes, string PageUrl);
 
 public enum UpdateStatus { UpToDate, Available, Failed }
@@ -15,7 +15,7 @@ public sealed record UpdateCheck(UpdateStatus Status, UpdateInfo? Info, Version?
 
 /// <summary>
 /// Проверка наличия новой версии. Только чтение данных о релизе из GitHub API по HTTPS.
-/// Файлы программы не загружаются и не заменяются: пользователь скачивает версию сам.
+/// Сама проверка ничего не скачивает: обновление ставится только по кнопке «Обновить» (см. Updater).
 /// </summary>
 public static class UpdateChecker
 {
