@@ -613,6 +613,8 @@
                               Checked="AddToggle_Changed" Unchecked="AddToggle_Changed"/>
                 <ToggleButton x:Name="LogToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0" Content="Журнал"
                               Checked="LogToggle_Changed" Unchecked="LogToggle_Changed"/>
+                <ToggleButton x:Name="ToolsToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0" Content="Telegram и YouTube"
+                              Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"/>
                 <!-- Версия и проверка обновления: справа внизу, на виду и не теснят шапку. В компактном виде версия в заголовке окна -->
                 <StackPanel x:Name="UpdateGroup" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="HeaderVersion" Style="{StaticResource Label}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>

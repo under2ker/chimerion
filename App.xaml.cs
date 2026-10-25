@@ -10,10 +10,15 @@ public partial class App : Application
     /// <summary>Только один экземпляр: две копии DNEX, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
-        _single = new Mutex(true, @"Local\DNEX-single-instance", out bool first);
+        _single = new Mutex(false, @"Local\DNEX-single-instance");
+        bool first;
+        // После обновления новая копия стартует, пока старая еще закрывается: ждем ее до 20 секунд
+        try { first = _single.WaitOne(Dnex.Services.Updater.StartedAfterUpdate ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
+        catch (AbandonedMutexException) { first = true; } // прежняя копия завершилась аварийно: мьютекс наш
+        if (first) Dnex.Services.Updater.Cleanup();
         if (!first)
         {
-            MessageBox.Show("DNEX уже запущена.", "DNEX", MessageBoxButton.OK, MessageBoxImage.Information);
+            DnexDialog.Show("DNEX уже запущена", "Значок программы в трее, рядом с часами. Если его не видно, раскройте скрытые значки стрелкой.", DialogKind.Info);
             Shutdown();
             return;
         }
@@ -31,8 +36,8 @@ public partial class App : Application
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {e.Exception}\n"); } catch (Exception) { }
-        MessageBox.Show(e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
-            "DNEX: ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+        DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
+            DialogKind.Error, "Ошибка");
         e.Handled = true;
     }
 }
