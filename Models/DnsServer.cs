@@ -32,6 +32,8 @@ public class DnsServer : INotifyPropertyChanged
     public List<string> Ipv6 { get; set; } = new();
 
     public string Source { get; set; } = "вручную";
+    /// <summary>Добавлен пользователем вручную: автоочистка его не убирает, даже если ИИ через него не открываются.</summary>
+    public bool Manual { get; set; }
 
     /// <summary>Страница, на которой сервер найден (кнопка 🔗 в списке).</summary>
     public string? SourceUrl { get; set; }
@@ -43,9 +45,13 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string SourceHost => HasSourceUrl ? new Uri(SourceUrl!).Host : Source;
 
-    /// <summary>Откуда взят сервер, коротко для колонки таблицы: «github.com › main». Полный путь — над таблицей и в подсказке.</summary>
+    /// <summary>Откуда взят сервер, коротко: «github.com › main». Полный путь — над таблицей и в подсказке.</summary>
     [JsonIgnore]
     public string SourcePrettyShort => SourceLabel.Compact(HasSourceUrl ? SourceUrl : null, Source);
+
+    /// <summary>Подсказка кнопки источника в таблице: откуда сервер и что сделает щелчок.</summary>
+    [JsonIgnore]
+    public string SourceHint => $"Открыть источник: {SourcePrettyShort}";
     public DateTime AddedAt { get; set; } = DateTime.Now;
 
     /// <summary>Найден за последние 7 дней — в таблице помечается «новый».</summary>
@@ -270,6 +276,41 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Сколько проверок подряд прошли успешно / всего — для оценки стабильности.</summary>
     public int ChecksOk { get; set; }
     public int ChecksTotal { get; set; }
+
+    /// <summary>История полных проверок за последние 14 дней (не больше 200 точек): работал ли сервер и пинг.</summary>
+    public List<CheckPoint> History { get; set; } = new();
+
+    public void AddHistory(bool ok, long? ms, DateTime? at = null)
+    {
+        var now = at ?? DateTime.Now;
+        History.Add(new CheckPoint(now, ok, ms));
+        History.RemoveAll(p => now - p.T > TimeSpan.FromDays(14));
+        if (History.Count > 200) History.RemoveRange(0, History.Count - 200);
+    }
+
+    /// <summary>Итог истории для подсказки: доступность и пинг за 7 дней, сравнение с предыдущей неделей.</summary>
+    [JsonIgnore]
+    public string HistoryText
+    {
+        get
+        {
+            var now = DateTime.Now;
+            var week = History.Where(p => now - p.T <= TimeSpan.FromDays(7)).ToList();
+            if (week.Count == 0) return "Истории проверок пока нет: она копится с каждой полной проверкой";
+            var ok = week.Count(p => p.Ok);
+            var pings = week.Where(p => p.Ok && p.Ms != null).Select(p => p.Ms!.Value).OrderBy(v => v).ToList();
+            var text = $"За 7 дней: работал в {ok} из {week.Count} проверок ({ok * 100 / week.Count}%)";
+            if (pings.Count > 0) text += $", пинг {pings[0]}–{pings[^1]} мс, обычно {pings[pings.Count / 2]} мс";
+            var prev = History.Where(p => now - p.T > TimeSpan.FromDays(7)).ToList();
+            if (prev.Count >= 5)
+            {
+                int was = prev.Count(p => p.Ok) * 100 / prev.Count, isNow = ok * 100 / week.Count;
+                if (isNow <= was - 15) text += $". Стал хуже: неделей раньше {was}%";
+                else if (isNow >= was + 15) text += $". Стал лучше: неделей раньше {was}%";
+            }
+            return text;
+        }
+    }
     /// <summary>Сколько последних проверок подряд провалено.</summary>
     public int FailStreak { get; set; }
 
@@ -378,11 +419,22 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string Key => !string.IsNullOrEmpty(Primary) ? Primary : (DohUrl ?? Name).ToLowerInvariant();
 
-    public void NotifyStability() { On(nameof(Stability)); On(nameof(StabilityShown)); On(nameof(Score)); On(nameof(Rank)); }
+    public void NotifyStability()
+    {
+        On(nameof(Stability)); On(nameof(StabilityShown)); On(nameof(Score)); On(nameof(Rank));
+        On(nameof(HistoryText)); On(nameof(HistoryPoints));
+    }
+
+    /// <summary>Копия истории для графика: новый объект, чтобы подсказка перерисовалась.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<CheckPoint> HistoryPoints => History.ToList();
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void On([CallerMemberName] string? p = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
 }
+
+/// <summary>Точка истории сервера: когда проверяли, работал ли и с каким пингом.</summary>
+public sealed record CheckPoint(DateTime T, bool Ok, long? Ms);
 
 public sealed record ServiceChip(string Name, string State)
 {

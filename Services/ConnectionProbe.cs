@@ -48,7 +48,7 @@ public static class ConnectionProbe
         })
         { Timeout = TimeSpan.FromSeconds(10) };
         // Сайты за Cloudflare по-разному отвечают запросу без браузерной подписи; так ответ ближе к тому, что видит браузер
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DNEX/0.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CHIMERION/0.1");
         return http;
     }
 

@@ -5,27 +5,41 @@ using System.Windows.Media;
 namespace Dnex;
 
 /// <summary>
-/// Вопрос при выходе с активным подключением. Системное MessageBox делает «Да» (отключиться) кнопкой
-/// по умолчанию: лишний Enter отключает DNS. Здесь по умолчанию выбрано «Нет» (DNS остается как есть),
-/// Esc и закрытие окна — «Отмена» (не выходить).
+/// Вопрос при выходе, когда что-то работает: подключение DNS, обход zapret, ускорение Telegram.
+/// По умолчанию «Нет» (все остается работать, как с DNS), «Да» выключает все, Esc и закрытие окна — «Отмена».
+/// Системное MessageBox делало бы «Да» кнопкой по умолчанию: лишний Enter выключал бы все.
 /// </summary>
 internal static class ClosePrompt
 {
-    public static MessageBoxResult Ask(string connectionName)
+    public static MessageBoxResult Ask(string connectionName) => Ask(connectionName, Array.Empty<string>());
+
+    /// <param name="connectionName">Активное подключение DNS или null.</param>
+    /// <param name="tools">Работающие инструменты CHIMERION («обход zapret», «ускорение Telegram»).</param>
+    public static MessageBoxResult Ask(string? connectionName, IReadOnlyList<string> tools)
     {
         var result = MessageBoxResult.Cancel;
         var res = Application.Current.Resources;
-        var w = DnexDialog.CreateWindow("Выход", 470);
-        var root = new StackPanel { Margin = new Thickness(26, 24, 26, 22) };
-        root.Children.Add(DnexDialog.Header(DialogKind.Warn, $"Подключение «{connectionName}» активно",
-            "Что сделать с DNS при выходе из программы?"));
+        var w = DnexDialog.CreateWindow("Выход", Ui.Narrow);
+        var root = Ui.Root();
+        var parts = new List<string>();
+        if (connectionName != null) parts.Add($"DNS «{connectionName}»");
+        parts.AddRange(tools);
+        var what = string.Join(", ", parts);
+        root.Children.Add(DnexDialog.Header(DialogKind.Warn,
+            connectionName != null && tools.Count == 0 ? $"Подключение «{connectionName}» активно" : "Сейчас работает: " + what,
+            "Что сделать с этим при выходе из программы?"));
 
         // Три варианта: каждый с пояснением, основной подсвечен
-        root.Children.Add(MakeOption("Выйти, оставив DNS как есть",
-            "Программа закроется, DNS останется переключенным. Вернуть исходные настройки можно в программе или через reset-dns.cmd.",
+        var keepHint = new List<string>();
+        if (connectionName != null) keepHint.Add("DNS останется переключенным");
+        if (tools.Count > 0) keepHint.Add(string.Join(" и ", tools) + (tools.Count > 1 ? " продолжат работать" : " продолжит работать"));
+        root.Children.Add(MakeOption(connectionName != null && tools.Count == 0 ? "Выйти, оставив DNS как есть" : "Выйти, оставив все работать",
+            "Программа закроется, " + string.Join(", ", keepHint) + ". При следующем запуске CHIMERION подхватит их как есть." +
+            (connectionName != null ? " Вернуть исходные DNS можно и через reset-dns.cmd." : ""),
             MessageBoxResult.No, isDefault: true));
-        root.Children.Add(MakeOption("Отключиться и выйти",
-            "Исходные DNS вернутся, программа закроется.",
+        root.Children.Add(MakeOption(connectionName != null && tools.Count == 0 ? "Отключиться и выйти" : "Выключить все и выйти",
+            (connectionName != null ? "Исходные DNS вернутся" : "") + (connectionName != null && tools.Count > 0 ? ", " : "") +
+            (tools.Count > 0 ? string.Join(" и ", tools) + " выключатся" : "") + ", программа закроется.",
             MessageBoxResult.Yes, danger: true));
         root.Children.Add(MakeOption("Отмена",
             "Остаться в программе.",
@@ -55,7 +69,7 @@ internal static class ClosePrompt
                 Content = body,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Background = (Brush)res["Surface2"],
-                BorderBrush = isDefault ? (Brush)res["Accent"] : (Brush)res["Border"],
+
                 BorderThickness = new Thickness(isDefault ? 1.5 : 1),
                 Padding = new Thickness(16, 12, 16, 12),
                 Margin = new Thickness(0, 0, 0, 8),
@@ -64,6 +78,7 @@ internal static class ClosePrompt
             };
             // Кнопка-карточка: скругление как у карточек, подсветка от общего стиля кнопок
             b.Template = CardButtonTemplate();
+            b.SetResourceReference(Control.BorderBrushProperty, isDefault ? "Accent" : "Border");
             b.Click += (_, _) => { result = answer; w.Close(); };
             return b;
         }

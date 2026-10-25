@@ -1,3 +1,4 @@
+using Dnex.Services;
 namespace Dnex.Models;
 
 /// <summary>Что проверять: сервис ИИ и признаки гео-блокировки в ответе.</summary>
@@ -49,7 +50,19 @@ public class AppSettings
     public string ReferenceDoh { get; set; } = "https://1.1.1.1/dns-query";
     public string ReferenceDohFallback { get; set; } = "https://dns.google/dns-query";
 
+    /// <summary>Режим «Два DNS» (эксперимент): общий DNS на адаптере, домены ИИ через правила NRPT в Smart DNS.</summary>
+    public SplitDnsSettings SplitDns { get; set; } = new();
+
     public int TimeoutSeconds { get; set; } = 6;
+
+    /// <summary>Свои цвета интерфейса: ключ палитры → #RRGGBB (Services/ThemeColors). Пусто — стандартные.</summary>
+    public Dictionary<string, string> Colors { get; set; } = new();
+
+    /// <summary>Тема оформления: «dark» или «light». Свои цвета светлой темы хранятся в Colors с приставкой «light:».</summary>
+    public string Theme { get; set; } = "dark";
+
+    /// <summary>Язык интерфейса: «ru» или «en» (Services/Loc).</summary>
+    public string Language { get; set; } = "ru";
 
     /// <summary>Как часто трей сам проверяет ИИ-сервисы (минуты, 1–60).</summary>
     public int TrayCheckMinutes { get; set; } = 5;

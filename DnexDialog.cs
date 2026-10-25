@@ -7,22 +7,28 @@ namespace Dnex;
 
 internal enum DialogKind { Info, Ok, Warn, Error }
 
+internal static class UiExt
+{
+    /// <summary>Настроить элемент на месте и вернуть его: удобно при сборке окон в коде.</summary>
+    public static T With<T>(this T e, Action<T> set) { set(e); return e; }
+}
+
 /// <summary>
-/// Окна-сообщения в стиле программы вместо системного MessageBox: темная рамка, значок DNEX в заголовке,
+/// Окна-сообщения в стиле программы вместо системного MessageBox: темная рамка, значок CHIMERION в заголовке,
 /// цветной значок рядом с заголовком сообщения, кнопки из общих стилей. На этой же основе собраны окна
 /// выхода (ClosePrompt) и обновления (UpdateWindow), чтобы все окна выглядели одинаково.
 /// </summary>
 internal static class DnexDialog
 {
-    /// <summary>Пустое окно программы: заголовок «DNEX · …», значок, палитра, темная рамка.</summary>
+    /// <summary>Пустое окно программы: заголовок «CHIMERION · …», значок, палитра, темная рамка.</summary>
     public static Window CreateWindow(string title, double width)
     {
         var res = Application.Current.Resources;
         var owner = Application.Current.MainWindow is { IsVisible: true } m ? m : null;
         var w = new Window
         {
-            Title = $"DNEX · {title}",
-            Icon = new BitmapImage(new Uri("pack://application:,,,/Assets/dnex-logo.png")),
+            Title = $"CHIMERION · {title}",
+            Icon = Controls.Brand.WindowIcon, // знак в текущих цветах (полосы следуют за акцентом)
             Width = width,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
@@ -30,13 +36,45 @@ internal static class DnexDialog
             Owner = owner,
             WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
             ShowInTaskbar = owner == null,
-            Background = (Brush)res["Bg"],
-            Foreground = (Brush)res["Text"],
+
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
             FontSize = 13,
         };
+        w.SetResourceReference(Window.BackgroundProperty, "Bg");
+        w.SetResourceReference(Window.ForegroundProperty, "Text");
+        // Текст и раскладка как у главного окна: без этого при плавной прокрутке на дробное смещение текст
+        // пересглаживался каждый кадр, строки дрожали и будто наезжали друг на друга (окно «Диагностика»)
+        TextOptions.SetTextFormattingMode(w, TextFormattingMode.Display);
+        w.UseLayoutRounding = true;
         w.SourceInitialized += (_, _) => Services.DarkTitle.Apply(w);
+        // Esc закрывает окно. Если в окне есть своя кнопка отмены (IsCancel), Esc уже нажимает ее, второй обработчик не нужен
+        w.Loaded += (_, _) =>
+        {
+            // Фокус сразу в окне: Tab и Enter работают без щелчка мышью
+            if (!w.IsKeyboardFocusWithin) w.MoveFocus(new System.Windows.Input.TraversalRequest(System.Windows.Input.FocusNavigationDirection.First));
+            if (FindAll<Button>(w).Any(b => b.IsCancel)) return;
+            w.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape && !e.Handled) { e.Handled = true; w.Close(); } };
+        };
+        // Окно целиком на экране: по центру владельца высокое окно могло уйти верхом или низом за край
+        w.SizeChanged += (_, _) =>
+        {
+            var area = SystemParameters.WorkArea;
+            if (w.Top + w.ActualHeight > area.Bottom) w.Top = Math.Max(area.Top, area.Bottom - w.ActualHeight);
+            if (w.Top < area.Top) w.Top = area.Top;
+            if (w.Left + w.ActualWidth > area.Right) w.Left = Math.Max(area.Left, area.Right - w.ActualWidth);
+            if (w.Left < area.Left) w.Left = area.Left;
+        };
         return w;
+    }
+
+    private static IEnumerable<T> FindAll<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var c = VisualTreeHelper.GetChild(root, i);
+            if (c is T t) yield return t;
+            foreach (var x in FindAll<T>(c)) yield return x;
+        }
     }
 
     /// <summary>Шапка: цветной значок и заголовок с пояснением. Длинный заголовок переносится, а не обрезается.</summary>
@@ -45,10 +83,16 @@ internal static class DnexDialog
         var res = Application.Current.Resources;
         var (bg, fg, sign) = kind switch
         {
-            DialogKind.Ok => (Color.FromRgb(0x13, 0x28, 0x1E), "Ok", "✓"),
-            DialogKind.Warn => (Color.FromRgb(0x3A, 0x2D, 0x12), "Warn", "!"),
-            DialogKind.Error => (Color.FromRgb(0x3A, 0x17, 0x1C), "Bad", "×"),
-            _ => (Color.FromRgb(0x16, 0x26, 0x40), "Accent", "i"),
+            DialogKind.Ok => ("OkSoft", "Ok", "circle-check"),
+            DialogKind.Warn => ("WarnSoft", "Warn", "triangle-alert"),
+            DialogKind.Error => ("BadSoft", "Bad", "circle-x"),
+            _ => ("InfoSoft", "Accent", "info"),
+        };
+        // glyph: имя иконки (Controls.Icon) или прежний символ, который переводится в иконку
+        var kindName = glyph switch
+        {
+            null => sign, "⇄" => "arrow-left-right", "⚡" => "zap", "✚" => "stethoscope", "⚙" => "settings",
+            "↑" => "circle-arrow-up", "↓" => "download", "✓" => "circle-check", _ => glyph,
         };
         var grid = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -56,14 +100,15 @@ internal static class DnexDialog
         var badge = new Border
         {
             Width = 36, Height = 36, CornerRadius = new CornerRadius(10),
-            Background = new SolidColorBrush(bg),
+            Background = (Brush)res[bg],
             VerticalAlignment = VerticalAlignment.Top,
-            Child = new TextBlock
-            {
-                Text = glyph ?? sign, FontSize = 18, FontWeight = FontWeights.Bold,
-                Foreground = (Brush)res[fg],
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            },
+            Child = Controls.Icon.Outline.ContainsKey(kindName)
+                ? new Controls.Icon { Kind = kindName, Size = 19, Foreground = (Brush)res[fg], HorizontalAlignment = HorizontalAlignment.Center }
+                : new TextBlock
+                {
+                    Text = kindName, FontSize = 18, FontWeight = FontWeights.Bold, Foreground = (Brush)res[fg],
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
         };
         grid.Children.Add(badge);
         var titles = new StackPanel { Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -93,15 +138,12 @@ internal static class DnexDialog
     /// <summary>Сообщение с одной кнопкой «Понятно».</summary>
     public static void Show(string title, string text, DialogKind kind = DialogKind.Info, string windowTitle = "Сообщение")
     {
-        var w = CreateWindow(windowTitle, 460);
+        var w = CreateWindow(windowTitle, Ui.Narrow);
         var root = Body(title, text, kind);
-        var row = new DockPanel { LastChildFill = false };
-        var ok = MakeButton("Понятно", "Primary", () => w.Close());
+        var ok = Ui.Action("Понятно", "Primary", () => w.Close());
         ok.IsDefault = true;
         ok.IsCancel = true;
-        DockPanel.SetDock(ok, Dock.Right);
-        row.Children.Add(ok);
-        root.Children.Add(row);
+        root.Children.Add(Ui.Footer(null, ok));
         w.Content = root;
         w.ShowDialog();
     }
@@ -114,24 +156,13 @@ internal static class DnexDialog
                            DialogKind kind = DialogKind.Warn, bool danger = false, string windowTitle = "Вопрос")
     {
         bool result = false;
-        var w = CreateWindow(windowTitle, 460);
+        var w = CreateWindow(windowTitle, Ui.Narrow);
         var root = Body(title, text, kind);
-        var row = new DockPanel { LastChildFill = false };
-        var yesBtn = MakeButton(yes, "Primary", () => { result = true; w.Close(); });
-        if (danger)
-        {
-            // Красная заливка, как у кнопки «Отключить» в главном окне
-            yesBtn.Background = (Brush)Application.Current.Resources["BadButton"];
-            yesBtn.BorderBrush = yesBtn.Background;
-        }
-        yesBtn.IsDefault = !danger;
-        var noBtn = MakeButton(no, "Ghost", () => w.Close());
+        var yesBtn = Ui.Action(yes, danger ? "Danger" : "Primary", () => { result = true; w.Close(); });
+        yesBtn.IsDefault = !danger; // рискованное действие Enter не нажимает
+        var noBtn = Ui.Action(no, "Ghost", () => w.Close());
         noBtn.IsCancel = true;
-        DockPanel.SetDock(yesBtn, Dock.Right);
-        DockPanel.SetDock(noBtn, Dock.Right);
-        row.Children.Add(yesBtn);
-        row.Children.Add(noBtn);
-        root.Children.Add(row);
+        root.Children.Add(Ui.Footer(null, yesBtn, noBtn));
         w.Content = root;
         w.ShowDialog();
         return result;
@@ -139,13 +170,13 @@ internal static class DnexDialog
 
     private static StackPanel Body(string title, string text, DialogKind kind)
     {
-        var root = new StackPanel { Margin = new Thickness(26, 24, 26, 22) };
+        var root = Ui.Root();
         root.Children.Add(Header(kind, title, null));
         if (!string.IsNullOrEmpty(text))
             root.Children.Add(new TextBlock
             {
                 Text = text, Foreground = (Brush)Application.Current.Resources["Muted"], FontSize = 13,
-                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -6, 0, 20), LineHeight = 19,
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -6, 0, 4), LineHeight = 19,
             });
         return root;
     }

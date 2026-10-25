@@ -23,7 +23,7 @@ public static class GitHubRelease
     private static HttpClient CreateApi()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("DNEX-tools/1.0");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-tools/1.0");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return c;
     }
@@ -31,7 +31,7 @@ public static class GitHubRelease
     private static HttpClient CreateDownload()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("DNEX-tools/1.0");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-tools/1.0");
         return c;
     }
 
@@ -75,7 +75,7 @@ public static class GitHubRelease
     {
         if (asset.Sha256 is not { Length: 64 })
             throw new ToolException("GitHub не дал контрольную сумму файла, без нее установка не делается");
-        var dir = Path.Combine(Path.GetTempPath(), "DNEX-tools");
+        var dir = Path.Combine(Path.GetTempPath(), "CHIMERION-tools");
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, asset.Name);
         try

@@ -19,11 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\DNEX.csproj" />
+    <ProjectReference Include="..\..\CHIMERION.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\DNEX.csproj" />
+    <ProjectReference Include="..\..\CHIMERION.csproj" />
   </ItemGroup>
 
 </Project>

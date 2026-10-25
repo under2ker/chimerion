@@ -19,7 +19,7 @@ public sealed record UpdateCheck(UpdateStatus Status, UpdateInfo? Info, Version?
 /// </summary>
 public static class UpdateChecker
 {
-    public const string Repo = "under2ker/dnex-dns-hub";
+    public const string Repo = "under2ker/chimerion";
 
     private static readonly HttpClient Http = CreateClient();
     // Для страниц сайта GitHub: без заголовков API и без перехода по перенаправлению (номер версии берется из него)
@@ -38,7 +38,7 @@ public static class UpdateChecker
     private static HttpClient CreateClient()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        c.DefaultRequestHeaders.UserAgent.ParseAdd("DNEX-update-check/1.0");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-update-check/1.0");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return c;
     }

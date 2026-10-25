@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace Dnex.Services;
 
-/// <summary>Хранение данных в %AppData%\DNEX в виде JSON.</summary>
+/// <summary>Хранение данных в %AppData%\CHIMERION в виде JSON.</summary>
 public static class Storage
 {
     // DNEX_DATA_DIR переопределяет папку данных: для тестов и для копии, которая работает с собственными файлами

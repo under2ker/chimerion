@@ -5,7 +5,7 @@ using Microsoft.Win32;
 namespace Dnex.Services;
 
 /// <summary>
-/// Запуск DNEX вместе с Windows через Планировщик заданий: при входе в систему, с наивысшими правами.
+/// Запуск CHIMERION вместе с Windows через Планировщик заданий: при входе в систему, с наивысшими правами.
 /// Так программа стартует уже с правами администратора и после загрузки возвращает прежний DNS без запроса UAC.
 /// Права спрашиваются один раз — при включении или выключении автозапуска. Программа стартует с ключом --tray:
 /// окно не показывается, работает значок в трее.
@@ -107,8 +107,20 @@ public static class AutoStart
             log("Автозапуск настроен по-старому, без прав администратора: включите его заново в настройках, чтобы DNS возвращался без запроса прав");
             return;
         }
+        // Копия данных для тестов и снимков: задание автозапуска принадлежит настоящей программе, его не трогаем
+        if (Environment.GetEnvironmentVariable("DNEX_DATA_DIR") is { Length: > 0 }) return;
         if (ExePath is not { } exe || !TaskExists()) return;
-        if (TaskXml().Contains(exe, StringComparison.OrdinalIgnoreCase)) return;
+        var xml = TaskXml();
+        if (xml.Contains(exe, StringComparison.OrdinalIgnoreCase)) return;
+        // Путь меняем, только если прежнего файла больше нет (программу перенесли). Если он на месте, значит
+        // запущена вторая копия из другой папки (например, свежая сборка): автозапуск остается за прежней
+        var old = System.Text.RegularExpressions.Regex.Match(xml, @"<Command>(.*?)</Command>").Groups[1].Value;
+        old = System.Net.WebUtility.HtmlDecode(old).Trim('"');
+        if (old.Length > 0 && File.Exists(old))
+        {
+            log($"Автозапуск запускает другую копию программы: {old}. Чтобы запускалась эта, включите автозапуск заново в настройках");
+            return;
+        }
         if (DnsSwitcher.IsAdmin() && await SetAsync(true)) log("Автозапуск: путь к программе обновлен");
         else log("Программу перенесли в другую папку: включите автозапуск заново в настройках");
     }

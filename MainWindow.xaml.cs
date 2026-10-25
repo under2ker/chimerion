@@ -35,11 +35,15 @@ public partial class MainWindow : Window
     private bool _locating, _locatingAgain; // идет определение локаций серверов
     private SolidColorBrush? _connBrush;    // собственная заливка кнопки «Подключить», чтобы менять цвет плавно
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(2.8) };
+    private readonly Queue<(string Text, string Key)> _toastQueue = new();
+    private string _toastKey = "Ok";
+    private DateTime _toastSince;
 
     public MainWindow()
     {
         InitializeComponent();
         SizeChanged += (_, _) => ApplyResponsive();
+        ServerGrid.SizeChanged += (_, _) => { if (EmptyState.Visibility == Visibility.Visible) UpdateEmptyState(0); };
 
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
         // Выключение или перезагрузка Windows: выходим без вопроса и без отключения, чтобы DNS остался после перезагрузки
@@ -52,10 +56,15 @@ public partial class MainWindow : Window
         _toastTimer.Tick += (_, _) =>
         {
             _toastTimer.Stop();
+            if (_toastQueue.TryDequeue(out var next)) { ShowToast(next.Text, next.Key); return; } // следующее из очереди
             Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, Motion(300)));
         };
 
         _settings = LoadSettings();
+        Loc.SetLanguage(_settings.Language);
+        Loc.Changed += OnLanguageChanged;
+        ThemeColors.Changed += OnThemeChanged;
+        ThemeColors.Apply(_settings.Colors, _settings.Theme);
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
         _pingTimer.Tick += async (_, _) => await RefreshPingsAsync();
@@ -115,6 +124,15 @@ public partial class MainWindow : Window
         _initStarted = true;
         {
             Log($"Данные: {Storage.Dir}. Серверов в списке: {_servers.Count}");
+            if (Updater.RolledBackFrom is { } failed)
+            {
+                Log($"Версия {failed} не запустилась, возвращена {UpdateChecker.CurrentVersion}. Эта версия больше не будет предлагаться");
+                _settings.SkippedUpdate = failed;
+                try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+                ShowToast($"Обновление до {failed} не запустилось, возвращена версия {UpdateChecker.CurrentVersion}", "Warn");
+            }
+            // Обновление считается удачным, если программа проработала 30 секунд (или закрылась штатно, см. OnClosed)
+            _ = Task.Delay(TimeSpan.FromSeconds(30)).ContinueWith(_ => Updater.ConfirmStarted(), TaskScheduler.Default);
             if (Updater.StartedAfterUpdate)
             {
                 Log($"Программа обновлена до версии {UpdateChecker.CurrentVersion}");
@@ -137,6 +155,7 @@ public partial class MainWindow : Window
             _ = ResolveLocationsAsync();
 
             // Автопроверка при запуске: все, что не проверялось или проверялось давно.
+            await MergeRemoteCatalogAsync();
             var stale = _servers.Where(x => x.LastChecked == null || DateTime.Now - x.LastChecked > TimeSpan.FromMinutes(30)).ToList();
             if (stale.Count > 0) await RunChecksAsync(stale);
         }
@@ -188,6 +207,7 @@ public partial class MainWindow : Window
         // Своя рамка (WindowStyle=None): без этого развернутое окно занимает весь экран вместе с местом под панелью
         // задач, и нижняя строка (добавление сервера, журнал, обновление) уходит под панель
         System.Windows.Interop.HwndSource.FromHwnd(new System.Windows.Interop.WindowInteropHelper(this).Handle)?.AddHook(MaxSizeHook);
+        FitToScreen();
     }
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
@@ -238,7 +258,58 @@ public partial class MainWindow : Window
         StatsText.Text = $"{_servers.Count(s => s.Status == ServerStatus.Ok)} работают   ·   " +
                          $"{_servers.Count(s => s.Status == ServerStatus.Partial)} частично   ·   " +
                          $"показано {shown} из {_servers.Count}";
+        UpdateEmptyState(shown);
         UpdateTopList();
+    }
+
+    /// <summary>
+    /// Пустая таблица: объяснение, почему строк нет, и кнопки, которые это исправят (сбросить поиск, показать все,
+    /// найти серверы). Раньше при пустом фильтре была видна только шапка таблицы.
+    /// </summary>
+    private void UpdateEmptyState(int shown)
+    {
+        EmptyState.Visibility = shown == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (shown > 0) return;
+        // В низкой таблице только заголовок и кнопки: иначе иконка и пояснение обрезаются
+        var h = ServerGrid.ActualHeight;
+        EmptyIcon.Visibility = h > 0 && h < 300 ? Visibility.Collapsed : Visibility.Visible;
+        EmptyText.Visibility = h > 0 && h < 220 ? Visibility.Collapsed : Visibility.Visible;
+        EmptyState.Margin = new Thickness(24, h > 0 && h < 300 ? 36 : 48, 24, 0);
+        EmptyActions.Children.Clear();
+        void Act(string text, string style, Action click)
+        {
+            var b = new Button { Content = text, Style = (Style)FindResource(style), Margin = new Thickness(4, 0, 4, 0) };
+            b.Click += (_, _) => click();
+            EmptyActions.Children.Add(b);
+        }
+        var search = SearchBox.Text.Trim();
+        bool checking = _working || _servers.Any(s => s.Status == ServerStatus.Checking); // серверы в очереди еще без статуса «проверка»
+        if (_servers.Count == 0)
+        {
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("globe", "Список серверов пуст", "CHIMERION найдет Smart DNS по источникам и в интернете и сразу их проверит");
+            Act("Найти новые серверы", "Primary", () => Fetch_Click(this, new RoutedEventArgs()));
+        }
+        else if (search.Length > 0)
+        {
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("search", $"По запросу «{search}» ничего нет", "Поиск идет по имени, адресу и источнику");
+            Act("Сбросить поиск", "Strong", () => SearchBox.Clear());
+        }
+        else if (FavTab.IsChecked == true)
+        {
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("star", "В избранном пусто", "Отметьте сервер звездочкой в начале строки, и он появится здесь");
+            Act("Показать все", "Strong", () => AllTab.IsChecked = true);
+        }
+        else if (checking)
+        {
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("refresh-cw", "Идет проверка", "Рабочие серверы появятся здесь по мере проверки");
+            Act("Показать все", "Ghost", () => AllTab.IsChecked = true);
+        }
+        else
+        {
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("triangle-alert", "Рабочих серверов нет", "Проверьте список заново или найдите новые серверы");
+            Act("Показать все", "Ghost", () => AllTab.IsChecked = true);
+            Act("Найти новые серверы", "Primary", () => Fetch_Click(this, new RoutedEventArgs()));
+        }
     }
 
     // ---------- Лучшие по стабильности ----------
@@ -425,7 +496,7 @@ public partial class MainWindow : Window
             var progress = new Progress<SourceParser.CrawlProgress>(p =>
             {
                 WorkBar.Maximum = Math.Max(1, p.Pages + p.Queued);
-                WorkBar.Value = p.Pages;
+                Ui.SetProgress(WorkBar, p.Pages);
                 lastProgress = $"Страниц {p.Pages}/{p.MaxPages} · в очереди {p.Queued} · найдено {p.Found} · новых {added.Count} · ошибок {p.Errors} · {p.Current}";
                 ProgressText.Text = lastProgress;
             });
@@ -499,6 +570,26 @@ public partial class MainWindow : Window
         await RunChecksAsync(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
 
     /// <summary>Меню у «Перепроверить»: полная, глубокая или только один сервис.</summary>
+    /// <summary>Выделить в таблице серверы по состоянию. Нерабочие скрыты фильтром «Рабочие», поэтому показываем все.</summary>
+    private void SelectWhere(Func<DnsServer, bool> match, string what)
+    {
+        var list = _servers.Where(s => s.Status != ServerStatus.Checking && match(s)).ToList();
+        if (list.Count == 0) { ShowToast($"{what}: таких серверов нет", "Warn"); return; }
+        if (AllTab.IsChecked != true) { AllTab.IsChecked = true; SearchBox.Clear(); _view?.Refresh(); }
+        ServerGrid.SelectedItems.Clear();
+        foreach (var s in list) ServerGrid.SelectedItems.Add(s);
+        ServerGrid.ScrollIntoView(list[0]);
+        ServerGrid.Focus();
+        ShowToast($"{what}: выделено {list.Count}. Del удаляет, «Проверить» в меню перепроверяет");
+    }
+
+    private void SelectBad_Click(object sender, RoutedEventArgs e) =>
+        SelectWhere(s => s.Status == ServerStatus.Fail && DnsSwitcher.GetActive()?.ServerId != s.Id, "Нерабочие");
+    private void SelectPartial_Click(object sender, RoutedEventArgs e) => SelectWhere(s => s.Status == ServerStatus.Partial, "Частично рабочие");
+    private void SelectOk_Click(object sender, RoutedEventArgs e) => SelectWhere(s => s.Status == ServerStatus.Ok, "Рабочие");
+    private void SelectAllRows_Click(object sender, RoutedEventArgs e) => ServerGrid.SelectAll();
+    private void SelectNone_Click(object sender, RoutedEventArgs e) => ServerGrid.UnselectAll();
+
     private void RecheckMenu_Click(object sender, RoutedEventArgs e)
     {
         var menu = new ContextMenu { PlacementTarget = RecheckMenuButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
@@ -532,12 +623,13 @@ public partial class MainWindow : Window
         var ct = BeginWork();
         var before = SnapshotCounters(list);
         var checker = new ServerChecker(_settings, opt);
+        WorkBar.IsIndeterminate = false;
         WorkBar.Visibility = Visibility.Visible;
         WorkBar.Maximum = list.Count;
-        WorkBar.Value = 0;
+        Ui.SetProgress(WorkBar, 0);
         var progress = new Progress<int>(n =>
         {
-            WorkBar.Value = n;
+            Ui.SetProgress(WorkBar, n);
             ProgressText.Text = $"Проверено {n} из {list.Count} · работают {list.Count(s => s.Status == ServerStatus.Ok)}";
             _statsTimer.Start();
         });
@@ -566,10 +658,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Счетчики стабильности до проверки: если проверку испортил сбой сети, они возвращаются.</summary>
-    private sealed record CheckCounters(ServerStatus Status, int Total, int Ok, int FailStreak, int ServiceChecks, int AllOk, Dictionary<string, int> ServiceOk);
+    private sealed record CheckCounters(ServerStatus Status, int Total, int Ok, int FailStreak, int ServiceChecks, int AllOk, Dictionary<string, int> ServiceOk, int History);
 
     private static Dictionary<DnsServer, CheckCounters> SnapshotCounters(IEnumerable<DnsServer> list) =>
-        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk)));
+        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk), s.History.Count));
 
     /// <summary>
     /// После пакетной проверки: сохранение, итог, автоочистка. Защита от ложного карантина: если сети нет
@@ -590,6 +682,7 @@ public partial class MainWindow : Window
             {
                 s.ChecksTotal = c.Total; s.ChecksOk = c.Ok; s.FailStreak = c.FailStreak;
                 s.ServiceChecks = c.ServiceChecks; s.AllOk = c.AllOk; s.ServiceOk = new(c.ServiceOk);
+                if (s.History.Count > c.History) s.History.RemoveRange(c.History, s.History.Count - c.History); // сбой сети не пишем в историю
                 s.NotifyStability();
             }
             Log(networkUp
@@ -614,6 +707,8 @@ public partial class MainWindow : Window
     // ---------- Применение DNS ----------
 
     private bool _closeConfirmed;
+    /// <summary>При выходе выбрано «оставить все работать»: zapret и прокси не выключаются.</summary>
+    private bool _keepToolsOnExit;
 
     /// <summary>При выходе с активным подключением спрашиваем, отключиться ли.</summary>
     private async void OnClosing(object? sender, CancelEventArgs e)
@@ -628,10 +723,14 @@ public partial class MainWindow : Window
         }
         SaveServersNow();
         // Windows завершает сеанс: не спрашиваем и не отключаем. Статический DNS сохраняется на адаптере,
-        // файл подключения остается, и после перезагрузки DNEX продолжает с того же сервера.
-        if (_sessionEnding || _closeConfirmed || DnsSwitcher.GetActive() is not { } a) { _cts?.Cancel(); return; }
+        // файл подключения остается, и после перезагрузки CHIMERION продолжает с того же сервера.
+        var a = DnsSwitcher.GetActive();
+        // Работающие инструменты, которые включила CHIMERION (своя копия прокси пользователя не в счет)
+        var running = _tools.Where(t => t.State.Enabled && t.IsInstalled && t.IsRunning() && !(t is TgProxyTool tg && tg.ForeignCopyRunning()))
+                            .Select(t => t is ZapretTool ? "обход zapret" : "ускорение Telegram").ToList();
+        if (_sessionEnding || _closeConfirmed || (a == null && running.Count == 0)) { _cts?.Cancel(); return; }
 
-        var r = ClosePrompt.Ask(a.Name);
+        var r = ClosePrompt.Ask(a == null ? null : Loc.T(a.Name), running); // название вида «Нидерланды, Амстердам» на языке интерфейса
         if (r == MessageBoxResult.Cancel)
         {
             // Передумал: программа работает дальше, текущая проверка или поиск не прерываются
@@ -640,7 +739,9 @@ public partial class MainWindow : Window
             return;
         }
         _cts?.Cancel();
-        if (r == MessageBoxResult.No) return; // выход с сохранением DNS: без проверок
+        // «Оставить все работать»: DNS как есть, zapret и прокси не выключаются (как и при выходе из Windows)
+        if (r == MessageBoxResult.No) { _keepToolsOnExit = true; return; }
+        if (a == null) { _closeConfirmed = true; return; } // выключить нечего, кроме инструментов: их выключит OnClosed
         e.Cancel = true;
         // Выход с отключением: только возврат DNS, без проверок подключения
         if (!await DisconnectAsync("выход из программы", probe: false))
@@ -693,7 +794,8 @@ public partial class MainWindow : Window
             Log($"  резолвер: {r.Ip} · {r.Org} · {r.Place}");
         if (n.Egress is { } eg)
             Log($"  ИИ видят выход: {GeoLocation.CountryName(eg.Country)}{(string.IsNullOrEmpty(n.EgressCity) ? "" : ", " + n.EgressCity)} ({eg.Ip}, {n.EgressOrg})");
-        if (DnsSwitcher.GetActive() != null && LeakTest.LooksLikeLeak(n.Resolvers))
+        // В режиме «Два DNS» тестовый домен идет через общий DNS: разные резолверы там не утечка
+        if (DnsSwitcher.GetActive() is { Split: false } && LeakTest.LooksLikeLeak(n.Resolvers))
             Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
     }
 
@@ -810,7 +912,10 @@ public partial class MainWindow : Window
                 return place.Length > 0 ? $"{name} ({Country(place)})" : name;
             })), B("Text"), true));
             bool leak = groups.Count > 1;
-            runs.Add((leak ? "   ⚠ часть запросов идет мимо сервера" : "   ✓ все запросы через сервер", leak ? B("Warn") : B("Ok"), true));
+            if (DnsSwitcher.GetActive() is { Split: true })
+                runs.Add(("   · это общий DNS, домены ИИ идут через сервер отдельно", B("Muted"), true));
+            else
+                runs.Add((leak ? "   ⚠ часть запросов идет мимо сервера" : "   ✓ все запросы через сервер", leak ? B("Warn") : B("Ok"), true));
             var line = Line(runs.ToArray());
             line.TextTrimming = TextTrimming.CharacterEllipsis;
             line.TextWrapping = TextWrapping.NoWrap;
@@ -927,14 +1032,14 @@ public partial class MainWindow : Window
             var h = entries[i];
             bool isOpen = h.Access.StartsWith("✓");
             bool isClosed = h.Access.Contains("закрыт");
-            string pillColor = isOpen ? "#173A2A" : isClosed ? "#3A1C20" : "#3A2F17";
+            string pillColor = isOpen ? "ChipOk" : isClosed ? "ChipBad" : "ChipWarn";
             string pillText = isOpen ? "доступен" : isClosed ? "закрыт" : h.Access.Contains("подтвержден") ? "не подтвержден" : "не отвечает";
             string pillFg = isOpen ? "Ok" : isClosed ? "Bad" : "Warn";
 
             var top = new DockPanel();
             var pill = new Border
             {
-                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(pillColor)),
+                Background = (Brush)FindResource(pillColor),
                 CornerRadius = new CornerRadius(6), Padding = new Thickness(7, 0, 7, 1), Margin = new Thickness(10, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center, ToolTip = h.Note ?? h.Access,
                 Child = new TextBlock { Text = pillText, FontSize = 11, Foreground = B(pillFg) },
@@ -997,7 +1102,8 @@ public partial class MainWindow : Window
         };
         popup.Closed += (_, _) =>
         {
-            toggle.Text = toggle.Text.Replace("Скрыть серверы ▴", $"Серверы ({1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal))}) ▾");
+            // Текст задаем заново, а не заменой в показанном: на английском показан перевод
+            toggle.Text = $"Серверы ({1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal))}) ▾";
             _hostsClosedAt = DateTime.Now;
         };
         popup.KeyDown += (_, k) => { if (k.Key == Key.Escape) popup.IsOpen = false; };
@@ -1139,18 +1245,200 @@ public partial class MainWindow : Window
         });
     }
 
+    /// <summary>
+    /// Перезапуск CHIMERION с правами администратора (для подбора стратегии zapret). Новая копия ждет, пока эта закроется.
+    /// DNS и сторонние программы не трогаем, как при перезапуске для обновления.
+    /// </summary>
+    private void RelaunchElevated()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(Environment.ProcessPath!, Updater.RelaunchArg) { UseShellExecute = true, Verb = "runas" })?.Dispose();
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            ShowToast("Права администратора не выданы", "Warn");
+            return;
+        }
+        Log("Перезапуск с правами администратора");
+        _restarting = true;
+        _exitRequested = true;
+        _closeConfirmed = true;
+        Close();
+        Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Изменились настройки «Два DNS». Если подключение есть, переподключаемся к тому же серверу: правила NRPT и общий
+    /// DNS ставятся (или снимаются) сразу. Без подключения режим заработает при следующем подключении.
+    /// </summary>
+    private async Task ApplySplitChangeAsync()
+    {
+        var s = _settings.SplitDns;
+        Log(s.Enabled ? $"Два DNS: включено, общий DNS «{s.GeneralName}»" : "Два DNS: выключено");
+        if (DnsSwitcher.GetActive() is not { } active)
+        {
+            ShowToast(s.Enabled ? "Два DNS заработают при подключении к серверу" : "Два DNS выключены");
+            return;
+        }
+        if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } server) return;
+        if (await ConnectToAsync(server, auto: true))
+            ShowToast(s.Enabled ? $"Два DNS включены: ИИ через {server.DisplayName}, остальное через «{s.GeneralName}»" : "Два DNS выключены, подключение обычное");
+        else
+            ShowToast("Применить два DNS не удалось, подробности в журнале", "Bad");
+    }
+
+    /// <summary>Ручной возврат прежней версии из настроек: файлы меняются местами, программа перезапускается.</summary>
+    private void RollbackAndRestart()
+    {
+        try { Updater.SwapWithPrevious(); }
+        catch (UpdateException ex)
+        {
+            Log("Вернуть прежнюю версию не удалось: " + ex.Message);
+            DnexDialog.Show("Не удалось вернуть версию", ex.Message, DialogKind.Warn, "Возврат версии");
+            return;
+        }
+        Log("Возвращаю прежнюю версию и перезапускаю программу");
+        Relaunch(afterUpdate: false);
+    }
+
     // ---------- Сторонние программы: TG WS Proxy и zapret ----------
 
     private readonly List<Tool> _tools = new() { new TgProxyTool(), new ZapretTool() };
     private bool _restarting;
 
+    /// <summary>Стартовый список CHIMERION с GitHub (подписанный): новые серверы добавляются и проверяются вместе с остальными.</summary>
+    private async Task MergeRemoteCatalogAsync()
+    {
+        try
+        {
+            if (await RemoteCatalog.LoadAsync() is not { } cat) return;
+            int added = 0;
+            foreach (var c in RemoteCatalog.Servers(cat))
+                if (!_junk.ContainsKey(c.Key) && _known.Add(c.Key)) { _servers.Add(c); added++; }
+            if (added == 0) return;
+            Log($"Список CHIMERION от {cat.Updated}: добавлено серверов {added}, сейчас проверю");
+            SaveServers();
+        }
+        catch (Exception ex) { Log("Список CHIMERION не загрузился: " + ex.Message); }
+    }
+
+    // ---------- Режимы в один клик ----------
+
+    private enum Mode { AiOnly, All, Games, Off }
+
+    private static readonly (Mode Mode, string Title, string Hint)[] Modes =
+    {
+        (Mode.AiOnly, "Только ИИ", "Рекомендуем для начала. Smart DNS для ChatGPT, Claude и Gemini. Telegram-прокси и zapret выключены"),
+        (Mode.All, "Все сразу", "Smart DNS, ускорение Telegram и обход для YouTube и Discord"),
+        (Mode.Games, "Игры", "zapret с обходом для игр (порты выше 1023). DNS и Telegram не меняются"),
+        (Mode.Off, "Все выключить", "Отключить DNS, выключить Telegram-прокси и zapret"),
+    };
+
+    private void ModeToggle_Click(object sender, RoutedEventArgs e)
+    {
+        ModeToggle.IsChecked = false;
+        var menu = new ContextMenu { PlacementTarget = ModeToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+        foreach (var (mode, title, hint) in Modes)
+        {
+            var mi = new MenuItem { Header = title, ToolTip = hint };
+            mi.Click += async (_, _) => await ApplyModeAsync(mode);
+            menu.Items.Add(mi);
+        }
+        menu.IsOpen = true;
+    }
+
+    private bool _modeBusy;
+
+    /// <summary>
+    /// Режим: набор состояний DNS, Telegram-прокси и zapret. Шаги идут по очереди; неудачный шаг пишется в журнал,
+    /// остальные все равно выполняются. Свою копию TG WS Proxy пользователя режим не выключает.
+    /// </summary>
+    private async Task ApplyModeAsync(Mode mode)
+    {
+        if (_modeBusy || _busyConn) { ShowToast("Подождите: предыдущее действие еще идет", "Warn"); return; }
+        _modeBusy = true;
+        var title = Modes.First(m => m.Mode == mode).Title;
+        Log($"Режим «{title}»");
+        var failed = new List<string>();
+        var tg = _tools.OfType<TgProxyTool>().First();
+        var zapret = _tools.OfType<ZapretTool>().First();
+        var silent = new Progress<string>(_ => { });
+
+        async Task Step(string name, Func<Task> action)
+        {
+            try { await action(); }
+            catch (ToolException ex) { failed.Add(name); Log($"Режим «{title}»: {name}: {ex.Message}"); }
+            catch (Exception ex) { failed.Add(name); Log($"Режим «{title}»: {name}: ошибка {ex.Message}"); }
+        }
+        async Task DnsOn()
+        {
+            if (DnsSwitcher.GetActive() != null) return;
+            var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && !s.IsJunk).OrderBy(s => s.Rank).FirstOrDefault()
+                       ?? throw new ToolException("нет рабочих серверов: сначала проверьте или найдите серверы");
+            if (!await ConnectToAsync(best, auto: true)) throw new ToolException("подключиться не удалось, подробности выше");
+        }
+        async Task ToolOff(Tool t)
+        {
+            if (t is TgProxyTool p && p.ForeignCopyRunning()) return; // своя копия пользователя: не трогаем
+            if (t.IsInstalled && (t.State.Enabled || t.IsRunning())) await t.DisableAsync();
+        }
+        async Task ZapretOn(bool games)
+        {
+            var restart = zapret.State.Games != games && zapret.IsInstalled && zapret.IsRunning();
+            zapret.State.Games = games;
+            zapret.SaveState();
+            if (restart) await zapret.StopAsync();
+            await zapret.EnableAsync(silent, CancellationToken.None);
+        }
+
+        try
+        {
+            switch (mode)
+            {
+                case Mode.AiOnly:
+                    await Step("DNS", DnsOn);
+                    await Step("Telegram", () => ToolOff(tg));
+                    await Step("zapret", () => ToolOff(zapret));
+                    break;
+                case Mode.All:
+                    await Step("DNS", DnsOn);
+                    await Step("Telegram", () => tg.EnableAsync(silent, CancellationToken.None));
+                    await Step("zapret", () => ZapretOn(games: false));
+                    break;
+                case Mode.Games:
+                    await Step("zapret", () => ZapretOn(games: true));
+                    break;
+                case Mode.Off:
+                    await Step("Telegram", () => ToolOff(tg));
+                    await Step("zapret", () => ToolOff(zapret));
+                    if (DnsSwitcher.GetActive() != null)
+                        await Step("DNS", async () => { if (!await DisconnectAsync("режим «Все выключить»")) throw new ToolException("отключиться не удалось"); });
+                    break;
+            }
+        }
+        finally
+        {
+            _modeBusy = false;
+            UpdateToolsTray();
+        }
+        if (failed.Count == 0) ShowToast($"Режим «{title}» включен");
+        else ShowToast($"Режим «{title}»: не получилось ({string.Join(", ", failed)}), подробности в журнале", "Warn");
+    }
+
+    private void DiagToggle_Click(object sender, RoutedEventArgs e)
+    {
+        DiagToggle.IsChecked = false;
+        DiagnosticsWindow.Show(_settings, _tools, () => _log.TakeLast(40).Select(l => $"{l.TimeText} {l.Text}"), Log, DiagFixAsync);
+    }
+
     private void ToolsToggle_Click(object sender, RoutedEventArgs e)
     {
         ToolsToggle.IsChecked = false; // это кнопка, а не переключатель панели: окно открывается отдельно
-        ToolsWindow.Show(_tools, Log, UpdateToolsTray);
+        ToolsWindow.Show(_tools, Log, UpdateToolsTray, RelaunchElevated, SendToSmartDns);
     }
 
-    /// <summary>При запуске DNEX поднимает включенные программы и смотрит, нет ли у них новых версий.</summary>
+    /// <summary>При запуске CHIMERION поднимает включенные программы и смотрит, нет ли у них новых версий.</summary>
     private async Task StartToolsAsync()
     {
         foreach (var t in _tools.Where(t => t.State.Enabled && t.IsInstalled))
@@ -1179,14 +1467,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Выход из DNEX выключает программы, которые она включала. Не трогаем их при выходе из Windows
+    /// Выход из CHIMERION выключает программы, которые она включала. Не трогаем их при выходе из Windows
     /// (система и так все закроет) и при перезапуске для обновления.
     /// </summary>
     private void StopToolsOnExit()
     {
-        if (_sessionEnding || _restarting) return;
-        foreach (var t in _tools.Where(t => t.State.Enabled && t.IsInstalled))
-            try { Task.Run(t.StopAsync).Wait(TimeSpan.FromSeconds(10)); } catch (Exception) { }
+        if (_sessionEnding || _restarting || _keepToolsOnExit) return;
+        // Все инструменты выключаются одновременно и не дольше 6 секунд в сумме: выход не должен висеть
+        var stops = _tools.Where(t => t.State.Enabled && t.IsInstalled).Select(t => Task.Run(t.StopAsync)).ToArray();
+        try { Task.WaitAll(stops, TimeSpan.FromSeconds(6)); } catch (Exception) { }
     }
 
     private System.Windows.Forms.ToolStripMenuItem? _trayTg, _trayZapret;
@@ -1202,6 +1491,7 @@ public partial class MainWindow : Window
             item.Text = foreign ? $"{name}: работает ваша копия" : on ? $"{name}: выключить" : $"{name}: включить";
             item.Enabled = !foreign;
         }
+        UpdateHeaderStats();
         Set(_trayTg, _tools[0], "Telegram");
         Set(_trayZapret, _tools[1], "YouTube и Discord");
     }
@@ -1227,9 +1517,12 @@ public partial class MainWindow : Window
     /// Перезапуск после обновления: новая версия стартует и ждет, пока эта копия закроется. Выход без вопроса
     /// и без отключения: DNS остается, новая копия продолжает с того же подключения (как при выходе из Windows).
     /// </summary>
-    private void RestartForUpdate()
+    private void RestartForUpdate() => Relaunch(afterUpdate: true);
+
+    /// <summary>Перезапуск программы: новая копия ждет, пока эта закроется. DNS и программы Telegram/zapret остаются.</summary>
+    private void Relaunch(bool afterUpdate)
     {
-        try { Updater.Restart(); }
+        try { Updater.Restart(afterUpdate); }
         catch (Exception e)
         {
             Log("Не удалось запустить новую версию: " + e.Message);
@@ -1269,11 +1562,12 @@ public partial class MainWindow : Window
                     OpenUpdateWindow(r.Info!);
                     break;
                 case UpdateStatus.UpToDate:
-                    ShowToast($"У вас последняя версия {UpdateChecker.CurrentVersion}");
+                    // Итог рядом с кнопкой, а не всплывающим окном: отменять нечего, и ничего не перекрывается
+                    ShowUpdateResult($"У вас последняя версия {UpdateChecker.CurrentVersion}", "Ok", null);
                     break;
                 default:
                     Log("Проверка обновления не удалась: " + r.Reason);
-                    ShowToast($"Не удалось проверить обновление: {r.Reason}", "Warn");
+                    ShowUpdateResult("Не удалось проверить обновление", "Warn", r.Reason);
                     break;
             }
         }
@@ -1282,6 +1576,37 @@ public partial class MainWindow : Window
             CheckUpdateButton.IsEnabled = true;
             CheckUpdateButton.Content = "Проверить обновление";
         }
+    }
+
+    private readonly DispatcherTimer _updateResultTimer = new() { Interval = TimeSpan.FromSeconds(6) };
+
+    /// <summary>Итог проверки обновления на месте подписи с версией слева от кнопки; через 6 с подпись возвращается.</summary>
+    private void ShowUpdateResult(string text, string colorKey, string? reason)
+    {
+        HeaderVersion.Text = text;
+        HeaderVersion.Foreground = (Brush)FindResource(colorKey);
+        UpdateResultIcon.Kind = colorKey == "Ok" ? "circle-check" : "triangle-alert";
+        UpdateResultIcon.Foreground = (Brush)FindResource(colorKey);
+        UpdateResultIcon.Visibility = Visibility.Visible;
+        UpdateResultIcon.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
+        HeaderVersion.ToolTip = reason;
+        HeaderVersion.Visibility = Visibility.Visible;
+        HeaderVersion.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
+        _updateResultTimer.Stop();
+        _updateResultTimer.Tick -= ResetUpdateResult;
+        _updateResultTimer.Tick += ResetUpdateResult;
+        _updateResultTimer.Start();
+        if (!IsVisible || WindowState == WindowState.Minimized) ShowToast(text + (reason != null ? ": " + reason : ""), colorKey);
+    }
+
+    private void ResetUpdateResult(object? sender, EventArgs e)
+    {
+        _updateResultTimer.Stop();
+        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
+        HeaderVersion.ClearValue(TextBlock.ForegroundProperty);
+        HeaderVersion.ToolTip = null;
+        UpdateResultIcon.Visibility = Visibility.Collapsed;
+        ApplyResponsive(); // на узком окне подпись снова скрывается
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -1295,7 +1620,7 @@ public partial class MainWindow : Window
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);
-        if (MaxButton != null) MaxButton.Content = WindowState == WindowState.Maximized ? "❐" : "☐";
+        if (MaxIcon != null) MaxIcon.Kind = WindowState == WindowState.Maximized ? "copy" : "square";
     }
 
     private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);
@@ -1323,19 +1648,18 @@ public partial class MainWindow : Window
         ColFav.Visibility = v;  // узкое окно: звездочка через меню строки
         ApplyActions.Visibility = v;
         HeaderSep.Visibility = v;
-        Subtitle.Visibility = v;
-        AppTitle.Visibility = v;
         DnsLine.Visibility = v;
         CompactConnect.Visibility = cv;
         ConnText.MaxWidth = compact ? 200 : 300;
-        ConnPill.Margin = compact ? new Thickness(12, 0, 0, 0) : new Thickness(28, 0, 0, 0);
+        ConnPill.Margin = new Thickness(0);
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
         ColStatus.Width = compact ? new DataGridLength(40) : new DataGridLength(128);
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
         ServerGrid.RowStyle = compact ? (Style)FindResource("RowCompact") : null;
         ServerGrid.Tag = compact ? "compact" : null; // по нему строки прячут текст статуса (см. XAML)
-        ModeButton.Content = compact ? "Полный вид" : "Компактно";
+        ModeButtonText.Text = compact ? "Полный вид" : "Компактно";
+        ((Controls.Icon)((StackPanel)ModeButton.Content).Children[0]).Kind = compact ? "expand" : "shrink";
         if (compact)
         {
             // В компактном виде — только рабочие серверы.
@@ -1352,7 +1676,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            MinWidth = 1000; MinHeight = 560;
+            MinWidth = 1000; MinHeight = 760; // ниже проверка подключения забирала все место у таблицы
             Grid.SetRow(HeaderStats, 0); Grid.SetColumn(HeaderStats, 1); Grid.SetColumnSpan(HeaderStats, 1);
             HeaderStats.Margin = new Thickness(18, 0, 0, 0);
             HeaderStats.HorizontalAlignment = HorizontalAlignment.Left;
@@ -1380,11 +1704,14 @@ public partial class MainWindow : Window
         ColLocation.Visibility = ColServices.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
         // Ширины колонок (см. XAML): без источника и без стабильности и оценки таблица нужна от ~1100 px,
         // с ними от ~1360 px, со всеми колонками от ~1540 px окна.
-        ColSource.Visibility = full && w >= 1540 ? Visibility.Visible : Visibility.Collapsed;
+        ColSource.Visibility = full ? Visibility.Visible : Visibility.Collapsed; // узкая колонка с одной кнопкой: место есть всегда
         ColStab.Visibility = ColScore.Visibility = full && w >= 1360 ? Visibility.Visible : Visibility.Collapsed;
 
         // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
         TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Версия внизу на узком окне теснит ссылки; она остается в заголовке окна
+        HeaderVersion.Visibility = full && w < 1200 ? Visibility.Collapsed : Visibility.Visible;
 
         if (!full) return; // компактный вид шапку раскладывает сам
 
@@ -1457,6 +1784,7 @@ public partial class MainWindow : Window
         SetConnectContent("Подключаю…");
         try
         {
+            ShowBusyBar(); // подключение: сколько осталось, неизвестно, поэтому полоса бегущая
             // 1. Проверка перед подключением — если последняя была давно или неудачной (свежую не повторяем, это экономит время).
             if (s.Status is not (ServerStatus.Ok or ServerStatus.Partial) || s.LastChecked == null ||
                 DateTime.Now - s.LastChecked > TimeSpan.FromMinutes(10))
@@ -1532,12 +1860,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// После подключения: что в системе мешает DNS из DNEX (VPN, безопасный DNS браузера, прокси, hosts,
+    /// После подключения: что в системе мешает DNS из CHIMERION (VPN, безопасный DNS браузера, прокси, hosts,
     /// чужие DNS на других адаптерах). Пишет в журнал и показывает, что отключить. Сторожу окно не показывается.
     /// </summary>
     private void ReportSystemIssues(bool quiet)
     {
-        var addrs = DnsSwitcher.GetActive()?.Addresses ?? new List<string>();
+        var addrs = DnsSwitcher.GetActive()?.OnAdapters ?? new List<string>();
         var issues = SystemCheck.Run(addrs);
         if (issues.Count == 0) { Log("Помех в системе не найдено"); return; }
         foreach (var i in issues) Log($"Помеха: {i.Title}. {i.Fix}");
@@ -1584,6 +1912,7 @@ public partial class MainWindow : Window
         {
             SetConnectContent("Отключаю…");
             ProgressText.Text = "Отключаю…";
+            ShowBusyBar();
             // «До» — последняя проверка в подключенном виде. Новая шла бы через DNS, который мог уже умереть,
             // и задержала бы возврат интернета на десятки секунд
             _before = _after ?? _traySnap;
@@ -1631,14 +1960,15 @@ public partial class MainWindow : Window
         AnimateConnectColor(on ? "BadButton" : "AccentButton");
         UpdateSwitchButton();
         var activeName = on ? (_servers.FirstOrDefault(x => x.Id == active!.ServerId)?.ShortName ?? DnsServer.Clip(active!.Name)) : null;
-        ConnText.Text = on ? $"Подключено · {activeName}" : "Не подключено";
+        ConnText.Text = on ? $"Подключено · {activeName}" : "Не подключено: нажмите «Подключить»";
         UpdateTray(on ? _servers.FirstOrDefault(x => x.Id == active!.ServerId) : null, activeName);
         foreach (var srv in _servers) srv.IsConnected = on && srv.Id == active!.ServerId;
         _view?.Refresh(); // подключенный сервер поднимается наверх
         UpdateTrayServices();
         UpdateHeaderStats();
-        ConnPill.BorderBrush = (System.Windows.Media.Brush)FindResource(on ? "Ok" : "Border");
-        ConnPill.Background = (System.Windows.Media.Brush)FindResource(on ? "OkSoft" : "Surface");
+        // По ссылке на палитру, а не снимком: при смене темы карточка перекрашивается вместе со всем окном
+        ConnPill.SetResourceReference(Border.BorderBrushProperty, on ? "Ok" : "Border");
+        ConnPill.SetResourceReference(Border.BackgroundProperty, on ? "OkSoft" : "Surface");
         _watchdogFails = 0;
         if (on) _watchdog.Start(); else _watchdog.Stop();
         UpdateConnectionLocation();
@@ -1658,8 +1988,10 @@ public partial class MainWindow : Window
         if (DnsSwitcher.GetActive() is not { } active) return;
         // Копия данных для тестов и снимков: подключение в ней чужое, DNS этого компьютера не трогаем
         if (Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1") return;
-        var mine = active.Addresses.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
-        if (mine.Count == 0) return;
+        var mine = active.OnAdapters.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
+        // Режим «Два DNS»: кроме адаптеров проверяем правила NRPT (их мог снять откат системы или другая программа)
+        bool rulesLost = active.Split && !SplitDns.RulesPresent();
+        if (mine.Count == 0 && !rulesLost) return;
 
         var waitUntil = DateTime.Now.AddSeconds(90);
         bool waited = false;
@@ -1676,12 +2008,13 @@ public partial class MainWindow : Window
         }
 
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
-        if (mine.Any(current.Contains))
+        if (!rulesLost && (mine.Count == 0 || mine.Any(current.Contains)))
         {
             Log($"DNS «{active.Name}» на месте");
             return;
         }
-        Log($"После запуска DNS системы другой ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
+        Log(rulesLost ? $"После запуска правила для доменов ИИ пропали. Возвращаю «{active.Name}»"
+                      : $"После запуска DNS системы другой ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
         if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } server)
         {
             Log($"Сервера «{active.Name}» больше нет в списке. Подключаюсь к лучшему по стабильности");
@@ -1721,10 +2054,12 @@ public partial class MainWindow : Window
 
         // Защита от сброса: на адаптерах должны стоять адреса подключения
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
-        var mine = active.Addresses.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
-        if (mine.Count > 0 && !mine.Any(current.Contains))
+        var mine = active.OnAdapters.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
+        bool rulesLost = active.Split && !SplitDns.RulesPresent();
+        if ((mine.Count > 0 && !mine.Any(current.Contains)) || rulesLost)
         {
-            Log($"Сторож: DNS системы сброшен ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
+            Log(rulesLost ? $"Сторож: пропали правила для доменов ИИ. Возвращаю «{active.Name}»"
+                          : $"Сторож: DNS системы сброшен ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
             HideUndo();
             if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is { } same && await ConnectToAsync(same, auto: true))
                 ShowToast($"DNS был сброшен. Подключение «{same.DisplayName}» возвращено", "Warn");
@@ -1765,14 +2100,14 @@ public partial class MainWindow : Window
         Log("Сторож: замена не нашлась. Отключаюсь и возвращаю исходные DNS");
         await DisconnectAsync("сервер перестал отвечать, замена не нашлась");
         DnexDialog.Show($"«{active.Name}» перестал отвечать",
-            "Рабочей замены не нашлось. DNEX отключилась и вернула исходные настройки DNS.", DialogKind.Warn, "Сторож");
+            "Рабочей замены не нашлось. CHIMERION отключилась и вернула исходные настройки DNS.", DialogKind.Warn, "Сторож");
     }
 
     // ---------- VPN ----------
 
     private HashSet<string> _vpnSeen = new();
 
-    /// <summary>Следит за сетью: если при подключенном DNEX включили VPN, предупреждает.</summary>
+    /// <summary>Следит за сетью: если при подключенном CHIMERION включили VPN, предупреждает.</summary>
     private void WatchVpn()
     {
         _vpnSeen = SystemCheck.ActiveVpns().ToHashSet();
@@ -1785,11 +2120,11 @@ public partial class MainWindow : Window
         var added = now.Except(_vpnSeen).ToList();
         _vpnSeen = now;
         if (added.Count == 0 || DnsSwitcher.GetActive() == null) return;
-        var text = $"Включен VPN: {string.Join(", ", added)}. Пока он работает, DNS из DNEX может не действовать";
+        var text = $"Включен VPN: {string.Join(", ", added)}. Пока он работает, DNS из CHIMERION может не действовать";
         Log(text);
         ShowToast(text, "Warn");
         // Окно может быть спрятано в трей: уведомление Windows видно всегда
-        _tray?.ShowBalloonTip(8000, "DNEX: включен VPN", "Пока VPN работает, DNS из DNEX может не действовать. Отключите VPN или DNEX.",
+        _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: включен VPN"), Loc.T("Пока VPN работает, DNS из CHIMERION может не действовать. Отключите VPN или CHIMERION."),
             System.Windows.Forms.ToolTipIcon.Warning);
     }
 
@@ -1989,8 +2324,16 @@ public partial class MainWindow : Window
 
         bool hasIp = IPAddress.TryParse(primary, out _);
         bool hasDoh = Uri.TryCreate(doh, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
-        if (!hasIp && !hasDoh) { Log("Укажите корректный основной IP или DoH-адрес (https://…)"); return; }
-        if (secondary.Length > 0 && !IPAddress.TryParse(secondary, out _)) { Log("Некорректный резервный IP"); return; }
+        // Ошибки ввода видны сразу (всплывающее сообщение), а не только в журнале
+        void Fail(string text, Control field) { Log(text); ShowToast(text, "Warn"); field.Focus(); }
+        if (!hasIp && !hasDoh)
+        {
+            Fail(primary.Length == 0 && doh.Length == 0 ? "Укажите основной IP (например 203.0.113.10) или адрес DoH"
+                 : primary.Length > 0 ? $"«{primary}» не похож на IP-адрес: нужен вид 203.0.113.10, без порта и запятых"
+                 : "Адрес DoH должен начинаться с https://", primary.Length > 0 || doh.Length == 0 ? AddPrimary : AddDoh);
+            return;
+        }
+        if (secondary.Length > 0 && !IPAddress.TryParse(secondary, out _)) { Fail($"«{secondary}» не похож на IP-адрес", AddSecondary); return; }
 
         var s = new DnsServer
         {
@@ -1998,9 +2341,24 @@ public partial class MainWindow : Window
             Primary = hasIp ? primary : "",
             Secondary = secondary.Length > 0 ? secondary : null,
             DohUrl = hasDoh ? doh : null,
+            Manual = true,
         };
-        if (_known.Contains(s.Key)) { Log("Такой сервер уже есть"); return; }
+        if (_servers.FirstOrDefault(x => x.Key == s.Key) is { } existing)
+        {
+            // Уже в списке: показываем его, а не молчим
+            ShowToast($"Такой сервер уже есть: {existing.DisplayName}", "Warn");
+            Log($"Такой сервер уже есть: {existing.DisplayName}");
+            existing.Manual = true;
+            AllTab.IsChecked = true;
+            SearchBox.Clear();
+            _view?.Refresh();
+            ServerGrid.SelectedItem = existing;
+            ServerGrid.ScrollIntoView(existing);
+            return;
+        }
 
+        // Удаленный раньше или убранный автоочисткой: раз добавлен вручную, больше не считается мусором
+        if (_junk.Remove(s.Key)) try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
         _known.Add(s.Key);
         s.JustAdded = true;
         _servers.Add(s);
@@ -2025,6 +2383,7 @@ public partial class MainWindow : Window
         ServerGrid.SelectedItem = s;
         ServerGrid.ScrollIntoView(s);
         Log($"Добавлен «{s.Name}», проверяю");
+        ShowToast($"Сервер «{s.Name}» добавлен, проверяю");
         _ = RunChecksAsync(new List<DnsServer> { s });
         _ = ResolveLocationsAsync();
     }
@@ -2231,7 +2590,7 @@ public partial class MainWindow : Window
     private int AutoPurge(bool silent = false)
     {
         var activeId = DnsSwitcher.GetActive()?.ServerId;
-        var junk = _servers.Where(s => s.Id != activeId && s.Status != ServerStatus.Checking && !_purgeKeep.Contains(s.Id) &&
+        var junk = _servers.Where(s => s.Id != activeId && s.Status != ServerStatus.Checking && !_purgeKeep.Contains(s.Id) && !s.Manual &&
                                        (SourceParser.IsNoise(s) || s.IsJunk)).ToList();
         if (junk.Count == 0) return 0;
         // Для отмены: места в списке и прежние отметки в мусоре
@@ -2606,12 +2965,35 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _trayTimer = new() { Interval = TimeSpan.FromMinutes(5) };
 
     /// <summary>Запоминает свежий снимок для трея и перезапускает отсчет до следующей проверки.</summary>
+    private readonly EgressWatch _egressWatch = new();
+
+    /// <summary>
+    /// Страна, из которой сервис видит подключение, сменилась без смены сервера: прокси перевел трафик на другой узел.
+    /// Предупреждение в журнал, на экран и в трей (если окно скрыто). Выход в страну, где сервис закрыт, отмечается красным.
+    /// </summary>
+    private void CheckEgressChange(NetSnapshot snap)
+    {
+        var active = DnsSwitcher.GetActive();
+        var changes = _egressWatch.Update(active?.ServerId.ToString(), snap.Services.Select(s => (s.Name, s.Egress?.Country)));
+        foreach (var c in changes)
+        {
+            var text = $"{c.Service} теперь видит вас из страны {GeoLocation.CountryName(c.To)}, раньше {GeoLocation.CountryName(c.From)}";
+            if (c.ToClosed) text += $". В этой стране {c.Service} не работает: попробуйте другой сервер";
+            Log("Смена страны выхода: " + text);
+            ShowToast(text, c.ToClosed ? "Bad" : "Warn");
+            if (!IsVisible)
+                _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: сменилась страна выхода"), Loc.T(text),
+                    c.ToClosed ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
+        }
+    }
+
     private void SetTraySnapshot(NetSnapshot? snap)
     {
         if (snap != null)
         {
             _traySnap = snap;
             SyncActiveSummary(snap);
+            CheckEgressChange(snap);
         }
         UpdateTrayServices();
         UpdateHeaderStats();
@@ -2647,7 +3029,12 @@ public partial class MainWindow : Window
     private void UpdateHeaderStats()
     {
         var active = DnsSwitcher.GetActive();
-        HeaderStats.Visibility = active == null ? Visibility.Collapsed : Visibility.Visible;
+        var bypass = UpdateBypassStat();
+        HeaderStats.Visibility = active == null && !bypass ? Visibility.Collapsed : Visibility.Visible;
+        // Без подключения в шапке только обход: пинг и ИИ относятся к серверу
+        var conn = active == null ? Visibility.Collapsed : Visibility.Visible;
+        StatPingBlock.Visibility = StatSep1.Visibility = StatStabBlock.Visibility = StatSep2.Visibility = StatServicesBlock.Visibility = ActiveRefresh.Visibility = conn;
+        StatSep3.Visibility = active != null && bypass ? Visibility.Visible : Visibility.Collapsed;
         if (active == null) return;
         var srv = _servers.FirstOrDefault(x => x.Id == active.ServerId);
         StatPing.Text = srv?.LatencyMs == null ? "—" : $"{srv.PingText} мс";
@@ -2655,6 +3042,25 @@ public partial class MainWindow : Window
         StatStab.Text = srv?.Stability ?? "—";
         var snap = _traySnap;
         StatServices.Text = snap == null ? "—" : $"{snap.Services.Count(x => x.Access.StartsWith("✓"))} из {snap.Services.Count}";
+    }
+
+    /// <summary>
+    /// Блок «В обходе» в шапке: сколько сайтов идет через zapret, а при обходе по адресам и сколько сетей.
+    /// Возвращает, виден ли блок (обход работает).
+    /// </summary>
+    private bool UpdateBypassStat()
+    {
+        var z = _tools.OfType<ZapretTool>().First();
+        var on = z.IsInstalled && z.IsRunning();
+        StatBypassBlock.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (!on) return false;
+        var (sites, nets) = z.Coverage(BypassCatalog.LoadCached());
+        var n = new System.Globalization.CultureInfo("ru-RU").NumberFormat;
+        StatBypass.Text = nets > 0 ? $"{sites.ToString("N0", n)} сайтов · {nets.ToString("N0", n)} сетей" : $"{sites.ToString("N0", n)} сайтов";
+        StatBypassBlock.ToolTip = nets > 0
+            ? $"zapret обходит блокировку для {sites:N0} сайтов из списков и для {nets:N0} сетей по адресам (IPSet), в том числе сайтов на Cloudflare и хостингах"
+            : $"zapret обходит блокировку для {sites:N0} сайтов из списков. Обход по адресам (IPSet) выключен: его можно включить в «Инструментах»";
+        return true;
     }
 
     /// <summary>Проверяет сервисы в фоне для трея. Повторный вызов во время проверки пропускается.</summary>
@@ -2684,15 +3090,20 @@ public partial class MainWindow : Window
         {
             Renderer = new TrayRenderer(),
             Font = new System.Drawing.Font("Segoe UI", 9.5f),
-            BackColor = System.Drawing.ColorTranslator.FromHtml("#1C1F26"),
-            ForeColor = System.Drawing.ColorTranslator.FromHtml("#E7E9EE"),
+            BackColor = Palette.Get("MenuBg"),
+            ForeColor = Palette.Get("Text"),
             ShowImageMargin = false,
             ShowCheckMargin = false,
-            Padding = new System.Windows.Forms.Padding(4),
+            // Без боковых отступов: пункты меню WinForms ставит от левого края, надписи — с отступом меню.
+            // Одинаковая ширина и ноль по бокам выравнивают все строки по одной линии
+            Padding = new System.Windows.Forms.Padding(0, 4, 0, 4),
         };
-        var pad = new System.Windows.Forms.Padding(10, 8, 10, 8);
+        menu.Opened += (_, _) => TrayMenu.Round(menu);
+        var pad = new System.Windows.Forms.Padding(12, 8, 12, 8);
         // Строки статуса не выделяются при наведении: это надписи, а не пункты.
-        _trayStatus = new System.Windows.Forms.ToolStripLabel("○ Не подключено") { Padding = pad };
+        _trayStatus = new System.Windows.Forms.ToolStripLabel("Не подключено") { Padding = pad, Image = TrayMenu.Dot(Palette.Get("Muted")),
+            DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.ImageAndText, ImageAlign = System.Drawing.ContentAlignment.MiddleLeft,
+            TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText };
         menu.Items.Add(_trayStatus);
         _trayPing = new TrayPingStrip();
         menu.Items.Add(new System.Windows.Forms.ToolStripControlHost(_trayPing)
@@ -2701,7 +3112,7 @@ public partial class MainWindow : Window
             Size = _trayPing.Size,
             Margin = System.Windows.Forms.Padding.Empty,
             Padding = System.Windows.Forms.Padding.Empty,
-            BackColor = System.Drawing.ColorTranslator.FromHtml("#1C1F26"),
+            BackColor = Palette.Get("MenuBg"),
         });
         _trayStab = new System.Windows.Forms.ToolStripLabel("Стабильность: —") { Padding = pad };
         menu.Items.Add(_trayStab);
@@ -2713,7 +3124,7 @@ public partial class MainWindow : Window
             Size = _traySvc.Size,
             Margin = System.Windows.Forms.Padding.Empty,
             Padding = System.Windows.Forms.Padding.Empty,
-            BackColor = System.Drawing.ColorTranslator.FromHtml("#1C1F26"),
+            BackColor = Palette.Get("MenuBg"),
         });
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Открыть", () => ShowFromTray()));
@@ -2723,21 +3134,44 @@ public partial class MainWindow : Window
         _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]));
         menu.Items.Add(_trayTg);
         menu.Items.Add(_trayZapret);
-        menu.Opening += (_, _) => UpdateToolsTray(); // состояние могло поменяться само (программу закрыли вручную)
+        // Режимы в один клик: подменю «Режим»
+        var modes = new System.Windows.Forms.ToolStripMenuItem("Режим") { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8) };
+        modes.DropDown.BackColor = menu.BackColor;
+        modes.DropDown.ForeColor = menu.ForeColor;
+        modes.DropDown.Renderer = menu.Renderer;
+        modes.DropDown.Padding = new System.Windows.Forms.Padding(0, 4, 0, 4);
+        // Подменю без пустого поля под картинки (из-за него текст стоял далеко от края) и в том же виде, что меню
+        if (modes.DropDown is System.Windows.Forms.ToolStripDropDownMenu ddm) { ddm.ShowImageMargin = false; ddm.ShowCheckMargin = false; }
+        modes.DropDown.Opened += (_, _) => TrayMenu.Round(modes.DropDown);
+        foreach (var (mode, title, hint) in Modes)
+        {
+            var mi = TrayItem(title, () => _ = ApplyModeAsync(mode));
+            mi.ToolTipText = hint;
+            modes.DropDownItems.Add(mi);
+        }
+        menu.Items.Add(modes);
+        menu.Opening += (_, _) => { UpdateToolsTray(); TranslateTray(); }; // состояние могло поменяться само (программу закрыли вручную)
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Выход", ExitFromTray));
+        // Ширина пунктов задана явно: раньше пункты выходили шире меню (291 против 264) и стрелка подменю обрезалась
+        FixWidths(menu.Items, TrayWidth.Menu);
+        FixWidths(modes.DropDownItems, 190);
+        menu.Opening += (_, _) => FitMenu(menu, TrayWidth.Menu);
+        modes.DropDown.Opening += (_, _) => FitMenu(modes.DropDown, 190);
 
         _tray = new System.Windows.Forms.NotifyIcon
         {
-            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!),
-            Text = "DNEX: не подключено",
+            Icon = Controls.Brand.TrayIcon(), // знак в текущих цветах, как в окне
+            Text = "CHIMERION: не подключено",
             ContextMenuStrip = menu,
             Visible = true,
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
+        // Щелчок левой кнопкой открывает окно (как у других программ в трее), правая — меню
+        _tray.MouseClick += (_, e) => { if (e.Button == System.Windows.Forms.MouseButtons.Left) ShowFromTray(); };
         _trayTimer.Tick += async (_, _) =>
         {
-            // Проверка по таймеру (по умолчанию каждые 5 минут) нужна, пока DNEX подключена. Без подключения
+            // Проверка по таймеру (по умолчанию каждые 5 минут) нужна, пока CHIMERION подключена. Без подключения
             // таймер обновляет только компактный блок, если он открыт. После выхода из программы проверок нет.
             if (DnsSwitcher.GetActive() == null && !(_compact && IsVisible)) return;
             await RefreshTrayServicesAsync();
@@ -2745,9 +3179,42 @@ public partial class MainWindow : Window
         UpdateTrayServices();
     }
 
+    /// <summary>
+    /// Ширина строк меню трея. Пункты меню WinForms ставит от левого края, надписи на 8 правее: надписи на 8 уже,
+    /// а их текст на 8 левее, чтобы все начиналось с одной линии.
+    /// </summary>
+    private static void FixWidths(System.Windows.Forms.ToolStripItemCollection items, int width)
+    {
+        foreach (System.Windows.Forms.ToolStripItem i in items)
+        {
+            if (i is System.Windows.Forms.ToolStripMenuItem)
+            {
+                i.AutoSize = false;
+                i.Size = new System.Drawing.Size(width, 34);
+            }
+            else if (i is System.Windows.Forms.ToolStripLabel)
+            {
+                i.AutoSize = false;
+                i.Size = new System.Drawing.Size(width - 8, 32);
+                i.Padding = new System.Windows.Forms.Padding(6, 8, 12, 8); // 8 (сдвиг WinForms) + 6 = линия текста пунктов (14)
+                i.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            }
+        }
+    }
+
+    /// <summary>Окно меню ровно по ширине пунктов: без пустой полосы справа, подменю открывается вплотную.</summary>
+    private static void FitMenu(System.Windows.Forms.ToolStripDropDown dd, int width)
+    {
+        dd.AutoSize = true;
+        dd.PerformLayout();
+        var h = dd.Height;
+        dd.AutoSize = false;
+        dd.Size = new System.Drawing.Size(width + 2, h);
+    }
+
     private static System.Windows.Forms.ToolStripMenuItem TrayItem(string text, Action onClick)
     {
-        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(10, 8, 18, 8) };
+        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8) };
         item.Click += (_, _) => onClick();
         return item;
     }
@@ -2756,13 +3223,14 @@ public partial class MainWindow : Window
     private void UpdateTray(DnsServer? srv, string? name)
     {
         if (_trayStatus == null || _tray == null) return;
-        _trayStatus.Text = name == null ? "○ Не подключено" : $"● {DnsServer.Clip(name, 22)}";
-        _trayStatus.ForeColor = System.Drawing.ColorTranslator.FromHtml(name == null ? "#8C93A3" : "#3DD68C");
+        _trayStatus.Text = name == null ? "Не подключено" : DnsServer.Clip(name, 26);
+        _trayStatus.ForeColor = Palette.Get(name == null ? "Muted" : "Ok");
+        _trayStatus.Image = TrayMenu.Dot(Palette.Get(name == null ? "Muted" : "Ok"));
         if (_trayPing != null)
             _trayPing.SetPing(srv?.LatencyMs, srv?.LatencyMs == null ? "Пинг: —" : $"Пинг: {srv.PingText} мс");
         if (_trayStab != null)
             _trayStab.Text = srv == null ? "Стабильность: —" : $"Стабильность: {srv.Stability}";
-        var tip = name == null ? "DNEX: не подключено" : $"DNEX: подключено, {name}";
+        var tip = name == null ? "CHIMERION: не подключено" : $"CHIMERION: подключено, {name}";
         _tray.Text = tip.Length <= 63 ? tip : tip[..63]; // подсказка трея не длиннее 63 символов
     }
 
@@ -2777,6 +3245,46 @@ public partial class MainWindow : Window
             // 0 — не проверено, 1 — доступен, 2 — недоступен
             var state = svc == null ? 0 : svc.Access.StartsWith("✓") ? 1 : 2;
             _traySvc.SetState(name, state);
+        }
+    }
+
+    /// <summary>
+    /// Домен из «Сайтов для обхода» в Smart DNS: добавляется в свои домены «Два DNS». Возвращает пояснение для подсказки.
+    /// Если «Два DNS» включены и есть подключение, правила обновляются сразу.
+    /// </summary>
+    private string SendToSmartDns(string host)
+    {
+        var list = _settings.SplitDns.ExtraAiDomains;
+        if (!list.Contains(host, StringComparer.OrdinalIgnoreCase)) list.Add(host);
+        try { Storage.Save("settings.json", _settings); } catch (Exception e) { Log("Не удалось сохранить настройки: " + e.Message); }
+        Log($"{host}: отправлен в Smart DNS («Два DNS» → свои домены)");
+        if (!_settings.SplitDns.Enabled)
+        {
+            ShowToast($"{host} добавлен в Smart DNS. Заработает, когда включите «Два DNS» в настройках", "Warn");
+            return "Добавлен в свои домены «Два DNS». Включите «Два DNS» в настройках";
+        }
+        if (DnsSwitcher.GetActive() != null) _ = ApplySplitChangeAsync();
+        ShowToast($"{host} теперь идет через Smart DNS");
+        return "Добавлен в свои домены «Два DNS»";
+    }
+
+    /// <summary>Исправления из «Диагностики», которые делает главное окно.</summary>
+    private async Task DiagFixAsync(string action)
+    {
+        switch (action)
+        {
+            case "connect":
+                var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial).OrderBy(s => s.Rank).FirstOrDefault();
+                if (best == null) { ShowToast("Рабочих серверов нет: нажмите «Найти новые серверы»", "Warn"); return; }
+                await ConnectToAsync(best);
+                break;
+            case "reconnect":
+                if (DnsSwitcher.GetActive() is { } a && _servers.FirstOrDefault(s => s.Id == a.ServerId) is { } cur)
+                    await ConnectToAsync(cur); // ApplyAsync заново ставит DNS и правила на адаптеры
+                break;
+            case "switch": await SwitchToBestAsync(); break;
+            case "update": CheckUpdate_Click(this, new RoutedEventArgs()); break;
+            case "tools": ToolsToggle_Click(this, new RoutedEventArgs()); break;
         }
     }
 
@@ -2805,6 +3313,12 @@ public partial class MainWindow : Window
         var autoBefore = AutoStart.IsEnabled();
         var w = new SettingsWindow(_settings) { Owner = this };
         w.ShowDialog();
+        if (w.RollbackRequested) { RollbackAndRestart(); return; }
+        if (w.SplitChanged)
+        {
+            if (!w.Saved) _settings = LoadSettings(); // «Два DNS» сохраняются сразу, даже если настройки закрыли кнопкой «Отмена»
+            _ = ApplySplitChangeAsync();
+        }
         if (w.Saved)
         {
             _settings = LoadSettings();
@@ -2817,6 +3331,7 @@ public partial class MainWindow : Window
                     Log("Автозапуск вернуть не удалось: права администратора не выданы");
                 _settings = LoadSettings();
                 ApplyTimerSettings();
+                ThemeColors.Apply(_settings.Colors, _settings.Theme); // отмена возвращает и прежние цвета
                 Log("Сохранение настроек отменено");
             });
         }
@@ -2847,7 +3362,8 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
-        StopToolsOnExit();
+        if (_initStarted && !_restarting) Updater.ConfirmStarted(); // дошли до штатного выхода: новая версия рабочая
+        // Сначала убираем значок: пользователь видит, что программа закрылась, пока выключаются инструменты
         _trayTimer.Stop();
         if (_tray != null)
         {
@@ -2855,6 +3371,10 @@ public partial class MainWindow : Window
             _tray.Dispose();
             _tray = null;
         }
+        StopToolsOnExit();
+        // Главное окно закрыто — программа завершается. Раньше завершение ждало закрытия последнего окна, и любое
+        // созданное, но не закрытое окно (скрытое или открытое без владельца из трея) оставляло процесс без значка
+        App.ExitNow();
     }
 
     // ---------- Анимации и уведомления ----------
@@ -2887,18 +3407,82 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Содержимое кнопки подключения: значок и текст текущего шага.</summary>
-    private static StackPanel BuildConnectContent(string text)
+    private StackPanel BuildConnectContent(string text)
     {
+        // Цвет надписи кнопки (подобран по контрасту с ее заливкой): белый терялся на лаймовой кнопке
+        var fg = ConnectButton.Foreground as Brush ?? Brushes.White;
         var sp = new StackPanel { Orientation = Orientation.Horizontal };
-        sp.Children.Add(MakeSpinner(13, Brushes.White));
-        sp.Children.Add(new TextBlock { Text = text, Margin = new Thickness(9, 0, 0, 0), FontWeight = FontWeights.SemiBold, Foreground = Brushes.White });
+        sp.Children.Add(MakeSpinner(13, fg));
+        sp.Children.Add(new TextBlock { Text = text, Margin = new Thickness(9, 0, 0, 0), FontWeight = FontWeights.SemiBold, Foreground = fg });
         return sp;
     }
 
     /// <summary>Плавная смена цвета кнопки: синий «Подключить» → красный «Отключить» и обратно.</summary>
+    /// <summary>
+    /// Сменился язык. Текст элементов переводит Loc сам; здесь то, что вне элементов: меню трея и данные в таблице
+    /// (ячейки берут текст из привязок, их перечитываем).
+    /// </summary>
+    private void OnLanguageChanged()
+    {
+        UpdateToolsTray();
+        TranslateTray();
+        foreach (var s in _servers) s.NotifyStability();
+        _view?.Refresh();
+        _compareSig = null;
+        if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
+        _topSig = null;
+        UpdateTopList();
+        UpdateStats();
+        if (_updateResultTimer.IsEnabled) ResetUpdateResult(null, EventArgs.Empty);
+        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
+    }
+
+    /// <summary>Исходный русский текст пунктов меню трея (WinForms: Loc туда не достает).</summary>
+    private readonly Dictionary<System.Windows.Forms.ToolStripItem, string> _trayRu = new();
+
+    /// <summary>Пункты меню трея на текущем языке. Вызывается при открытии меню и при смене языка.</summary>
+    private void TranslateTray()
+    {
+        if (_tray?.ContextMenuStrip is not { } menu) return;
+        void Walk(System.Windows.Forms.ToolStripItemCollection items)
+        {
+            foreach (System.Windows.Forms.ToolStripItem i in items)
+            {
+                if (string.IsNullOrEmpty(i.Text)) { }
+                else if (!_trayRu.TryGetValue(i, out var ru) || (i.Text != ru && i.Text != Loc.T(ru))) _trayRu[i] = ru = i.Text;
+                if (_trayRu.TryGetValue(i, out var orig)) i.Text = Loc.T(orig);
+                if (i is System.Windows.Forms.ToolStripDropDownItem dd) Walk(dd.DropDownItems);
+            }
+        }
+        Walk(menu.Items);
+    }
+
+    /// <summary>Сменились цвета: части, которые окно рисует кодом, перерисовываются с новыми кистями.</summary>
+    private void OnThemeChanged()
+    {
+        // Знак CHIMERION в значках окон и трея: полосы следуют за акцентом
+        Controls.Brand.RefreshWindowIcons();
+        if (_tray != null) { var old = _tray.Icon; _tray.Icon = Controls.Brand.TrayIcon(); old?.Dispose(); }
+        ServerGrid.Resources[SystemColors.HighlightBrushKey] = FindResource("Selection");
+        ServerGrid.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = FindResource("SelectionInactive");
+        ServerGrid.Resources[SystemColors.HighlightTextBrushKey] = FindResource("Text"); // текст выделенной строки читается и на светлой теме
+        foreach (Window w in Application.Current.Windows) Services.DarkTitle.Apply(w); // заголовок окна Windows в цвет темы
+        if (!IsLoaded) return; // при запуске цвета ставятся до загрузки списка: перерисовывать еще нечего
+        if (_connBrush != null) AnimateConnectColor(DnsSwitcher.GetActive() != null ? "BadButton" : "AccentButton");
+        _compareSig = null; // карточки перерисовываются, даже если данные те же: поменялись цвета
+        if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
+        _topSig = null;
+        UpdateTopList();
+        UpdateStatusVisuals();
+        Grid_SelectionChanged(ServerGrid, null!); // строка выбранного сервера над таблицей
+        ServerGrid.Items.Refresh(); // строки заново: логотипы сервисов и цвета, взятые при создании строк
+    }
+
     private void AnimateConnectColor(string key)
     {
         var target = ((SolidColorBrush)FindResource(key)).Color;
+        // Текст по контрасту с заливкой: свой цвет кнопок может быть светлым
+        ConnectButton.Foreground = CompactConnect.Foreground = new SolidColorBrush(ThemeColors.OnFill(target));
         if (_connBrush == null)
         {
             _connBrush = new SolidColorBrush(target);
@@ -2951,12 +3535,32 @@ public partial class MainWindow : Window
 
     private void ShowToast(string text, string colorKey = "Ok")
     {
+        // Окно в трее или свернуто: уведомление в окне никто не увидит. Важное показываем значком в трее
+        if (!IsVisible || WindowState == WindowState.Minimized)
+        {
+            if (colorKey is "Warn" or "Bad") _tray?.ShowBalloonTip(6000, "CHIMERION", Loc.T(text),
+                colorKey == "Bad" ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
+            return;
+        }
         // Внизу одна панель: если видна отмена, уведомление становится ее второй строкой
         if (_undo != null && UndoBar.Visibility == Visibility.Visible)
         {
             SetUndoHint(text.Replace("\n", " · "));
             return;
         }
+        var shown = _toastTimer.IsEnabled;
+        // То же сообщение еще на экране: только продлеваем, без повторной анимации
+        if (shown && ToastText.Text == Loc.T(text)) { _toastTimer.Stop(); _toastTimer.Start(); return; }
+        // Предупреждение или ошибку не затираем сразу: следующее сообщение ждет, пока его прочтут (не дольше очереди из трех)
+        if (shown && _toastKey is "Warn" or "Bad" && DateTime.Now - _toastSince < TimeSpan.FromSeconds(1.5) && colorKey == "Ok")
+        {
+            if (_toastQueue.Count < 3 && !_toastQueue.Contains((text, colorKey))) _toastQueue.Enqueue((text, colorKey));
+            return;
+        }
+        _toastKey = colorKey;
+        _toastSince = DateTime.Now;
+        // Сколько держать: ошибки и длинные сообщения дольше
+        _toastTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(2.4 + text.Length / 30.0 + (colorKey == "Bad" ? 2.5 : colorKey == "Warn" ? 1.2 : 0), 2.8, 9));
         ToastText.Text = text;
         ToastDot.Fill = (Brush)FindResource(colorKey);
         Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
@@ -2974,20 +3578,40 @@ public partial class MainWindow : Window
     private void HideToast()
     {
         _toastTimer.Stop();
+        _toastQueue.Clear();
         Toast.BeginAnimation(UIElement.OpacityProperty, null);
         Toast.Opacity = 0;
     }
 
     /// <summary>Плавный переход размера окна; при запуске — сразу.</summary>
+    /// <summary>
+    /// Окно целиком на рабочей области экрана (без панели задач). Размер по умолчанию 1600×1040 больше экрана ноутбука,
+    /// без этого низ окна с кнопками уходил за край.
+    /// </summary>
+    private void FitToScreen()
+    {
+        if (WindowState != WindowState.Normal) return;
+        var area = SystemParameters.WorkArea;
+        double w = Math.Min(Width, area.Width), h = Math.Min(Height, area.Height);
+        if (w < MinWidth) MinWidth = w;
+        if (h < MinHeight) MinHeight = h;
+        Width = w; Height = h;
+        if (double.IsNaN(Left) || Left + w > area.Right || Left < area.Left) Left = Math.Max(area.Left, area.Left + (area.Width - w) / 2);
+        if (double.IsNaN(Top) || Top + h > area.Bottom || Top < area.Top) Top = Math.Max(area.Top, area.Top + (area.Height - h) / 2);
+    }
+
     private void ResizeTo(double w, double h, bool animate)
     {
-        if (!animate || !IsLoaded) { Width = w; Height = h; return; }
+        var area = SystemParameters.WorkArea;
+        w = Math.Min(w, area.Width);
+        h = Math.Min(h, area.Height);
+        if (!animate || !IsLoaded) { Width = w; Height = h; FitToScreen(); return; }
         var d = Motion(260);
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         var wa = new DoubleAnimation(w, d) { EasingFunction = ease };
         wa.Completed += (_, _) => { BeginAnimation(WidthProperty, null); Width = w; };
         var ha = new DoubleAnimation(h, d) { EasingFunction = ease };
-        ha.Completed += (_, _) => { BeginAnimation(HeightProperty, null); Height = h; };
+        ha.Completed += (_, _) => { BeginAnimation(HeightProperty, null); Height = h; FitToScreen(); };
         BeginAnimation(WidthProperty, wa);
         BeginAnimation(HeightProperty, ha);
         if (Content is UIElement root)
@@ -3077,8 +3701,17 @@ public partial class MainWindow : Window
         _working = true;
         ListActions.IsEnabled = ApplyActions.IsEnabled = false;
         StopButton.Visibility = Visibility.Visible;
+        UpdateStats();
         UpdateStatusVisuals();
         return _cts.Token;
+    }
+
+    /// <summary>Бегущая полоса прогресса для работы без известного объема (подключение, отключение).</summary>
+    private void ShowBusyBar()
+    {
+        WorkBar.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty, null);
+        WorkBar.IsIndeterminate = true;
+        WorkBar.Visibility = Visibility.Visible;
     }
 
     private void EndWork()
@@ -3088,8 +3721,10 @@ public partial class MainWindow : Window
         _working = false;
         ListActions.IsEnabled = ApplyActions.IsEnabled = true;
         StopButton.Visibility = Visibility.Collapsed;
+        UpdateStats(); // пустое состояние таблицы: «идет проверка» сменится итогом
         ProgressText.Text = "";
         WorkBar.Visibility = Visibility.Collapsed;
+        WorkBar.IsIndeterminate = false;
         UpdateStatusVisuals();
         UpdateStats();
     }
@@ -3233,6 +3868,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Кнопка «Копировать»: выбранные строки, а если их нет, все видимые.</summary>
+    private void CloseLog_Click(object sender, RoutedEventArgs e) => LogToggle.IsChecked = false;
+
+    /// <summary>Enter в полях ручного добавления равен кнопке «Добавить».</summary>
+    private void AddPanel_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        Add_Click(sender, e);
+    }
+
     private void CopyLog_Click(object sender, RoutedEventArgs e)
     {
         if (_logView == null) return;

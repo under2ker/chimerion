@@ -51,7 +51,7 @@ public static class EgressTrace
                 catch { sock.Dispose(); throw; }
             };
         using var http = new HttpClient(handler) { Timeout = timeout + timeout };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DNEX/0.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CHIMERION/0.1");
         try
         {
             var text = await http.GetStringAsync($"https://{host}/cdn-cgi/trace", ct);

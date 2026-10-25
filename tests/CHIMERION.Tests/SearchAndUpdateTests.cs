@@ -1,7 +1,7 @@
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Новые правила поиска серверов и запасная проверка обновления через ленту релизов.</summary>
 public class SearchAndUpdateTests
@@ -53,13 +53,13 @@ public class SearchAndUpdateTests
         <?xml version="1.0" encoding="UTF-8"?>
         <feed xmlns="http://www.w3.org/2005/Atom">
           <entry>
-            <title>DNEX 0.1.21</title>
-            <link rel="alternate" type="text/html" href="https://github.com/under2ker/dnex-dns-hub/releases/tag/v0.1.21"/>
+            <title>CHIMERION 0.1.21</title>
+            <link rel="alternate" type="text/html" href="https://github.com/under2ker/chimerion/releases/tag/v0.1.21"/>
             <content type="html">&lt;p&gt;Адреса сервисов в панели.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Первое&lt;/li&gt;&lt;/ul&gt;</content>
           </entry>
           <entry>
-            <title>DNEX 0.1.20</title>
-            <link rel="alternate" type="text/html" href="https://github.com/under2ker/dnex-dns-hub/releases/tag/v0.1.20"/>
+            <title>CHIMERION 0.1.20</title>
+            <link rel="alternate" type="text/html" href="https://github.com/under2ker/chimerion/releases/tag/v0.1.20"/>
             <content type="html">старая</content>
           </entry>
         </feed>
@@ -74,7 +74,7 @@ public class SearchAndUpdateTests
         Assert.Equal(new Version(0, 1, 21), r.Info!.Version);
         Assert.Contains("Адреса сервисов в панели.", r.Info.Notes);
         Assert.Contains("Первое", r.Info.Notes);
-        Assert.Equal("https://github.com/under2ker/dnex-dns-hub/releases/tag/v0.1.21", r.Info.PageUrl);
+        Assert.Equal("https://github.com/under2ker/chimerion/releases/tag/v0.1.21", r.Info.PageUrl);
     }
 
     [Fact]

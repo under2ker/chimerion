@@ -8,7 +8,7 @@ namespace Dnex.Services.Tools;
 /// <summary>
 /// zapret-discord-youtube (github.com/Flowseal/zapret-discord-youtube): обход замедления YouTube и Discord.
 /// Внутри winws.exe из zapret (bol-van) и драйвер WinDivert. Стратегии — файлы general*.bat: каждый запускает
-/// winws.exe со своим набором параметров. DNEX эти bat-файлы не запускает (они вызывают service.bat, который
+/// winws.exe со своим набором параметров. CHIMERION эти bat-файлы не запускает (они вызывают service.bat, который
 /// может ждать ответа в консоли), а берет из них строку запуска winws.exe, подставляет пути и запускает winws
 /// сама, без окна. Нужны права администратора: WinDivert работает с сетевыми пакетами.
 /// </summary>
@@ -94,6 +94,103 @@ public sealed class ZapretTool : Tool
         return sb.ToString();
     }
 
+    // ---------- Свои сайты и обход по адресам ----------
+
+    private const string UserList = "list-general-user.txt";
+    private const string Placeholder = "domain.example.abc";
+
+    /// <summary>
+    /// Свои сайты для обхода. Хранятся в настройках CHIMERION отдельно от наборов; в первый раз переносятся из файла
+    /// списка zapret (туда их могли вписать раньше вручную или прежней версией CHIMERION).
+    /// </summary>
+    public IReadOnlyList<string> UserDomains()
+    {
+        if (State.OwnSites != null) return State.OwnSites;
+        var p = Path.Combine(Lists, UserList);
+        if (!File.Exists(p)) return Array.Empty<string>();
+        return File.ReadAllLines(p).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#') && l != Placeholder).ToList();
+    }
+
+    /// <summary>Сколько доменов уйдет в обход: свои плюс домены выбранных наборов (без повторов).</summary>
+    public int SitesCount(Dnex.Services.BypassCatalog.Data? catalog) => BuildList(catalog).Count;
+
+    private List<string> BuildList(Dnex.Services.BypassCatalog.Data? catalog)
+    {
+        var all = new List<string>(UserDomains());
+        all.AddRange(Dnex.Services.BypassCatalog.DomainsOf(catalog, State.Groups));
+        foreach (var l in State.BigLists.Select(RemoteLists.Get).OfType<RemoteList>().Where(l => !l.IsIp))
+            all.AddRange(RemoteLists.Cached(l));
+        return all.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Сохраняет свои сайты и выбранные наборы и пересобирает список для winws. Если обход работает,
+    /// он перезапускается, чтобы список сразу применился.
+    /// </summary>
+    public async Task SaveSitesAsync(IEnumerable<string> own, IEnumerable<string> groups, IEnumerable<string> bigLists, Dnex.Services.BypassCatalog.Data? catalog)
+    {
+        State.OwnSites = own.Select(Dnex.Services.SplitDns.Clean).Where(d => d.Length > 0).Distinct().ToList();
+        State.Groups = groups.Distinct().ToList();
+        State.BigLists = bigLists.Distinct().ToList();
+        SaveState();
+        foreach (var l in State.BigLists.Select(RemoteLists.Get).OfType<RemoteList>()) await RemoteLists.EnsureAsync(l);
+        WriteUserList(catalog);
+        if (IsRunning() && State.Enabled) { await StopAsync(); await StartAsync(); }
+    }
+
+    /// <summary>
+    /// Файл lists\list-general-user.txt, на который ссылаются все стратегии: свои сайты и наборы. Пустой список
+    /// заменяется заглушкой: пустой файл winws не принимает (так пишет и сборка).
+    /// </summary>
+    private void WriteUserList(Dnex.Services.BypassCatalog.Data? catalog)
+    {
+        var list = BuildList(catalog);
+        Directory.CreateDirectory(Lists);
+        var text = "# Never leave this file empty\r\n# Собрано CHIMERION: свои сайты и готовые наборы. Правьте в CHIMERION, ручные правки перезапишутся\r\n" +
+                   string.Join("\r\n", list.Count > 0 ? list : new List<string> { Placeholder }) + "\r\n";
+        try { File.WriteAllText(Path.Combine(Lists, UserList), text); }
+        catch (UnauthorizedAccessException) { throw new ToolException($"Нет прав на папку {Dir}: запустите CHIMERION с правами администратора"); }
+    }
+
+    /// <summary>
+    /// Сколько покрывает запущенный обход: сайты (основной список сборки и ваши «Сайты для обхода») и, если включен
+    /// обход по адресам, сети из ipset-all.txt. Для шапки главного окна.
+    /// </summary>
+    public (int Sites, int Networks) Coverage(Dnex.Services.BypassCatalog.Data? catalog)
+    {
+        static int Lines(string path)
+        {
+            try
+            {
+                return File.Exists(path)
+                    ? File.ReadLines(path).Count(l => l.Length > 0 && l[0] != '#' && !l.StartsWith("203.0.113.113") && !l.StartsWith("domain.example"))
+                    : 0;
+            }
+            catch (Exception) { return 0; }
+        }
+        var sites = Lines(Path.Combine(Lists, "list-general.txt")) + SitesCount(catalog);
+        return (sites, State.IpSet ? Lines(Path.Combine(Lists, "ipset-all.txt")) : 0);
+    }
+
+    /// <summary>
+    /// Обход по адресам: в ipset-all.txt либо полный список сборки (ipset-all.txt.backup, в нем и сети Cloudflare),
+    /// либо заглушка, как в сборке по умолчанию (режим «none» в service.bat).
+    /// </summary>
+    private void ApplyIpSet()
+    {
+        var target = Path.Combine(Lists, "ipset-all.txt");
+        var full = Path.Combine(Lists, "ipset-all.txt.backup");
+        // Внешний список адресов, если выбран и уже скачан; иначе список сборки
+        var remote = State.IpSetSource is { } id && RemoteLists.Get(id) is { IsIp: true } rl ? RemoteLists.CachedPath(rl) : null;
+        try
+        {
+            if (State.IpSet && remote != null) File.Copy(remote, target, overwrite: true);
+            else if (State.IpSet && File.Exists(full)) File.Copy(full, target, overwrite: true);
+            else File.WriteAllText(target, "203.0.113.113/32\r\n");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* файл занят или нет прав: остается как был */ }
+    }
+
     /// <summary>Пользовательские списки, на которые ссылаются стратегии. Без них winws не стартует; содержимое как у service.bat.</summary>
     private static void EnsureUserLists()
     {
@@ -122,15 +219,32 @@ public sealed class ZapretTool : Tool
     {
         if (IsRunning())
         {
-            if (State.Enabled) return; // уже работает наша копия (например, после перезапуска DNEX)
-            throw new ToolException("winws.exe уже запущен другой программой или вручную. Закройте его, чтобы DNEX управляла обходом сама");
+            if (State.Enabled) return; // уже работает наша копия (например, после перезапуска CHIMERION)
+            throw new ToolException("winws.exe уже запущен другой программой или вручную. Закройте его, чтобы CHIMERION управляла обходом сама");
         }
-        if (ForeignServiceInstalled())
-            throw new ToolException("Установлена служба zapret из service.bat. Удалите ее там (Remove Services), чтобы DNEX управляла обходом сама");
-        if (!IsInstalled) throw new ToolException("zapret не установлен");
-
+        EnsureNoForeignService();
         var strategy = State.Strategy is { } s && File.Exists(Path.Combine(Dir, s)) ? s : DefaultStrategy;
-        var args = ParseArgs(await File.ReadAllTextAsync(Path.Combine(Dir, strategy)), Bin, Lists, State.Games)
+        await LaunchAsync(strategy, State.Games);
+    }
+
+    private static void EnsureNoForeignService()
+    {
+        if (ForeignServiceInstalled())
+            throw new ToolException("Установлена служба zapret из service.bat. Удалите ее там (Remove Services), чтобы CHIMERION управляла обходом сама");
+    }
+
+    /// <summary>Запуск winws.exe со стратегией strategy. Выбор пользователя (State) не меняется.</summary>
+    private async Task LaunchAsync(string strategy, bool games)
+    {
+        if (!IsInstalled) throw new ToolException("zapret не установлен");
+        // Большие списки обновляются перед запуском (без сети остаются прежние копии)
+        foreach (var l in State.BigLists.Append(State.IpSet ? State.IpSetSource : null).OfType<string>().Select(RemoteLists.Get).OfType<RemoteList>())
+            await RemoteLists.EnsureAsync(l);
+        ApplyIpSet();
+        // Наборы могли обновиться с прошлого запуска: список пересобирается из последних принятых
+        if (State.OwnSites != null || State.Groups.Count > 0 || State.BigLists.Count > 0)
+            try { WriteUserList(Dnex.Services.BypassCatalog.LoadCached()); } catch (ToolException) { }
+        var args = ParseArgs(await File.ReadAllTextAsync(Path.Combine(Dir, strategy)), Bin, Lists, games)
                    ?? throw new ToolException($"В стратегии {strategy} не нашлась строка запуска winws.exe. Возможно, формат сборки изменился");
         EnsureUserLists();
 
@@ -150,6 +264,151 @@ public sealed class ZapretTool : Tool
         }
     }
 
+    // ---------- Подбор стратегии ----------
+
+    /// <summary>
+    /// Итог проверки стратегии: открылись ли YouTube и Discord, какие из ваших сайтов догрузились полностью, и за
+    /// сколько. File = null — проверка без обхода.
+    /// </summary>
+    public sealed record StrategyResult(string? File, bool YouTube, bool Discord, long Ms,
+        IReadOnlyList<string>? SitesOk = null, IReadOnlyList<string>? SitesFailed = null)
+    {
+        public string Title => File == null ? "Без обхода" : StrategyTitle(File);
+        public int SitesTotal => (SitesOk?.Count ?? 0) + (SitesFailed?.Count ?? 0);
+        /// <summary>Сколько всего открылось: YouTube, Discord и каждый ваш сайт по единице.</summary>
+        public int Score => (YouTube ? 1 : 0) + (Discord ? 1 : 0) + (SitesOk?.Count ?? 0);
+        public int MaxScore => 2 + SitesTotal;
+    }
+
+    /// <summary>Сколько своих сайтов проверять при подборе: каждая стратегия проверяется на всех, долго не ждем.</summary>
+    private const int MaxPickSites = 8;
+
+    // Что проверяем: сайт YouTube и сервер видео googlevideo; API, шлюз и CDN Discord. Для Discord любой
+    // ответ HTTP означает, что соединение прошло (шлюз отвечает ошибкой на обычный запрос, это нормально)
+    private static readonly string[] YouTubeUrls = { "https://www.youtube.com/", "https://redirector.googlevideo.com/report_mapping" };
+    private static readonly string[] DiscordUrls = { "https://discord.com/api/v9/gateway", "https://gateway.discord.gg/", "https://cdn.discordapp.com/" };
+
+    /// <summary>Запрос через новое соединение: ответ пришел за 7 секунд (сервер не 5xx) и сколько это заняло.</summary>
+    private static async Task<(bool Ok, long Ms)> ProbeAsync(string url, CancellationToken ct)
+    {
+        using var http = new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(5), AllowAutoRedirect = false, UseCookies = false,
+        }) { Timeout = TimeSpan.FromSeconds(7) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CHIMERION/0.1");
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var resp = await http.GetAsync(url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, ct);
+            return ((int)resp.StatusCode < 500, sw.ElapsedMilliseconds);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return (false, sw.ElapsedMilliseconds); }
+    }
+
+    /// <summary>
+    /// Ваш сайт с этой стратегией: страница и ее самый большой файл (стили или скрипт) должны догрузиться полностью
+    /// и без обрыва, всего не дольше 10 секунд. Так ловится и «не открывается вовсе», и «открывается, но
+    /// не догружается» (замедление хостингов и Cloudflare обрывает загрузку на 15–30 КБ).
+    /// </summary>
+    private static async Task<(bool Ok, long Ms)> SiteLoadsAsync(string host, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(TimeSpan.FromSeconds(10));
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var http = new System.Net.Http.HttpClient(new System.Net.Http.SocketsHttpHandler
+            {
+                AllowAutoRedirect = true, MaxAutomaticRedirections = 5, ConnectTimeout = TimeSpan.FromSeconds(5),
+                AutomaticDecompression = System.Net.DecompressionMethods.None, UseCookies = false,
+            });
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
+            http.DefaultRequestHeaders.AcceptEncoding.ParseAdd("identity");
+            var page = await Dnex.Services.SiteCheck.FetchAsync(http, $"https://{host}/", 1_500_000, cts.Token);
+            if (page.Error != null || page.Stalled || page.Status >= 500) return (false, sw.ElapsedMilliseconds);
+            var asset = System.Text.RegularExpressions.Regex.Match(page.Body, @"(?:src|href)=""(/[^""/][^""]*?\.(?:css|js))""");
+            if (asset.Success)
+            {
+                var f = await Dnex.Services.SiteCheck.FetchAsync(http, $"https://{host}{asset.Groups[1].Value}", 3_000_000, cts.Token);
+                if (f.Error != null || f.Stalled) return (false, sw.ElapsedMilliseconds);
+            }
+            return (true, sw.ElapsedMilliseconds);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return (false, sw.ElapsedMilliseconds); }
+    }
+
+    /// <summary>Проверка YouTube, Discord и ваших сайтов сейчас (с тем обходом, что запущен, или без него).</summary>
+    public static async Task<StrategyResult> MeasureAsync(string? file, CancellationToken ct, IReadOnlyList<string>? sites = null)
+    {
+        var yt = YouTubeUrls.Select(u => ProbeAsync(u, ct)).ToList();
+        var dc = DiscordUrls.Select(u => ProbeAsync(u, ct)).ToList();
+        var own = (sites ?? Array.Empty<string>()).Select(h => (Host: h, Task: SiteLoadsAsync(h, ct))).ToList();
+        await Task.WhenAll(yt.Concat(dc).Concat(own.Select(o => o.Task)));
+        bool ytOk = yt.All(t => t.Result.Ok), dcOk = dc.All(t => t.Result.Ok);
+        var ms = yt.Concat(dc).Concat(own.Select(o => o.Task)).Where(t => t.Result.Ok).Select(t => t.Result.Ms).DefaultIfEmpty(0).Max();
+        return new StrategyResult(file, ytOk, dcOk, ms,
+            own.Where(o => o.Task.Result.Ok).Select(o => o.Host).ToList(),
+            own.Where(o => !o.Task.Result.Ok).Select(o => o.Host).ToList());
+    }
+
+    /// <summary>
+    /// Подбор: сначала проверка без обхода, затем каждая стратегия по очереди (запуск, проверка, остановка).
+    /// Нужны права администратора: без них каждая смена стратегии спрашивала бы UAC. После подбора возвращается
+    /// то, что было до него (обход работал или нет, прежняя стратегия). Результаты: лучшие первыми.
+    /// </summary>
+    public async Task<List<StrategyResult>> PickAsync(IProgress<string> progress, CancellationToken ct, IEnumerable<string>? sites = null)
+    {
+        // Кроме YouTube и Discord проверяются ваши сайты из «Сайты для обхода» (не больше восьми)
+        var targets = (sites ?? UserDomains()).Select(Dnex.Services.SplitDns.Clean).Where(d => d.Length > 0).Distinct().Take(MaxPickSites).ToList();
+        if (!DnsSwitcher.IsAdmin()) throw new ToolException("Для подбора нужны права администратора: перезапустите CHIMERION с ними");
+        if (!IsInstalled) throw new ToolException("zapret не установлен");
+        if (IsRunning() && !State.Enabled)
+            throw new ToolException("winws.exe уже запущен другой программой или вручную. Закройте его, чтобы CHIMERION могла проверять стратегии");
+        EnsureNoForeignService();
+
+        var wasRunning = IsRunning();
+        var results = new List<StrategyResult>();
+        try
+        {
+            if (wasRunning) { progress.Report("Останавливаю обход…"); KillWinws(); }
+            progress.Report("Проверяю без обхода…");
+            results.Add(await MeasureAsync(null, ct, targets));
+            var list = Strategies();
+            for (int i = 0; i < list.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                progress.Report($"Проверяю {StrategyTitle(list[i])} ({i + 1} из {list.Count})…");
+                try
+                {
+                    await LaunchAsync(list[i], State.Games);
+                    await Task.Delay(1000, ct); // обходу нужно мгновение, чтобы встать на пакеты
+                    results.Add(await MeasureAsync(list[i], ct, targets));
+                }
+                catch (ToolException) { results.Add(new StrategyResult(list[i], false, false, 0, Array.Empty<string>(), targets)); }
+                finally { KillWinws(); }
+            }
+        }
+        finally
+        {
+            KillWinws();
+            if (wasRunning)
+            {
+                progress.Report("Возвращаю прежнюю стратегию…");
+                try { await LaunchAsync(State.Strategy ?? DefaultStrategy, State.Games); } catch (ToolException) { }
+            }
+        }
+        return Rank(results);
+    }
+
+    /// <summary>Лучшие первыми: больше открытых сервисов, при равенстве быстрее. «Без обхода» остается в списке для сравнения.</summary>
+    public static List<StrategyResult> Rank(IEnumerable<StrategyResult> results) =>
+        results.OrderByDescending(r => r.Score).ThenBy(r => r.Score == 0 ? long.MaxValue : r.Ms).ThenBy(r => r.File == null ? 0 : 1).ToList();
+
+    private static void KillWinws()
+    {
+        Kill(Process.GetProcessesByName("winws"));
+    }
+
     public override async Task StopAsync()
     {
         if (!IsRunning()) return;
@@ -166,7 +425,7 @@ public sealed class ZapretTool : Tool
     /// </summary>
     protected override async Task PlaceAsync(string file, IProgress<string> progress, CancellationToken ct)
     {
-        var temp = Path.Combine(Path.GetTempPath(), "DNEX-tools", "zapret-" + Guid.NewGuid().ToString("N"));
+        var temp = Path.Combine(Path.GetTempPath(), "CHIMERION-tools", "zapret-" + Guid.NewGuid().ToString("N"));
         try
         {
             await Task.Run(() => ZipFile.ExtractToDirectory(file, temp), ct);
@@ -186,7 +445,7 @@ public sealed class ZapretTool : Tool
             }
             catch (UnauthorizedAccessException)
             {
-                throw new ToolException($"Нет прав на папку {Dir}. Скорее всего, прошлую версию ставила DNEX с правами администратора: запустите DNEX от администратора и повторите");
+                throw new ToolException($"Нет прав на папку {Dir}. Скорее всего, прошлую версию ставила CHIMERION с правами администратора: запустите CHIMERION от администратора и повторите");
             }
             catch (IOException e) { throw new ToolException("Не удалось заменить файлы zapret: " + e.Message); }
 

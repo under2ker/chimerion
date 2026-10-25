@@ -9,7 +9,7 @@ namespace Dnex.Services;
 
 /// <summary>
 /// Где физически находится DNS-сервер: страна и город по IP (ipinfo.io), флаг страны (flagcdn.com).
-/// Флаги кэшируются в %AppData%\DNEX\flags, поэтому повторно из сети не скачиваются.
+/// Флаги кэшируются в %AppData%\CHIMERION\flags, поэтому повторно из сети не скачиваются.
 /// </summary>
 public static class GeoLocation
 {
@@ -237,6 +237,18 @@ public static class GeoLocation
     };
 
     public static string CityName(string city) => RuCities.TryGetValue(city, out var ru) ? ru : city;
+
+    /// <summary>Русские названия стран и городов и их английские варианты: для английского интерфейса (Loc).</summary>
+    public static IEnumerable<(string Ru, string En)> EnglishNames()
+    {
+        foreach (var (code, ru) in RuNames)
+        {
+            string en;
+            try { en = new RegionInfo(code).EnglishName; } catch (ArgumentException) { continue; }
+            yield return (ru, en);
+        }
+        foreach (var (en, ru) in RuCities) yield return (ru, en);
+    }
 
     /// <summary>Название страны по коду: по-русски для частых стран, иначе по-английски.</summary>
     public static string CountryName(string code)

@@ -1,12 +1,12 @@
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Разбор ответа GitHub API о последнем релизе: когда показывать уведомление, а когда нет.</summary>
 public class UpdateCheckerTests
 {
-    private static string Release(string tag, bool draft = false, bool prerelease = false, string page = "https://github.com/under2ker/dnex-dns-hub/releases/tag/x") =>
+    private static string Release(string tag, bool draft = false, bool prerelease = false, string page = "https://github.com/under2ker/chimerion/releases/tag/x") =>
         $@"{{ ""tag_name"": ""{tag}"", ""draft"": {draft.ToString().ToLowerInvariant()}, ""prerelease"": {prerelease.ToString().ToLowerInvariant()},
             ""html_url"": ""{page}"", ""body"": ""## Что нового\n- первое\n- второе"" }}";
 
@@ -45,6 +45,6 @@ public class UpdateCheckerTests
     {
         var info = UpdateChecker.Parse(Release("v0.2.0", page: "https://example.com/evil"), new Version(0, 1, 15));
         Assert.NotNull(info);
-        Assert.Equal("https://github.com/under2ker/dnex-dns-hub/releases/latest", info!.PageUrl);
+        Assert.Equal("https://github.com/under2ker/chimerion/releases/latest", info!.PageUrl);
     }
 }

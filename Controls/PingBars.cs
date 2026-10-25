@@ -26,10 +26,12 @@ public sealed class PingBars : Canvas
 
     private const int BarWidth = 3, Gap = 2, IconHeight = 14;
     private static readonly int[] Heights = { 5, 8, 11, 14 };
-    private static readonly Brush Ok = Freeze(Color.FromRgb(0x3D, 0xD6, 0x8C));
-    private static readonly Brush Warn = Freeze(Color.FromRgb(0xF5, 0xB9, 0x41));
-    private static readonly Brush Bad = Freeze(Color.FromRgb(0xF2, 0x62, 0x6E));
-    private static readonly Brush Off = Freeze(Color.FromRgb(0x3A, 0x40, 0x4C));
+    /// <summary>Цвет из палитры программы (App.xaml), без своей копии оттенка.</summary>
+    private static Brush Pal(string key) => Application.Current?.TryFindResource(key) as Brush ?? Brushes.Gray;
+    private static Brush Ok => Pal("Ok");
+    private static Brush Warn => Pal("Warn");
+    private static Brush Bad => Pal("Bad");
+    private static Brush Off => Pal("ScrollThumb");
 
     private readonly Rectangle[] _bars = new Rectangle[4];
 

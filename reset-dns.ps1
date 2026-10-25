@@ -1,15 +1,20 @@
-﻿# Аварийный сброс DNS, который выставила DNEX.
-# Трогает только физические адаптеры, на которых DNEX меняла настройки:
+﻿# Аварийный сброс DNS, который выставила CHIMERION.
+# Трогает только физические адаптеры, на которых CHIMERION меняла настройки:
 # исходные DNS берутся из dns-backup.json, без копии адаптер переводится на автоматические (DHCP).
-# Если DNEX ничего не меняла, скрипт ничего не делает.
-# Файлы DNEX удаляются только после успешного восстановления и проверки.
+# Если CHIMERION ничего не меняла, скрипт ничего не делает.
+# Файлы CHIMERION удаляются только после успешного восстановления и проверки.
 $ErrorActionPreference = 'Stop'
 $dir = Join-Path $env:APPDATA 'DNEX'
 $backupPath = Join-Path $dir 'dns-backup.json'
 $activePath = Join-Path $dir 'active.json'
 
+# Правила NRPT режима «Два DNS» (домены ИИ в Smart DNS): снимаются всегда, даже без файлов подключения
+$rules = @(Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object { $_.Comment -eq 'DNEX' })
+foreach ($r in $rules) { Remove-DnsClientNrptRule -Name $r.Name -Force -ErrorAction SilentlyContinue }
+if ($rules.Count -gt 0) { Write-Host "Сняты правила для доменов ИИ: $($rules.Count)" }
+
 if (-not (Test-Path $backupPath) -and -not (Test-Path $activePath)) {
-    Write-Host 'DNEX не меняла DNS на этом компьютере: файлов подключения нет. Ничего не сделано.'
+    Write-Host 'CHIMERION не меняла DNS на этом компьютере: файлов подключения нет. Ничего не сделано.'
     exit 0
 }
 
@@ -18,11 +23,12 @@ if (Test-Path $backupPath) { $backup = @(Get-Content $backupPath -Raw -Encoding 
 $active = $null
 if (Test-Path $activePath) { $active = Get-Content $activePath -Raw -Encoding UTF8 | ConvertFrom-Json }
 
-# Адреса, которые ставила DNEX (серверы и DoH-адреса)
+# Адреса, которые ставила CHIMERION (серверы и DoH-адреса)
 $ours = @()
 if ($active) {
     $ours += @($active.addresses)
     $ours += @($active.dohAddedFor)
+    $ours += @($active.adapterAddresses)
 }
 $ours = @($ours | Where-Object { $_ } | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
 
@@ -59,7 +65,7 @@ foreach ($ip in $ours) { Remove-DnsClientDohServerAddress -ServerAddress $ip -Er
 Clear-DnsClientCache
 ipconfig /flushdns | Out-Null
 
-# Проверка: адресов DNEX не должно остаться ни на одном физическом адаптере
+# Проверка: адресов CHIMERION не должно остаться ни на одном физическом адаптере
 $left = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object {
     Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
 } | ForEach-Object { $_.ServerAddresses } | Where-Object { $ours -contains $_ })
@@ -68,8 +74,8 @@ if ($left.Count -gt 0) { $ok = $false }
 if ($ok) {
     Remove-Item $backupPath, $activePath -ErrorAction SilentlyContinue
     Write-Host ''
-    Write-Host 'Готово. DNS восстановлен, файлы подключения DNEX удалены.'
+    Write-Host 'Готово. DNS восстановлен, файлы подключения CHIMERION удалены.'
 } else {
     Write-Host ''
-    Write-Host 'Восстановлено не полностью. Файлы DNEX сохранены. Запустите сброс еще раз или проверьте адаптеры в Параметрах Windows.'
+    Write-Host 'Восстановлено не полностью. Файлы CHIMERION сохранены. Запустите сброс еще раз или проверьте адаптеры в Параметрах Windows.'
 }

@@ -1,7 +1,7 @@
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Источник сервера в читаемом виде: сайт и путь «хлебными крошками».</summary>
 public class SourceLabelTests

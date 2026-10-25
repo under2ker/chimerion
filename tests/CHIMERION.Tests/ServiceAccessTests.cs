@@ -2,7 +2,7 @@ using Dnex.Models;
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Доступ к ИИ-сервису засчитывается только по ожидаемому ответу API.</summary>
 public class ServiceAccessTests

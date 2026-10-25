@@ -1,0 +1,238 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace Dnex;
+
+/// <summary>
+/// Общие элементы окон CHIMERION, чтобы все окна, собранные в коде, выглядели как окно настроек:
+/// одинаковые ширина и поля, заголовки разделов капсом, карточки, строки настроек «название и пояснение
+/// слева, переключатель справа», кнопки выбора с «▾», нижняя строка с линией сверху.
+/// </summary>
+internal static class Ui
+{
+    /// <summary>Ширина окон с настройками и списками и ширина коротких диалогов.</summary>
+    public const double Wide = 600, Narrow = 480;
+
+    private static ResourceDictionary Res => Application.Current.Resources;
+    public static Brush B(string key) => (Brush)Res[key];
+
+    /// <summary>Корневая колонка окна: одинаковые поля во всех окнах.</summary>
+    public static StackPanel Root() => new() { Margin = new Thickness(24, 22, 24, 20) };
+
+    /// <summary>Заголовок раздела, как в настройках: капс, 11 пт, приглушенный.</summary>
+    public static TextBlock Section(string text, bool first = false) => new()
+    {
+        Text = text.ToUpperInvariant(), Foreground = B("Muted"), FontSize = 11, FontWeight = FontWeights.SemiBold,
+        Margin = new Thickness(2, first ? 4 : 20, 0, 8),
+    };
+
+    /// <summary>Свойство по ссылке на ресурс палитры: при смене цвета в настройках обновится само.</summary>
+    public static T Ref<T>(this T el, DependencyProperty dp, string key) where T : FrameworkElement { el.SetResourceReference(dp, key); return el; }
+
+    /// <summary>Пояснение мелким приглушенным текстом.</summary>
+    public static TextBlock Hint(string text, double top = 4, string brush = "Muted") => new TextBlock
+    {
+        Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0), LineHeight = 17,
+    }.Ref(TextBlock.ForegroundProperty, brush);
+
+    /// <summary>Строка состояния: ход работы или ошибка.</summary>
+    public static TextBlock Status() => new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = B("Muted"), Margin = new Thickness(0, 10, 0, 0) };
+
+    public static void SetStatus(TextBlock t, string text, bool error = false)
+    {
+        t.Text = text;
+        t.Foreground = B(error ? "Bad" : "Muted");
+        t.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Карточка (как в настройках). selected — выбранный вариант с синей рамкой.</summary>
+    public static Border Card(UIElement child, bool selected = false, double bottom = 10) => new Border
+    {
+        BorderThickness = new Thickness(selected ? 1.5 : 1), CornerRadius = new CornerRadius(12),
+        Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, bottom), Child = child,
+    }.Ref(Border.BackgroundProperty, selected ? "Surface2" : "Surface").Ref(Border.BorderBrushProperty, selected ? "Accent" : "Border");
+
+    /// <summary>Заголовок карточки: название слева, метка состояния справа.</summary>
+    public static DockPanel CardTitle(string title, string? pill = null, string pillBrush = "Muted")
+    {
+        var d = new DockPanel();
+        if (pill != null)
+        {
+            var p = new TextBlock { Text = pill, Foreground = B(pillBrush), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            DockPanel.SetDock(p, Dock.Right);
+            d.Children.Add(p);
+        }
+        d.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        return d;
+    }
+
+    /// <summary>Метка «рекомендуем»: салатовая плашка рядом с вариантом, который стоит выбрать.</summary>
+    public static Border Badge(string text = "рекомендуем") => new Border
+    {
+        CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(6, 1, 6, 2), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        Child = new TextBlock { Text = text, FontSize = 11, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Lime"),
+    }.Ref(Border.BackgroundProperty, "LimeSoft");
+
+    /// <summary>Галочка набора: название с числом доменов и метка «рекомендуем», если набор советуем выбрать.</summary>
+    public static CheckBox SetCheck(string title, int count, string note, bool recommended, bool on)
+    {
+        var text = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 205 };
+        text.Inlines.Add(new System.Windows.Documents.Run($"{title} ({count})"));
+        if (recommended)
+        {
+            text.Inlines.Add(new System.Windows.Documents.Run(" "));
+            text.Inlines.Add(new System.Windows.Documents.InlineUIContainer(Badge().With(b => { b.Margin = new Thickness(2, 0, 0, -3); }))
+                             { BaselineAlignment = BaselineAlignment.Center });
+        }
+        return new CheckBox { Content = text, IsChecked = on, Margin = new Thickness(0, 4, 12, 4), ToolTip = note.Length > 0 ? note : null };
+    }
+
+    /// <summary>
+    /// Быстрый выбор для списка галочек: «Рекомендуемые» (ровно рекомендуемые), «Выбрать все», «Снять все».
+    /// Ручной выбор остается: после кнопки любую галочку можно поменять.
+    /// </summary>
+    public static WrapPanel ChoiceBar(IReadOnlyList<CheckBox> checks, Func<CheckBox, bool> recommended)
+    {
+        void Set(Func<CheckBox, bool> on) { foreach (var c in checks) c.IsChecked = on(c); }
+        var rec = Action("Рекомендуемые", "Strong", () => Set(recommended)).With(b => b.ToolTip = "Отметить только то, что помечено «рекомендуем»");
+        var all = Action("Выбрать все", "Ghost", () => Set(_ => true));
+        var none = Action("Снять все", "Ghost", () => Set(_ => false));
+        var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        foreach (var b in new[] { rec, all, none }) { b.Margin = new Thickness(0, 0, 8, 0); bar.Children.Add(b); }
+        return bar;
+    }
+
+    /// <summary>
+    /// Заголовок раздела в списке галочек со ссылкой «выбрать все» или «снять все» для этого раздела.
+    /// Текст ссылки следит за галочками: все отмечены, значит «снять все».
+    /// </summary>
+    public static DockPanel CategoryHeader(string title, IReadOnlyList<CheckBox> checks, bool first)
+    {
+        var d = new DockPanel { Margin = new Thickness(0, first ? 0 : 12, 12, 2) };
+        var link = new Button
+        {
+            Style = (Style)Res["Ghost"], Padding = new Thickness(8, 2, 8, 2), MinHeight = 0, Margin = new Thickness(0), FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        void Refresh() => link.Content = checks.All(c => c.IsChecked == true) ? "снять все" : "выбрать все";
+        link.Click += (_, _) => { var on = !checks.All(c => c.IsChecked == true); foreach (var c in checks) c.IsChecked = on; };
+        foreach (var c in checks) { c.Checked += (_, _) => Refresh(); c.Unchecked += (_, _) => Refresh(); }
+        Refresh();
+        DockPanel.SetDock(link, Dock.Right);
+        d.Children.Add(link);
+        d.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        return d;
+    }
+
+    /// <summary>Подсказка «что нажать»: короткий порядок действий синим текстом.</summary>
+    public static TextBlock Steps(string text, double top = 8) => Hint(text, top, "Accent");
+
+    /// <summary>
+    /// Длительность анимации с учетом Windows: если в «Специальных возможностях» выключены эффекты анимации,
+    /// все переходы мгновенные. Логика не зависит от окончания анимаций, поэтому ничего не зависает.
+    /// </summary>
+    public static Duration Motion(int ms) => SystemParameters.ClientAreaAnimation ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
+    public static bool Animate => SystemParameters.ClientAreaAnimation;
+
+    /// <summary>Тонкая линия между строками внутри карточки.</summary>
+    public static Border Separator() => new() { Height = 1, Background = B("Border"), Margin = new Thickness(0, 10, 0, 10) };
+
+    /// <summary>Строка настройки: название и пояснение слева, элемент управления справа.</summary>
+    public static Grid Row(string label, string? hint, UIElement control)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+        left.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrEmpty(hint)) left.Children.Add(Hint(hint, 2).With(t => t.FontSize = 11));
+        g.Children.Add(left);
+        if (control is FrameworkElement fe) fe.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(control, 1);
+        g.Children.Add(control);
+        return g;
+    }
+
+    /// <summary>Переключатель для строки настройки (галочка без текста: текст в самой строке).</summary>
+    public static CheckBox Toggle(bool on) => new() { IsChecked = on, Margin = new Thickness(0) };
+
+    /// <summary>Кнопка выбора значения: текущее значение и «▾», по щелчку меню вариантов.</summary>
+    public static Button Picker(string value, Action<Button> open)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new TextBlock { Text = value, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new Controls.Icon { Kind = "chevron-down", Size = 14, Margin = new Thickness(8, 1, 0, 0), Opacity = 0.8 });
+        var b = new Button { Content = row, Padding = new Thickness(12, 6, 12, 6), MinHeight = 32, Margin = new Thickness(0), MaxWidth = 260 };
+        b.Click += (_, _) => open(b);
+        return b;
+    }
+
+    /// <summary>Кнопка действия. style: Primary, Strong, Ghost, Danger (красная заливка).</summary>
+    public static Button Action(string text, string style, Action click)
+    {
+        var b = DnexDialog.MakeButton(text, style == "Danger" ? "Primary" : style, click);
+        if (style == "Danger") { b.Background = B("BadButton"); b.BorderBrush = b.Background; }
+        b.MinWidth = 0;
+        b.Margin = new Thickness(0, 0, 8, 0);
+        return b;
+    }
+
+    /// <summary>Ряд кнопок внутри карточки, слева направо.</summary>
+    public static WrapPanel Actions(params Button[] buttons)
+    {
+        var w = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        foreach (var b in buttons) w.Children.Add(b);
+        return w;
+    }
+
+    /// <summary>
+    /// Нижняя строка окна, как в настройках: линия сверху, слева пояснение или ошибка, справа кнопки
+    /// (первая в списке встает крайней справа: обычно основная).
+    /// </summary>
+    public static Border Footer(UIElement? left, params Button[] right)
+    {
+        var d = new DockPanel { LastChildFill = true };
+        foreach (var b in right)
+        {
+            b.Margin = new Thickness(8, 0, 0, 0);
+            DockPanel.SetDock(b, Dock.Right);
+            d.Children.Add(b);
+        }
+        if (left != null) d.Children.Add(left);
+        return new Border { BorderBrush = B("Border"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d };
+    }
+
+    /// <summary>Многострочное поле: текст сверху, а не по центру (общий стиль полей центрирует однострочные).</summary>
+    public static TextBox MultiLine(string text, double height) => new()
+    {
+        Text = text, AcceptsReturn = true, Height = height, TextWrapping = TextWrapping.Wrap,
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(10, 8, 10, 8),
+    };
+
+    /// <summary>
+    /// Плавное изменение полосы прогресса: заливка доезжает до нового значения за 300 мс, а не прыгает рывком
+    /// на каждый проверенный сервер или скачанный кусок. Сброс к нулю мгновенный.
+    /// </summary>
+    public static void SetProgress(ProgressBar bar, double value)
+    {
+        if (value <= bar.Minimum || value < bar.Value || !Animate) { bar.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty, null); bar.Value = value; return; }
+        bar.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(value, TimeSpan.FromMilliseconds(300))
+            { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } },
+            System.Windows.Media.Animation.HandoffBehavior.SnapshotAndReplace);
+    }
+
+    /// <summary>Прокручиваемая область для длинных списков внутри окна.</summary>
+    public static ScrollViewer Scroll(UIElement content, double maxHeight) => new()
+    {
+        Content = content, MaxHeight = maxHeight, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 8, 0),
+    };
+
+    /// <summary>Содержимое окна с прокруткой, если оно выше экрана.</summary>
+    public static ScrollViewer WindowContent(UIElement root) => new()
+    {
+        Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = SystemParameters.WorkArea.Height - 80,
+    };
+}

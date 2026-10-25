@@ -2,7 +2,7 @@ using System.Net;
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>IPv6 в DNS-ответах и источниках, разбор ответа теста утечки dnscheck.tools.</summary>
 public class Ipv6AndLeakTests

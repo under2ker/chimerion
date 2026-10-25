@@ -3,7 +3,7 @@ using System.IO;
 using System.Net;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Разбор DNS-ответов из сети: пакеты приходят от недоверенного сервера, поэтому проверяем границы.</summary>
 public class DnsWireTests

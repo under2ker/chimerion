@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CHIMERION</AssemblyName>
+    <Product>CHIMERION</Product>
+    <AssemblyTitle>CHIMERION</AssemblyTitle>
+    <Description>CHIMERION: сетевые инструменты для открытого интернета (Smart DNS для ИИ, обход zapret, ускорение Telegram). Раньше назывался DNEX</Description>
+    <Company>under2ker</Company>
+    <Copyright>under2ker</Copyright>
+    <RootNamespace>Dnex</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.25</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>Assets\chimerion.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\chimerion-logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Тесты живут отдельно и не входят в программу -->
+    <Compile Remove="tests/**" />
+    <!-- Наборы сайтов для обхода: встроенная копия на случай работы без сети (подпись проверяется так же, как у скачанных) -->
+    <EmbeddedResource Include="catalog/bypass.json" LogicalName="bypass.json" />
+    <EmbeddedResource Include="catalog/bypass.json.sig" LogicalName="bypass.json.sig" />
+    <EmbeddedResource Include="i18n/en.json" LogicalName="i18n.en.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Только NotifyIcon для трея; WinForms не импортируется глобально, имена полные -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

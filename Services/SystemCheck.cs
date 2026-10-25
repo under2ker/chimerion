@@ -9,14 +9,15 @@ using Microsoft.Win32;
 namespace Dnex.Services;
 
 /// <summary>
-/// Что в системе мешает DNS из DNEX: включенный VPN, «безопасный DNS» в браузере, прокси Windows,
+/// Что в системе мешает DNS из CHIMERION: включенный VPN, «безопасный DNS» в браузере, прокси Windows,
 /// записи в hosts и DNS на других адаптерах. Только чтение, права администратора не нужны.
-/// DNEX работает на Windows 10 и 11 (.NET 8 не запускается на Windows 7 и 8).
+/// CHIMERION работает на Windows 10 и 11 (.NET 8 не запускается на Windows 7 и 8).
 /// </summary>
 public static class SystemCheck
 {
     /// <summary>Одна проблема: что мешает и как это отключить.</summary>
-    public sealed record Issue(string Title, string Fix);
+    /// <summary>Помеха. Action и ActionText: что можно открыть или исправить по кнопке в «Диагностике» (см. DiagItem).</summary>
+    public sealed record Issue(string Title, string Fix, string? Action = null, string? ActionText = null);
 
     // Признаки VPN в имени или описании адаптера. Виртуальные сети Hyper-V и WSL (vEthernet) VPN не считаются.
     private static readonly string[] VpnWords =
@@ -72,21 +73,24 @@ public static class SystemCheck
         return false;
     }
 
-    /// <summary>Все найденные проблемы. dnexAddresses — адреса текущего подключения DNEX (их DNS на адаптерах не считаются чужими).</summary>
+    /// <summary>Все найденные проблемы. dnexAddresses — адреса текущего подключения CHIMERION (их DNS на адаптерах не считаются чужими).</summary>
     public static List<Issue> Run(IReadOnlyCollection<string> dnexAddresses)
     {
         var list = new List<Issue>();
         foreach (var vpn in ActiveVpns())
             list.Add(new Issue($"Включен VPN: {vpn}",
-                "VPN подставляет свои DNS, и DNS из DNEX не действует. Отключите VPN на время работы DNEX."));
+                "VPN подставляет свои DNS, и DNS из CHIMERION не действует. Отключите VPN на время работы CHIMERION.",
+                "open:ms-settings:network-vpn", "Открыть настройки VPN"));
 
         list.AddRange(BrowserSecureDns());
         if (SystemProxy() is { } proxy)
             list.Add(new Issue($"В Windows включен прокси: {proxy}",
-                "Браузер отправляет запросы через прокси, и DNS системы не используется. Отключите: Параметры → Сеть и Интернет → Прокси."));
+                "Браузер отправляет запросы через прокси, и DNS системы не используется. Отключите: Параметры → Сеть и Интернет → Прокси.",
+                "open:ms-settings:network-proxy", "Открыть настройки прокси"));
         if (HostsOverrides() is { Count: > 0 } hosts)
             list.Add(new Issue($"В файле hosts заданы адреса для: {string.Join(", ", hosts)}",
-                @"Записи в hosts важнее DNS. Удалите их из C:\Windows\System32\drivers\etc\hosts (нужен редактор с правами администратора)."));
+                @"Записи в hosts важнее DNS. Удалите их из C:\Windows\System32\drivers\etc\hosts (нужен редактор с правами администратора).",
+                "hosts", "Открыть hosts"));
         list.AddRange(OtherAdapterDns(dnexAddresses));
         list.AddRange(Ipv6Dns(dnexAddresses));
         return list;
@@ -111,11 +115,11 @@ public static class SystemCheck
             var mode = ChromiumDohMode(Path.Combine(local, b.Dir, "Local State"));
             if (mode == "secure")
                 yield return new Issue($"{b.Name}: включен безопасный DNS со своим провайдером",
-                    $"Браузер обходит DNS системы, и DNEX в нем не действует. Отключите: {b.Path}.");
+                    $"Браузер обходит DNS системы, и CHIMERION в нем не действует. Отключите: {b.Path}.");
         }
         if (FirefoxTrrOn())
             yield return new Issue("Firefox: включен DNS через HTTPS",
-                "Браузер обходит DNS системы, и DNEX в нем не действует. Отключите: Настройки → Приватность и защита → DNS через HTTPS → Выкл.");
+                "Браузер обходит DNS системы, и CHIMERION в нем не действует. Отключите: Настройки → Приватность и защита → DNS через HTTPS → Выкл.");
     }
 
     private static string? ChromiumDohMode(string localState)
@@ -182,7 +186,7 @@ public static class SystemCheck
     }
 
     /// <summary>
-    /// DNS по IPv6 на сетевой карте или Wi-Fi, не от DNEX: обычно его раздает роутер. Windows отправляет туда часть
+    /// DNS по IPv6 на сетевой карте или Wi-Fi, не от CHIMERION: обычно его раздает роутер. Windows отправляет туда часть
     /// запросов, и они идут мимо сервера к DNS провайдера. Служебные fec0::/10 не считаются.
     /// </summary>
     private static IEnumerable<Issue> Ipv6Dns(IReadOnlyCollection<string> dnex)
@@ -204,13 +208,13 @@ public static class SystemCheck
 
         foreach (var (name, dns) in found)
             yield return new Issue($"На адаптере «{name}» есть DNS по IPv6: {string.Join(", ", dns)}",
-                "Часть запросов может идти по IPv6 мимо DNEX к DNS роутера или провайдера. Подключитесь заново: " +
-                "у сервера без IPv6 DNEX на время подключения выключает IPv6 на адаптере. Если предупреждение осталось, выключите IPv6 в свойствах адаптера.");
+                "Часть запросов может идти по IPv6 мимо CHIMERION к DNS роутера или провайдера. Подключитесь заново: " +
+                "у сервера без IPv6 CHIMERION на время подключения выключает IPv6 на адаптере. Если предупреждение осталось, выключите IPv6 в свойствах адаптера.");
     }
 
     /// <summary>
-    /// Работающие не физические адаптеры со своими DNS (виртуальные сети, туннели). DNEX меняет DNS только
-    /// на физических адаптерах, и Windows может отправлять запросы через такой адаптер в обход DNEX.
+    /// Работающие не физические адаптеры со своими DNS (виртуальные сети, туннели). CHIMERION меняет DNS только
+    /// на физических адаптерах, и Windows может отправлять запросы через такой адаптер в обход CHIMERION.
     /// </summary>
     private static IEnumerable<Issue> OtherAdapterDns(IReadOnlyCollection<string> dnex)
     {
@@ -230,6 +234,6 @@ public static class SystemCheck
 
         foreach (var (name, dns) in found)
             yield return new Issue($"Адаптер «{name}» использует свои DNS: {string.Join(", ", dns)}",
-                "Если это VPN или виртуальная сеть, отключите его на время работы DNEX: запросы могут идти через него.");
+                "Если это VPN или виртуальная сеть, отключите его на время работы CHIMERION: запросы могут идти через него.");
     }
 }
