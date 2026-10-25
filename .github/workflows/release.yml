@@ -1,0 +1,52 @@
+# Сборка релизного архива на серверах GitHub с подтверждением происхождения (attestation).
+# Запускается вручную после пуша версии. Архив потом подписывается ключом автора на его компьютере
+# и выкладывается в релиз (см. release.ps1 вне репозитория).
+name: Релизный архив
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Версия из CHIMERION.csproj
+        id: ver
+        shell: pwsh
+        run: |
+          $v = ([xml](Get-Content CHIMERION.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          "version=$v" >> $env:GITHUB_OUTPUT
+      - name: Тесты
+        run: dotnet test tests/CHIMERION.Tests -c Release
+      - name: Сборка
+        run: dotnet publish CHIMERION.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none -o out
+      - name: Архивы
+        shell: pwsh
+        run: |
+          # CHIMERION-x.y.z для новых загрузок и DNEX-x.y.z (тот же файл под старым именем) для уже установленных
+          # версий DNEX: их обновление ищет архив и exe со старым именем
+          $v = "${{ steps.ver.outputs.version }}"
+          Compress-Archive -Path out/CHIMERION.exe -DestinationPath "CHIMERION-$v-win-x64.zip"
+          New-Item -ItemType Directory legacy | Out-Null
+          Copy-Item out/CHIMERION.exe legacy/DNEX.exe
+          Compress-Archive -Path legacy/DNEX.exe -DestinationPath "DNEX-$v-win-x64.zip"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            CHIMERION-${{ steps.ver.outputs.version }}-win-x64.zip
+            DNEX-${{ steps.ver.outputs.version }}-win-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: |
+            CHIMERION-${{ steps.ver.outputs.version }}-win-x64.zip
+            DNEX-${{ steps.ver.outputs.version }}-win-x64.zip

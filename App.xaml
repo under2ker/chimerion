@@ -1,30 +1,65 @@
 <Application x:Class="Dnex.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:Dnex.Controls"
              DispatcherUnhandledException="OnUnhandled">
     <Application.Resources>
 
         <!-- ===== Палитра ===== -->
-        <Color x:Key="BgColor">#14161B</Color>
-        <SolidColorBrush x:Key="Bg" Color="#14161B"/>
-        <SolidColorBrush x:Key="Surface" Color="#1C1F26"/>
-        <SolidColorBrush x:Key="Surface2" Color="#242832"/>
-        <SolidColorBrush x:Key="SurfaceHover" Color="#2B303C"/>
-        <SolidColorBrush x:Key="Border" Color="#2C313C"/>
-        <SolidColorBrush x:Key="Text" Color="#E7E9EE"/>
-        <SolidColorBrush x:Key="Muted" Color="#8C93A3"/>
-        <SolidColorBrush x:Key="Accent" Color="#4C8DFF"/>
-        <SolidColorBrush x:Key="AccentHover" Color="#6AA0FF"/>
-        <SolidColorBrush x:Key="AccentSoft" Color="#1E3156"/>
+        <Color x:Key="BgColor">#0F1012</Color>
+        <SolidColorBrush x:Key="Bg" Color="#0F1012"/>
+        <SolidColorBrush x:Key="Surface" Color="#17191C"/>
+        <SolidColorBrush x:Key="Surface2" Color="#1F2125"/>
+        <SolidColorBrush x:Key="SurfaceHover" Color="#272A2F"/>
+        <SolidColorBrush x:Key="Border" Color="#2B2E33"/>
+        <SolidColorBrush x:Key="Text" Color="#F3F4F1"/>
+        <SolidColorBrush x:Key="Muted" Color="#8F949B"/>
+        <SolidColorBrush x:Key="Accent" Color="#C5F23A"/>
+        <SolidColorBrush x:Key="AccentHover" Color="#D3F566"/>
+        <SolidColorBrush x:Key="AccentSoft" Color="#2A3413"/>
         <SolidColorBrush x:Key="Ok" Color="#3DD68C"/>
         <SolidColorBrush x:Key="Warn" Color="#F5B941"/>
         <SolidColorBrush x:Key="Bad" Color="#F2626E"/>
         <SolidColorBrush x:Key="Idle" Color="#5C6373"/>
-        <SolidColorBrush x:Key="Focus" Color="#8DB8FF"/>
+        <SolidColorBrush x:Key="Focus" Color="#DCF781"/>
         <SolidColorBrush x:Key="OkSoft" Color="#13281E"/>
-        <SolidColorBrush x:Key="Lime" Color="#A3E635"/>
+        <SolidColorBrush x:Key="Lime" Color="#C5F23A"/>
+        <!-- Мягкие подложки статусов: значок в шапке окна, метки, плашки -->
+        <SolidColorBrush x:Key="LimeSoft" Color="#273110"/>
+        <SolidColorBrush x:Key="WarnSoft" Color="#3A2D12"/>
+        <SolidColorBrush x:Key="BadSoft" Color="#3A171C"/>
+        <SolidColorBrush x:Key="InfoSoft" Color="#252D14"/>
+        <!-- Полоса заголовка главного окна и бегунок прокрутки -->
+        <SolidColorBrush x:Key="Chrome" Color="#0B0C0D"/>
+        <SolidColorBrush x:Key="ScrollThumb" Color="#3A3E44"/>
+        <SolidColorBrush x:Key="ScrollThumbHover" Color="#4C5158"/>
+        <!-- Плашки статуса в таблице и карточках сервисов (ярче мягких подложек, чтобы читались на строке) -->
+        <SolidColorBrush x:Key="ChipOk" Color="#173A2A"/>
+        <SolidColorBrush x:Key="ChipWarn" Color="#3A2F17"/>
+        <SolidColorBrush x:Key="ChipBad" Color="#3A1C20"/>
+        <SolidColorBrush x:Key="ChipLime" Color="#2B3D12"/>
+        <!-- Выделение строк, линии таблицы, обводка акцентных элементов -->
+        <SolidColorBrush x:Key="Selection" Color="#2B3816"/>
+        <SolidColorBrush x:Key="SelectionInactive" Color="#252F15"/>
+        <SolidColorBrush x:Key="GridLine" Color="#212428"/>
+        <SolidColorBrush x:Key="AccentBorder" Color="#86A231"/>
+        <SolidColorBrush x:Key="ControlBorder" Color="#4C5158"/>
+        <!-- Настраиваемые в «Настройки» → «Цвета» (ThemeColors). Ссылки на них только DynamicResource, чтобы смена
+             цвета сразу доходила до всех окон. On* — текст поверх заливки, подбирается по контрасту -->
+        <SolidColorBrush x:Key="OnAccentButton" Color="#111214"/>
+        <SolidColorBrush x:Key="StrongButton" Color="#23262A"/>
+        <SolidColorBrush x:Key="OnStrongButton" Color="White"/>
+        <!-- Подсветка кнопки при наведении: белая на темной теме, черная на светлой (непрозрачность задает шаблон) -->
+        <SolidColorBrush x:Key="HoverOverlay" Color="White"/>
+        <SolidColorBrush x:Key="ToggleOn" Color="#C5F23A"/>
+        <SolidColorBrush x:Key="OnToggle" Color="#111214"/>
+        <SolidColorBrush x:Key="MenuBg" Color="#1C1E21"/>
+        <SolidColorBrush x:Key="MenuHover" Color="#2A2D31"/>
+        <!-- Знак CHIMERION: две первые полосы (белые в стандартной схеме, цвета акцента в своей) и третья оливковая -->
+        <SolidColorBrush x:Key="LogoStripe" Color="#F5F5F0"/>
+        <SolidColorBrush x:Key="LogoTail" Color="#B5B29C"/>
         <!-- Заливка кнопок с белым текстом: контраст не ниже 4.5:1 (основной и красный цвет чуть темнее) -->
-        <SolidColorBrush x:Key="AccentButton" Color="#2A66C9"/>
+        <SolidColorBrush x:Key="AccentButton" Color="#C5F23A"/>
         <SolidColorBrush x:Key="BadButton" Color="#C23B47"/>
         <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
 
@@ -33,22 +68,22 @@
             <Setter Property="Control.Template">
                 <Setter.Value>
                     <ControlTemplate>
-                        <Border CornerRadius="10" BorderThickness="2" BorderBrush="{StaticResource Focus}" Margin="-3"/>
+                        <Border CornerRadius="10" BorderThickness="2" BorderBrush="{DynamicResource Focus}" Margin="-3"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
         </Style>
 
         <!-- ===== Кнопки ===== -->
         <Style TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
-            <Setter Property="Background" Value="{StaticResource Surface2}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <!-- Отступы с запасом: иначе текст касается края подсветки при наведении -->
             <Setter Property="Padding" Value="18,9"/>
@@ -64,8 +99,16 @@
                             <Grid>
                                 <!-- Подсветка при наведении плавно нарастает поверх фона, текст не меняется.
                                      Отступы у текста, а не у рамки: иначе подсветка не покрывает поля вокруг слова -->
-                                <Border x:Name="hov" Background="White" CornerRadius="7" Opacity="0"/>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                <Border x:Name="hov" Background="{DynamicResource HoverOverlay}" CornerRadius="7" Opacity="0"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}">
+                                    <!-- Текст кнопки цвета самой кнопки: иначе общий стиль TextBlock (белый) перебивал его,
+                                         и на лаймовой основной кнопке белая надпись не читалась -->
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}"/>
+                                        </Style>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -94,17 +137,25 @@
         </Style>
 
         <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource AccentButton}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource AccentButton}"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource AccentButton}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentButton}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnAccentButton}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="8">
                             <Grid>
-                                <Border x:Name="hov" Background="White" CornerRadius="7" Opacity="0"/>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                                <Border x:Name="hov" Background="{DynamicResource HoverOverlay}" CornerRadius="7" Opacity="0"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}">
+                                    <!-- Текст кнопки цвета самой кнопки: иначе общий стиль TextBlock (белый) перебивал его,
+                                         и на лаймовой основной кнопке белая надпись не читалась -->
+                                    <ContentPresenter.Resources>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ButtonBase}}"/>
+                                        </Style>
+                                    </ContentPresenter.Resources>
+                                </ContentPresenter>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -132,29 +183,29 @@
         <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
         </Style>
 
         <!-- Важное действие рядом с основным: светлая заливка, заметная синяя рамка и белый текст,
              чтобы кнопка не терялась на темной карточке -->
         <Style x:Key="Strong" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#2C3446"/>
-            <Setter Property="BorderBrush" Value="#4C6FAE"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource StrongButton}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnStrongButton}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
 
         <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Foreground" Value="{StaticResource Bad}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Bad}"/>
         </Style>
 
         <!-- ===== Поля ввода (подсказка через Tag) ===== -->
         <Style TargetType="TextBox">
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
-            <Setter Property="Background" Value="{StaticResource Surface2}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
-            <Setter Property="CaretBrush" Value="{StaticResource Text}"/>
-            <Setter Property="SelectionBrush" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+            <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -164,7 +215,7 @@
                         <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1" CornerRadius="8">
                             <Grid>
-                                <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Foreground="{StaticResource Muted}"
+                                <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Foreground="{DynamicResource Muted}"
                                            Margin="{TemplateBinding Padding}" Padding="2,0,0,0" VerticalAlignment="Center"
                                            IsHitTestVisible="False" Visibility="Collapsed"/>
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
@@ -176,7 +227,7 @@
                                 <Setter TargetName="hint" Property="Visibility" Value="Visible"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -184,35 +235,35 @@
             </Setter>
         </Style>
 
-        <!-- ===== Логотипы ИИ-сервисов (из SVG, цвета как в исходниках) ===== -->
+        <!-- ===== Логотипы ИИ-сервисов: контуры из Simple Icons (CC0, simpleicons.org), цвета фирменные ===== -->
         <DrawingImage x:Key="LogoOpenAI">
             <DrawingImage.Drawing>
                 <DrawingGroup>
-                    <GeometryDrawing Geometry="F0 M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"><GeometryDrawing.Brush><SolidColorBrush Color="#E7E9EE"/></GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 22.2819 9.8211 a 5.9847 5.9847 0 0 0 -.5157 -4.9108 a 6.0462 6.0462 0 0 0 -6.5098 -2.9 A 6.0651 6.0651 0 0 0 4.9807 4.1818 a 5.9847 5.9847 0 0 0 -3.9977 2.9 a 6.0462 6.0462 0 0 0 .7427 7.0966 a 5.98 5.98 0 0 0 .511 4.9107 a 6.051 6.051 0 0 0 6.5146 2.9001 A 5.9847 5.9847 0 0 0 13.2599 24 a 6.0557 6.0557 0 0 0 5.7718 -4.2058 a 5.9894 5.9894 0 0 0 3.9977 -2.9001 a 6.0557 6.0557 0 0 0 -.7475 -7.0729 z m -9.022 12.6081 a 4.4755 4.4755 0 0 1 -2.8764 -1.0408 l .1419 -.0804 l 4.7783 -2.7582 a .7948 .7948 0 0 0 .3927 -.6813 v -6.7369 l 2.02 1.1686 a .071 .071 0 0 1 .038 .052 v 5.5826 a 4.504 4.504 0 0 1 -4.4945 4.4944 z m -9.6607 -4.1254 a 4.4708 4.4708 0 0 1 -.5346 -3.0137 l .142 .0852 l 4.783 2.7582 a .7712 .7712 0 0 0 .7806 0 l 5.8428 -3.3685 v 2.3324 a .0804 .0804 0 0 1 -.0332 .0615 L 9.74 19.9502 a 4.4992 4.4992 0 0 1 -6.1408 -1.6464 z M 2.3408 7.8956 a 4.485 4.485 0 0 1 2.3655 -1.9728 V 11.6 a .7664 .7664 0 0 0 .3879 .6765 l 5.8144 3.3543 l -2.0201 1.1685 a .0757 .0757 0 0 1 -.071 0 l -4.8303 -2.7865 A 4.504 4.504 0 0 1 2.3408 7.872 z m 16.5963 3.8558 L 13.1038 8.364 L 15.1192 7.2 a .0757 .0757 0 0 1 .071 0 l 4.8303 2.7913 a 4.4944 4.4944 0 0 1 -.6765 8.1042 v -5.6772 a .79 .79 0 0 0 -.407 -.667 z m 2.0107 -3.0231 l -.142 -.0852 l -4.7735 -2.7818 a .7759 .7759 0 0 0 -.7854 0 L 9.409 9.2297 V 6.8974 a .0662 .0662 0 0 1 .0284 -.0615 l 4.8303 -2.7866 a 4.4992 4.4992 0 0 1 6.6802 4.66 z M 8.3065 12.863 l -2.02 -1.1638 a .0804 .0804 0 0 1 -.038 -.0567 V 6.0742 a 4.4992 4.4992 0 0 1 7.3757 -3.4537 l -.142 .0805 L 8.704 5.459 a .7948 .7948 0 0 0 -.3927 .6813 z m 1.0976 -2.3654 l 2.602 -1.4998 l 2.6069 1.4998 v 2.9994 l -2.5974 1.4997 l -2.6067 -1.4997 Z"><GeometryDrawing.Brush><SolidColorBrush Color="#E7E9EE"/></GeometryDrawing.Brush></GeometryDrawing>
                 </DrawingGroup>
             </DrawingImage.Drawing>
         </DrawingImage>
         <DrawingImage x:Key="LogoClaude">
             <DrawingImage.Drawing>
                 <DrawingGroup>
-                    <GeometryDrawing Geometry="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"><GeometryDrawing.Brush>#FFD97757</GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 4.7144 15.9555 l 4.7174 -2.6471 l .079 -.2307 l -.079 -.1275 h -.2307 l -.7893 -.0486 l -2.6956 -.0729 l -2.3375 -.0971 l -2.2646 -.1214 l -.5707 -.1215 l -.5343 -.7042 l .0546 -.3522 l .4797 -.3218 l .686 .0608 l 1.5179 .1032 l 2.2767 .1578 l 1.6514 .0972 l 2.4468 .255 h .3886 l .0546 -.1579 l -.1336 -.0971 l -.1032 -.0972 L 6.973 9.8356 l -2.55 -1.6879 l -1.3356 -.9714 l -.7225 -.4918 l -.3643 -.4614 l -.1578 -1.0078 l .6557 -.7225 l .8803 .0607 l .2246 .0607 l .8925 .686 l 1.9064 1.4754 l 2.4893 1.8336 l .3643 .3035 l .1457 -.1032 l .0182 -.0728 l -.164 -.2733 l -1.3539 -2.4467 l -1.445 -2.4893 l -.6435 -1.032 l -.17 -.6194 c -.0607 -.255 -.1032 -.4674 -.1032 -.7285 L 6.287 .1335 L 6.6997 0 l .9957 .1336 l .419 .3642 l .6192 1.4147 l 1.0018 2.2282 l 1.5543 3.0296 l .4553 .8985 l .2429 .8318 l .091 .255 h .1579 v -.1457 l .1275 -1.706 l .2368 -2.0947 l .2307 -2.6957 l .0789 -.7589 l .3764 -.9107 l .7468 -.4918 l .5828 .2793 l .4797 .686 l -.0668 .4433 l -.2853 1.8517 l -.5586 2.9021 l -.3643 1.9429 h .2125 l .2429 -.2429 l .9835 -1.3053 l 1.6514 -2.0643 l .7286 -.8196 l .85 -.9046 l .5464 -.4311 h 1.0321 l .759 1.1293 l -.34 1.1657 l -1.0625 1.3478 l -.8804 1.1414 l -1.2628 1.7 l -.7893 1.36 l .0729 .1093 l .1882 -.0183 l 2.8535 -.607 l 1.5421 -.2794 l 1.8396 -.3157 l .8318 .3886 l .091 .3946 l -.3278 .8075 l -1.967 .4857 l -2.3072 .4614 l -3.4364 .8136 l -.0425 .0304 l .0486 .0607 l 1.5482 .1457 l .6618 .0364 h 1.621 l 3.0175 .2247 l .7892 .522 l .4736 .6376 l -.079 .4857 l -1.2142 .6193 l -1.6393 -.3886 l -3.825 -.9107 l -1.3113 -.3279 h -.1822 v .1093 l 1.0929 1.0686 l 2.0035 1.8092 l 2.5075 2.3314 l .1275 .5768 l -.3218 .4554 l -.34 -.0486 l -2.2039 -1.6575 l -.85 -.7468 l -1.9246 -1.621 h -.1275 v .17 l .4432 .6496 l 2.3436 3.5214 l .1214 1.0807 l -.17 .3521 l -.6071 .2125 l -.6679 -.1214 l -1.3721 -1.9246 L 14.38 17.959 l -1.1414 -1.9428 l -.1397 .079 l -.674 7.2552 l -.3156 .3703 l -.7286 .2793 l -.6071 -.4614 l -.3218 -.7468 l .3218 -1.4753 l .3886 -1.9246 l .3157 -1.53 l .2853 -1.9004 l .17 -.6314 l -.0121 -.0425 l -.1397 .0182 l -1.4328 1.9672 l -2.1796 2.9446 l -1.7243 1.8456 l -.4128 .164 l -.7164 -.3704 l .0667 -.6618 l .4008 -.5889 l 2.386 -3.0357 l 1.4389 -1.882 l .929 -1.0868 l -.0062 -.1579 h -.0546 l -6.3385 4.1164 l -1.1293 .1457 l -.4857 -.4554 l .0608 -.7467 l .2307 -.2429 l 1.9064 -1.3114 Z"><GeometryDrawing.Brush>#FFD97757</GeometryDrawing.Brush></GeometryDrawing>
                 </DrawingGroup>
             </DrawingImage.Drawing>
         </DrawingImage>
         <DrawingImage x:Key="LogoGemini">
             <DrawingImage.Drawing>
                 <DrawingGroup>
-                    <GeometryDrawing Geometry="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"><GeometryDrawing.Brush><SolidColorBrush Color="#3186FF"/></GeometryDrawing.Brush></GeometryDrawing>
-                    <GeometryDrawing Geometry="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="7,15.5" EndPoint="11,12"><GradientStop Color="#FF08B962" Offset="0"/><GradientStop Color="#0008B962" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
-                    <GeometryDrawing Geometry="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="8,5.5" EndPoint="11.5,11"><GradientStop Color="#FFF94543" Offset="0"/><GradientStop Color="#00F94543" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
-                    <GeometryDrawing Geometry="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="3.5,13.5" EndPoint="17.5,12"><GradientStop Color="#FFFABC12" Offset="0"/><GradientStop Color="#00FABC12" Offset=".46"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 11.04 19.32 Q 12 21.51 12 24 q 0 -2.49 .93 -4.68 q .96 -2.19 2.58 -3.81 t 3.81 -2.55 Q 21.51 12 24 12 q -2.49 0 -4.68 -.93 a 12.3 12.3 0 0 1 -3.81 -2.58 a 12.3 12.3 0 0 1 -2.58 -3.81 Q 12 2.49 12 0 q 0 2.49 -.96 4.68 q -.93 2.19 -2.55 3.81 a 12.3 12.3 0 0 1 -3.81 2.58 Q 2.49 12 0 12 q 2.49 0 4.68 .96 q 2.19 .93 3.81 2.55 t 2.55 3.81"><GeometryDrawing.Brush><SolidColorBrush Color="#3186FF"/></GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 11.04 19.32 Q 12 21.51 12 24 q 0 -2.49 .93 -4.68 q .96 -2.19 2.58 -3.81 t 3.81 -2.55 Q 21.51 12 24 12 q -2.49 0 -4.68 -.93 a 12.3 12.3 0 0 1 -3.81 -2.58 a 12.3 12.3 0 0 1 -2.58 -3.81 Q 12 2.49 12 0 q 0 2.49 -.96 4.68 q -.93 2.19 -2.55 3.81 a 12.3 12.3 0 0 1 -3.81 2.58 Q 2.49 12 0 12 q 2.49 0 4.68 .96 q 2.19 .93 3.81 2.55 t 2.55 3.81"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="7,15.5" EndPoint="11,12"><GradientStop Color="#FF08B962" Offset="0"/><GradientStop Color="#0008B962" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 11.04 19.32 Q 12 21.51 12 24 q 0 -2.49 .93 -4.68 q .96 -2.19 2.58 -3.81 t 3.81 -2.55 Q 21.51 12 24 12 q -2.49 0 -4.68 -.93 a 12.3 12.3 0 0 1 -3.81 -2.58 a 12.3 12.3 0 0 1 -2.58 -3.81 Q 12 2.49 12 0 q 0 2.49 -.96 4.68 q -.93 2.19 -2.55 3.81 a 12.3 12.3 0 0 1 -3.81 2.58 Q 2.49 12 0 12 q 2.49 0 4.68 .96 q 2.19 .93 3.81 2.55 t 2.55 3.81"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="8,5.5" EndPoint="11.5,11"><GradientStop Color="#FFF94543" Offset="0"/><GradientStop Color="#00F94543" Offset="1"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
+                    <GeometryDrawing Geometry="M 11.04 19.32 Q 12 21.51 12 24 q 0 -2.49 .93 -4.68 q .96 -2.19 2.58 -3.81 t 3.81 -2.55 Q 21.51 12 24 12 q -2.49 0 -4.68 -.93 a 12.3 12.3 0 0 1 -3.81 -2.58 a 12.3 12.3 0 0 1 -2.58 -3.81 Q 12 2.49 12 0 q 0 2.49 -.96 4.68 q -.93 2.19 -2.55 3.81 a 12.3 12.3 0 0 1 -3.81 2.58 Q 2.49 12 0 12 q 2.49 0 4.68 .96 q 2.19 .93 3.81 2.55 t 2.55 3.81"><GeometryDrawing.Brush><LinearGradientBrush MappingMode="Absolute" StartPoint="3.5,13.5" EndPoint="17.5,12"><GradientStop Color="#FFFABC12" Offset="0"/><GradientStop Color="#00FABC12" Offset=".46"/></LinearGradientBrush></GeometryDrawing.Brush></GeometryDrawing>
                 </DrawingGroup>
             </DrawingImage.Drawing>
         </DrawingImage>
 
         <!-- ===== Обновление сервера в строке таблицы: круглая кнопка с круговой стрелкой ===== -->
         <Style x:Key="RowRefresh" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Margin" Value="0"/>
@@ -226,8 +277,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
-                                <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Opacity" Value="0.7"/>
@@ -241,7 +292,7 @@
             </Setter>
         </Style>
 
-        <!-- Сам значок: дуга почти по кругу и наконечник. Цвет берется у кнопки -->
+        <!-- Сам значок: refresh-cw из Lucide (ISC). Цвет берется у кнопки -->
         <Style x:Key="RefreshGlyph" TargetType="Path">
             <Setter Property="Width" Value="16"/>
             <Setter Property="Height" Value="16"/>
@@ -251,13 +302,13 @@
             <Setter Property="StrokeStartLineCap" Value="Round"/>
             <Setter Property="StrokeEndLineCap" Value="Round"/>
             <Setter Property="StrokeLineJoin" Value="Round"/>
-            <Setter Property="Data" Value="M13.5,8 A5.5,5.5 0 1 1 11.9,4.1 M9.6,2.6 L11.9,4.1 L13.1,1.9"/>
+            <Setter Property="Data" Value="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8 M21 3v5h-5 M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16 M8 16H3v5"/>
         </Style>
 
         <!-- ===== Вкладки фильтра ===== -->
         <Style x:Key="Tab" TargetType="RadioButton">
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Template">
@@ -266,13 +317,13 @@
                         <Border x:Name="bd" Background="Transparent" CornerRadius="6">
                             <Grid>
                                 <!-- Выбранная вкладка не мигает, а плавно «проявляется». Отступы у текста, чтобы подсветка охватывала всю вкладку -->
-                                <Border x:Name="sel" Background="{StaticResource AccentSoft}" CornerRadius="6" Opacity="0"/>
+                                <Border x:Name="sel" Background="{DynamicResource AccentSoft}" CornerRadius="6" Opacity="0"/>
                                 <ContentPresenter VerticalAlignment="Center" Margin="16,8"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SurfaceHover}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Trigger.EnterActions>
@@ -285,7 +336,7 @@
                                         <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.ExitActions>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -295,7 +346,7 @@
 
         <!-- Галочка в темной теме -->
         <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -303,9 +354,9 @@
                     <ControlTemplate TargetType="CheckBox">
                         <StackPanel Orientation="Horizontal" Background="Transparent">
                             <Border x:Name="box" Width="16" Height="16" CornerRadius="4" BorderThickness="1.5"
-                                    BorderBrush="#4A5160" Background="Transparent" VerticalAlignment="Center">
+                                    BorderBrush="{DynamicResource ControlBorder}" Background="Transparent" VerticalAlignment="Center">
                                 <!-- Область Path совпадает с внутренней частью рамки (13×13 при толщине 1.5): галочка по центру -->
-                                <Path x:Name="mark" Data="M2.5,6.7 L5.3,9.5 L10.5,3.7" Stroke="White" StrokeThickness="2"
+                                <Path x:Name="mark" Data="M2.5,6.7 L5.3,9.5 L10.5,3.7" Stroke="{DynamicResource OnToggle}" StrokeThickness="2"
                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                       Visibility="Collapsed" Stretch="None" Width="13" Height="13"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -314,12 +365,12 @@
                         </StackPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="box" Property="Background" Value="{StaticResource Accent}"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource ToggleOn}"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource ToggleOn}"/>
                                 <Setter TargetName="mark" Property="Visibility" Value="Visible"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -329,7 +380,7 @@
 
         <!-- Тумблер-ссылка («Журнал ▸») -->
         <Style x:Key="LinkToggle" TargetType="ToggleButton">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -339,7 +390,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -352,7 +403,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ContextMenu">
-                        <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                        <Border Background="{DynamicResource MenuBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1"
                                 CornerRadius="8" Padding="4">
                             <StackPanel IsItemsHost="True"/>
                         </Border>
@@ -361,20 +412,41 @@
             </Setter>
         </Style>
         <Style TargetType="MenuItem">
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="MenuItem">
-                        <Border x:Name="bd" Background="Transparent" CornerRadius="5" Padding="12,7" MinWidth="200">
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Right" Text="{TemplateBinding InputGestureText}" Foreground="{StaticResource Muted}" Margin="20,0,0,0"/>
-                                <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
-                            </DockPanel>
-                        </Border>
+                        <Grid>
+                            <Border x:Name="bd" Background="Transparent" CornerRadius="5" Padding="12,7" MinWidth="200">
+                                <DockPanel>
+                                    <controls:Icon x:Name="arrow" DockPanel.Dock="Right" Kind="chevron-down" Size="12" Margin="16,0,0,0"
+                                                   Foreground="{DynamicResource Muted}" Visibility="Collapsed">
+                                        <controls:Icon.LayoutTransform><RotateTransform Angle="-90"/></controls:Icon.LayoutTransform>
+                                    </controls:Icon>
+                                    <TextBlock DockPanel.Dock="Right" Text="{TemplateBinding InputGestureText}" Foreground="{DynamicResource Muted}" Margin="20,0,0,0"/>
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+                                </DockPanel>
+                            </Border>
+                            <!-- Подменю: справа от пункта, тот же вид, что у меню -->
+                            <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="4" VerticalOffset="-5" AllowsTransparency="True"
+                                   IsOpen="{Binding IsSubmenuOpen, RelativeSource={RelativeSource TemplatedParent}}" Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border Background="{DynamicResource MenuBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1"
+                                        CornerRadius="8" Padding="4">
+                                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                                </Border>
+                            </Popup>
+                        </Grid>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="Role" Value="SubmenuHeader">
+                                <Setter TargetName="arrow" Property="Visibility" Value="Visible"/>
+                            </Trigger>
                             <Trigger Property="IsHighlighted" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource SurfaceHover}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource MenuHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource MenuHover}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4"/>
@@ -388,7 +460,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Separator">
-                        <Border Height="1" Background="{StaticResource Border}" Margin="6,4"/>
+                        <Border Height="1" Background="{DynamicResource Border}" Margin="8,6"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -402,11 +474,13 @@
             <Setter Property="Background" Value="#2A2F3A"/>
         </Style>
 
-        <!-- ===== Полоса прогресса ===== -->
+        <!-- ===== Полоса прогресса =====
+             Прежний вид: дорожка 6 px со скруглением 3, заливка цвета акцента. Пока прогресс неизвестен (подключение,
+             диагностика), по дорожке слева направо скользит мягкий блик того же цвета: двигается только градиент. -->
         <Style TargetType="ProgressBar">
             <Setter Property="Height" Value="6"/>
-            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
-            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
@@ -415,11 +489,48 @@
                                 <Border x:Name="PART_Track"/>
                                 <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
                                         CornerRadius="3" HorizontalAlignment="Left"/>
+                                <Border x:Name="Glide" CornerRadius="3" Visibility="Collapsed">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                            <LinearGradientBrush.RelativeTransform>
+                                                <TranslateTransform X="-1"/>
+                                            </LinearGradientBrush.RelativeTransform>
+                                            <GradientStop Color="#00C5F23A" Offset="0.30"/>
+                                            <GradientStop Color="#FFC5F23A" Offset="0.50"/>
+                                            <GradientStop Color="#00C5F23A" Offset="0.70"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
                             </Grid>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsIndeterminate" Value="True">
+                                <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/>
+                                <Setter TargetName="Glide" Property="Visibility" Value="Visible"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard x:Name="GlideStory">
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetName="Glide"
+                                                             Storyboard.TargetProperty="Background.RelativeTransform.X"
+                                                             From="-0.7" To="0.7" Duration="0:0:1.4">
+                                                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="GlideStory"/>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- ===== Плавная прокрутка колесом во всех списках и окнах (Controls/SmoothScroll) ===== -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="controls:SmoothScroll.IsEnabled" Value="True"/>
         </Style>
 
         <!-- ===== Тонкие полосы прокрутки ===== -->
@@ -435,7 +546,15 @@
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#3A404C" CornerRadius="4" Margin="2"/>
+                                            <Border x:Name="th" Background="{DynamicResource ScrollThumb}" CornerRadius="4" Margin="2"/>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="th" Property="Background" Value="{DynamicResource ScrollThumbHover}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="th" Property="Background" Value="{DynamicResource Muted}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -456,8 +575,16 @@
                                     <Track.Thumb>
                                         <Thumb>
                                             <Thumb.Template>
-                                                <ControlTemplate TargetType="Thumb">
-                                                    <Border Background="#3A404C" CornerRadius="4" Margin="2"/>
+                                        <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="th" Background="{DynamicResource ScrollThumb}" CornerRadius="4" Margin="2"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="th" Property="Background" Value="{DynamicResource ScrollThumbHover}"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsDragging" Value="True">
+                                                            <Setter TargetName="th" Property="Background" Value="{DynamicResource Muted}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Thumb.Template>
                                         </Thumb>
@@ -472,11 +599,11 @@
 
         <!-- ===== Таблица ===== -->
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Padding" Value="12,10"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
         </Style>
 
@@ -492,7 +619,7 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
         </Style>
 
         <Style TargetType="DataGridRow">
@@ -505,13 +632,13 @@
             <Setter Property="ToolTip" Value="{Binding LastError}"/>
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                    <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                     <Setter Property="BorderBrush" Value="#3A4150"/>
                 </Trigger>
                 <!-- Выбранная строка: синяя заливка + яркая полоса слева + жирный текст -->
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="#263F66"/>
-                    <Setter Property="BorderBrush" Value="{StaticResource Lime}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Lime}"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Trigger>
                 <!-- Новый рабочий сервер: строка проявляется и поднимается снизу на место -->
@@ -559,8 +686,8 @@
         </Style>
 
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource Surface}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="16"/>
@@ -576,16 +703,31 @@
 
         <!-- Подсказки в темной теме, а не светлые системные -->
         <Style TargetType="ToolTip">
-            <Setter Property="Background" Value="{StaticResource Surface2}"/>
-            <Setter Property="Foreground" Value="{StaticResource Text}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource Border}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}" MaxWidth="380">
+                            <ContentPresenter>
+                                <!-- Длинная строка переносится, а не растягивает подсказку на весь экран -->
+                                <ContentPresenter.Resources>
+                                    <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+                                </ContentPresenter.Resources>
+                            </ContentPresenter>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="Label" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
     </Application.Resources>

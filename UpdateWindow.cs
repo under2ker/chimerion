@@ -17,18 +17,20 @@ internal static class UpdateWindow
     public static void Show(Window owner, UpdateInfo info, Action onSkip, Action onRestart, Action<string> log)
     {
         var res = Application.Current.Resources;
-        var w = DnexDialog.CreateWindow("Обновление", 480);
-        var root = new StackPanel { Margin = new Thickness(26, 24, 26, 22) };
+        var w = DnexDialog.CreateWindow("Обновление", Ui.Narrow);
+        var root = Ui.Root();
         var header = new ContentControl { Focusable = false };
         root.Children.Add(header);
 
         // Описание из релиза: заголовки разделов выделены, пункты списка с точкой, остальная разметка убрана
         var notes = new TextBlock { Foreground = (Brush)res["Muted"], FontSize = 12, TextWrapping = TextWrapping.Wrap, LineHeight = 18 };
         RenderNotes(notes, info.Notes, (Brush)res["Text"]);
-        var body = new ContentControl { Focusable = false, Margin = new Thickness(50, -4, 0, 18) }; // по линии заголовка, как в других окнах
+        var body = new ContentControl { Focusable = false, Margin = new Thickness(50, -4, 0, 0) }; // по линии заголовка, как в других окнах
         root.Children.Add(body);
+        // Нижняя строка общего вида (линия сверху), кнопки меняются по состоянию окна
         var row = new DockPanel { LastChildFill = false };
-        root.Children.Add(row);
+        root.Children.Add(new Border { BorderBrush = Ui.B("Border"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0),
+                                       Padding = new Thickness(0, 14, 0, 0), Child = row });
         w.Content = root;
 
         CancellationTokenSource? cts = null;
@@ -41,8 +43,8 @@ internal static class UpdateWindow
             foreach (var b in buttons) row.Children.Add(b);
         }
         Button Right(Button b) { DockPanel.SetDock(b, Dock.Right); return b; }
-        Button Left(Button b) { DockPanel.SetDock(b, Dock.Left); return b; }
-        Button Btn(string text, string style, Action click) => DnexDialog.MakeButton(text, style, click);
+        Button Left(Button b) { DockPanel.SetDock(b, Dock.Left); b.Margin = new Thickness(0, 0, 8, 0); return b; }
+        Button Btn(string text, string style, Action click) => Ui.Action(text, style, click).With(b => b.Margin = new Thickness(8, 0, 0, 0));
         TextBlock Text(string t, string brush = "Muted") => new()
         {
             Text = t, Foreground = (Brush)res[brush], FontSize = 12, TextWrapping = TextWrapping.Wrap, LineHeight = 18,
@@ -66,8 +68,8 @@ internal static class UpdateWindow
         {
             header.Content = DnexDialog.Header(DialogKind.Info, $"Устанавливаю версию {info.Version}",
                 "Программа работает как обычно, подключение не прерывается", glyph: "↓");
-            var bar = new ProgressBar { Height = 6, Minimum = 0, Maximum = 1, IsIndeterminate = true, Margin = new Thickness(0, 4, 0, 10) };
-            var stage = Text("Подготовка…");
+            var bar = new ProgressBar { Minimum = 0, Maximum = 1, IsIndeterminate = true, Margin = new Thickness(0, 10, 0, 0) };
+            var stage = Text("Подготовка…").With(t => t.Margin = new Thickness(0, 8, 0, 0));
             var panel = new StackPanel();
             panel.Children.Add(bar);
             panel.Children.Add(stage);
@@ -78,7 +80,7 @@ internal static class UpdateWindow
             var progress = new Progress<(double? Part, string Stage)>(p =>
             {
                 bar.IsIndeterminate = p.Part == null;
-                if (p.Part is { } part) bar.Value = part;
+                if (p.Part is { } part) Ui.SetProgress(bar, part);
                 stage.Text = p.Stage;
             });
             log($"Обновление: скачиваю версию {info.Version}");

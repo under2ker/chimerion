@@ -167,6 +167,7 @@ public class ServerChecker
             if (subset) return; // частичная проверка не считается в стабильность
             s.ChecksTotal++;
             if (status != ServerStatus.Fail) { s.ChecksOk++; s.FailStreak = 0; } else s.FailStreak++;
+            s.AddHistory(status != ServerStatus.Fail, median);
             // Стабильность по каждому ИИ отдельно: для списка «лучший для ChatGPT, Claude, Gemini, для всех»
             s.ServiceChecks++;
             for (int i = 0; i < targets.Count; i++)
@@ -388,7 +389,7 @@ public class ServerChecker
             },
         };
         using var http = new HttpClient(handler) { Timeout = _timeout + _timeout };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) DNEX/0.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) CHIMERION/0.1");
 
         try
         {

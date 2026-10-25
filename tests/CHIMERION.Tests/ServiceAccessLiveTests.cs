@@ -2,7 +2,7 @@ using Dnex.Models;
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>
 /// Правила доступа на ответах, снятых с живых сервисов: напрямую из закрытого региона и через прокси Smart DNS.

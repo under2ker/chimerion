@@ -3,22 +3,34 @@ using System.IO;
 
 namespace Dnex.Services.Tools;
 
-/// <summary>Что помнится об инструменте между запусками DNEX (файл tools.json).</summary>
+/// <summary>Что помнится об инструменте между запусками CHIMERION (файл tools.json).</summary>
 public sealed class ToolState
 {
     /// <summary>Установленная версия. Null — не установлен.</summary>
     public string? Version { get; set; }
-    /// <summary>Включен пользователем: DNEX поднимает его при своем запуске.</summary>
+    /// <summary>Включен пользователем: CHIMERION поднимает его при своем запуске.</summary>
     public bool Enabled { get; set; }
     /// <summary>zapret: файл стратегии (general (ALT2).bat).</summary>
     public string? Strategy { get; set; }
     /// <summary>zapret: обход и для игр (порты выше 1023).</summary>
     public bool Games { get; set; }
+    /// <summary>zapret: обход по списку адресов сборки (ipset-all), в том числе Cloudflare.</summary>
+    public bool IpSet { get; set; }
+    /// <summary>zapret: свои сайты для обхода. Null — еще не переносились из файла списка (версии до наборов).</summary>
+    public List<string>? OwnSites { get; set; }
+    /// <summary>zapret: включенные готовые наборы (Meta, X, Discord...) из BypassCatalog.</summary>
+    public List<string> Groups { get; set; } = new();
+    /// <summary>zapret: большие внешние списки доменов (RemoteLists), например весь реестр от Re:filter.</summary>
+    public List<string> BigLists { get; set; } = new();
+    /// <summary>zapret: откуда брать адреса для IPSet. Null — список из сборки zapret.</summary>
+    public string? IpSetSource { get; set; }
+    /// <summary>zapret: после подбора сразу включать лучшую стратегию (иначе пользователь выбирает сам).</summary>
+    public bool AutoApplyBest { get; set; }
 }
 
 /// <summary>
-/// Сторонняя программа, которую DNEX скачивает с GitHub, включает, выключает и обновляет.
-/// Код самих программ в DNEX не входит: ставится их официальный релиз после проверки SHA-256.
+/// Сторонняя программа, которую CHIMERION скачивает с GitHub, включает, выключает и обновляет.
+/// Код самих программ в CHIMERION не входит: ставится их официальный релиз после проверки SHA-256.
 /// </summary>
 public abstract class Tool
 {
@@ -56,7 +68,7 @@ public abstract class Tool
 
     public abstract bool IsInstalled { get; }
     public abstract bool IsRunning();
-    /// <summary>Работает копия, которой управляет DNEX (ее и перезапускаем при обновлении).</summary>
+    /// <summary>Работает копия, которой управляет CHIMERION (ее и перезапускаем при обновлении).</summary>
     protected virtual bool RunningOurs() => IsRunning();
     public abstract Task StartAsync();
     public abstract Task StopAsync();
@@ -87,7 +99,7 @@ public abstract class Tool
         if (wasRunning) { progress.Report("Запускаю…"); await StartAsync(); }
     }
 
-    /// <summary>Включить по кнопке: установить, если еще нет, и запустить. Запоминается для следующих запусков DNEX.</summary>
+    /// <summary>Включить по кнопке: установить, если еще нет, и запустить. Запоминается для следующих запусков CHIMERION.</summary>
     public async Task EnableAsync(IProgress<string> progress, CancellationToken ct)
     {
         if (!IsInstalled) await InstallAsync(progress, ct);

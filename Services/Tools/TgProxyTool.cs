@@ -8,7 +8,7 @@ namespace Dnex.Services.Tools;
 /// <summary>
 /// TG WS Proxy (github.com/Flowseal/tg-ws-proxy): локальный MTProto-прокси для Telegram Desktop, который ведет
 /// трафик к серверам Telegram через WebSocket. Это отдельная программа со своим значком в трее и своими
-/// настройками в %APPDATA%\TgWsProxy. DNEX ее скачивает, запускает, останавливает и обновляет, а ссылку
+/// настройками в %APPDATA%\TgWsProxy. CHIMERION ее скачивает, запускает, останавливает и обновляет, а ссылку
 /// для подключения Telegram собирает из ее настроек так же, как она сама.
 /// </summary>
 public sealed class TgProxyTool : Tool
@@ -35,7 +35,7 @@ public sealed class TgProxyTool : Tool
         return list.Length > 0;
     }
 
-    /// <summary>Копия из папки DNEX. Путь чужой копии (поставленной пользователем самим) не совпадает.</summary>
+    /// <summary>Копия из папки CHIMERION. Путь чужой копии (поставленной пользователем самим) не совпадает.</summary>
     private static bool IsOurs(Process p)
     {
         try { return string.Equals(p.MainModule?.FileName, ExePath, StringComparison.OrdinalIgnoreCase); }
@@ -49,7 +49,7 @@ public sealed class TgProxyTool : Tool
         finally { foreach (var p in list) p.Dispose(); }
     }
 
-    /// <summary>Работает копия прокси, которую пользователь запустил сам, не через DNEX.</summary>
+    /// <summary>Работает копия прокси, которую пользователь запустил сам, не через CHIMERION.</summary>
     public bool ForeignCopyRunning()
     {
         var list = Running();
@@ -77,14 +77,14 @@ public sealed class TgProxyTool : Tool
         if (!IsRunning()) throw new ToolException("Прокси запустился и сразу закрылся. Возможно, его остановил антивирус");
     }
 
-    /// <summary>Останавливает только копию из папки DNEX. Собственную копию пользователя не трогаем.</summary>
+    /// <summary>Останавливает только копию из папки CHIMERION. Собственную копию пользователя не трогаем.</summary>
     public override Task StopAsync()
     {
         var list = Running();
         Kill(list.Where(IsOurs));
         foreach (var p in list) p.Dispose();
         if (ForeignCopyRunning())
-            throw new ToolException("Работает ваша собственная копия TG WS Proxy, запущенная не через DNEX. Закройте ее через ее значок в трее");
+            throw new ToolException("Работает ваша собственная копия TG WS Proxy, запущенная не через CHIMERION. Закройте ее через ее значок в трее");
         return Task.CompletedTask;
     }
 

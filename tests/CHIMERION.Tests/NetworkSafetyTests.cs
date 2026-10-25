@@ -1,7 +1,7 @@
 using Dnex.Services;
 using Xunit;
 
-namespace DNEX.Tests;
+namespace CHIMERION.Tests;
 
 /// <summary>Что программа считает публичным адресом и допустимым DoH-адресом.</summary>
 public class NetworkSafetyTests

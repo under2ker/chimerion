@@ -1,0 +1,141 @@
+{
+  "updated": "2026-10-25",
+  "servers": [
+    {
+      "name": "DoH router.comss.one",
+      "doh": "https://router.comss.one/dns-query",
+      "site": "https://wifigid.ru/poleznoe-i-interesnoe/dns-dlya-ii"
+    },
+    {
+      "name": "MagicDNS (DoH)",
+      "doh": "https://dns.magicdns.ru/dns-query",
+      "site": "https://magicdns.ru/"
+    },
+    {
+      "name": "Keyoneday DNS (DoH)",
+      "doh": "https://dns.keyoneday.ru/dns-query",
+      "site": "https://keyoneday.ru/dns.html"
+    },
+    {
+      "name": "Zapret DNS (DoH)",
+      "doh": "https://dns.zapret.moe/dns-query",
+      "site": "https://wiki.zapret.moe/Zapret/zapret-dns"
+    },
+    {
+      "name": "eu.geohide.ru",
+      "doh": "https://eu.geohide.ru/dns-query",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "dns.gonestore.ru",
+      "doh": "https://dns.gonestore.ru/dns-query",
+      "site": "https://keyoneday.ru/dns.html"
+    },
+    {
+      "name": "dns.comss.one",
+      "doh": "https://dns.comss.one/dns-query",
+      "site": "https://habr.com/ru/articles/870494/"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "143.20.64.192",
+      "secondary": "45.13.237.213",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "5.175.161.40",
+      "secondary": "5.175.161.3",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "31.25.239.132",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "83.220.169.155",
+      "secondary": "212.109.195.93",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "195.133.25.16",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "135.106.217.200",
+      "site": "https://raw.githubusercontent.com/WhIteGh0s1/DnsSwitch/main/presets.txt"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "143.20.64.55",
+      "secondary": "31.58.216.201",
+      "site": "https://raw.githubusercontent.com/Kam300/KodVsego-SmartDNS/main/README.md"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "109.120.132.43",
+      "secondary": "94.249.177.102",
+      "site": "https://raw.githubusercontent.com/Kam300/KodVsego-SmartDNS/main/README.md"
+    },
+    {
+      "name": "magicdns.ru",
+      "primary": "94.249.177.102",
+      "site": "https://magicdns.ru/"
+    },
+    {
+      "name": "trofimovsky.ru",
+      "primary": "212.109.195.93",
+      "site": "https://trofimovsky.ru/article/dns-dlya-gemini-i-neirosetei-rossiya-2026-chatgpt-claude-grok-bez-vpn/"
+    },
+    {
+      "name": "trofimovsky.ru",
+      "primary": "45.13.237.213",
+      "site": "https://trofimovsky.ru/article/dns-dlya-gemini-i-neirosetei-rossiya-2026-chatgpt-claude-grok-bez-vpn/"
+    },
+    {
+      "name": "keyoneday.ru",
+      "primary": "212.67.13.51",
+      "site": "https://keyoneday.ru/dns.html"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "5.175.161.3",
+      "site": "https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "37.221.93.141",
+      "site": "https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "37.221.93.128",
+      "site": "https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
+    },
+    {
+      "name": "raw.githubusercontent.com",
+      "primary": "192.255.159.241",
+      "site": "https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts"
+    },
+    {
+      "name": "bezmezhau.com",
+      "primary": "181.215.40.49",
+      "secondary": "31.58.216.201",
+      "site": "https://bezmezhau.com/"
+    },
+    {
+      "name": "bezmezhau.com",
+      "primary": "31.58.216.201",
+      "site": "https://bezmezhau.com/"
+    },
+    {
+      "name": "dns.zapret.moe",
+      "primary": "83.217.211.149",
+      "site": "https://dns.zapret.moe/"
+    }
+  ]
+}

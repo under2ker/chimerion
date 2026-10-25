@@ -14,19 +14,26 @@ public static class DnsSwitcher
     private const string ActiveFile = "active.json";
 
     /// <summary>Сведения о текущем подключении. Файл переживает перезапуск и сбой программы,
-    /// поэтому отключиться можно всегда, даже если DNEX закрылась аварийно.</summary>
+    /// поэтому отключиться можно всегда, даже если CHIMERION закрылась аварийно.</summary>
     public sealed class ActiveConnection
     {
         public Guid ServerId { get; set; }
         public string Name { get; set; } = "";
         public List<string> Addresses { get; set; } = new();
         public string? DohTemplate { get; set; }
-        /// <summary>Адреса, для которых DNEX сама зарегистрировала DoH, — только их и удаляем при отключении.</summary>
+        /// <summary>Адреса, для которых CHIMERION сама зарегистрировала DoH, — только их и удаляем при отключении.</summary>
         public List<string> DohAddedFor { get; set; } = new();
-        /// <summary>Адаптеры (GUID), на которых DNEX на время подключения выключила IPv6: у сервера нет IPv6,
+        /// <summary>Адаптеры (GUID), на которых CHIMERION на время подключения выключила IPv6: у сервера нет IPv6,
         /// а DNS роутера по IPv6 вел бы запросы мимо сервера. При отключении IPv6 включается обратно.</summary>
         public List<string> Ipv6Disabled { get; set; } = new();
         public DateTime Since { get; set; } = DateTime.Now;
+        /// <summary>Режим «Два DNS»: Addresses — Smart DNS для ИИ (через NRPT), AdapterAddresses — общий DNS на адаптерах.</summary>
+        public bool Split { get; set; }
+        public List<string> AdapterAddresses { get; set; } = new();
+        public string? GeneralName { get; set; }
+        /// <summary>Что должно стоять на адаптерах: общий DNS в режиме «Два DNS» (может быть пусто: адаптер не меняли), иначе сервер.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public List<string> OnAdapters => Split ? AdapterAddresses : Addresses;
     }
 
     private static ActiveConnection? _activeCache;
@@ -130,11 +137,24 @@ public static class DnsSwitcher
         }
         if (addrs.Count == 0) throw new InvalidOperationException("У сервера нет IP-адреса");
 
+        // Режим «Два DNS»: на адаптеры идет общий DNS (или ничего, если его не меняем), сервер получает только домены ИИ
+        var split = settings.SplitDns is { Enabled: true } sd ? sd : null;
+        var adapterAddrs = addrs;
+        string? adapterDoh = doh;
+        if (split != null)
+        {
+            adapterAddrs = split.GeneralAddresses.Where(a => IPAddress.TryParse(a, out _)).Select(a => IPAddress.Parse(a).ToString()).Distinct().ToList();
+            if (adapterAddrs.Any(IsV6) && !HasGlobalIpv6()) adapterAddrs.RemoveAll(IsV6);
+            adapterDoh = Uri.TryCreate(split.GeneralDoh?.Split('{')[0], UriKind.Absolute, out var gu) && gu.Scheme == Uri.UriSchemeHttps
+                ? gu.GetLeftPart(UriPartial.Path).Replace("'", "''") : null;
+        }
+        bool touchAdapters = adapterAddrs.Count > 0;
+
         await EnsureBackupAsync(log);
 
         var prev = GetActive();
-        bool hasV6 = addrs.Any(IsV6);
-        var list = string.Join(",", addrs.Select(a => $"'{a}'"));
+        bool hasV6 = adapterAddrs.Any(IsV6);
+        var list = string.Join(",", adapterAddrs.Select(a => $"'{a}'"));
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
         // Только физические адаптеры: VPN-туннели и виртуальные сети (Hyper-V, WSL) не трогаем — иначе сломаем их DNS.
@@ -152,20 +172,36 @@ public static class DnsSwitcher
                 }
                 """);
         }
-        if (doh != null)
+        // DoH: для адресов сервера (и в режиме «Два DNS» для адресов общего DNS). Windows знает эти адреса как DoH,
+        // и запросы по правилам NRPT к ним тоже идут через DoH
+        var dohPairs = new List<(string Ip, string Template)>();
+        if (doh != null) dohPairs.AddRange(addrs.Select(a => (a, doh)));
+        if (split != null && adapterDoh != null) dohPairs.AddRange(adapterAddrs.Where(a => !addrs.Contains(a)).Select(a => (a, adapterDoh)));
+        if (dohPairs.Count > 0)
         {
             sb.AppendLine("if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {");
-            foreach (var a in addrs)
+            foreach (var (a, t) in dohPairs)
             {
                 // Существующую системную запись DoH не трогаем; свою помечаем строкой ADDED, чтобы при отключении удалить только ее.
                 sb.AppendLine($"  if (-not (Get-DnsClientDohServerAddress -ServerAddress '{a}' -ErrorAction SilentlyContinue)) {{");
-                sb.AppendLine($"    Add-DnsClientDohServerAddress -ServerAddress '{a}' -DohTemplate '{doh}' -AllowFallbackToUdp $false -AutoUpgrade $true; Write-Output 'ADDED {a}' }}");
+                sb.AppendLine($"    Add-DnsClientDohServerAddress -ServerAddress '{a}' -DohTemplate '{t}' -AllowFallbackToUdp $false -AutoUpgrade $true | Out-Null; Write-Output 'ADDED {a}' }}");
             }
             sb.AppendLine("  Write-Output 'DoH зарегистрирован'");
             sb.AppendLine("} else { Write-Output 'Эта версия Windows не поддерживает DoH, используется обычный DNS' }");
         }
-        sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
-        if (!hasV6)
+        // Правила NRPT: прежние правила CHIMERION снимаем всегда, в режиме «Два DNS» ставим заново для доменов ИИ
+        sb.AppendLine(SplitDns.RemoveRulesScript);
+        if (split != null)
+        {
+            var ns = SplitDns.Namespaces(settings);
+            sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(n => $"'{n.Replace("'", "")}'"))}) -NameServers @({string.Join(",", addrs.Select(a => $"'{a}'"))}) -Comment '{SplitDns.RuleComment}'");
+            sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) направлены в {s.Name.Replace("'", "")}'");
+        }
+        if (touchAdapters)
+            sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
+        else
+            sb.AppendLine("Write-Output 'DNS адаптеров не меняется'");
+        if (touchAdapters && !hasV6)
         {
             // У сервера нет IPv6, а роутер раздает DNS по IPv6: Windows отправляла бы часть запросов туда, мимо сервера.
             // На время подключения выключаем IPv6 только на таких адаптерах и запоминаем их (строка V6OFF).
@@ -191,6 +227,7 @@ public static class DnsSwitcher
             ServerId = s.Id, Name = s.Name, Addresses = addrs, DohTemplate = doh?.Replace("''", "'"),
             DohAddedFor = prev?.DohAddedFor.ToList() ?? new(),
             Ipv6Disabled = prev?.Ipv6Disabled.ToList() ?? new(),
+            Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
         };
         Storage.Save(ActiveFile, active);
 
@@ -228,7 +265,9 @@ public static class DnsSwitcher
             catch (Exception re) { log("Откат не удался, см. журнал: " + re.Message); }
             throw;
         }
-        log($"Подключено: {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")})");
+        log(split != null
+            ? $"Подключено, два DNS: ИИ через {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
+            : $"Подключено: {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")})");
     }
 
     /// <summary>Запоминаем исходные настройки один раз — до первой смены.</summary>
@@ -253,9 +292,9 @@ public static class DnsSwitcher
     /// <summary>
     /// Безопасное отключение:
     /// 1) каждому адаптеру из резервной копии (ищем по GUID, не по номеру) возвращаем исходные DNS;
-    /// 2) любой адаптер, где остались адреса DNEX, сбрасываем на автоматические (DHCP);
-    /// 3) удаляем добавленные DNEX записи DoH (глобальные и на интерфейсах);
-    /// 4) сбрасываем кэш и сверяем результат — если адреса DNEX остались, сообщаем об ошибке.
+    /// 2) любой адаптер, где остались адреса CHIMERION, сбрасываем на автоматические (DHCP);
+    /// 3) удаляем добавленные CHIMERION записи DoH (глобальные и на интерфейсах);
+    /// 4) сбрасываем кэш и сверяем результат — если адреса CHIMERION остались, сообщаем об ошибке.
     /// </summary>
     public static async Task RestoreAsync(Action<string> log)
     {
@@ -267,7 +306,10 @@ public static class DnsSwitcher
         static IEnumerable<string> Ips(string? v) => (v ?? "").Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
             .Where(x => IPAddress.TryParse(x, out _)).Select(x => IPAddress.Parse(x).ToString());
 
-        var ours = (active?.Addresses ?? new()).Concat(active?.DohAddedFor ?? new()).SelectMany(x => Ips(x)).Distinct().ToList();
+        // Общий DNS режима «Два DNS» тоже наш, кроме адресов, которые и так стояли до подключения (их вернем как исходные)
+        var backupIps = backup.SelectMany(a => Ips(a.Static).Concat(Ips(a.Static6))).ToHashSet();
+        var general = (active?.AdapterAddresses ?? new()).SelectMany(x => Ips(x)).Where(ip => !backupIps.Contains(ip));
+        var ours = (active?.Addresses ?? new()).Concat(active?.DohAddedFor ?? new()).SelectMany(x => Ips(x)).Concat(general).Distinct().ToList();
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine($"$ours = @({string.Join(",", ours.Select(Q))})");
@@ -302,7 +344,7 @@ public static class DnsSwitcher
               elseif ($hasOurs) { $want = '' }
               else { continue }
               $want6 = if ($backup6.ContainsKey($g)) { $backup6[$g] } else { '' }
-              # Если в «исходных» почему-то оказались адреса DNEX — не возвращаем их, а ставим автоматические.
+              # Если в «исходных» почему-то оказались адреса CHIMERION — не возвращаем их, а ставим автоматические.
               if ($want -and @($want -split ',' | Where-Object { $ours -contains $_ }).Count -gt 0) { $want = '' }
               if ($want6 -and @($want6 -split ',' | Where-Object { $ours -contains $_ }).Count -gt 0) { $want6 = '' }
               try {
@@ -320,6 +362,11 @@ public static class DnsSwitcher
               if (@($after | Where-Object { $ours -contains $_ }).Count -gt 0) { Write-Output "LEFT $($a.Name)" }
             }
             foreach ($ip in $ours) { Remove-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue }
+            """);
+        // Правила NRPT режима «Два DNS»: снимаем всегда, даже если запись о подключении потерялась
+        sb.AppendLine(SplitDns.RemoveRulesScript);
+        sb.AppendLine("""
+            if (@(Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object { $_.Comment -eq 'DNEX' }).Count -gt 0) { Write-Output 'LEFT правила NRPT' }
             Clear-DnsClientCache
             ipconfig /flushdns | Out-Null
             """);
@@ -330,7 +377,7 @@ public static class DnsSwitcher
         {
             if (line.StartsWith("RESULT ")) log("  " + line[7..]);
             else if (line.StartsWith("WARN ")) log("  ⚠ " + line[5..]);
-            else if (line.StartsWith("LEFT ")) { left = true; log("  ✗ Остались адреса DNEX: " + line[5..]); }
+            else if (line.StartsWith("LEFT ")) { left = true; log("  ✗ Остались адреса CHIMERION: " + line[5..]); }
             else if (line.Length > 0) log("  " + line);
         }
         if (code != 0) throw new InvalidOperationException("Ошибка отключения, см. журнал");
