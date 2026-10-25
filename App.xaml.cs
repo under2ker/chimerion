@@ -18,6 +18,14 @@ public partial class App : Application
             return;
         }
         base.OnStartup(e);
+
+        var win = new MainWindow();
+        MainWindow = win;
+        // Запуск вместе с Windows: окно не создается вовсе, работает трей. Окно, показанное в первые секунды
+        // после входа в систему (пока не готовы видеодрайвер и DWM), оставалось черным до закрытия.
+        // Теперь оно создается при первом открытии из трея, когда система уже загружена.
+        if (Dnex.Services.AutoStart.StartedHidden) _ = win.StartHiddenAsync();
+        else win.Show();
     }
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)

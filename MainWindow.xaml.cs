@@ -88,18 +88,31 @@ public partial class MainWindow : Window
         _statsTimer.Tick += (_, _) => UpdateStats();
         _servers.CollectionChanged += (_, _) => _statsTimer.Start();
 
-        // Запуск из автозагрузки Windows: окно не показываем, работает значок в трее
-        if (AutoStart.StartedHidden) { Opacity = 0; ShowInTaskbar = false; }
+        Loaded += async (_, _) => await InitAsync();
+        _watchdog.Tick += Watchdog_Tick;
+        WatchVpn();
+        TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
+        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
+        _undoTimer.Tick += (_, _) => UndoTick();
+        PreviewKeyDown += Window_PreviewKeyDown;
+        Closing += OnClosing;
+    }
 
-        Loaded += async (_, _) =>
+    private bool _initStarted;
+
+    /// <summary>Запуск вместе с Windows: все, что делается при запуске, но без показа окна (см. App.OnStartup).</summary>
+    public Task StartHiddenAsync()
+    {
+        Log("Запуск вместе с Windows: программа в трее");
+        return InitAsync();
+    }
+
+    /// <summary>Подготовка после запуска. Один раз: из Loaded или, при запуске в трей, без окна.</summary>
+    private async Task InitAsync()
+    {
+        if (_initStarted) return;
+        _initStarted = true;
         {
-            if (AutoStart.StartedHidden)
-            {
-                Hide();
-                Opacity = 1;
-                ShowInTaskbar = true;
-                Log("Запуск вместе с Windows: программа в трее");
-            }
             Log($"Данные: {Storage.Dir}. Серверов в списке: {_servers.Count}");
             UpdateStats();
             ShowCompare();
@@ -109,7 +122,7 @@ public partial class MainWindow : Window
             _ = AutoStart.RefreshPathAsync(Log);
             await EnsureConnectionAfterStartAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
-        if (_settings.CheckUpdates) ScheduleUpdateCheck();
+            if (_settings.CheckUpdates) ScheduleUpdateCheck();
             if (DnsSwitcher.GetActive() is { } a)
                 Log($"Активно подключение «{a.Name}» с {a.Since:dd.MM HH:mm}.");
             SelectBest();
@@ -119,14 +132,7 @@ public partial class MainWindow : Window
             // Автопроверка при запуске: все, что не проверялось или проверялось давно.
             var stale = _servers.Where(x => x.LastChecked == null || DateTime.Now - x.LastChecked > TimeSpan.FromMinutes(30)).ToList();
             if (stale.Count > 0) await RunChecksAsync(stale);
-        };
-        _watchdog.Tick += Watchdog_Tick;
-        WatchVpn();
-        TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
-        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
-        _undoTimer.Tick += (_, _) => UndoTick();
-        PreviewKeyDown += Window_PreviewKeyDown;
-        Closing += OnClosing;
+        }
     }
 
     // ---------- Поиск и фильтр ----------
