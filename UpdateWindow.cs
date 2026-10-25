@@ -21,13 +21,15 @@ internal static class UpdateWindow
             Width = 480,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
-            Owner = owner,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            // Программа запущена в трей и окно еще не открывалось: владельцем его назначить нельзя (WPF бросает
+            // исключение), окно обновления встает по центру экрана и видно в панели задач
+            Owner = owner.IsVisible ? owner : null,
+            WindowStartupLocation = owner.IsVisible ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
             Background = (Brush)res["Bg"],
             Foreground = (Brush)res["Text"],
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
             FontSize = 13,
-            ShowInTaskbar = false,
+            ShowInTaskbar = !owner.IsVisible,
         };
 
         var root = new StackPanel { Margin = new Thickness(26, 24, 26, 22) };
