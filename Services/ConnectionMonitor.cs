@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Dnex.Models;
 
 namespace Dnex.Services;
@@ -26,6 +26,13 @@ public sealed class ConnectionMonitor
         Failing,
         /// <summary>DNS не отвечает FailsBeforeSwitch раз подряд: переключиться на следующий лучший сервер.</summary>
         SwitchServer,
+        /// <summary>
+        /// Работает сторонний VPN: DNS адаптеров или ответы определяет он. Сторож не возвращает DNS и не меняет сервер,
+        /// иначе спорил бы с VPN по кругу (с запросом прав каждый раз). Когда VPN выключат, все проверится заново.
+        /// </summary>
+        VpnHolds,
+        /// <summary>DNS сбрасывают снова и снова: другая программа меняет его следом за сторожем. Сторож перестает спорить.</summary>
+        Conflict,
     }
 
     /// <summary>Неудачи подряд на текущий момент.</summary>
@@ -37,7 +44,23 @@ public sealed class ConnectionMonitor
     /// <summary>Сколько раз писать в журнал «нет сети»: true только на первом такте без сети.</summary>
     public bool FirstNoNetwork { get; private set; }
 
-    public void Reset() { Fails = 0; NoNetworkReported = false; FirstNoNetwork = false; }
+    /// <summary>Сколько возвратов DNS подряд терпим за окно RestoreWindow, прежде чем решить, что с нами спорит другая программа.</summary>
+    public const int MaxRestores = 3;
+    public static readonly TimeSpan RestoreWindow = TimeSpan.FromMinutes(15);
+
+    private readonly List<DateTime> _restores = new();
+    /// <summary>Часы. Подменяются в тестах.</summary>
+    internal Func<DateTime> Now = () => DateTime.Now;
+
+    /// <summary>Первый такт, на котором VPN держит DNS: в журнал пишем один раз, пока VPN не выключат.</summary>
+    public bool FirstVpnHold { get; private set; }
+    private bool _vpnHolding;
+
+    /// <summary>Новый такт после смены подключения. Счетчик возвратов DNS не обнуляется: возврат сам меняет подключение.</summary>
+    public void Reset() { Fails = 0; NoNetworkReported = false; FirstNoNetwork = false; _vpnHolding = false; FirstVpnHold = false; }
+
+    /// <summary>Пользователь подключился сам: прежние возвраты DNS больше не считаются спором.</summary>
+    public void ForgetRestores() => _restores.Clear();
 
     /// <summary>
     /// Адреса подключения пропали с адаптеров или пропали правила NRPT режима «Два DNS». Подключение,
@@ -58,7 +81,7 @@ public sealed class ConnectionMonitor
     /// Один такт сторожа. dnsWorks вызывается, только если сеть есть и DNS на месте: это сетевой запрос.
     /// </summary>
     public async Task<Verdict> TickAsync(DnsSwitcher.ActiveConnection active, bool networkUp, IReadOnlyCollection<IPAddress> current,
-                                         bool rulesPresent, Func<Task<bool>> dnsWorks)
+                                         bool rulesPresent, Func<Task<bool>> dnsWorks, bool vpnActive = false)
     {
         if (!networkUp)
         {
@@ -69,8 +92,27 @@ public sealed class ConnectionMonitor
         }
         NoNetworkReported = false;
         FirstNoNetwork = false;
-        if (NeedsRestore(active, current, rulesPresent, out _)) return Verdict.Restore;
-        if (await dnsWorks()) { Fails = 0; return Verdict.Ok; }
+        bool restore = NeedsRestore(active, current, rulesPresent, out _);
+        bool works = restore || await dnsWorks();
+        // VPN включен и DNS «сброшен» или не отвечает: это делает VPN, а не сбой сервера. Ждем, пока его выключат
+        if (vpnActive && (restore || !works))
+        {
+            FirstVpnHold = !_vpnHolding;
+            _vpnHolding = true;
+            Fails = 0;
+            return Verdict.VpnHolds;
+        }
+        _vpnHolding = false;
+        FirstVpnHold = false;
+        if (restore)
+        {
+            var now = Now();
+            _restores.RemoveAll(t => now - t > RestoreWindow);
+            if (_restores.Count >= MaxRestores) return Verdict.Conflict;
+            _restores.Add(now);
+            return Verdict.Restore;
+        }
+        if (works) { Fails = 0; return Verdict.Ok; }
         if (++Fails < FailsBeforeSwitch) return Verdict.Failing;
         Fails = 0;
         return Verdict.SwitchServer;

@@ -286,7 +286,8 @@ public static class Updater
     /// Скачивает и ставит версию v. progress — доля от 0 до 1 (null, если размер неизвестен) и текст этапа.
     /// После успеха нужен перезапуск (Restart).
     /// </summary>
-    public static async Task InstallAsync(Version v, IProgress<(double? Part, string Stage)> progress, CancellationToken ct)
+    public static async Task InstallAsync(Version v, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
+                                          HotfixChannel.Manifest? hotfix = null)
     {
         var ver = v.ToString(3);
         Directory.CreateDirectory(TempDir);
@@ -297,7 +298,14 @@ public static class Updater
         //    замедлен: тогда файлы берутся через зеркала (GitHubMirrors). Это безопасно: архив ставится только с подписью автора
         progress.Report((null, "Получаю контрольную сумму…"));
         string expected;
-        try
+        if (hotfix != null)
+        {
+            // Быстрое исправление из R2: сумма в подписанном манифесте, архив и подпись лежат рядом в бакете
+            if (hotfix.ParsedVersion != v) throw new UpdateException("Манифест быстрого обновления не про эту версию");
+            expected = hotfix.Sha256;
+            legacy = false;
+        }
+        else try
         {
             var text = await GitHubMirrors.GetStringAsync(Http, GitHubMirrors.ReleaseUrls(ShaUrl(v)), ct,
                 t => PickSum(t, v).Hash is { Length: 64 } h && h.All(Uri.IsHexDigit));
@@ -308,7 +316,7 @@ public static class Updater
         // 2–3. Архив с прогрессом и проверка суммы. Путь, с которого пришел поврежденный или чужой архив, пропускается
         Exception? lastError = null;
         bool mismatch = false, got = false;
-        foreach (var url in GitHubMirrors.ReleaseUrls(ZipUrl(v, legacy)))
+        foreach (var url in hotfix != null ? new[] { HotfixChannel.ZipUrl(hotfix) } : GitHubMirrors.ReleaseUrls(ZipUrl(v, legacy)))
         {
             try { await DownloadAsync(url, zipPath, progress, ct); }
             catch (Exception e) when (!ct.IsCancellationRequested) { lastError = e; continue; }
@@ -332,7 +340,7 @@ public static class Updater
         string sig;
         try
         {
-            sig = await GitHubMirrors.GetStringAsync(Http, GitHubMirrors.ReleaseUrls(SigUrl(v, legacy)), ct,
+            sig = await GitHubMirrors.GetStringAsync(Http, hotfix != null ? new[] { HotfixChannel.SigUrl(hotfix) } : GitHubMirrors.ReleaseUrls(SigUrl(v, legacy)), ct,
                 t => { try { return Convert.FromBase64String(t.Trim()).Length > 0; } catch (FormatException) { return false; } });
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { throw new UpdateException("Не удалось получить подпись релиза: " + Short(e)); }

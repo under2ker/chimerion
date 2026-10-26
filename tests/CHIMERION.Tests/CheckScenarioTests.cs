@@ -387,3 +387,79 @@ public class MonitorAndRankingTests
         Assert.Contains("не проверялся", m.Describe());
     }
 }
+
+/// <summary>Сторож и сторонний VPN или программа, которая меняет DNS следом за ним.</summary>
+public class MonitorVpnAndConflictTests
+{
+    private static readonly IPAddress Ours = IPAddress.Parse("203.0.113.10");
+    private static readonly List<IPAddress> Reset = new() { IPAddress.Parse("10.8.0.1") };
+    private static DnsSwitcher.ActiveConnection Active() => new() { ServerId = Guid.NewGuid(), Name = "Тест", Addresses = { "203.0.113.10" } };
+
+    [Fact]
+    public async Task Vpn_that_changed_dns_is_not_fought()
+    {
+        var m = new ConnectionMonitor();
+        var v = await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true), vpnActive: true);
+        Assert.Equal(ConnectionMonitor.Verdict.VpnHolds, v);
+        Assert.True(m.FirstVpnHold);
+        Assert.Equal(ConnectionMonitor.Verdict.VpnHolds, await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true), true));
+        Assert.False(m.FirstVpnHold); // в журнал один раз
+    }
+
+    [Fact]
+    public async Task Vpn_blocking_dns_does_not_make_watchdog_switch_servers()
+    {
+        var m = new ConnectionMonitor();
+        var cur = new List<IPAddress> { Ours };
+        for (int i = 0; i < 5; i++)
+            Assert.Equal(ConnectionMonitor.Verdict.VpnHolds, await m.TickAsync(Active(), true, cur, true, () => Task.FromResult(false), true));
+        Assert.Equal(0, m.Fails);
+    }
+
+    [Fact]
+    public async Task Vpn_that_does_not_interfere_is_ignored_and_turning_it_off_resumes_restore()
+    {
+        var m = new ConnectionMonitor();
+        var a = Active();
+        Assert.Equal(ConnectionMonitor.Verdict.Ok, await m.TickAsync(a, true, new List<IPAddress> { Ours }, true, () => Task.FromResult(true), true));
+        Assert.Equal(ConnectionMonitor.Verdict.VpnHolds, await m.TickAsync(a, true, Reset, true, () => Task.FromResult(true), true));
+        // VPN выключили, а DNS так и остался чужим: теперь сторож возвращает подключение
+        Assert.Equal(ConnectionMonitor.Verdict.Restore, await m.TickAsync(a, true, Reset, true, () => Task.FromResult(true), false));
+    }
+
+    [Fact]
+    public async Task Program_that_keeps_resetting_dns_stops_the_watchdog()
+    {
+        var t = new DateTime(2026, 10, 26, 12, 0, 0);
+        var m = new ConnectionMonitor { Now = () => t };
+        var a = Active();
+        for (int i = 0; i < ConnectionMonitor.MaxRestores; i++)
+        {
+            Assert.Equal(ConnectionMonitor.Verdict.Restore, await m.TickAsync(a, true, Reset, true, () => Task.FromResult(true)));
+            m.Reset(); // так делает окно после каждого возврата: счетчик возвратов при этом не теряется
+            t = t.AddMinutes(2);
+        }
+        Assert.Equal(ConnectionMonitor.Verdict.Conflict, await m.TickAsync(a, true, Reset, true, () => Task.FromResult(true)));
+    }
+
+    [Fact]
+    public async Task Rare_resets_are_restored_every_time()
+    {
+        var t = new DateTime(2026, 10, 26, 12, 0, 0);
+        var m = new ConnectionMonitor { Now = () => t };
+        for (int i = 0; i < 6; i++)
+        {
+            Assert.Equal(ConnectionMonitor.Verdict.Restore, await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true)));
+            t = t.AddMinutes(10); // раз в 10 минут: за 15 минут не больше двух
+        }
+    }
+
+    [Fact]
+    public async Task Manual_connect_forgets_old_restores()
+    {
+        var m = new ConnectionMonitor();
+        for (int i = 0; i < ConnectionMonitor.MaxRestores; i++) await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true));
+        m.ForgetRestores();
+        Assert.Equal(ConnectionMonitor.Verdict.Restore, await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true)));
+    }
+}

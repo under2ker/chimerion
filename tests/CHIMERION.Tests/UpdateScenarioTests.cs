@@ -55,7 +55,10 @@ public sealed class UpdateScenarioTests : IDisposable
         // Ярлыки ищутся только во временной папке теста, а не на настоящем рабочем столе
         _links = Directory.CreateDirectory(Path.Combine(_dir, "links")).FullName;
         Shortcuts.Folders = () => new[] { _links };
+        HotfixChannel.BaseUrl = ""; // настоящий бакет тестам не нужен, сценарии с R2 включают свой адрес
     }
+
+    private static readonly string RealHotfixBase = HotfixChannel.BaseUrl;
 
     private readonly string _links;
     private static readonly Func<IEnumerable<string>> DefaultFolders = Shortcuts.Folders;
@@ -69,6 +72,7 @@ public sealed class UpdateScenarioTests : IDisposable
         Updater.TempDirOverride = null;
         Updater.ExePathOverride = null;
         Shortcuts.Folders = DefaultFolders;
+        HotfixChannel.BaseUrl = RealHotfixBase;
         File.Delete(Storage.PathOf("update-pending.json"));
         if (Directory.Exists(Storage.PathOf("backup"))) Directory.Delete(Storage.PathOf("backup"), true);
         _key.Dispose();
@@ -438,5 +442,119 @@ public sealed class UpdateScenarioTests : IDisposable
         Assert.Equal(NewExe, File.ReadAllBytes(Exe));
         Assert.Contains(Updater.ZipUrl(V, legacy: true), _gh.Requested);
         Assert.DoesNotContain(Updater.ZipUrl(V), _gh.Requested);
+    }
+
+    // ---------- Быстрые обновления через Cloudflare R2 ----------
+
+    private const string R2 = "https://updates.example.r2.dev";
+
+    /// <summary>Быстрое исправление в «бакете»: архив, его подпись, подписанный манифест.</summary>
+    private HotfixChannel.Manifest PublishHotfix(Version hv, byte[]? zip = null, string notes = "Срочно поправлено отключение", ECDsa? signer = null)
+    {
+        zip ??= Zip("CHIMERION.exe", NewExe);
+        var name = $"CHIMERION-{hv.ToString(3)}-win-x64.zip";
+        string Sig(byte[] data) => Convert.ToBase64String((signer ?? _key).SignData(data, HashAlgorithmName.SHA256));
+        _gh.Files[$"{R2}/{name}"] = zip;
+        _gh.Files[$"{R2}/{name}.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(zip));
+        var json = System.Text.Json.JsonSerializer.Serialize(new { version = hv.ToString(3), notes, zip = name, sha256 = Convert.ToHexString(SHA256.HashData(zip)), date = "2026-10-26" });
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        _gh.Files[$"{R2}/latest.json"] = bytes;
+        _gh.Files[$"{R2}/latest.json.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(bytes));
+        return HotfixChannel.Parse(json, Sig(bytes), Updater.TrustedKey)!;
+    }
+
+    private void UseR2()
+    {
+        HotfixChannel.BaseUrl = R2;
+        HotfixChannel.Http = new HttpClient(_gh);
+    }
+
+    [Fact]
+    public async Task Hotfix_from_R2_installs_like_a_release()
+    {
+        UseR2();
+        try
+        {
+            // Быстрое исправление собрано из этой же сборки: номер в архиве совпадает с V
+            var m = PublishHotfix(V);
+            var found = await HotfixChannel.CheckAsync(CancellationToken.None);
+            Assert.Equal(V, found!.ParsedVersion);
+            await Updater.InstallAsync(V, new Progress<(double?, string)>(), CancellationToken.None, m);
+            Assert.Equal(NewExe, File.ReadAllBytes(Exe));
+            Assert.DoesNotContain(_gh.Requested, u => u.Contains("github.com"));
+        }
+        finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    [Fact]
+    public async Task Forged_hotfix_archive_in_bucket_is_not_installed()
+    {
+        UseR2();
+        try
+        {
+            var m = PublishHotfix(V);
+            // Кто-то получил доступ к бакету и подменил архив вместе с суммой в манифесте, но ключа автора у него нет
+            using var stranger = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            var forged = Zip("CHIMERION.exe", NewExe.Concat(new byte[] { 9 }).ToArray());
+            _gh.Files[$"{R2}/{m.Zip}"] = forged;
+            _gh.Files[$"{R2}/{m.Zip}.sig"] = System.Text.Encoding.ASCII.GetBytes(Convert.ToBase64String(stranger.SignData(forged, HashAlgorithmName.SHA256)));
+            m.Sha256 = Convert.ToHexString(SHA256.HashData(forged));
+            var e = await Assert.ThrowsAsync<UpdateException>(() => Updater.InstallAsync(V, new Progress<(double?, string)>(), CancellationToken.None, m));
+            Assert.Contains("Подпись архива не прошла проверку", e.Message);
+            AssertUntouched();
+        }
+        finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    [Fact]
+    public async Task Hotfix_manifest_with_wrong_signature_is_ignored()
+    {
+        UseR2();
+        try
+        {
+            using var stranger = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            PublishHotfix(new Version(V.Major, V.Minor, V.Build + 5), signer: stranger);
+            Assert.Null(await HotfixChannel.CheckAsync(CancellationToken.None));
+        }
+        finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    [Fact]
+    public void Manifest_rejects_paths_and_bad_sums()
+    {
+        string Sig(string j) => Convert.ToBase64String(_key.SignData(System.Text.Encoding.UTF8.GetBytes(j), HashAlgorithmName.SHA256));
+        var ok = "{\"version\":\"0.1.28\",\"zip\":\"CHIMERION-0.1.28-win-x64.zip\",\"sha256\":\"" + new string('a', 64) + "\"}";
+        Assert.NotNull(HotfixChannel.Parse(ok, Sig(ok), Updater.TrustedKey));
+        foreach (var bad in new[]
+        {
+            ok.Replace("CHIMERION-0.1.28-win-x64.zip", "../evil.zip"),
+            ok.Replace("CHIMERION-0.1.28-win-x64.zip", "https://evil.example/CHIMERION-0.1.28-win-x64.zip"),
+            ok.Replace(new string('a', 64), "123"),
+            ok.Replace("0.1.28\",", "latest\","),
+        })
+            Assert.Null(HotfixChannel.Parse(bad, Sig(bad), Updater.TrustedKey));
+    }
+
+    [Fact]
+    public void Newest_channel_wins()
+    {
+        var cur = new Version(0, 1, 27);
+        HotfixChannel.Manifest Hot(string v) => new() { Version = v, Zip = $"CHIMERION-{v}-win-x64.zip", Sha256 = new string('A', 64), Notes = "срочно" };
+        var ghSame = new UpdateCheck(UpdateStatus.UpToDate, null, cur);
+        // Быстрое исправление новее программы и релиза GitHub: предлагается оно
+        var r = UpdateChecker.Combine(ghSame, Hot("0.1.28"), cur);
+        Assert.Equal(UpdateStatus.Available, r.Status);
+        Assert.NotNull(r.Info!.Hotfix);
+        // Вышел большой релиз новее исправления: предлагается релиз
+        var ghBig = new UpdateCheck(UpdateStatus.Available, new UpdateInfo(new Version(0, 1, 30), "большой", "page"), new Version(0, 1, 30));
+        Assert.Null(UpdateChecker.Combine(ghBig, Hot("0.1.28"), cur).Info!.Hotfix);
+        // Исправление уже стоит
+        Assert.Equal(UpdateStatus.UpToDate, UpdateChecker.Combine(ghSame, Hot("0.1.27"), cur).Status);
+        // GitHub недоступен, R2 ответил: итог есть, а не «проверить не удалось»
+        var ghFail = new UpdateCheck(UpdateStatus.Failed, null, null, "нет соединения");
+        Assert.Equal(UpdateStatus.UpToDate, UpdateChecker.Combine(ghFail, Hot("0.1.27"), cur).Status);
+        Assert.Equal(UpdateStatus.Available, UpdateChecker.Combine(ghFail, Hot("0.1.29"), cur).Status);
+        // R2 выключен или не ответил: как раньше
+        Assert.Same(ghFail, UpdateChecker.Combine(ghFail, null, cur));
     }
 }
