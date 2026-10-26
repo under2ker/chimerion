@@ -177,6 +177,9 @@ public partial class MainWindow
             Visible = true,
         };
         _tray.DoubleClick += (_, _) => ShowFromTray();
+        // Щелчок по уведомлению: действие, которое к нему привязано (например, открыть окно обновления)
+        _tray.BalloonTipClicked += (_, _) => { var a = _balloonClick; _balloonClick = null; a?.Invoke(); };
+        _tray.BalloonTipClosed += (_, _) => _balloonClick = null;
         // Щелчок левой кнопкой открывает окно (как у других программ в трее), правая — меню
         _tray.MouseClick += (_, e) => { if (e.Button == System.Windows.Forms.MouseButtons.Left) ShowFromTray(); };
         _trayTimer.Tick += async (_, _) =>
@@ -257,6 +260,9 @@ public partial class MainWindow
             _traySvc.SetState(name, state);
         }
     }
+
+    /// <summary>Действие по щелчку на текущем уведомлении в трее. Сбрасывается, когда уведомление закрылось.</summary>
+    private Action? _balloonClick;
 
     private void ShowFromTray()
     {

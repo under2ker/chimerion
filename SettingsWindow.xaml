@@ -127,8 +127,8 @@
                     <StackPanel>
                         <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)"/>
                         <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                        <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию при запуске (рекомендуем)" Margin="0,12,0,0"/>
-                        <TextBlock Text="Программа покажет, что вышло нового. Обновление ставится только по кнопке «Обновить» и заработает после перезапуска" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                        <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию в фоне (рекомендуем)" Margin="0,12,0,0"/>
+                        <TextBlock Text="При запуске и раз в 6 часов. Программа покажет, что вышло нового, а обновится по кнопке «Обновить» и сама перезапустится" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                         <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows (рекомендуем)" Margin="0,12,0,0"/>
                         <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
 

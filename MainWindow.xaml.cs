@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -163,7 +163,7 @@ public partial class MainWindow : Window
             await EnsureConnectionAfterStartAsync();
             _ = StartToolsAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
-            if (_settings.CheckUpdates) ScheduleUpdateCheck();
+            ScheduleUpdateCheck(); // настройку «Проверять новую версию» смотрит сама проверка: ее можно включить на ходу
             if (DnsSwitcher.GetActive() is { } a)
                 Log($"Активно подключение «{a.Name}» с {a.Since:dd.MM HH:mm}.");
             SelectBest();
