@@ -358,6 +358,11 @@ public partial class MainWindow
         var wereWorking = before?.Where(kv => kv.Value.Status is ServerStatus.Ok or ServerStatus.Partial).Select(kv => kv.Key).ToList() ?? new();
         int broke = wereWorking.Count(s => s.Status == ServerStatus.Fail);
         bool outage = !networkUp || (wereWorking.Count >= 5 && broke * 100 / wereWorking.Count >= 60);
+        // Работающий VPN ведет запросы проверки через себя: часть VPN блокирует обращения к чужим DNS (защита от утечек),
+        // и все серверы выглядели бы нерабочими. Такую проверку не засчитываем и мусор по ней не убираем
+        var vpns = SystemCheck.ActiveVpns();
+        bool vpnSkewed = vpns.Count > 0 && !outage;
+        outage |= vpnSkewed;
 
         if (outage)
         {
@@ -368,10 +373,16 @@ public partial class MainWindow
                 if (s.History.Count > c.History) s.History.RemoveRange(c.History, s.History.Count - c.History); // сбой сети не пишем в историю
                 s.NotifyStability();
             }
-            Log(networkUp
+            if (vpnSkewed)
+            {
+                Log($"Во время проверки работал VPN ({string.Join(", ", vpns)}): запросы шли через него, и результат может не совпадать с тем, " +
+                    "что будет без VPN. Автоочистка пропущена, стабильность не изменена. Выключите VPN и нажмите «Перепроверить»");
+                ShowToast("Работал VPN: проверка не засчитана, серверы не отправлены в мусор", "Warn");
+            }
+            else Log(networkUp
                 ? $"Похоже на сбой сети: из {wereWorking.Count} работавших серверов разом перестали отвечать {broke}. Автоочистка пропущена, стабильность не изменена. Проверьте сеть и нажмите «Перепроверить»"
                 : "Сеть пропала во время проверки. Автоочистка пропущена, стабильность не изменена. Когда сеть вернется, нажмите «Перепроверить»");
-            ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
+            if (!vpnSkewed) ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
         }
 
         SaveServers();

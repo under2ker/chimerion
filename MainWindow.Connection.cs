@@ -82,6 +82,11 @@ public partial class MainWindow
     private async Task<bool> ConnectToAsync(DnsServer s, bool auto = false)
     {
         if (_busyConn) return false;
+        // Работает сторонний VPN: DNS из CHIMERION при нем обычно не действует. Предупреждаем до запроса прав, а не после
+        if (!auto && SystemCheck.ActiveVpns() is { Count: > 0 } vpnsNow &&
+            !DnexDialog.Ask("Работает VPN", $"Включен {string.Join(", ", vpnsNow)}. Пока он работает, запросы идут через него, " +
+                "и DNS из CHIMERION, скорее всего, не будет действовать. Лучше сначала выключить VPN.", "Подключить все равно", windowTitle: "Подключение"))
+            return false;
         bool connected = false;
         // Для отмены: к какому серверу было подключение до этого (если было)
         var prevActive = DnsSwitcher.GetActive();
@@ -115,6 +120,7 @@ public partial class MainWindow
             await DnsSwitcher.ApplyAsync(s, _settings, Log);
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
             _uacDeclined = false;
+            if (!auto) _monitor.ForgetRestores();
 
             // 3. Проверка, что интернет после смены жив. Если нет — автоматический откат.
             ProgressText.Text = "Проверяю интернет…";
@@ -379,8 +385,9 @@ public partial class MainWindow
         bool up = await SystemCheck.NetworkUpAsync();
         var current = up ? await DnsSwitcher.GetCurrentAddressesAsync() : new List<IPAddress>();
         bool rulesPresent = !active.Split || SplitDns.RulesPresent();
+        var vpns = up ? SystemCheck.ActiveVpns() : new List<string>();
         var verdict = await _monitor.TickAsync(active, up, current, rulesPresent,
-            () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)));
+            () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)), vpns.Count > 0);
         // Проверки шли несколько секунд: за это время пользователь мог начать подключение или отключиться.
         // Тогда решение сторожа устарело: чинить чужое действие нельзя, иначе он сообщил бы о ложном сбое
         if (WatchdogStale(active)) return;
@@ -398,6 +405,23 @@ public partial class MainWindow
                     ShowToast($"DNS был сброшен. Подключение «{same.DisplayName}» возвращено", "Warn");
                 else
                     ShowToast("DNS был сброшен, вернуть подключение не удалось: подробности в журнале", "Bad");
+                return;
+            case ConnectionMonitor.Verdict.VpnHolds:
+                if (_monitor.FirstVpnHold)
+                {
+                    Log($"Сторож: работает VPN ({string.Join(", ", vpns)}), DNS сейчас определяет он. Пока VPN включен, " +
+                        "CHIMERION не возвращает DNS и не меняет сервер. Когда VPN выключат, подключение проверится и вернется само");
+                    ShowToast("Работает VPN: пока он включен, CHIMERION не спорит с ним за DNS", "Warn");
+                }
+                return;
+            case ConnectionMonitor.Verdict.Conflict:
+                // DNS сбрасывают следом за каждым возвратом: со сторожем спорит другая программа. Дальше он не вмешивается,
+                // иначе спор шел бы бесконечно, а без прав администратора еще и с запросом UAC каждую минуту
+                _uacDeclined = true;
+                Log($"Сторож: DNS сбрасывают снова и снова ({ConnectionMonitor.MaxRestores} раза за {ConnectionMonitor.RestoreWindow.TotalMinutes:0} минут), " +
+                    $"сейчас стоит {string.Join(", ", current)}. Похоже, его меняет другая программа: VPN, антивирус, «оптимизатор» сети. " +
+                    "Сторож больше не возвращает подключение. Закройте такую программу и нажмите «Подключить»");
+                ShowToast("DNS постоянно меняет другая программа: сторож перестал спорить, подробности в журнале", "Bad");
                 return;
             case ConnectionMonitor.Verdict.Failing:
                 Log($"Сторож: DNS не отвечает ({_monitor.Fails}/{ConnectionMonitor.FailsBeforeSwitch})");

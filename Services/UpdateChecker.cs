@@ -6,7 +6,8 @@ using System.Text.Json;
 namespace Dnex.Services;
 
 /// <summary>Новая версия из GitHub: номер, описание и страница релиза. Установку делает Updater.</summary>
-public sealed record UpdateInfo(Version Version, string Notes, string PageUrl);
+/// <summary>Hotfix — версия пришла из канала быстрых обновлений (Cloudflare R2), а не из релиза GitHub.</summary>
+public sealed record UpdateInfo(Version Version, string Notes, string PageUrl, HotfixChannel.Manifest? Hotfix = null);
 
 public enum UpdateStatus { UpToDate, Available, Failed }
 
@@ -62,6 +63,34 @@ public static class UpdateChecker
     /// Неудачей считается, только если не сработал ни один путь; Reason объясняет почему.
     /// </summary>
     public static async Task<UpdateCheck> CheckDetailedAsync(CancellationToken ct = default)
+    {
+        // GitHub (большие релизы) и R2 (быстрые исправления) спрашиваются одновременно, побеждает более новая версия
+        var hotTask = HotfixChannel.CheckAsync(ct);
+        var gh = await CheckGitHubAsync(ct);
+        var hot = await hotTask;
+        return Combine(gh, hot, CurrentVersion);
+    }
+
+    /// <summary>
+    /// Итог по двум каналам. Быстрое исправление берется, если оно новее и программы, и последнего релиза GitHub.
+    /// Если GitHub не ответил, а R2 ответил, итог все равно есть: обновление или «последняя версия».
+    /// </summary>
+    internal static UpdateCheck Combine(UpdateCheck gh, HotfixChannel.Manifest? hot, Version current)
+    {
+        if (hot?.ParsedVersion is not { } hv) return gh;
+        var ghLatest = gh.Latest ?? new Version(0, 0, 0);
+        if (hv > current && hv > ghLatest)
+        {
+            var notes = string.IsNullOrWhiteSpace(hot.Notes) ? "Срочное исправление." : hot.Notes.Trim();
+            return new UpdateCheck(UpdateStatus.Available,
+                new UpdateInfo(hv, notes, $"https://github.com/{Repo}/blob/main/CHANGELOG.md", hot), hv);
+        }
+        if (gh.Status == UpdateStatus.Failed)
+            return new UpdateCheck(UpdateStatus.UpToDate, null, hv > current ? hv : current);
+        return gh;
+    }
+
+    private static async Task<UpdateCheck> CheckGitHubAsync(CancellationToken ct)
     {
         string reason;
         try

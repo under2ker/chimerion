@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -86,7 +86,7 @@ internal static class UpdateWindow
             log($"Обновление: скачиваю версию {info.Version}");
             try
             {
-                await Updater.InstallAsync(info.Version, progress, cts.Token);
+                await Updater.InstallAsync(info.Version, progress, cts.Token, info.Hotfix);
                 log($"Обновление: версия {info.Version} установлена, заработает после перезапуска");
                 Done();
             }
