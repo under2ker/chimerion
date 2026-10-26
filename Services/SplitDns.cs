@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using Dnex.Models;
@@ -103,6 +103,30 @@ public static class SplitDns
         d = d.Split('/')[0].TrimStart('*').Trim('.');
         return Uri.CheckHostName(d) == UriHostNameType.Dns && d.Contains('.') ? d : "";
     }
+
+    /// <summary>Ветка правил NRPT из групповой политики (домен или локальная политика).</summary>
+    internal static string PolicyKey = @"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient\DnsPolicyConfig";
+
+    /// <summary>
+    /// Сколько правил NRPT задано групповой политикой. Если они есть, Windows берет таблицу NRPT только из политики
+    /// и локальные правила (в том числе правила «Двух DNS») не применяет. Писать свои правила в ветку политики
+    /// нельзя: домен перезаписывает ее при каждом обновлении политик. Поэтому режим в таком случае честно
+    /// предупреждает, что работать не будет. Чтение реестра, права не нужны.
+    /// </summary>
+    public static int PolicyRuleCount()
+    {
+        try
+        {
+            using var k = Registry.LocalMachine.OpenSubKey(PolicyKey);
+            return k?.GetSubKeyNames().Length ?? 0;
+        }
+        catch (Exception) { return 0; }
+    }
+
+    /// <summary>Предупреждение для журнала и окон, если NRPT задан политикой. Null, если не задан.</summary>
+    public static string? PolicyWarning(int count) => count == 0 ? null
+        : $"На этом компьютере правила NRPT заданы групповой политикой ({count}). Пока они есть, Windows не применяет правила «Двух DNS»: " +
+          "домены ИИ пойдут через общий DNS. Используйте обычный режим или попросите администратора убрать NRPT из политики";
 
     /// <summary>Есть ли сейчас правила CHIMERION в таблице NRPT (чтение реестра, без PowerShell и прав администратора).</summary>
     public static bool RulesPresent()

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.IO;
 using System.Net.Http;
@@ -99,9 +99,14 @@ public static class GeoLocation
         await Gate.WaitAsync(ct);
         try
         {
-            var json = await Http.GetStringAsync($"https://ipinfo.io/{ip}/json", ct);
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("org", out var o) ? o.GetString() ?? "" : "";
+            try
+            {
+                var json = await Http.GetStringAsync($"https://ipinfo.io/{ip}/json", ct);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("org", out var o) && o.GetString() is { Length: > 0 } org) return org;
+            }
+            catch (Exception) { /* ipinfo ограничивает число запросов с адреса: дальше запасная база */ }
+            return await OrgFallbackAsync(ip, ct);
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
@@ -111,6 +116,27 @@ public static class GeoLocation
         {
             Gate.Release();
         }
+    }
+
+    /// <summary>
+    /// Владелец сети по ip-api.com, когда ipinfo уперся в лимит запросов. Без этого адрес Cloudflare или Google
+    /// не признавался своим для сервиса и в журнале выглядел как «через Smart DNS» даже без подключения.
+    /// Бесплатная версия ip-api работает только по HTTP: подмена ответа исказит лишь подпись «напрямую / через
+    /// Smart DNS», на смену DNS и доступ это не влияет. Название собирается из AS, провайдера и организации.
+    /// </summary>
+    private static async Task<string?> OrgFallbackAsync(string ip, CancellationToken ct)
+    {
+        try
+        {
+            var json = await Http.GetStringAsync($"http://ip-api.com/json/{ip}?fields=status,as,isp,org", ct);
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+            if (!r.TryGetProperty("status", out var st) || st.GetString() != "success") return null;
+            string F(string n) => r.TryGetProperty(n, out var v) ? v.GetString() ?? "" : "";
+            var parts = new[] { F("as"), F("isp"), F("org") }.Where(x => x.Length > 0).Distinct().ToList();
+            return parts.Count == 0 ? null : string.Join(" / ", parts);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return null; }
     }
 
     /// <summary>Адрес принадлежит сети самого сервиса (по списку владельцев из настроек).</summary>

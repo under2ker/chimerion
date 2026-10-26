@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
@@ -21,9 +21,12 @@ public static class UpdateChecker
 {
     public const string Repo = "under2ker/chimerion";
 
-    private static readonly HttpClient Http = CreateClient();
+    // internal и не readonly: сценарные тесты подставляют клиентов с поддельными ответами GitHub
+    internal static HttpClient Http = CreateClient();
     // Для страниц сайта GitHub: без заголовков API и без перехода по перенаправлению (номер версии берется из него)
-    private static readonly HttpClient Web = new(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(15) };
+    internal static HttpClient Web = new(new SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(15) };
+    // jsDelivr: список версий репозитория, когда GitHub недоступен целиком
+    internal static HttpClient Cdn = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     /// <summary>Версия программы из три части (0.1.16), без служебного четвертого числа сборки.</summary>
     public static Version CurrentVersion
@@ -98,7 +101,37 @@ public static class UpdateChecker
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { reason += "; сайт GitHub: " + Friendly(e); }
 
+        // 4) GitHub недоступен целиком: номер последней версии из jsDelivr (он раздает теги репозитория). Только номер:
+        //    сама установка все равно проверяет подпись автора, а скачать архив поможет зеркало (GitHubMirrors)
+        try
+        {
+            var json = await Cdn.GetStringAsync($"https://data.jsdelivr.com/v1/packages/gh/{Repo}", ct);
+            if (CdnLatest(json) is { } latest)
+            {
+                var page = $"https://github.com/{Repo}/releases/tag/v{latest.ToString(3)}";
+                return latest > CurrentVersion
+                    ? new UpdateCheck(UpdateStatus.Available, new UpdateInfo(latest, "Описание версии на странице релиза.", page), latest)
+                    : new UpdateCheck(UpdateStatus.UpToDate, null, latest);
+            }
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { /* и jsDelivr недоступен */ }
+
         return new UpdateCheck(UpdateStatus.Failed, null, null, reason);
+    }
+
+    /// <summary>Самая новая версия из ответа jsDelivr («versions»: [{ "version": "0.1.26" }, ...]). Null, если не разобрать.</summary>
+    internal static Version? CdnLatest(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("versions", out var vs) || vs.ValueKind != JsonValueKind.Array) return null;
+            return vs.EnumerateArray()
+                .Select(v => v.TryGetProperty("version", out var x) ? x.GetString() : null)
+                .Select(t => Version.TryParse(t?.TrimStart('v', 'V'), out var ver) && ver.Build >= 0 ? ver : null)
+                .OfType<Version>().DefaultIfEmpty().Max();
+        }
+        catch (JsonException) { return null; }
     }
 
     /// <summary>Понятная причина вместо текста исключения .NET.</summary>

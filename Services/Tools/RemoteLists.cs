@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Net;
 using System.Net.Http;
 
@@ -58,7 +58,8 @@ public static class RemoteLists
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-lists/1.0");
-                var text = await http.GetStringAsync(l.Url, ct);
+                // Списки лежат на GitHub; если он недоступен, тот же файл берется через jsDelivr
+                var text = await GitHubMirrors.GetStringAsync(http, GitHubMirrors.RawUrls(l.Url), ct, t => Clean(t, l.IsIp).Count >= l.MinLines);
                 var clean = Clean(text, l.IsIp);
                 // Защита от порчи: пустой или подозрительно короткий ответ не заменяет рабочую копию
                 if (clean.Count >= l.MinLines)
@@ -70,6 +71,26 @@ public static class RemoteLists
             catch (Exception) when (!ct.IsCancellationRequested) { }
         }
         return Cached(l).Count;
+    }
+
+    /// <summary>
+    /// Сеть годится для обхода: не слишком широкая и не служебная. Подмененный или испорченный список с сетью вида
+    /// 0.0.0.0/1 отправил бы в обход половину интернета, а с 192.168.0.0/16 и сайты роутера и локальной сети.
+    /// </summary>
+    internal static bool Acceptable(IPNetwork n)
+    {
+        var a = n.BaseAddress;
+        if (a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            if (n.PrefixLength < 8) return false;
+            var b = a.GetAddressBytes();
+            return !(b[0] is 0 or 10 or 127 || b[0] >= 224 || (b[0] == 169 && b[1] == 254) || (b[0] == 172 && b[1] is >= 16 and <= 31)
+                     || (b[0] == 192 && b[1] == 168) || (b[0] == 100 && b[1] is >= 64 and <= 127));
+        }
+        if (n.PrefixLength < 16) return false;
+        var v6 = a.GetAddressBytes();
+        // глобальные адреса только из 2000::/3: без локальных fc00::/7, fe80::/10, мультикаста и служебных
+        return (v6[0] & 0xE0) == 0x20;
     }
 
     /// <summary>Только корректные строки: домены (без схемы и путей) или подсети IPv4/IPv6. Комментарии отбрасываются.</summary>
@@ -84,10 +105,8 @@ public static class RemoteLists
             string? v = null;
             if (ip)
             {
-                if (IPNetwork.TryParse(line, out var n)) v = n.ToString();
-                else if (IPAddress.TryParse(line, out var a)) v = a.ToString();
-                // 0.0.0.0/8 и подобные служебные сети zapret не нужны
-                if (v != null && (v.StartsWith("0.") || v.StartsWith("127.") || v == "::/0" || v == "0.0.0.0/0")) v = null;
+                if (IPNetwork.TryParse(line, out var n)) v = Acceptable(n) ? n.ToString() : null;
+                else if (IPAddress.TryParse(line, out var a)) v = Acceptable(new IPNetwork(a, a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128)) ? a.ToString() : null;
             }
             else
             {

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Windows;
 using Dnex.Models;
@@ -111,7 +111,7 @@ public partial class SettingsWindow : Window
             ErrorText.Text = "";
             if (!ok)
             {
-                ErrorText.Text = "Не удалось изменить автозапуск: права администратора не выданы или планировщик заданий отказал";
+                ErrorText.Text = "Не удалось изменить автозапуск: Windows не дала записать его или убрать прежнее задание с правами администратора";
                 return;
             }
         }

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -342,6 +342,9 @@ internal sealed class SplitDnsWindow
         if (bad.Count > 0) { Error("Не похоже на домен: " + string.Join(", ", bad.Take(3))); return; }
         _edit.ExtraAiDomains = lines.Select(SplitDns.Clean).Distinct().ToList();
         _edit.Enabled = _enabled.IsChecked == true;
+        if (_edit.Enabled && !_settings.SplitDns.Enabled && SplitDns.PolicyWarning(SplitDns.PolicyRuleCount()) is { } gpo &&
+            !DnexDialog.Ask("«Два DNS» здесь не сработают", gpo, "Все равно включить", windowTitle: "Два DNS"))
+            return;
         _edit.Groups = _groupChecks.Where(c => c.IsChecked == true).Select(c => (string)c.Tag).ToList();
         _settings.SplitDns = _edit;
         try { Storage.Save("settings.json", _settings); }

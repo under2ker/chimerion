@@ -9,12 +9,12 @@
     <AssemblyName>CHIMERION</AssemblyName>
     <Product>CHIMERION</Product>
     <AssemblyTitle>CHIMERION</AssemblyTitle>
-    <Description>CHIMERION: сетевые инструменты для открытого интернета (Smart DNS для ИИ, обход zapret, ускорение Telegram). Раньше назывался DNEX</Description>
+    <Description>CHIMERION: сетевые инструменты для открытого интернета (Smart DNS для ИИ, обход zapret, ускорение Telegram)</Description>
     <Company>under2ker</Company>
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.26</Version>
+    <Version>0.1.27</Version>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -37,6 +37,11 @@
   <ItemGroup>
     <!-- Только NotifyIcon для трея; WinForms не импортируется глобально, имена полные -->
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Точки подмены сети, PowerShell и файлов для сценарных тестов: internal, снаружи программы их не видно -->
+    <InternalsVisibleTo Include="CHIMERION.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,11 +10,17 @@ public partial class App : Application
     /// <summary>Только один экземпляр: две копии CHIMERION, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
-        _single = new Mutex(false, @"Local\DNEX-single-instance");
         bool first;
-        // После обновления новая копия стартует, пока старая еще закрывается: ждем ее до 20 секунд
-        try { first = _single.WaitOne(Dnex.Services.Updater.StartedByRestart ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
-        catch (AbandonedMutexException) { first = true; } // прежняя копия завершилась аварийно: мьютекс наш
+        try
+        {
+            _single = new Mutex(false, @"Local\DNEX-single-instance");
+            // После обновления новая копия стартует, пока старая еще закрывается: ждем ее до 20 секунд
+            try { first = _single.WaitOne(Dnex.Services.Updater.StartedByRestart ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
+            catch (AbandonedMutexException) { first = true; } // прежняя копия завершилась аварийно: мьютекс наш
+        }
+        // Мьютекс создала копия с правами администратора (автозапуск), а эта запущена без них: открыть его
+        // не дают права. Это тоже значит «уже запущена», а не ошибка запуска
+        catch (UnauthorizedAccessException) { first = false; }
         // Новая версия трижды не запустилась: OnStartup вернул прежнюю и запустил ее, эта копия закрывается
         if (first && Dnex.Services.Updater.OnStartup()) { Shutdown(); return; }
         if (!first)

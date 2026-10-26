@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -106,7 +106,10 @@ public static class DnsWire
         }
     }
 
-    private static readonly HttpClient DohHttp = new() { Timeout = TimeSpan.FromSeconds(15) };
+    // Ответ DNS не бывает больше 64 КБ. Серверы берутся из чужих списков, и сервер, который шлет бесконечный ответ,
+    // иначе занял бы память программы
+    internal const int MaxDohResponse = 65535;
+    private static readonly HttpClient DohHttp = new() { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = MaxDohResponse };
 
     public static async Task<(List<IPAddress> Ips, long Ms)> ResolveDohAsync(
         string template, string host, TimeSpan timeout, CancellationToken ct, ushort qtype = 1)

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -30,7 +30,11 @@ public static class SystemCheck
     // Служебные туннели Windows: всегда есть в системе и VPN не являются
     private static readonly string[] NotVpn = { "teredo", "isatap", "6to4", "ip-https", "loopback", "vethernet", "hyper-v" };
 
-    /// <summary>Работающие VPN-адаптеры: имя для показа пользователю.</summary>
+    /// <summary>
+    /// Работающие VPN-адаптеры, которые могут увести DNS мимо CHIMERION: имя для показа пользователю. VPN для
+    /// локальной сети поверх интернета (Radmin VPN, ZeroTier, Hamachi) без своих DNS и без шлюза запросы
+    /// не перехватывает, о нем не предупреждаем: так было в журнале пользователя с Radmin VPN.
+    /// </summary>
     public static List<string> ActiveVpns()
     {
         try
@@ -39,17 +43,24 @@ public static class SystemCheck
                 .Where(n => n.OperationalStatus == OperationalStatus.Up)
                 .Where(n =>
                 {
-                    var text = (n.Name + " " + n.Description).ToLowerInvariant();
-                    if (NotVpn.Any(text.Contains)) return false;
-                    return n.NetworkInterfaceType is NetworkInterfaceType.Ppp
-                        || VpnWords.Any(text.Contains)
-                        || (n.NetworkInterfaceType == NetworkInterfaceType.Tunnel && n.GetIPProperties().UnicastAddresses.Count > 0);
+                    var ip = n.GetIPProperties();
+                    return IsInterferingVpn(n.Name, n.Description, n.NetworkInterfaceType, ip.UnicastAddresses.Count,
+                        ip.DnsAddresses.Count(a => !a.IsIPv6SiteLocal), ip.GatewayAddresses.Count(g => !g.Address.Equals(IPAddress.Any)));
                 })
                 .Select(n => string.IsNullOrWhiteSpace(n.Description) ? n.Name : $"{n.Name} ({n.Description})")
                 .Distinct()
                 .ToList();
         }
         catch (NetworkInformationException) { return new(); }
+    }
+
+    /// <summary>Похож на VPN и может перехватить DNS: у него свои DNS-серверы или шлюз (через него идет трафик).</summary>
+    internal static bool IsInterferingVpn(string name, string description, NetworkInterfaceType type, int unicast, int dns, int gateways)
+    {
+        var text = (name + " " + description).ToLowerInvariant();
+        if (NotVpn.Any(text.Contains)) return false;
+        bool vpn = type is NetworkInterfaceType.Ppp || VpnWords.Any(text.Contains) || (type == NetworkInterfaceType.Tunnel && unicast > 0);
+        return vpn && (dns > 0 || gateways > 0 || type is NetworkInterfaceType.Ppp);
     }
 
     /// <summary>
@@ -165,7 +176,8 @@ public static class SystemCheck
     }
 
     private static readonly string[] AiDomains =
-        { "openai.com", "chatgpt.com", "oaistatic.com", "anthropic.com", "claude.ai", "claude.com", "gemini.google.com", "googleapis.com" };
+        // У Google только адреса самих ИИ: записи для fonts.googleapis.com или storage.googleapis.com к ИИ отношения не имеют
+        { "openai.com", "chatgpt.com", "oaistatic.com", "anthropic.com", "claude.ai", "claude.com", "gemini.google.com", "generativelanguage.googleapis.com" };
 
     /// <summary>Домены ИИ-сервисов, для которых в hosts прописан адрес.</summary>
     private static List<string> HostsOverrides()

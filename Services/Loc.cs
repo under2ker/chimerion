@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -32,11 +32,20 @@ public static class Loc
 
     private static readonly Dictionary<string, string> Exact = new(StringComparer.Ordinal);
     private static readonly List<(Regex Re, string En, int Literal)> Templates = new();
+    /// <summary>Шаблоны, которые начинаются или кончаются знаком из Edge: их сверяют до обрезки краев.</summary>
+    private static readonly HashSet<Regex> EdgeTemplates = new();
     private static readonly ConcurrentDictionary<string, string> Cache = new(StringComparer.Ordinal);
     private static bool _loaded, _hooked;
     private static readonly Regex Cyr = new("[А-Яа-яЁё]", RegexOptions.Compiled);
     /// <summary>Разделители для перевода по частям, когда строка целиком в словаре не нашлась.</summary>
     private static readonly string[] Separators = { "\n", " · ", " › ", " → ", ". ", "; ", ": ", ", " };
+
+    private static readonly Lazy<Dictionary<string, string>> Upper = new(() =>
+    {
+        var d = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (ru, en) in Exact) d.TryAdd(ru.ToUpperInvariant(), en.ToUpperInvariant());
+        return d;
+    });
 
     private static readonly char[] Edge = { ' ', ',', '.', ';', ':', '·', '\n', '\r' };
 
@@ -45,6 +54,7 @@ public static class Loc
     {
         var pattern = "^" + Regex.Replace(Regex.Escape(ru), @"\\\{(\d)\}", m => $"(?<g{m.Groups[1].Value}>.+?)") + "$";
         Templates.Add((new Regex(pattern, RegexOptions.Singleline | RegexOptions.Compiled), en, Regex.Replace(ru, @"\{\d\}", "").Length));
+        if (ru.Length > 0 && (Array.IndexOf(Edge, ru[^1]) >= 0 || Array.IndexOf(Edge, ru[0]) >= 0)) EdgeTemplates.Add(Templates[^1].Re);
     }
 
     private static void Load()
@@ -97,7 +107,19 @@ public static class Loc
     {
         if (!Cyr.IsMatch(s)) return s;
         if (Exact.TryGetValue(s, out var e)) return e;
-        // Пробелы по краям сохраняем, переводим середину
+        // Заголовки разделов пишутся капсом уже после того, как текст взят из кода («ПРОВЕРИТЬ САЙТ»): ищем их
+        // без учета регистра и возвращаем перевод тоже капсом
+        if (s == s.ToUpperInvariant() && Upper.Value.TryGetValue(s, out var up)) return up;
+        // Шаблон, который сам кончается знаком («{0} мс · {1} пров.»), проверяется по строке целиком, до обрезки краев:
+        // иначе точка сокращения осталась бы висеть в переводе
+        foreach (var (re, en, _) in Templates)
+        {
+            if (!EdgeTemplates.Contains(re)) continue;
+            var m = re.Match(s);
+            if (!m.Success) continue;
+            var r = Regex.Replace(en, @"\{(\d)\}", g => Translate(m.Groups["g" + g.Groups[1].Value].Value, depth + 1));
+            if (!Cyr.IsMatch(r)) return r;
+        }
         // Знаки и пробелы по краям сохраняем, переводим середину («Программа закроется, » -> «The app will close, »)
         var trimmed = s.Trim(Edge);
         if (trimmed.Length != s.Length && trimmed.Length > 0)

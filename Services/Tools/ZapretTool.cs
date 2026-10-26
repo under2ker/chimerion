@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -35,6 +35,7 @@ public sealed class ZapretTool : Tool
     private static string Lists => Path.Combine(Dir, "lists") + Path.DirectorySeparatorChar;
 
     public override bool IsInstalled => File.Exists(Path.Combine(Bin, "winws.exe"));
+    public override bool NeedsAdmin => true;
 
     public override bool IsRunning()
     {
@@ -50,6 +51,14 @@ public sealed class ZapretTool : Tool
     public IReadOnlyList<string> Strategies() => !Directory.Exists(Dir) ? Array.Empty<string>() :
         Directory.GetFiles(Dir, "general*.bat").Select(Path.GetFileName).OfType<string>()
             .OrderBy(f => f == DefaultStrategy ? 0 : 1).ThenBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>
+    /// Имя файла стратегии из настроек: только файл general*.bat в папке сборки, без путей. Стратегия запускается
+    /// с правами администратора, и строка вида «..\..\другой.bat» из испорченного tools.json не должна выводить за папку.
+    /// </summary>
+    public static bool IsStrategyName(string? name) =>
+        !string.IsNullOrEmpty(name) && Path.GetFileName(name) == name && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
+        && name.StartsWith("general", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Имя стратегии для списка: «general.bat» — «Основная», «general (ALT2).bat» — «ALT2».</summary>
     public static string StrategyTitle(string file)
@@ -223,7 +232,7 @@ public sealed class ZapretTool : Tool
             throw new ToolException("winws.exe уже запущен другой программой или вручную. Закройте его, чтобы CHIMERION управляла обходом сама");
         }
         EnsureNoForeignService();
-        var strategy = State.Strategy is { } s && File.Exists(Path.Combine(Dir, s)) ? s : DefaultStrategy;
+        var strategy = IsStrategyName(State.Strategy) && File.Exists(Path.Combine(Dir, State.Strategy!)) ? State.Strategy! : DefaultStrategy;
         await LaunchAsync(strategy, State.Games);
     }
 
@@ -237,6 +246,7 @@ public sealed class ZapretTool : Tool
     private async Task LaunchAsync(string strategy, bool games)
     {
         if (!IsInstalled) throw new ToolException("zapret не установлен");
+        if (!IsStrategyName(strategy)) throw new ToolException($"Некорректное имя стратегии: {strategy}");
         // Большие списки обновляются перед запуском (без сети остаются прежние копии)
         foreach (var l in State.BigLists.Append(State.IpSet ? State.IpSetSource : null).OfType<string>().Select(RemoteLists.Get).OfType<RemoteList>())
             await RemoteLists.EnsureAsync(l);
@@ -394,7 +404,7 @@ public sealed class ZapretTool : Tool
             if (wasRunning)
             {
                 progress.Report("Возвращаю прежнюю стратегию…");
-                try { await LaunchAsync(State.Strategy ?? DefaultStrategy, State.Games); } catch (ToolException) { }
+                try { await LaunchAsync(IsStrategyName(State.Strategy) ? State.Strategy! : DefaultStrategy, State.Games); } catch (ToolException) { }
             }
         }
         return Rank(results);
@@ -438,22 +448,49 @@ public sealed class ZapretTool : Tool
                 foreach (var f in Directory.GetFiles(Lists, "*-user.txt"))
                     keep[Path.GetFileName(f)] = await File.ReadAllBytesAsync(f, ct);
 
-            try
-            {
-                if (Directory.Exists(Dir)) Directory.Delete(Dir, recursive: true);
-                CopyDir(root, Dir);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                throw new ToolException($"Нет прав на папку {Dir}. Скорее всего, прошлую версию ставила CHIMERION с правами администратора: запустите CHIMERION от администратора и повторите");
-            }
-            catch (IOException e) { throw new ToolException("Не удалось заменить файлы zapret: " + e.Message); }
-
-            Directory.CreateDirectory(Lists);
-            foreach (var (name, data) in keep) await File.WriteAllBytesAsync(Path.Combine(Lists, name), data, ct);
-            EnsureUserLists();
+            // Свои списки кладутся в новую версию до замены, а замена идет переименованием: сначала новая папка
+            // рядом, потом прежняя отодвигается, новая встает на место. Если что-то не удалось, прежняя
+            // возвращается. Раньше прежняя папка удалялась до копирования, и сбой оставлял без zapret и без списков
+            Directory.CreateDirectory(Path.GetDirectoryName(Dir)!);
+            await Task.Run(() => SwapIn(root, Dir, keep), ct);
         }
         finally { try { Directory.Delete(temp, recursive: true); } catch (Exception) { } }
+    }
+
+    /// <summary>Ставит папку from на место target. Свои списки (keep) записываются в новую копию заранее.</summary>
+    internal static void SwapIn(string from, string target, IReadOnlyDictionary<string, byte[]> keep)
+    {
+        var fresh = target + ".new";
+        var old = target + ".old";
+        try
+        {
+            if (Directory.Exists(fresh)) Directory.Delete(fresh, recursive: true);
+            if (Directory.Exists(old)) Directory.Delete(old, recursive: true); // остаток прошлой неудачной попытки
+            CopyDir(from, fresh);
+            var lists = Path.Combine(fresh, "lists");
+            Directory.CreateDirectory(lists);
+            foreach (var (name, data) in keep) File.WriteAllBytes(Path.Combine(lists, name), data);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            try { Directory.Delete(fresh, recursive: true); } catch (Exception) { }
+            throw new ToolException("Не удалось подготовить новые файлы zapret: " + e.Message + ". Установленная версия не тронута");
+        }
+        bool moved = false;
+        try
+        {
+            if (Directory.Exists(target)) { Directory.Move(target, old); moved = true; }
+            Directory.Move(fresh, target);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            if (moved && !Directory.Exists(target)) try { Directory.Move(old, target); } catch (Exception) { }
+            try { Directory.Delete(fresh, recursive: true); } catch (Exception) { }
+            throw e is UnauthorizedAccessException
+                ? new ToolException($"Нет прав на папку {target}. Скорее всего, прошлую версию ставила CHIMERION с правами администратора: запустите CHIMERION от администратора и повторите")
+                : new ToolException("Не удалось заменить файлы zapret: " + e.Message + ". Установленная версия не тронута");
+        }
+        try { if (Directory.Exists(old)) Directory.Delete(old, recursive: true); } catch (Exception) { } // занятый драйвер удалится в следующий раз
     }
 
     private static void CopyDir(string from, string to)

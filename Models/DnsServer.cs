@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Windows.Media;
@@ -385,15 +385,12 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Обрезает подпись, чтобы не растягивать таблицу и меню.</summary>
     public static string Clip(string s, int max = 28) => s.Length <= max ? s : s[..(max - 1)] + "…";
 
-    /// <summary>Подсказка к оценке: из чего она складывается и чем отличается от стабильности.</summary>
+    /// <summary>Подсказка к оценке: показатели по отдельности (одно число прячет разные отказы) и из чего сложена оценка.</summary>
     [JsonIgnore]
     public string ScoreHint =>
-        "Оценка 0–100: совокупное качество сервера.\n" +
-        "• стабильность (доля успешных проверок): до 60 баллов\n" +
-        "• пинг: чем ниже, тем лучше, до 25\n" +
-        "• разброс пинга между замерами, до 15\n" +
-        "«Частично» (работают не все сервисы) снижает оценку.\n" +
-        "Стабильность считается только по доле успешных проверок. Оценка учитывает еще и пинг с разбросом.";
+        ServerMetrics.Of(this).Describe() + "\n\n" +
+        "Оценка 0–100 нужна только для порядка в таблице: стабильность до 60 баллов, пинг до 25, разброс до 15. " +
+        "«Частично» снижает оценку. Лучший сервер выбирается по стабильности для каждого сервиса и уверенности, а не по оценке";
 
     /// <summary>Порядок сортировки: рабочие сверху, нерабочие внизу.</summary>
     [JsonIgnore]
@@ -422,7 +419,7 @@ public class DnsServer : INotifyPropertyChanged
     public void NotifyStability()
     {
         On(nameof(Stability)); On(nameof(StabilityShown)); On(nameof(Score)); On(nameof(Rank));
-        On(nameof(HistoryText)); On(nameof(HistoryPoints));
+        On(nameof(HistoryText)); On(nameof(HistoryPoints)); On(nameof(ScoreHint));
     }
 
     /// <summary>Копия истории для графика: новый объект, чтобы подсказка перерисовалась.</summary>

@@ -7,11 +7,38 @@ using Dnex.Models;
 
 namespace Dnex.Services;
 
+/// <summary>Пользователь отказал в правах администратора (UAC). Наследует отмену: старый код, ловящий отмену, работает как раньше.</summary>
+public sealed class UacDeclinedException() : OperationCanceledException("Запрос прав администратора отклонен");
+
 /// <summary>Смена DNS на активных адаптерах Windows через PowerShell (NetTCPIP / DnsClient).</summary>
 public static class DnsSwitcher
 {
     private const string BackupFile = "dns-backup.json";
     private const string ActiveFile = "active.json";
+    /// <summary>
+    /// GUID адаптеров, где CHIMERION выключила IPv6. Скрипт подключения дописывает строку сразу после выключения,
+    /// еще до того, как программа прочтет его вывод: если ее закроют посередине, отключение все равно включит IPv6
+    /// обратно. В active.json те же GUID попадают только после завершения скрипта.
+    /// </summary>
+    private const string Ipv6OffFile = "ipv6-disabled.txt";
+
+    /// <summary>
+    /// Адаптеры, на которых последнее отключение не смогло включить IPv6 обратно. DNS при этом восстановлен, но без
+    /// IPv6 часть сайтов может работать хуже: окно подсказывает, как включить его вручную.
+    /// </summary>
+    public static List<string> Ipv6NotRestored { get; } = new();
+
+    private static List<string> Ipv6OffFromFile()
+    {
+        try
+        {
+            var path = Storage.PathOf(Ipv6OffFile);
+            return File.Exists(path)
+                ? File.ReadAllLines(path).Select(l => l.Trim().ToUpperInvariant()).Where(l => System.Guid.TryParse(l.Trim('{', '}'), out _)).Distinct().ToList()
+                : new();
+        }
+        catch (IOException) { return new(); }
+    }
 
     /// <summary>Сведения о текущем подключении. Файл переживает перезапуск и сбой программы,
     /// поэтому отключиться можно всегда, даже если CHIMERION закрылась аварийно.</summary>
@@ -35,6 +62,16 @@ public static class DnsSwitcher
         [System.Text.Json.Serialization.JsonIgnore]
         public List<string> OnAdapters => Split ? AdapterAddresses : Addresses;
     }
+
+    /// <summary>
+    /// Исполнитель скриптов PowerShell (скрипт, нужны ли права администратора). В программе это RunPsAsync;
+    /// сценарные тесты подставляют свой и проверяют, что и в каком порядке программа делает с DNS при сбоях,
+    /// не трогая сеть компьютера.
+    /// </summary>
+    internal static Func<string, bool, Task<(int Code, string Output)>> Runner = RunPsAsync;
+
+    /// <summary>Есть ли IPv6-интернет. Подменяется в тестах, в программе HasGlobalIpv6.</summary>
+    internal static Func<bool> Ipv6Internet = HasGlobalIpv6;
 
     private static ActiveConnection? _activeCache;
     private static DateTime _activeStamp;
@@ -129,7 +166,7 @@ public static class DnsSwitcher
         }
         // IPv6-адреса сервера ставим, только если у компьютера есть IPv6-интернет: иначе Windows ждала бы ответа
         // от недоступного адреса. Без него DNS ставится для IPv4, а IPv6 на адаптере выключается на время подключения.
-        if (addrs.Any(IsV6) && !HasGlobalIpv6())
+        if (addrs.Any(IsV6) && !Ipv6Internet())
         {
             addrs.RemoveAll(IsV6);
             if (addrs.Count == 0) throw new InvalidOperationException("Сервер работает только по IPv6, а IPv6-интернета на компьютере нет");
@@ -144,7 +181,7 @@ public static class DnsSwitcher
         if (split != null)
         {
             adapterAddrs = split.GeneralAddresses.Where(a => IPAddress.TryParse(a, out _)).Select(a => IPAddress.Parse(a).ToString()).Distinct().ToList();
-            if (adapterAddrs.Any(IsV6) && !HasGlobalIpv6()) adapterAddrs.RemoveAll(IsV6);
+            if (adapterAddrs.Any(IsV6) && !Ipv6Internet()) adapterAddrs.RemoveAll(IsV6);
             adapterDoh = Uri.TryCreate(split.GeneralDoh?.Split('{')[0], UriKind.Absolute, out var gu) && gu.Scheme == Uri.UriSchemeHttps
                 ? gu.GetLeftPart(UriPartial.Path).Replace("'", "''") : null;
         }
@@ -160,9 +197,11 @@ public static class DnsSwitcher
         // Только физические адаптеры: VPN-туннели и виртуальные сети (Hyper-V, WSL) не трогаем — иначе сломаем их DNS.
         sb.AppendLine("$ifs = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }");
         // Переход с сервера без IPv6 на сервер с IPv6: включаем IPv6 обратно до смены DNS, иначе его DNS не поставить
-        if (hasV6 && prev?.Ipv6Disabled.Count > 0)
+        // Выключенный раньше IPv6: из записи о подключении и из файла (если прошлый раз программу закрыли посередине)
+        var prevV6 = (prev?.Ipv6Disabled ?? new()).Select(g => g.ToUpperInvariant()).Concat(Ipv6OffFromFile()).Distinct().ToList();
+        if (hasV6 && prevV6.Count > 0)
         {
-            sb.AppendLine($"foreach ($g in @({string.Join(",", prev.Ipv6Disabled.Select(g => $"'{g.Replace("'", "")}'"))})) {{");
+            sb.AppendLine($"foreach ($g in @({string.Join(",", prevV6.Select(g => $"'{g.Replace("'", "")}'"))})) {{");
             sb.AppendLine("""
                   try {
                     Get-NetAdapter -IncludeHidden | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g } | ForEach-Object {
@@ -194,6 +233,7 @@ public static class DnsSwitcher
         if (split != null)
         {
             var ns = SplitDns.Namespaces(settings);
+            if (SplitDns.PolicyWarning(SplitDns.PolicyRuleCount()) is { } gpo) log("ВНИМАНИЕ: " + gpo);
             sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(n => $"'{n.Replace("'", "")}'"))}) -NameServers @({string.Join(",", addrs.Select(a => $"'{a}'"))}) -Comment '{SplitDns.RuleComment}'");
             sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) направлены в {s.Name.Replace("'", "")}'");
         }
@@ -203,6 +243,8 @@ public static class DnsSwitcher
             sb.AppendLine("Write-Output 'DNS адаптеров не меняется'");
         if (touchAdapters && !hasV6)
         {
+            Directory.CreateDirectory(Storage.Dir);
+            sb.AppendLine($"$v6file = '{Storage.PathOf(Ipv6OffFile).Replace("'", "''")}'");
             // У сервера нет IPv6, а роутер раздает DNS по IPv6: Windows отправляла бы часть запросов туда, мимо сервера.
             // На время подключения выключаем IPv6 только на таких адаптерах и запоминаем их (строка V6OFF).
             sb.AppendLine("""
@@ -212,6 +254,7 @@ public static class DnsSwitcher
                     $b = Get-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
                     if ($v6dns.Count -gt 0 -and $b -and $b.Enabled) {
                       Disable-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
+                      Add-Content -Path $v6file -Value ([string]$i.InterfaceGuid).ToUpper() -Encoding ASCII
                       Write-Output ('V6OFF ' + ([string]$i.InterfaceGuid).ToUpper())
                       Write-Output ('IPv6 на время подключения выключен: ' + $i.Name + ' (DNS роутера по IPv6 вел запросы мимо сервера)')
                     }
@@ -226,14 +269,14 @@ public static class DnsSwitcher
         {
             ServerId = s.Id, Name = s.Name, Addresses = addrs, DohTemplate = doh?.Replace("''", "'"),
             DohAddedFor = prev?.DohAddedFor.ToList() ?? new(),
-            Ipv6Disabled = prev?.Ipv6Disabled.ToList() ?? new(),
+            Ipv6Disabled = prevV6,
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
         };
         Storage.Save(ActiveFile, active);
 
         try
         {
-            var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
+            var (code, output) = await Runner(sb.ToString(), true);
             foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 var l = line.Trim();
@@ -274,7 +317,7 @@ public static class DnsSwitcher
     private static async Task EnsureBackupAsync(Action<string> log)
     {
         if (File.Exists(Storage.PathOf(BackupFile))) return;
-        var (code, json) = await RunPsAsync(
+        var (code, json) = await Runner(
             "$r = foreach ($a in Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }) {\n" +
             "  $p = \"HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($a.InterfaceGuid)\"\n" +
             "  $ns = (Get-ItemProperty -Path $p -Name NameServer -ErrorAction SilentlyContinue).NameServer\n" +
@@ -282,7 +325,7 @@ public static class DnsSwitcher
             "  $ns6 = (Get-ItemProperty -Path $p6 -Name NameServer -ErrorAction SilentlyContinue).NameServer\n" +
             "  [pscustomobject]@{ InterfaceIndex = $a.ifIndex; Guid = [string]$a.InterfaceGuid; Name = $a.Name; Static = [string]$ns; Static6 = [string]$ns6 }\n" +
             "}\n" +
-            "ConvertTo-Json -InputObject @($r) -Compress");
+            "ConvertTo-Json -InputObject @($r) -Compress", false);
         if (code != 0) throw new InvalidOperationException("Не удалось сохранить исходные настройки DNS: " + json);
         var items = JsonSerializer.Deserialize<List<AdapterBackup>>(json, Storage.Options) ?? new();
         Storage.Save(BackupFile, items);
@@ -314,14 +357,19 @@ public static class DnsSwitcher
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine($"$ours = @({string.Join(",", ours.Select(Q))})");
         // IPv6, выключенный на время подключения, включаем первым: иначе его DNS не вернуть
-        sb.AppendLine($"$v6off = @({string.Join(",", (active?.Ipv6Disabled ?? new()).Select(g => Q(g.ToUpperInvariant())))})");
+        var v6off = (active?.Ipv6Disabled ?? new()).Select(g => g.ToUpperInvariant()).Concat(Ipv6OffFromFile()).Distinct().ToList();
+        sb.AppendLine($"$v6off = @({string.Join(",", v6off.Select(Q))})");
         sb.AppendLine("""
             foreach ($g in $v6off) {
-              try {
-                Get-NetAdapter -IncludeHidden | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g } | ForEach-Object {
-                  Enable-NetAdapterBinding -Name $_.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
-                  Write-Output "RESULT $($_.Name) → IPv6 включен обратно" }
-              } catch { Write-Output "WARN IPv6: $($_.Exception.Message)" }
+              foreach ($a6 in @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g })) {
+                try {
+                  Enable-NetAdapterBinding -Name $a6.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
+                  # Проверяем, что IPv6 правда включился: драйвер или политика могут молча оставить его выключенным
+                  $b6 = Get-NetAdapterBinding -Name $a6.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+                  if ($b6 -and -not $b6.Enabled) { Write-Output "V6FAIL $g $($a6.Name)" }
+                  else { Write-Output "RESULT $($a6.Name) → IPv6 включен обратно" }
+                } catch { Write-Output "V6FAIL $g $($a6.Name): $($_.Exception.Message)" }
+              }
             }
             """);
         sb.AppendLine("$backup6 = @{}");
@@ -350,7 +398,7 @@ public static class DnsSwitcher
               try {
                 # Сначала автоматические DNS для IPv4 и IPv6, потом исходные статические, если они были
                 Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop
-                $all = @(@($want -split ',') + @($want6 -split ',') | Where-Object { $_ })
+                $all = @(@($want -split ',') + @($want6 -split ',') | Where-Object { $_ } | Select-Object -Unique)
                 if ($all.Count -gt 0) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $all -ErrorAction Stop }
               } catch { Write-Output "WARN $($a.Name): $($_.Exception.Message)" }
               foreach ($ip in $ours) {
@@ -358,10 +406,14 @@ public static class DnsSwitcher
               }
               $after = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
               $mode = if ($want) { 'исходные' } else { 'автоматически (DHCP)' }
-              Write-Output "RESULT $($a.Name) → $($mode): $($after -join ', ')"
+              Write-Output "RESULT $($a.Name) → $($mode): $(@($after | Select-Object -Unique) -join ', ')"
               if (@($after | Where-Object { $ours -contains $_ }).Count -gt 0) { Write-Output "LEFT $($a.Name)" }
             }
-            foreach ($ip in $ours) { Remove-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue }
+            # На Windows 10 без DoH (до сборки 19628) этой команды нет: без проверки отключение падало целиком,
+            # запись о подключении оставалась, и сторож подключал снова
+            if (Get-Command Remove-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {
+              foreach ($ip in $ours) { Remove-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue }
+            }
             """);
         // Правила NRPT режима «Два DNS»: снимаем всегда, даже если запись о подключении потерялась
         sb.AppendLine(SplitDns.RemoveRulesScript);
@@ -371,19 +423,35 @@ public static class DnsSwitcher
             ipconfig /flushdns | Out-Null
             """);
 
-        var (code, output) = await RunPsAsync(sb.ToString(), elevated: true);
+        Ipv6NotRestored.Clear();
+        var v6failed = new List<string>();
+        var (code, output) = await Runner(sb.ToString(), true);
         bool left = false;
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()))
         {
             if (line.StartsWith("RESULT ")) log("  " + line[7..]);
             else if (line.StartsWith("WARN ")) log("  ⚠ " + line[5..]);
             else if (line.StartsWith("LEFT ")) { left = true; log("  ✗ Остались адреса CHIMERION: " + line[5..]); }
+            else if (line.StartsWith("V6FAIL "))
+            {
+                var rest = line[7..];
+                var sp = rest.IndexOf(' ');
+                var guid = sp > 0 ? rest[..sp] : rest;
+                var name = sp > 0 ? rest[(sp + 1)..] : rest;
+                v6failed.Add(guid);
+                Ipv6NotRestored.Add(name);
+                log("  ✗ IPv6 не включился обратно: " + name);
+            }
             else if (line.Length > 0) log("  " + line);
         }
         if (code != 0) throw new InvalidOperationException("Ошибка отключения, см. журнал");
         if (left) throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал");
 
         if (File.Exists(path)) File.Delete(path);
+        var v6path = Storage.PathOf(Ipv6OffFile);
+        // Адаптеры, где IPv6 включить не удалось, остаются в файле: следующее отключение или подключение попробует снова
+        if (v6failed.Count > 0) File.WriteAllLines(v6path, v6failed);
+        else if (File.Exists(v6path)) File.Delete(v6path);
         var activePath = Storage.PathOf(ActiveFile);
         if (File.Exists(activePath)) File.Delete(activePath);
         log("Отключено: исходные настройки DNS восстановлены");
@@ -397,14 +465,14 @@ public static class DnsSwitcher
     {
         try
         {
-            var (_, output) = await RunPsAsync(
+            var (_, output) = await Runner(
                 "foreach ($a in Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }) {\n" +
                 "  $s = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses\n" +
                 "  Write-Output ('DNS ' + $a.Name + ': ' + ($s -join ', '))\n" +
                 "}\n" +
-                "$d = @(Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue)\n" +
+                "$d = @(if (Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue) { Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue })\n" +
                 "if ($d.Count -gt 0) { foreach ($x in $d) { Write-Output ('DoH ' + $x.ServerAddress + ' ' + $x.DohTemplate) } }\n" +
-                "else { Write-Output 'DoH: записей нет' }");
+                "else { Write-Output 'DoH: записей нет' }", false);
             foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()))
                 if (line.Length > 0) log("  " + line);
         }
@@ -446,6 +514,35 @@ public static class DnsSwitcher
         }
         return false;
     }
+
+    private static string? _languageMode;
+
+    /// <summary>
+    /// Режим языка PowerShell на этом компьютере: FullLanguage или ConstrainedLanguage (его включают корпоративные
+    /// AppLocker и WDAC). В ограниченном режиме загрузчик скриптов не работает, и CHIMERION не может менять DNS.
+    /// Проверяется без загрузчика, одной короткой командой. Null, если PowerShell не ответил.
+    /// </summary>
+    public static async Task<string?> LanguageModeAsync()
+    {
+        if (_languageMode != null) return _languageMode;
+        try
+        {
+            var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+            var psi = new ProcessStartInfo(powershell, "-NoProfile -NonInteractive -Command \"$ExecutionContext.SessionState.LanguageMode\"")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            using var p = Process.Start(psi)!;
+            var output = (await p.StandardOutput.ReadToEndAsync()).Trim();
+            await p.WaitForExitAsync();
+            return _languageMode = output.Length > 0 ? output : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>Понятное предупреждение, если PowerShell ограничен политикой. Null, если все в порядке или режим неизвестен.</summary>
+    public static string? LanguageModeWarning(string? mode) =>
+        mode is null or "FullLanguage" ? null
+        : $"PowerShell на этом компьютере ограничен политикой ({mode}). CHIMERION меняет DNS через PowerShell и здесь не сможет " +
+          "подключиться и отключиться. Обычно так настроены рабочие компьютеры (AppLocker, WDAC): обратитесь к администратору";
 
     public static bool IsAdmin()
     {
@@ -492,7 +589,7 @@ public static class DnsSwitcher
             }
             catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
             {
-                throw new OperationCanceledException("Запрос прав администратора отклонен");
+                throw new UacDeclinedException();
             }
         }
         finally
@@ -511,22 +608,24 @@ public static class DnsSwitcher
     {
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(scriptBytes));
         var sf = scriptFile.Replace("'", "''");
-        var load =
-            "$ProgressPreference = 'SilentlyContinue'\n" +
-            "try {\n" +
+        var check =
             $"  $b = [IO.File]::ReadAllBytes('{sf}')\n" +
             "  $h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-', '')\n" +
             $"  if ($h -ne '{hash}') {{ throw 'файл скрипта изменен до запуска, выполнение отменено' }}\n" +
             "  $code = [Text.Encoding]::UTF8.GetString($b)\n";
         if (outFile == null)
-            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n" + load +
+            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n$ProgressPreference = 'SilentlyContinue'\ntry {\n" + check +
                    "  & ([scriptblock]::Create($code))\n" +
                    "} catch { [Console]::Error.WriteLine('ОШИБКА: ' + $_.Exception.Message); exit 1 }";
+        // Файл вывода повышенный процесс создает сам и только новым (CreateNew): если на его месте заранее подложили
+        // файл или жесткую ссылку на системный файл, запись не пойдет туда с правами администратора
         var of = outFile.Replace("'", "''");
-        return load +
-               $"  & ([scriptblock]::Create($code)) *>&1 | Out-File -FilePath '{of}' -Encoding utf8\n" +
-               "  exit 0\n" +
-               $"}} catch {{ ('ОШИБКА: ' + $_.Exception.Message) | Out-File -FilePath '{of}' -Append -Encoding utf8; exit 1 }}";
+        return "$ProgressPreference = 'SilentlyContinue'\n$w = $null\ntry {\n" +
+               $"  $w = New-Object IO.StreamWriter([IO.File]::Open('{of}', [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read), (New-Object Text.UTF8Encoding $false))\n" +
+               "  $w.AutoFlush = $true\n" + check +
+               "  & ([scriptblock]::Create($code)) *>&1 | ForEach-Object { $w.WriteLine([string]$_) }\n" +
+               "  $w.Dispose()\n  exit 0\n" +
+               "} catch { if ($w) { $w.WriteLine('ОШИБКА: ' + $_.Exception.Message); $w.Dispose() }; exit 1 }";
     }
 
     public static string Arguments(string launcher, bool hidden) =>
@@ -550,8 +649,30 @@ public static class DnsSwitcher
         var stderr = proc.StandardError.ReadToEndAsync();
         await proc.WaitForExitAsync();
         var err = (await stderr).Trim();
-        if (err.StartsWith("#< CLIXML")) err = ""; // служебный поток прогресса, не ошибка
+        err = ClixmlErrors(err);
         var outp = (await stdout).Trim();
         return (proc.ExitCode, string.IsNullOrEmpty(err) ? outp : $"{outp}\n{err}".Trim());
+    }
+
+    /// <summary>
+    /// Поток ошибок PowerShell при перенаправлении приходит в формате CLIXML («#&lt; CLIXML»): там и служебный прогресс,
+    /// и настоящие ошибки (строки &lt;S S="Error"&gt;). Раньше весь такой поток отбрасывался как прогресс, и причина
+    /// сбоя терялась. Теперь прогресс отбрасывается, а текст ошибок остается. Обычный текст возвращается как есть.
+    /// </summary>
+    internal static string ClixmlErrors(string err)
+    {
+        const System.Text.RegularExpressions.RegexOptions S = System.Text.RegularExpressions.RegexOptions.Singleline;
+        var errors = new List<string>();
+        // Блоки CLIXML вырезаются, из них остаются только строки ошибок; обычный текст вокруг (например «ОШИБКА: ...»
+        // из загрузчика) сохраняется как есть
+        // Блоков <Objs> бывает несколько подряд, а заголовок «#< CLIXML» один
+        var rest = System.Text.RegularExpressions.Regex.Replace(err, @"#< CLIXML\s*|<Objs .*?</Objs>", m =>
+        {
+            foreach (System.Text.RegularExpressions.Match e in System.Text.RegularExpressions.Regex.Matches(m.Value, @"<S S=""Error"">(.*?)</S>", S))
+                errors.Add(WebUtility.HtmlDecode(System.Text.RegularExpressions.Regex.Replace(e.Groups[1].Value, "_x([0-9A-Fa-f]{4})_",
+                    x => ((char)Convert.ToInt32(x.Groups[1].Value, 16)).ToString())));
+            return "";
+        }, S);
+        return (string.Concat(errors).Trim() + "\n" + rest.Trim()).Trim();
     }
 }

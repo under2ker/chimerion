@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
@@ -39,7 +39,13 @@ public static class Updater
     /// <summary>Версия, уже установленная в этом сеансе и ждущая перезапуска.</summary>
     public static Version? Installed { get; private set; }
 
-    private static readonly HttpClient Http = CreateClient();
+    // Точки подмены для сценарных тестов: сеть, путь к exe, ключ подписи, запуск процесса и временная папка.
+    // В программе всегда значения по умолчанию.
+    internal static HttpClient Http = CreateClient();
+    internal static string? ExePathOverride;
+    internal static string TrustedKey = PublicKey;
+    internal static Action<ProcessStartInfo> Launch = psi => Process.Start(psi)?.Dispose();
+    internal static string? TempDirOverride;
 
     private static HttpClient CreateClient()
     {
@@ -49,23 +55,39 @@ public static class Updater
         return c;
     }
 
-    private static string ExePath => Environment.ProcessPath ?? throw new UpdateException("Не удалось определить, где лежит программа");
+    /// <summary>Файл программы переименован в этом сеансе (DNEX.exe → CHIMERION.exe): процесс работает уже из него.</summary>
+    private static string? _movedTo;
+
+    private static string? ProcessPath => ExePathOverride ?? _movedTo ?? Environment.ProcessPath;
+    /// <summary>Где сейчас лежит файл программы (с учетом переименования в этом сеансе).</summary>
+    public static string? CurrentExePath => ProcessPath;
+    private static string ExePath => ProcessPath ?? throw new UpdateException("Не удалось определить, где лежит программа");
     private static string Dir => Path.GetDirectoryName(ExePath)!;
     private static string Name => Path.GetFileNameWithoutExtension(ExePath);
-    private static string OldPath => Path.Combine(Dir, Name + ".old.exe");
+    /// <summary>Имя файла программы. Обновление всегда ставит ее под этим именем, прежний DNEX.exe убирается.</summary>
+    public const string AppFile = "CHIMERION.exe";
+    private static string TargetPath => Path.Combine(Dir, AppFile);
     private static string NewPath => Path.Combine(Dir, Name + ".new.exe");
-    private static string PrevPath => Path.Combine(Dir, Name + ".prev.exe");
-    private static string BadPath => Path.Combine(Dir, Name + ".bad.exe");
+    /// <summary>Отложенный прежний файл. Удаляется при следующем запуске (так делают и версии с 0.1.25).</summary>
+    private static string StashFor(string exePath) => Path.Combine(Path.GetDirectoryName(exePath)!, Path.GetFileNameWithoutExtension(exePath) + ".bad.exe");
+    // Резервная копия прежней версии лежит в папке данных, а не рядом с программой: на рабочем столе остается один файл
+    private static string BackupDir => Storage.PathOf("backup");
+    private static string PrevBackup => Path.Combine(BackupDir, "previous.exe");
+    // Копии, которые клали рядом с программой версии до 0.1.27
+    private static string LegacyOld => Path.Combine(Dir, Name + ".old.exe");
+    private static string LegacyPrev => Path.Combine(Dir, Name + ".prev.exe");
     private static string PendingPath => Storage.PathOf("update-pending.json");
 
-    /// <summary>Неподтвержденное обновление: с какой версии на какую и сколько раз уже запускалась новая.</summary>
+    /// <summary>Неподтвержденное обновление: с какой версии на какую, сколько раз уже запускалась новая и где лежал прежний файл.</summary>
     public sealed class Pending
     {
         public string From { get; set; } = "";
         public string To { get; set; } = "";
         public int Starts { get; set; }
+        /// <summary>Путь прежнего файла (DNEX.exe или CHIMERION.exe). Нет у обновлений, поставленных версиями до 0.1.27.</summary>
+        public string? OldPath { get; set; }
     }
-    private static string TempDir => Path.Combine(Path.GetTempPath(), "CHIMERION-update");
+    private static string TempDir => TempDirOverride ?? Path.Combine(Path.GetTempPath(), "CHIMERION-update");
 
     /// <summary>
     /// Имя архива в релизе. С 0.1.25 программа называется CHIMERION: в релизе два одинаковых архива,
@@ -128,45 +150,88 @@ public static class Updater
     /// </summary>
     public static bool OnStartup()
     {
-        if (Environment.ProcessPath == null) return false;
+        if (ProcessPath == null) return false;
         try { if (File.Exists(NewPath)) File.Delete(NewPath); } catch (Exception) { }
-        try { if (File.Exists(BadPath)) File.Delete(BadPath); } catch (Exception) { }
+        // Отложенные прежние файлы: и под своим именем, и под старым (после переименования DNEX.exe → CHIMERION.exe)
+        foreach (var n in new[] { Name, "DNEX", "CHIMERION" }.Distinct(StringComparer.OrdinalIgnoreCase))
+            try { var bad = Path.Combine(Dir, n + ".bad.exe"); if (File.Exists(bad)) File.Delete(bad); } catch (Exception) { }
         try { if (Directory.Exists(TempDir)) Directory.Delete(TempDir, recursive: true); } catch (Exception) { }
         var p = LoadPending();
         if (p == null) return false;
         if (p.To != UpdateChecker.CurrentVersion.ToString(3)) { DeletePending(); return false; } // это уже не та версия
         p.Starts++;
-        if (p.Starts <= MaxUnconfirmedStarts || !File.Exists(OldPath)) { SavePending(p); return false; }
-        // Новая версия не запускается: возвращаем прежнюю, неудачную откладываем в .bad.exe (удалится при следующем запуске)
+        // Откуда возвращать: копия в папке данных (с 0.1.27) или файл .old.exe рядом с программой (обновление старой версией)
+        var restoreTo = p.OldPath ?? ExePath;
+        var source = p.OldPath != null ? PrevBackup : LegacyOld;
+        if (p.Starts <= MaxUnconfirmedStarts || !File.Exists(source)) { SavePending(p); return false; }
+        // Новая версия не запускается: возвращаем прежнюю. Неудачную откладываем под именем, которое прежняя версия
+        // сама удалит при запуске (<имя>.bad.exe)
         try
         {
-            File.Move(ExePath, BadPath, overwrite: true);
-            File.Move(OldPath, ExePath);
+            File.Move(ExePath, StashFor(restoreTo), overwrite: true);
+            Hide(StashFor(restoreTo));
+            if (p.OldPath != null) File.Copy(source, restoreTo, overwrite: true);
+            else File.Move(source, restoreTo, overwrite: true);
+            if (!restoreTo.Equals(ExePath, StringComparison.OrdinalIgnoreCase)) Shortcuts.Retarget(ExePath, restoreTo);
             DeletePending();
-            Process.Start(new ProcessStartInfo(ExePath, RolledBackArg + p.To) { UseShellExecute = false, WorkingDirectory = Dir });
+            Launch(new ProcessStartInfo(restoreTo, RolledBackArg + p.To) { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(restoreTo)! });
             return true;
         }
         catch (Exception) { SavePending(p); return false; }
     }
 
     /// <summary>
-    /// Новая версия работает: проработала 30 секунд или закрылась штатно. Отметка убирается, прежняя версия
-    /// остается как CHIMERION.prev.exe для ручного возврата.
+    /// Новая версия работает: проработала 30 секунд или закрылась штатно. Отметка убирается. Копии, которые прежние
+    /// версии оставляли рядом с программой (.old.exe, .prev.exe), уходят в папку данных, а файл DNEX.exe
+    /// переименовывается в CHIMERION.exe: на рабочем столе остается одна программа с новым именем.
     /// </summary>
     public static void ConfirmStarted()
     {
-        if (Environment.ProcessPath == null) return;
+        if (ProcessPath == null) return;
         DeletePending();
-        try { if (File.Exists(OldPath)) File.Move(OldPath, PrevPath, overwrite: true); } catch (Exception) { }
+        try
+        {
+            Directory.CreateDirectory(BackupDir);
+            // Сначала .prev, потом .old: более новая прежняя версия (.old) остается последней
+            foreach (var suffix in new[] { ".prev.exe", ".old.exe" })
+                foreach (var n in new[] { Name, "DNEX", "CHIMERION" }.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    var f = Path.Combine(Dir, n + suffix);
+                    if (File.Exists(f)) File.Move(f, PrevBackup, overwrite: true);
+                }
+        }
+        catch (Exception) { }
+        RenameToAppFile();
     }
 
-    /// <summary>Прежняя версия для ручного возврата: номер из файла CHIMERION.prev.exe. Null, если возвращать не на что.</summary>
+    /// <summary>
+    /// Программа лежит под старым именем DNEX.exe: файл переименовывается в CHIMERION.exe (Windows разрешает
+    /// переименовать запущенный exe), ярлыки и автозапуск переводятся на новое имя. Если CHIMERION.exe рядом уже
+    /// есть, ничего не трогаем: это другая копия.
+    /// </summary>
+    internal static void RenameToAppFile()
+    {
+        try
+        {
+            if (!Name.Equals("DNEX", StringComparison.OrdinalIgnoreCase) || File.Exists(TargetPath)) return;
+            var from = ExePath;
+            var to = TargetPath;
+            File.Move(from, to);
+            _movedTo = to;
+            Shortcuts.Retarget(from, to);
+        }
+        catch (Exception) { }
+    }
+
+    /// <summary>Прежняя версия для ручного возврата: номер из резервной копии. Null, если возвращать не на что.</summary>
     public static Version? PreviousVersion()
     {
         try
         {
-            if (Environment.ProcessPath == null || !File.Exists(PrevPath)) return null;
-            var pv = FileVersionInfo.GetVersionInfo(PrevPath).ProductVersion ?? "";
+            if (ProcessPath == null) return null;
+            var prev = File.Exists(PrevBackup) ? PrevBackup : File.Exists(LegacyPrev) ? LegacyPrev : null;
+            if (prev == null) return null;
+            var pv = FileVersionInfo.GetVersionInfo(prev).ProductVersion ?? "";
             var plus = pv.IndexOf('+');
             return Version.TryParse(plus > 0 ? pv[..plus] : pv, out var v) ? v : null;
         }
@@ -174,22 +239,34 @@ public static class Updater
     }
 
     /// <summary>
-    /// Ручной возврат прежней версии: файлы меняются местами (текущая становится CHIMERION.prev.exe, вперед можно
-    /// вернуться тем же способом). После этого нужен перезапуск (Restart).
+    /// Ручной возврат прежней версии: она встает на место программы, а текущая уходит в резервную копию (вперед можно
+    /// вернуться тем же способом). Запущенный файл откладывается под именем, которое удалит следующий запуск.
+    /// После этого нужен перезапуск (Restart).
     /// </summary>
     public static void SwapWithPrevious()
     {
-        if (!File.Exists(PrevPath)) throw new UpdateException("Прежней версии нет");
-        var tmp = Path.Combine(Dir, Name + ".swap.exe");
+        var prev = File.Exists(PrevBackup) ? PrevBackup : File.Exists(LegacyPrev) ? LegacyPrev : throw new UpdateException("Прежней версии нет");
+        var swap = Path.Combine(BackupDir, "swap.exe");
+        var stash = StashFor(ExePath);
         try
         {
-            File.Move(ExePath, tmp, overwrite: true);
-            File.Move(PrevPath, ExePath);
-            File.Move(tmp, PrevPath);
+            Directory.CreateDirectory(BackupDir);
+            File.Copy(ExePath, swap, overwrite: true); // запущенный файл можно читать
+            File.Move(ExePath, stash, overwrite: true);
+            Hide(stash);
+            try { File.Copy(prev, ExePath, overwrite: true); }
+            catch { File.Move(stash, ExePath); throw; }
+            File.Move(swap, PrevBackup, overwrite: true);
+            if (prev == LegacyPrev) TryDelete(LegacyPrev);
         }
         catch (UnauthorizedAccessException) { throw new UpdateException($"Нет прав на запись в папку программы ({Dir})"); }
         catch (IOException e) { throw new UpdateException("Не удалось поменять файлы: " + e.Message); }
         DeletePending();
+    }
+
+    private static void Hide(string path)
+    {
+        try { File.SetAttributes(path, File.GetAttributes(path) | FileAttributes.Hidden); } catch (Exception) { }
     }
 
     private static Pending? LoadPending()
@@ -216,52 +293,50 @@ public static class Updater
         var zipPath = Path.Combine(TempDir, ZipName(v));
         bool legacy;
 
-        // 1. Контрольная сумма: файл SHA256-pc-x.y.z.txt, строка «HEX  имя_архива»
+        // 1. Контрольная сумма: файл SHA256-pc-x.y.z.txt, строка «HEX  имя_архива». GitHub бывает недоступен или
+        //    замедлен: тогда файлы берутся через зеркала (GitHubMirrors). Это безопасно: архив ставится только с подписью автора
         progress.Report((null, "Получаю контрольную сумму…"));
         string expected;
         try
         {
-            var text = await Http.GetStringAsync(ShaUrl(v), ct);
+            var text = await GitHubMirrors.GetStringAsync(Http, GitHubMirrors.ReleaseUrls(ShaUrl(v)), ct,
+                t => PickSum(t, v).Hash is { Length: 64 } h && h.All(Uri.IsHexDigit));
             (expected, legacy) = PickSum(text, v);
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { throw new UpdateException("Не удалось получить контрольную сумму с GitHub: " + Short(e)); }
-        if (expected.Length != 64 || !expected.All(Uri.IsHexDigit))
-            throw new UpdateException("Файл контрольной суммы в релизе не читается");
 
-        // 2. Архив с прогрессом
-        try
+        // 2–3. Архив с прогрессом и проверка суммы. Путь, с которого пришел поврежденный или чужой архив, пропускается
+        Exception? lastError = null;
+        bool mismatch = false, got = false;
+        foreach (var url in GitHubMirrors.ReleaseUrls(ZipUrl(v, legacy)))
         {
-            using var resp = await Http.GetAsync(ZipUrl(v, legacy), HttpCompletionOption.ResponseHeadersRead, ct);
-            resp.EnsureSuccessStatusCode();
-            var total = resp.Content.Headers.ContentLength;
-            await using var src = await resp.Content.ReadAsStreamAsync(ct);
-            await using var dst = File.Create(zipPath);
-            var buf = new byte[81920];
-            long done = 0;
-            int n;
-            while ((n = await src.ReadAsync(buf, ct)) > 0)
-            {
-                await dst.WriteAsync(buf.AsMemory(0, n), ct);
-                done += n;
-                progress.Report((total > 0 ? (double)done / total.Value : null, $"Скачиваю: {done / 1024} из {(total > 0 ? total.Value / 1024 + " КБ" : "? КБ")}"));
-            }
+            try { await DownloadAsync(url, zipPath, progress, ct); }
+            catch (Exception e) when (!ct.IsCancellationRequested) { lastError = e; continue; }
+            progress.Report((1, "Проверяю архив…"));
+            string actual;
+            await using (var fs = File.OpenRead(zipPath))
+                actual = Convert.ToHexString(await SHA256.HashDataAsync(fs, ct));
+            if (actual == expected) { got = true; break; }
+            mismatch = true;
         }
-        catch (Exception e) when (!ct.IsCancellationRequested) { throw new UpdateException("Не удалось скачать архив: " + Short(e)); }
-
-        // 3. Проверка суммы: поврежденный или подмененный по дороге архив не ставится
-        progress.Report((1, "Проверяю архив…"));
-        string actual;
-        await using (var fs = File.OpenRead(zipPath))
-            actual = Convert.ToHexString(await SHA256.HashDataAsync(fs, ct));
-        if (actual != expected)
-            throw new UpdateException("Контрольная сумма архива не совпала. Архив не установлен, программа не изменена");
+        if (!got)
+        {
+            TryDelete(zipPath);
+            throw mismatch
+                ? new UpdateException("Контрольная сумма архива не совпала. Архив не установлен, программа не изменена")
+                : new UpdateException("Не удалось скачать архив: " + Short(lastError!));
+        }
 
         // 3а. Подпись автора: без нее архив не ставится, даже если сумма совпала
         progress.Report((1, "Проверяю подпись…"));
         string sig;
-        try { sig = await Http.GetStringAsync(SigUrl(v, legacy), ct); }
+        try
+        {
+            sig = await GitHubMirrors.GetStringAsync(Http, GitHubMirrors.ReleaseUrls(SigUrl(v, legacy)), ct,
+                t => { try { return Convert.FromBase64String(t.Trim()).Length > 0; } catch (FormatException) { return false; } });
+        }
         catch (Exception e) when (!ct.IsCancellationRequested) { throw new UpdateException("Не удалось получить подпись релиза: " + Short(e)); }
-        if (!VerifySignature(await File.ReadAllBytesAsync(zipPath, ct), sig))
+        if (!VerifySignature(await File.ReadAllBytesAsync(zipPath, ct), sig, TrustedKey))
             throw new UpdateException("Подпись архива не прошла проверку. Архив не установлен, программа не изменена");
 
         // 4. Распаковка рядом с программой (тот же диск: переименование мгновенное и не ломается посередине)
@@ -284,24 +359,57 @@ public static class Updater
             throw new UpdateException($"В архиве программа другой версии ({fileVer}), установка отменена");
         }
 
-        // 5. Замена: текущий файл в CHIMERION.old.exe, новый на его место. Если второй шаг не удался, возвращаем старый
+        // 5. Замена. Прежняя версия копируется в папку данных (для отката и ручного возврата), запущенный файл
+        //    откладывается под именем <имя>.bad.exe (удалится при следующем запуске), новая встает как CHIMERION.exe.
+        //    Старый DNEX.exe так исчезает с рабочего стола, ярлыки и автозапуск переводятся на новый файл
         progress.Report((1, "Устанавливаю…"));
+        var target = TargetPath;
+        var stash = StashFor(ExePath);
         try
         {
-            File.Move(ExePath, OldPath, overwrite: true);
-            try { File.Move(NewPath, ExePath); }
-            catch { File.Move(OldPath, ExePath); throw; }
+            Directory.CreateDirectory(BackupDir);
+            File.Copy(ExePath, PrevBackup, overwrite: true);
+            File.Move(ExePath, stash, overwrite: true);
+            try { File.Move(NewPath, target, overwrite: true); }
+            catch { File.Move(stash, ExePath); throw; }
+            Hide(stash);
         }
         catch (UnauthorizedAccessException) { TryDelete(NewPath); throw new UpdateException($"Нет прав на запись в папку программы ({Dir}). Скачайте версию вручную со страницы релиза"); }
         catch (IOException e) { TryDelete(NewPath); throw new UpdateException("Не удалось заменить файл программы: " + e.Message); }
         TryDelete(zipPath);
+        var oldPath = ExePath;
+        if (!oldPath.Equals(target, StringComparison.OrdinalIgnoreCase)) { Shortcuts.Retarget(oldPath, target); _movedTo = target; }
         Installed = v;
-        SavePending(new Pending { From = UpdateChecker.CurrentVersion.ToString(3), To = ver });
+        SavePending(new Pending { From = UpdateChecker.CurrentVersion.ToString(3), To = ver, OldPath = oldPath });
     }
 
     /// <summary>Запускает программу заново (новую или возвращенную версию). Она дождется, пока эта копия закроется (см. App.OnStartup).</summary>
     public static void Restart(bool afterUpdate = true) =>
-        Process.Start(new ProcessStartInfo(ExePath, afterUpdate ? AfterUpdateArg : RelaunchArg) { UseShellExecute = false, WorkingDirectory = Dir });
+        Launch(new ProcessStartInfo(ExePath, afterUpdate ? AfterUpdateArg : RelaunchArg) { UseShellExecute = false, WorkingDirectory = Dir });
+
+    /// <summary>Скачивание архива одним путем. Ответа ждем не дольше GitHubMirrors.AttemptTimeout, само скачивание не ограничено.</summary>
+    private static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct)
+    {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(GitHubMirrors.AttemptTimeout);
+        using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        resp.EnsureSuccessStatusCode();
+        cts.CancelAfter(Timeout.InfiniteTimeSpan); // ответ пришел: дальше ограничивает только таймаут клиента
+        var total = resp.Content.Headers.ContentLength;
+        await using var src = await resp.Content.ReadAsStreamAsync(cts.Token);
+        await using var dst = File.Create(path);
+        var buf = new byte[81920];
+        long done = 0;
+        int n;
+        var host = new Uri(url).Host;
+        var via = host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || host.EndsWith("githubusercontent.com", StringComparison.OrdinalIgnoreCase) ? "" : $" через {host}";
+        while ((n = await src.ReadAsync(buf, cts.Token)) > 0)
+        {
+            await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
+            done += n;
+            progress.Report((total > 0 ? (double)done / total.Value : null, $"Скачиваю{via}: {done / 1024} из {(total > 0 ? total.Value / 1024 + " КБ" : "? КБ")}"));
+        }
+    }
 
     private static void TryDelete(string path) { try { File.Delete(path); } catch (Exception) { } }
 

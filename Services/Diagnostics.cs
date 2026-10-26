@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Dnex.Models;
@@ -32,6 +32,12 @@ public static class Diagnostics
         var admin = DnsSwitcher.IsAdmin();
         items.Add(new DiagItem(DiagLevel.Info, $"CHIMERION {UpdateChecker.CurrentVersion}",
             $"Windows {Environment.OSVersion.Version}, права администратора: {(admin ? "да" : "нет")}, автозапуск: {(AutoStart.IsEnabled() ? "включен" : "выключен")}"));
+
+        if (DnsSwitcher.LanguageModeWarning(await DnsSwitcher.LanguageModeAsync()) is { } psWarn)
+            items.Add(new DiagItem(DiagLevel.Bad, "PowerShell ограничен политикой", psWarn));
+
+        if (st.SplitDns.Enabled && SplitDns.PolicyWarning(SplitDns.PolicyRuleCount()) is { } gpoWarn)
+            items.Add(new DiagItem(DiagLevel.Bad, "«Два DNS» не действуют из-за групповой политики", gpoWarn));
 
         // Подключение и то, что реально стоит на адаптерах
         var active = DnsSwitcher.GetActive();
@@ -131,7 +137,14 @@ public static class Diagnostics
     /// </summary>
     public static string Sanitize(string text, string? publicIp, string? userName = null)
     {
-        if (!string.IsNullOrEmpty(publicIp)) text = text.Replace(publicIp, "[ваш IP]");
+        if (!string.IsNullOrEmpty(publicIp))
+        {
+            text = text.Replace(publicIp, "[ваш IP]");
+            // Рядом с IP журнал пишет место и провайдера: «IP 1.2.3.4 (RU, Область, Город, AS1234 Провайдер)» и
+            // «выход: Россия, Город (1.2.3.4, AS1234 Провайдер)». Это тоже личное, город и провайдер убираются
+            text = Regex.Replace(text, @"\[ваш IP\] \([^()\n]*\)", "[ваш IP] ([место скрыто])");
+            text = Regex.Replace(text, @"(?<=: )[^:()\n]+ \(\[ваш IP\][^()\n]*\)", "[место скрыто] ([ваш IP])");
+        }
         text = Ipv4.Replace(text, m =>
         {
             int a = int.Parse(m.Groups[1].Value), b = int.Parse(m.Groups[2].Value);
