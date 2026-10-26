@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -50,6 +50,15 @@ public static class Storage
 
     public static string PathOf(string file) => Path.Combine(Dir, file);
 
+    /// <summary>
+    /// Файлы, которые при чтении оказались повреждены и заменены значениями по умолчанию (их копия лежит рядом
+    /// с окончанием .broken). Окно сообщает о них после запуска: иначе список серверов или настройки молча
+    /// пропали бы, а первое сохранение затерло бы испорченный файл.
+    /// </summary>
+    public static readonly System.Collections.Concurrent.ConcurrentQueue<string> Recovered = new();
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> FileLocks = new(StringComparer.OrdinalIgnoreCase);
+
     public static T LoadOrCreate<T>(string file, Func<T> createDefault)
     {
         var path = PathOf(file);
@@ -59,27 +68,67 @@ public static class Storage
             Save(file, d);
             return d;
         }
+        string text;
+        try { text = ReadWithRetry(path); }
+        catch (IOException)
+        {
+            // Файл занят (антивирус, резервное копирование) дольше секунды: это не порча. Копию .broken не делаем,
+            // и вызывающий получит значения по умолчанию только на этот раз, файл на диске остается целым
+            return createDefault();
+        }
         try
         {
-            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), Options) ?? createDefault();
+            return JsonSerializer.Deserialize<T>(text, Options) ?? createDefault();
         }
-        catch
+        catch (Exception)
         {
-            // Поврежденный файл не теряем — откладываем копию.
-            File.Copy(path, path + ".broken", overwrite: true);
+            // Поврежденный файл (не JSON или другой формат) не теряем — откладываем копию.
+            try { File.Copy(path, path + ".broken", overwrite: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            Recovered.Enqueue(file);
             return createDefault();
+        }
+    }
+
+    /// <summary>Чтение с повтором: файл бывает ненадолго занят антивирусом или второй записью.</summary>
+    private static string ReadWithRetry(string path)
+    {
+        for (int i = 0; ; i++)
+        {
+            try { return File.ReadAllText(path); }
+            catch (IOException) when (i < 5 && File.Exists(path)) { Thread.Sleep(200); }
         }
     }
 
     public static void Save<T>(string file, T value) => SaveJson(file, JsonSerializer.Serialize(value, Options));
 
-    /// <summary>Записывает уже готовый JSON: без повторной сериализации и без лишней записи на диск.</summary>
+    /// <summary>
+    /// Записывает уже готовый JSON: без повторной сериализации и без лишней записи на диск. Сначала во временный файл
+    /// со своим именем (две записи одного файла из разных потоков не мешают друг другу), с принудительным сбросом
+    /// на диск: при отключении питания остается прежний файл или новый целиком, а не пустой.
+    /// </summary>
     public static void SaveJson(string file, string json)
     {
         Directory.CreateDirectory(Dir);
         var path = PathOf(file);
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, json);
-        File.Move(tmp, path, overwrite: true);
+        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+        // Записи одного файла внутри программы идут по очереди: замена файла, пока его заменяет соседний поток,
+        // иногда не проходит и с повторами. Между процессами остаются повторы ниже
+        lock (FileLocks.GetOrAdd(path, _ => new object()))
+        try
+        {
+            using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = new System.Text.UTF8Encoding(false).GetBytes(json);
+                fs.Write(bytes);
+                fs.Flush(flushToDisk: true);
+            }
+            for (int i = 0; ; i++)
+            {
+                try { File.Move(tmp, path, overwrite: true); break; }
+                catch (IOException) when (i < 5) { Thread.Sleep(100); } // файл ненадолго открыт на чтение
+                catch (UnauthorizedAccessException) when (i < 5) { Thread.Sleep(100); }
+            }
+        }
+        finally { try { if (File.Exists(tmp)) File.Delete(tmp); } catch (IOException) { } }
     }
 }

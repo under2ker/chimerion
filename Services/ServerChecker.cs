@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -14,7 +14,10 @@ namespace Dnex.Services;
 /// </summary>
 public class ServerChecker
 {
-    private enum Probe { Ok, Blocked, Error }
+    internal enum Probe { Ok, Blocked, Error }
+
+    // Сетевые шаги проверки (запрос к серверу, эталон, владелец сети, HTTPS к сервису, trace выхода) виртуальные:
+    // сценарные тесты подставляют свои ответы и проверяют, как из них складывается итог, без настоящей сети.
 
     private readonly AppSettings _settings;
     private readonly TimeSpan _timeout;
@@ -66,7 +69,21 @@ public class ServerChecker
         });
     }
 
+    /// <summary>
+    /// Проверка одного сервера. Отмена на любом шаге (и при замере пинга, и при определении страны выхода)
+    /// возвращает строку в «Не проверен»: раньше «Стоп» во время trace оставлял ее в «Проверка…» до следующей проверки.
+    /// </summary>
     public async Task CheckAsync(DnsServer s, CancellationToken ct)
+    {
+        try { await CheckCoreAsync(s, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException)
+        {
+            await OnUi(() => { if (s.Status == ServerStatus.Checking) s.Status = ServerStatus.Unknown; });
+            throw;
+        }
+    }
+
+    private async Task CheckCoreAsync(DnsServer s, CancellationToken ct)
     {
         await OnUi(() => s.Status = ServerStatus.Checking);
         var all = _settings.Targets.Where(t => t.Enabled).ToList();
@@ -126,7 +143,9 @@ public class ServerChecker
         int okAll = parts.Count(p => p.Contains('✓'));
         var status = okAll == 0 ? ServerStatus.Fail : okAll == all.Count ? ServerStatus.Ok : ServerStatus.Partial;
         var error = results.Select(r => r.Error).FirstOrDefault(e => e != null);
-        if (noProxy && status != ServerStatus.Fail)
+        // Обычный DNS: подмены нет ни у одного сервиса. Причина пишется всегда, даже если сервисы и так не открылись,
+        // иначе строка «Не работает» осталась бы без объяснения
+        if (noProxy)
         {
             status = ServerStatus.Fail;
             error = "Не подменяет адреса ИИ-сервисов, обычный DNS";
@@ -206,7 +225,7 @@ public class ServerChecker
             compared = true;
             proxied = !ips.Any(refIps.Contains);
             // Адрес не совпал с эталоном, но это сеть самого сервиса (у Google много адресов): подмены нет
-            if (proxied && await GeoLocation.IsOwnedByAsync(ips[0].ToString(), t.OwnerOrgs, ct).ConfigureAwait(false))
+            if (proxied && await IsOwnedByAsync(ips[0].ToString(), t.OwnerOrgs, ct).ConfigureAwait(false))
                 proxied = false;
         }
         catch (Exception) when (!ct.IsCancellationRequested) { /* эталон недоступен — подмену не оцениваем */ }
@@ -278,7 +297,7 @@ public class ServerChecker
             if (ips.Count == 0) return null;
             var host = EgressTrace.TraceHostFor(t.Name);
             // Один trace на адрес прокси за проверку (см. _traceCache)
-            return await _traceCache.GetOrAdd($"{host}|{ips[0]}", _ => EgressTrace.TraceAsync(ips[0], _timeout, ct, host))
+            return await _traceCache.GetOrAdd($"{host}|{ips[0]}", _ => TraceAsync(ips[0], host, ct))
                 .WaitAsync(ct).ConfigureAwait(false);
         }
         catch (Exception) when (!ct.IsCancellationRequested) { return null; }
@@ -318,7 +337,7 @@ public class ServerChecker
         return (samples[samples.Count / 2], samples.Count > 1 ? samples[^1] - samples[0] : null);
     }
 
-    public async Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct)
+    public virtual async Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(s.DohUrl))
             return await DnsWire.ResolveDohAsync(s.DohUrl, host, _timeout, ct);
@@ -354,7 +373,13 @@ public class ServerChecker
         return task;
     }
 
-    private async Task<HashSet<IPAddress>> ResolveReferenceAsync(string host, CancellationToken ct)
+    internal virtual Task<bool> IsOwnedByAsync(string ip, IReadOnlyCollection<string> orgs, CancellationToken ct) =>
+        GeoLocation.IsOwnedByAsync(ip, orgs, ct);
+
+    internal virtual Task<Egress?> TraceAsync(IPAddress ip, string host, CancellationToken ct) =>
+        EgressTrace.TraceAsync(ip, _timeout, ct, host);
+
+    internal virtual async Task<HashSet<IPAddress>> ResolveReferenceAsync(string host, CancellationToken ct)
     {
         try
         {
@@ -367,7 +392,7 @@ public class ServerChecker
     }
 
     /// <summary>HTTPS-запрос к сервису через конкретный IP с правильным SNI и проверкой сертификата.</summary>
-    private async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct, bool isWeb = false)
+    internal virtual async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct, bool isWeb = false)
     {
         using var handler = new SocketsHttpHandler
         {

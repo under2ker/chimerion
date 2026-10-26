@@ -46,6 +46,10 @@ public class LocTests
 
     [Theory]
     [InlineData("Сохранить", "Save")]
+    [InlineData("ПРОВЕРИТЬ САЙТ", "CHECK A SITE")]
+    [InlineData("СОСТОЯНИЕ", "STATUS")]
+    [InlineData("24 мс · 12 пров.", "24 ms · 12 checks")]
+    [InlineData("Windows 10.0.26200.0, права администратора: да, автозапуск: включен", "Windows 10.0.26200.0, administrator rights: yes, autostart: on")]
     [InlineData("Подключено · Нидерланды, Амстердам", "Connected · Netherlands, Amsterdam")]
     [InlineData("Найдено 3 новых, убрано 2 нерабочих", "Found 3 new, removed 2 non-working")]
     [InlineData("0 работают   ·   1 частично   ·   показано 7 из 7", "0 working   ·   1 partial   ·   showing 7 of 7")]
@@ -62,6 +66,19 @@ public class LocTests
         var r = En("Вернуть исходные DNS можно и через reset-dns.cmd.");
         Assert.DoesNotContain(" and через", r);
         Assert.Equal("You can also restore the original DNS with reset-dns.cmd.", r);
+    }
+
+    [Fact]
+    public void Server_metrics_hint_is_fully_translated()
+    {
+        var s = new Dnex.Models.DnsServer { Name = "x", Primary = "198.51.100.1", Status = Dnex.Models.ServerStatus.Partial, LatencyMs = 45, JitterMs = 12 };
+        s.ChecksOk = 3; s.ChecksTotal = 4; s.Summary = "ChatGPT ✓ · Claude ✗ регион · Gemini ✓";
+        s.AddHistory(true, 45); s.LastChecked = DateTime.Now.AddDays(-2);
+        var r = En(s.ScoreHint);
+        Assert.DoesNotMatch("[А-Яа-я]", r);
+        Assert.Contains("Compatibility: 2 of 3 services work", r);
+        Assert.Contains("Freshness: checked 2 d ago, the result may be outdated", r);
+        Assert.Equal("Freshness: never checked", En("Свежесть: не проверялся"));
     }
 
     [Fact]

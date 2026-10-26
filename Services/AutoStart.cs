@@ -1,26 +1,33 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32;
 
 namespace Dnex.Services;
 
 /// <summary>
-/// Запуск CHIMERION вместе с Windows через Планировщик заданий: при входе в систему, с наивысшими правами.
-/// Так программа стартует уже с правами администратора и после загрузки возвращает прежний DNS без запроса UAC.
-/// Права спрашиваются один раз — при включении или выключении автозапуска. Программа стартует с ключом --tray:
-/// окно не показывается, работает значок в трее.
+/// Запуск CHIMERION вместе с Windows: ключ Run текущего пользователя, без прав администратора. Программа стартует
+/// с ключом --tray (окно не показывается, работает значок в трее). Права Windows спрашивает только тогда, когда
+/// нужно вернуть DNS (его сбросили обновление Windows, другой адаптер или программа): тогда появится запрос UAC.
+///
+/// До 0.1.27 автозапуск был заданием Планировщика с наивысшими правами. Оно запускало exe из папки, куда может
+/// писать любая программа пользователя, и подмена файла давала права администратора без запроса. Такое задание
+/// убирается при включении или выключении автозапуска (это один запрос UAC).
 /// </summary>
 public static class AutoStart
 {
     public const string TaskName = "DNEX";
     public const string TrayArg = "--tray";
 
-    // Прежний способ (ключ Run без прав администратора): при переходе на планировщик убирается
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValue = "DNEX";
 
-    private static string? ExePath => Environment.ProcessPath;
+    // С учетом переименования DNEX.exe → CHIMERION.exe в этом сеансе (см. Updater)
+    private static string? ExePath => Updater.CurrentExePath;
 
-    public static bool IsEnabled() => TaskExists() || RunKeyExists();
+    public static bool IsEnabled() => RunKeyCommand() != null || TaskExists();
+
+    /// <summary>Осталось задание Планировщика старых версий (с правами администратора).</summary>
+    public static bool LegacyTaskExists() => TaskExists();
 
     private static bool TaskExists() => Schtasks($"/Query /TN \"{TaskName}\"").Code == 0;
 
@@ -43,86 +50,102 @@ public static class AutoStart
         catch (Exception) { return (-1, ""); }
     }
 
-    private static bool RunKeyExists()
+    /// <summary>Команда в ключе Run. Null, если автозапуска через ключ нет.</summary>
+    internal static string? RunKeyCommand()
     {
         try
         {
             using var k = Registry.CurrentUser.OpenSubKey(RunKey);
-            return k?.GetValue(TaskName) is string v && v.Length > 0;
+            return k?.GetValue(RunValue) is string v && v.Length > 0 ? v : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>Строка запуска для ключа Run: путь в кавычках и ключ --tray.</summary>
+    internal static string CommandFor(string exe) => $"\"{exe}\" {TrayArg}";
+
+    /// <summary>Путь к программе из строки ключа Run.</summary>
+    internal static string ExeFromCommand(string cmd)
+    {
+        cmd = cmd.Trim();
+        if (cmd.StartsWith('"')) { var end = cmd.IndexOf('"', 1); return end > 0 ? cmd[1..end] : cmd.Trim('"'); }
+        var sp = cmd.IndexOf(' ');
+        return sp > 0 ? cmd[..sp] : cmd;
+    }
+
+    private static bool WriteRunKey(string? command)
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
+            if (command == null) k.DeleteValue(RunValue, throwOnMissingValue: false);
+            else k.SetValue(RunValue, command);
+            return true;
         }
         catch (Exception) { return false; }
     }
 
-    private static void RemoveRunKey()
+    /// <summary>Файл программы переименован или перенесен: автозапуск, который указывал на прежний файл, переводится на новый.</summary>
+    internal static void Retarget(string from, string to)
     {
+        if (RunKeyCommand() is { } cmd && ExeFromCommand(cmd).Equals(from, StringComparison.OrdinalIgnoreCase))
+            WriteRunKey(CommandFor(to));
+    }
+
+    /// <summary>Убрать задание старых версий. Оно создано с правами администратора, и удалить его можно только с ними.</summary>
+    private static async Task<bool> RemoveLegacyTaskAsync()
+    {
+        if (!TaskExists()) return true;
         try
         {
-            using var k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
-            k?.DeleteValue(TaskName, throwOnMissingValue: false);
+            await DnsSwitcher.RunPsAsync($"Unregister-ScheduledTask -TaskName '{TaskName}' -Confirm:$false -ErrorAction SilentlyContinue", elevated: true);
         }
-        catch (Exception) { }
+        catch (OperationCanceledException) { return false; } // UAC отклонен
+        return !TaskExists();
     }
 
     /// <summary>
-    /// Включает или выключает автозапуск (задание планировщика). Спрашивает права администратора, если программа
-    /// запущена без них. False — права не выданы или планировщик отказал.
+    /// Включает или выключает автозапуск. Права нужны, только если осталось задание старых версий: его надо убрать.
+    /// False — ключ не записался или старое задание убрать не дали.
     /// </summary>
     public static async Task<bool> SetAsync(bool enable)
     {
-        RemoveRunKey();
-        static string Q(string v) => "'" + v.Replace("'", "''") + "'";
-        var user = Environment.UserDomainName + "\\" + Environment.UserName; // пользователь, а не учетка, выдавшая права
-        string script;
         if (enable)
         {
-            if (ExePath is not { } exe) return false;
-            script = $"""
-                $a = New-ScheduledTaskAction -Execute {Q(exe)} -Argument '{TrayArg}'
-                $t = New-ScheduledTaskTrigger -AtLogOn -User {Q(user)}
-                $t.Delay = 'PT10S'
-                $p = New-ScheduledTaskPrincipal -UserId {Q(user)} -LogonType Interactive -RunLevel Highest
-                $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
-                Register-ScheduledTask -TaskName {Q(TaskName)} -Action $a -Trigger $t -Principal $p -Settings $s -Force | Out-Null
-                Write-Output 'OK'
-                """;
+            if (ExePath is not { } exe || !WriteRunKey(CommandFor(exe))) return false;
         }
-        else script = $"Unregister-ScheduledTask -TaskName {Q(TaskName)} -Confirm:$false -ErrorAction SilentlyContinue; Write-Output 'OK'";
-
-        try
-        {
-            var (code, output) = await DnsSwitcher.RunPsAsync(script, elevated: true);
-            return code == 0 && output.Contains("OK") && TaskExists() == enable;
-        }
-        catch (OperationCanceledException) { return false; } // UAC отклонен
+        else if (!WriteRunKey(null)) return false;
+        return await RemoveLegacyTaskAsync();
     }
 
     /// <summary>
-    /// Программу перенесли в другую папку: задание указывает на старый путь. С правами администратора путь
-    /// обновляется сам, без них — пишется подсказка включить автозапуск заново.
+    /// После запуска: программу перенесли в другую папку — путь в ключе Run обновляется сам (права не нужны).
+    /// Осталось задание старых версий — подсказка включить автозапуск заново, чтобы программа стартовала без прав.
     /// </summary>
-    public static async Task RefreshPathAsync(Action<string> log)
+    public static Task RefreshPathAsync(Action<string> log)
     {
-        if (RunKeyExists() && !TaskExists())
+        // Копия данных для тестов и снимков: автозапуск принадлежит настоящей программе, его не трогаем
+        if (Environment.GetEnvironmentVariable("DNEX_DATA_DIR") is { Length: > 0 }) return Task.CompletedTask;
+        if (TaskExists())
         {
-            log("Автозапуск настроен по-старому, без прав администратора: включите его заново в настройках, чтобы DNS возвращался без запроса прав");
-            return;
+            var xml = TaskXml();
+            if (xml.Contains("HighestAvailable", StringComparison.OrdinalIgnoreCase))
+                log("Автозапуск настроен по-старому, с правами администратора без запроса. Выключите и включите его в настройках: " +
+                    "программа будет стартовать без прав, а права спросит, только когда нужно вернуть DNS");
+            return Task.CompletedTask;
         }
-        // Копия данных для тестов и снимков: задание автозапуска принадлежит настоящей программе, его не трогаем
-        if (Environment.GetEnvironmentVariable("DNEX_DATA_DIR") is { Length: > 0 }) return;
-        if (ExePath is not { } exe || !TaskExists()) return;
-        var xml = TaskXml();
-        if (xml.Contains(exe, StringComparison.OrdinalIgnoreCase)) return;
+        if (ExePath is not { } exe || RunKeyCommand() is not { } cmd) return Task.CompletedTask;
+        var old = ExeFromCommand(cmd);
+        if (old.Equals(exe, StringComparison.OrdinalIgnoreCase)) return Task.CompletedTask;
         // Путь меняем, только если прежнего файла больше нет (программу перенесли). Если он на месте, значит
         // запущена вторая копия из другой папки (например, свежая сборка): автозапуск остается за прежней
-        var old = System.Text.RegularExpressions.Regex.Match(xml, @"<Command>(.*?)</Command>").Groups[1].Value;
-        old = System.Net.WebUtility.HtmlDecode(old).Trim('"');
-        if (old.Length > 0 && File.Exists(old))
+        if (File.Exists(old))
         {
             log($"Автозапуск запускает другую копию программы: {old}. Чтобы запускалась эта, включите автозапуск заново в настройках");
-            return;
+            return Task.CompletedTask;
         }
-        if (DnsSwitcher.IsAdmin() && await SetAsync(true)) log("Автозапуск: путь к программе обновлен");
-        else log("Программу перенесли в другую папку: включите автозапуск заново в настройках");
+        if (WriteRunKey(CommandFor(exe))) log("Автозапуск: путь к программе обновлен");
+        return Task.CompletedTask;
     }
 
     /// <summary>Запущена из автозагрузки: окно не показываем, только трей.</summary>

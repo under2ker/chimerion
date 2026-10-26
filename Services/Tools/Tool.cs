@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 
 namespace Dnex.Services.Tools;
@@ -67,6 +67,8 @@ public abstract class Tool
     public bool UpdateAvailable => IsInstalled && Latest != null && InstalledVersion != null && Latest.Version > InstalledVersion;
 
     public abstract bool IsInstalled { get; }
+    /// <summary>Запуск требует прав администратора (zapret: драйвер WinDivert работает с сетевыми пакетами).</summary>
+    public virtual bool NeedsAdmin => false;
     public abstract bool IsRunning();
     /// <summary>Работает копия, которой управляет CHIMERION (ее и перезапускаем при обновлении).</summary>
     protected virtual bool RunningOurs() => IsRunning();

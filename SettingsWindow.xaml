@@ -1,4 +1,4 @@
-<Window x:Class="Dnex.SettingsWindow"
+﻿<Window x:Class="Dnex.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Dnex.Controls"
@@ -130,7 +130,7 @@
                         <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию при запуске (рекомендуем)" Margin="0,12,0,0"/>
                         <TextBlock Text="Программа покажет, что вышло нового. Обновление ставится только по кнопке «Обновить» и заработает после перезапуска" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                         <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows (рекомендуем)" Margin="0,12,0,0"/>
-                        <TextBlock Text="Программа стартует в трее с правами администратора и сразу возвращает DNS, который был включен. Права Windows спросит один раз, при включении" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                        <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
 
                         <Grid Margin="0,18,0,0">
                             <Grid.ColumnDefinitions>

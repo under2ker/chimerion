@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -115,8 +115,10 @@ public sealed class TgProxyTool : Tool
             var host = r.TryGetProperty("host", out var h) ? h.GetString() ?? "127.0.0.1" : "127.0.0.1";
             var port = r.TryGetProperty("port", out var p) && p.TryGetInt32(out var pv) ? pv : 1443;
             var secret = r.TryGetProperty("secret", out var s) ? s.GetString() : null;
-            if (string.IsNullOrEmpty(secret) || !secret.All(Uri.IsHexDigit)) return null;
+            if (string.IsNullOrEmpty(secret) || !secret.All(Uri.IsHexDigit) || port is < 1 or > 65535) return null;
             if (host is "0.0.0.0" or "::" or "") host = "127.0.0.1"; // слушает все адреса: Telegram на этом же компьютере
+            // В ссылку попадает только адрес или имя хоста: «&» и пробелы из испорченного файла настроек не допишут в нее параметры
+            if (!System.Net.IPAddress.TryParse(host, out _) && Uri.CheckHostName(host) != UriHostNameType.Dns) return null;
             return $"tg://proxy?server={host}&port={port}&secret=dd{secret}";
         }
         catch (JsonException) { return null; }

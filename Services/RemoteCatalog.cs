@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Dnex.Models;
@@ -74,9 +74,8 @@ public static class RemoteCatalog
             {
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-catalog/1.0");
-                var json = await http.GetStringAsync(Url, ct);
-                var sig = await http.GetStringAsync(Url + ".sig", ct);
-                if (Parse(json, sig) != null)
+                // GitHub недоступен: тот же подписанный файл через jsDelivr (см. GitHubMirrors)
+                if (await GitHubMirrors.SignedRawAsync(http, Url, (j, s) => Parse(j, s) != null, ct) is var (json, sig))
                 {
                     cache = new Cache { Fetched = DateTime.Now, Json = json, Sig = sig };
                     try { Storage.Save(CacheFile, cache); } catch (Exception) { }
