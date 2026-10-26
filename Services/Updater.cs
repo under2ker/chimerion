@@ -395,8 +395,20 @@ public static class Updater
     public static void Restart(bool afterUpdate = true) =>
         Launch(new ProcessStartInfo(ExePath, afterUpdate ? AfterUpdateArg : RelaunchArg) { UseShellExecute = false, WorkingDirectory = Dir });
 
-    /// <summary>Скачивание архива одним путем. Ответа ждем не дольше GitHubMirrors.AttemptTimeout, само скачивание не ограничено.</summary>
-    private static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
+    /// <summary>Скорость ниже этой после разгона считается замедлением провайдера.</summary>
+    internal const int SlowBytesPerSecond = 24 * 1024;
+    /// <summary>Сколько ждать, прежде чем судить о скорости, и сколько терпеть полную тишину.</summary>
+    internal static TimeSpan SlowAfter = TimeSpan.FromSeconds(6), StallAfter = TimeSpan.FromSeconds(5);
+    /// <summary>Кусок при докачке: меньше порога, после которого провайдеры режут соединение (15–30 КБ).</summary>
+    internal const int ChunkSize = 14 * 1024;
+
+    /// <summary>
+    /// Скачивание архива одним путем. Ответа ждем не дольше GitHubMirrors.AttemptTimeout. Если загрузка замирает или
+    /// идет медленнее SlowBytesPerSecond, это похоже на замедление провайдером (так режут Cloudflare, где лежат быстрые
+    /// исправления): первые 15–30 КБ соединения проходят, дальше почти ничего. Тогда остаток докачивается кусками по
+    /// ChunkSize, каждый в новом соединении и несколько сразу. Архив все равно проверяется суммой и подписью.
+    /// </summary>
+    internal static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
                                             IProgress<(long Done, long? Total)>? bytes = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -405,21 +417,84 @@ public static class Updater
         resp.EnsureSuccessStatusCode();
         cts.CancelAfter(Timeout.InfiniteTimeSpan); // ответ пришел: дальше ограничивает только таймаут клиента
         var total = resp.Content.Headers.ContentLength;
+        bool ranges = resp.Headers.AcceptRanges.Contains("bytes") && total > 0;
+        var finalUrl = resp.RequestMessage?.RequestUri?.ToString() ?? url; // после перенаправления GitHub: прямой адрес файла
         await using var src = await resp.Content.ReadAsStreamAsync(cts.Token);
         await using var dst = File.Create(path);
         var buf = new byte[81920];
         long done = 0;
-        int n;
         var host = new Uri(url).Host;
         var via = host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || host.EndsWith("githubusercontent.com", StringComparison.OrdinalIgnoreCase) ? "" : $" через {host}";
-        while ((n = await src.ReadAsync(buf, cts.Token)) > 0)
+        void Report(string how = "")
         {
-            await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
-            done += n;
-            progress.Report((total > 0 ? (double)done / total.Value : null, $"Скачиваю{via}: {done / 1024} из {(total > 0 ? total.Value / 1024 + " КБ" : "? КБ")}"));
+            progress.Report((total > 0 ? (double)done / total.Value : null, $"Скачиваю{via}{how}: {done / 1024} из {(total > 0 ? total.Value / 1024 + " КБ" : "? КБ")}"));
             bytes?.Report((done, total));
         }
+        var sw = Stopwatch.StartNew();
+        bool slow = false;
+        while (true)
+        {
+            using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            if (ranges) readCts.CancelAfter(StallAfter);
+            int n;
+            try { n = await src.ReadAsync(buf, readCts.Token); }
+            catch (OperationCanceledException) when (!cts.IsCancellationRequested) { slow = true; break; } // тишина: замедление
+            if (n == 0) break;
+            await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
+            done += n;
+            Report();
+            if (ranges && sw.Elapsed > SlowAfter && done < total && done / sw.Elapsed.TotalSeconds < SlowBytesPerSecond) { slow = true; break; }
+        }
+        if (!slow) return;
+        if (done >= total) return;
+        await DownloadChunksAsync(finalUrl, dst, done, total!.Value, d => { done = d; Report(" кусками, провайдер замедляет"); }, ct);
     }
+
+    /// <summary>Докачка с from до total кусками по ChunkSize: каждый кусок новым соединением, до 6 одновременно, по порядку записи.</summary>
+    internal static async Task DownloadChunksAsync(string url, Stream dst, long from, long total, Action<long> onProgress, CancellationToken ct)
+    {
+        var parts = new List<(long Start, long End)>();
+        for (long s = from; s < total; s += ChunkSize) parts.Add((s, Math.Min(s + ChunkSize, total) - 1));
+        var results = new byte[parts.Count][];
+        using var gate = new SemaphoreSlim(6);
+        long got = from;
+        var tasks = parts.Select(async (p, i) =>
+        {
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                for (int attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                        req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(p.Start, p.End);
+                        req.Headers.ConnectionClose = true; // новое соединение на каждый кусок: замедление начинается не сразу
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        cts.CancelAfter(TimeSpan.FromSeconds(20));
+                        using var r = await ChunkHttp.SendAsync(req, cts.Token).ConfigureAwait(false);
+                        if (r.StatusCode != System.Net.HttpStatusCode.PartialContent) throw new UpdateException($"Сервер не отдал кусок архива (ответ {(int)r.StatusCode})");
+                        var data = await r.Content.ReadAsByteArrayAsync(cts.Token).ConfigureAwait(false);
+                        if (data.Length != p.End - p.Start + 1) throw new IOException("кусок архива пришел не целиком");
+                        results[i] = data;
+                        onProgress(Interlocked.Add(ref got, data.Length));
+                        return;
+                    }
+                    catch (Exception) when (attempt < 4 && !ct.IsCancellationRequested) { await Task.Delay(500 * (attempt + 1), ct).ConfigureAwait(false); }
+                }
+            }
+            finally { gate.Release(); }
+        }).ToList();
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+        foreach (var part in results) await dst.WriteAsync(part, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Клиент для кусков: без общих соединений, чтобы каждый кусок шел своим.</summary>
+    internal static HttpClient ChunkHttp = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.Zero, AllowAutoRedirect = true })
+    {
+        Timeout = TimeSpan.FromSeconds(30),
+        DefaultRequestHeaders = { { "User-Agent", "CHIMERION-updater/1.0" } },
+    };
 
     private static void TryDelete(string path) { try { File.Delete(path); } catch (Exception) { } }
 

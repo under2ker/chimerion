@@ -74,6 +74,10 @@ public static class SiteCheck
         var host = HostOf(input);
         var lines = new List<string>();
         if (host.Length == 0) return new SiteReport(input, SiteVerdict.Error, lines, "Не похоже на адрес сайта");
+        // Служебные домены хранилищ: на самом домене сайта нет, он не отвечает даже без блокировок. Проверять надо адрес с поддоменом
+        if (ServiceRoots.TryGetValue(host, out var example))
+            return new SiteReport(host, SiteVerdict.Error, lines,
+                $"{host} сам по себе не сайт, а домен хранилища: он не отвечает даже без всяких блокировок. Проверьте полный адрес, например {example}");
 
         // 1. Адрес через DNS системы (как у браузера)
         IPAddress[] ips;
@@ -127,6 +131,15 @@ public static class SiteCheck
             $"Загрузка обрывается на {Kb(bytes)}: " + (cloudflare ? "так провайдеры замедляют сайты на Cloudflare. " : "похоже на замедление провайдером. ") +
             "DNS это не исправит, все DNS ведут на те же адреса. Помогает zapret: включите его в «Telegram и YouTube», добавьте сайт в «Свои сайты» " +
             "или включите «Обход по адресам (IPSet)»");
+
+    /// <summary>Домены хранилищ без сайта на самом домене и пример настоящего адреса для проверки.</summary>
+    private static readonly Dictionary<string, string> ServiceRoots = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["r2.dev"] = "pub-6327ca42c2344c2ab42e1c16868d6c5a.r2.dev/latest.json (канал обновлений CHIMERION)",
+        ["workers.dev"] = "chimerion-crowd.chimerion.workers.dev",
+        ["pages.dev"] = "имя-проекта.pages.dev",
+        ["githubusercontent.com"] = "raw.githubusercontent.com",
+    };
 
     private static string Kb(long bytes) => bytes < 1024 ? $"{bytes} Б" : $"{bytes / 1024} КБ";
 }
