@@ -20,18 +20,66 @@ namespace Dnex;
 public partial class MainWindow
 {
     /// <summary>Проверка новой версии через 10 секунд после запуска, чтобы не мешать старту. Только уведомление.</summary>
+    /// <summary>Как часто программа сама проверяет новую версию, пока работает (первый раз через 10 секунд после запуска).</summary>
+    internal static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(6);
+    private readonly DispatcherTimer _updateTimer = new();
+    /// <summary>Найденная фоном версия: кнопка внизу становится «Обновить до …» и открывает окно сразу, без новой проверки.</summary>
+    private UpdateInfo? _pendingUpdate;
+    /// <summary>Версия, которую уже предлагали в этом сеансе: окно само не открывается повторно каждые 6 часов.</summary>
+    private string? _offeredVersion;
+
     private void ScheduleUpdateCheck()
     {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
-        timer.Tick += async (_, _) =>
+        _updateTimer.Interval = TimeSpan.FromSeconds(10);
+        _updateTimer.Tick += async (_, _) =>
         {
-            timer.Stop();
-            var info = await UpdateChecker.CheckAsync();
-            if (info == null || _settings.SkippedUpdate == info.Version.ToString()) return;
-            Log($"Доступна версия {info.Version}");
-            OpenUpdateWindow(info);
+            _updateTimer.Interval = UpdateCheckEvery;
+            await BackgroundUpdateCheckAsync();
         };
-        timer.Start();
+        _updateTimer.Start();
+    }
+
+    /// <summary>
+    /// Фоновая проверка. Нашлась новая версия (не пропущенная пользователем): кнопка внизу превращается в
+    /// «Обновить до …». Если окно на экране и программа ничем не занята, сразу открывается предложение; если она
+    /// в трее, приходит уведомление Windows, и щелчок по нему открывает то же окно.
+    /// </summary>
+    private async Task BackgroundUpdateCheckAsync()
+    {
+        if (!_settings.CheckUpdates || Updater.Installed != null) return;
+        UpdateInfo? info;
+        try { info = await UpdateChecker.CheckAsync(); }
+        catch (Exception) { return; }
+        if (info == null || _settings.SkippedUpdate == info.Version.ToString()) return;
+        ShowUpdateAvailable(info);
+        if (_offeredVersion == info.Version.ToString()) return;
+        _offeredVersion = info.Version.ToString();
+        Log($"Доступна версия {info.Version}{(info.Hotfix != null ? " (быстрое исправление)" : "")}");
+        bool onScreen = IsVisible && WindowState != WindowState.Minimized && IsActive;
+        if (onScreen && !_busyConn && !System.Windows.Interop.ComponentDispatcher.IsThreadModal && UpdateWindow.Current == null)
+            OpenUpdateWindow(info);
+        else if (_tray != null)
+        {
+            _balloonClick = () => { ShowFromTray(); OpenUpdateWindow(info); };
+            _tray.ShowBalloonTip(10000, Loc.T($"Доступна CHIMERION {info.Version.ToString(3)}"),
+                Loc.T(info.Hotfix != null ? "Срочное исправление. Нажмите, чтобы обновить" : "Нажмите, чтобы посмотреть, что нового, и обновить"),
+                System.Windows.Forms.ToolTipIcon.Info);
+        }
+    }
+
+    /// <summary>Кнопка внизу окна показывает найденную версию.</summary>
+    private void ShowUpdateAvailable(UpdateInfo info)
+    {
+        _pendingUpdate = info;
+        CheckUpdateButton.Content = $"Обновить до {info.Version.ToString(3)}";
+        CheckUpdateButton.Style = (Style)FindResource("Primary");
+    }
+
+    private void ClearUpdateAvailable()
+    {
+        _pendingUpdate = null;
+        CheckUpdateButton.Content = "Проверить обновление";
+        CheckUpdateButton.Style = (Style)FindResource("Strong");
     }
 
     /// <summary>Окно с новой версией. «Пропустить версию» запоминает номер для фоновой проверки.</summary>
@@ -47,6 +95,7 @@ public partial class MainWindow
         }
         UpdateWindow.Show(this, info, onRestart: RestartForUpdate, log: Log, onSkip: () =>
         {
+            ClearUpdateAvailable();
             var before = _settings.SkippedUpdate;
             _settings.SkippedUpdate = info.Version.ToString();
             try { Storage.Save("settings.json", _settings); } catch (Exception) { }
@@ -315,6 +364,8 @@ public partial class MainWindow
     /// <summary>Кнопка в полосе заголовка: проверить сейчас и показать результат.</summary>
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
     {
+        // Фон уже нашел версию: окно сразу, без повторной проверки
+        if (_pendingUpdate is { } found) { OpenUpdateWindow(found); return; }
         CheckUpdateButton.IsEnabled = false;
         CheckUpdateButton.Content = "Проверяю…";
         try
@@ -324,6 +375,8 @@ public partial class MainWindow
             {
                 case UpdateStatus.Available:
                     Log($"Доступна версия {r.Info!.Version}");
+                    _offeredVersion = r.Info!.Version.ToString();
+                    ShowUpdateAvailable(r.Info!);
                     OpenUpdateWindow(r.Info!);
                     break;
                 case UpdateStatus.UpToDate:
@@ -339,7 +392,7 @@ public partial class MainWindow
         finally
         {
             CheckUpdateButton.IsEnabled = true;
-            CheckUpdateButton.Content = "Проверить обновление";
+            if (_pendingUpdate == null) CheckUpdateButton.Content = "Проверить обновление";
         }
     }
 

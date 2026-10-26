@@ -287,7 +287,7 @@ public static class Updater
     /// После успеха нужен перезапуск (Restart).
     /// </summary>
     public static async Task InstallAsync(Version v, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
-                                          HotfixChannel.Manifest? hotfix = null)
+                                          HotfixChannel.Manifest? hotfix = null, IProgress<(long Done, long? Total)>? bytes = null)
     {
         var ver = v.ToString(3);
         Directory.CreateDirectory(TempDir);
@@ -318,7 +318,7 @@ public static class Updater
         bool mismatch = false, got = false;
         foreach (var url in hotfix != null ? new[] { HotfixChannel.ZipUrl(hotfix) } : GitHubMirrors.ReleaseUrls(ZipUrl(v, legacy)))
         {
-            try { await DownloadAsync(url, zipPath, progress, ct); }
+            try { await DownloadAsync(url, zipPath, progress, ct, bytes); }
             catch (Exception e) when (!ct.IsCancellationRequested) { lastError = e; continue; }
             progress.Report((1, "Проверяю архив…"));
             string actual;
@@ -396,7 +396,8 @@ public static class Updater
         Launch(new ProcessStartInfo(ExePath, afterUpdate ? AfterUpdateArg : RelaunchArg) { UseShellExecute = false, WorkingDirectory = Dir });
 
     /// <summary>Скачивание архива одним путем. Ответа ждем не дольше GitHubMirrors.AttemptTimeout, само скачивание не ограничено.</summary>
-    private static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct)
+    private static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
+                                            IProgress<(long Done, long? Total)>? bytes = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(GitHubMirrors.AttemptTimeout);
@@ -416,6 +417,7 @@ public static class Updater
             await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
             done += n;
             progress.Report((total > 0 ? (double)done / total.Value : null, $"Скачиваю{via}: {done / 1024} из {(total > 0 ? total.Value / 1024 + " КБ" : "? КБ")}"));
+            bytes?.Report((done, total));
         }
     }
 
