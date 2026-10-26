@@ -2,192 +2,390 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Dnex.Controls"
-        Title="CHIMERION · Настройки" Icon="/Assets/chimerion-logo.png" Width="600" SizeToContent="Height" ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner"
+        Title="CHIMERION · Настройки" Icon="/Assets/chimerion-logo.png" Width="980" Height="680" MinWidth="820" MinHeight="520"
+        ResizeMode="CanResize" WindowStartupLocation="CenterOwner"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
     <Window.Resources>
-        <!-- Заголовок раздела: маленькие заглавные буквы, приглушенный цвет -->
+        <!-- Заголовок раздела внутри вкладки: маленькие заглавные буквы, приглушенный цвет -->
         <Style x:Key="SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource Label}">
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="2,20,0,8"/>
+            <Setter Property="Margin" Value="2,22,0,8"/>
         </Style>
-        <!-- Подпись поля над полем ввода -->
         <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource Label}">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
-        <!-- Пояснение под полем -->
         <Style x:Key="FieldHint" TargetType="TextBlock" BasedOn="{StaticResource Label}">
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Margin" Value="0,5,0,0"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
-        <!-- Поле ввода одинаковой высоты -->
         <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <Style x:Key="Para" TargetType="TextBlock" BasedOn="{StaticResource Label}">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="LineHeight" Value="20"/>
+        </Style>
+        <!-- Пункт боковой панели: значок и название, у выбранного акцентная полоска слева и подсветка -->
+        <Style x:Key="NavItem" TargetType="RadioButton">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="GroupName" Value="nav"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="8">
+                            <Grid>
+                                <Border x:Name="sel" Background="{DynamicResource AccentSoft}" CornerRadius="8" Opacity="0"/>
+                                <Border x:Name="bar" Width="3" CornerRadius="2" HorizontalAlignment="Left" Margin="0,8" Background="{DynamicResource Accent}" Opacity="0"/>
+                                <ContentPresenter VerticalAlignment="Center" Margin="14,9,12,9"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <DockPanel Margin="24,22,24,20">
-        <!-- Шапка: логотип и название -->
-        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" LastChildFill="False">
-            <!-- Язык интерфейса: на виду в шапке, переключается сразу (Services/Loc) -->
-            <Border DockPanel.Dock="Right" Padding="3" CornerRadius="9" Background="{DynamicResource Surface2}" VerticalAlignment="Center"
-                    BorderBrush="{DynamicResource Border}" BorderThickness="1" ToolTip="Язык интерфейса">
-                <StackPanel Orientation="Horizontal">
-                    <RadioButton x:Name="LangRu" Style="{StaticResource Tab}" GroupName="lang" Content="Русский" Checked="Lang_Checked" Tag="ru"/>
-                    <RadioButton x:Name="LangEn" Style="{StaticResource Tab}" GroupName="lang" Content="English" Checked="Lang_Checked" Tag="en"/>
-                </StackPanel>
-            </Border>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-            <!-- Шапка как у остальных окон: значок в цветном квадрате, заголовок и пояснение (DnexDialog.Header) -->
-            <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource InfoSoft}" VerticalAlignment="Center">
-                <controls:Icon Kind="settings" Size="19" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center"/>
-            </Border>
-            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="Настройки" FontSize="15" FontWeight="SemiBold"/>
-                <TextBlock Text="Изменения применяются после «Сохранить»" Style="{StaticResource Label}" FontSize="12" Margin="0,3,0,0"/>
-            </StackPanel>
-        </StackPanel>
-        </DockPanel>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="236"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- Нижняя панель: ошибка слева, кнопки справа -->
-        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Margin="0,18,0,0" Padding="0,16,0,0">
-            <StackPanel>
-            <!-- Сообщение отдельной строкой над кнопками: длинный текст переносится, а кнопки не растягиваются.
-                 Пустое сообщение места не занимает -->
-            <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Bad}" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="12">
-                <TextBlock.Style>
-                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-                        <Style.Triggers>
-                            <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </TextBlock.Style>
-            </TextBlock>
-            <DockPanel LastChildFill="False">
-                <Button Content="Сохранить" DockPanel.Dock="Right" Style="{StaticResource Primary}" IsDefault="True" Click="Save_Click" MinWidth="130"/>
-                <Button Content="Отмена" DockPanel.Dock="Right" Style="{StaticResource Ghost}" IsCancel="True" Click="Cancel_Click"/>
-                <Button Content="Рекомендуемые значения" DockPanel.Dock="Left" Style="{StaticResource Ghost}" Click="Defaults_Click" Margin="0"
-                        ToolTip="Поставить во все поля рекомендуемые значения. Сохранятся только после «Сохранить»"/>
+        <!-- ===== Боковая панель ===== -->
+        <Border Grid.Column="0" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="16,20,16,16">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,22">
+                    <Border Width="38" Height="38" CornerRadius="11" Background="{DynamicResource AccentSoft}">
+                        <controls:BrandMark Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Настройки" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="SideVersion" Text="CHIMERION" Style="{StaticResource Label}" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Язык интерфейса: переключается сразу, без «Сохранить» -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                    <TextBlock Text="ЯЗЫК" Style="{StaticResource Label}" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,6"/>
+                    <Border Padding="3" CornerRadius="9" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border}" BorderThickness="1" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="LangRu" Style="{StaticResource Tab}" GroupName="lang" Content="Русский" Checked="Lang_Checked" Tag="ru"/>
+                            <RadioButton x:Name="LangEn" Style="{StaticResource Tab}" GroupName="lang" Content="English" Checked="Lang_Checked" Tag="en"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="Nav">
+                    <RadioButton Style="{StaticResource NavItem}" Tag="General" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="16" Margin="0,0,11,0"/><TextBlock Text="Основные" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Privacy" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,11,0"/><TextBlock Text="Приватность" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Check" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="activity" Size="16" Margin="0,0,11,0"/><TextBlock Text="Проверка серверов" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Watch" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,11,0"/><TextBlock Text="Сторож и трей" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Split" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="arrow-left-right" Size="16" Margin="0,0,11,0"/><TextBlock Text="Два DNS" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Look" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,11,0"/><TextBlock Text="Внешний вид" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="Data" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,11,0"/><TextBlock Text="Данные" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource NavItem}" Tag="About" Checked="Nav_Checked">
+                        <StackPanel Orientation="Horizontal"><controls:Icon Kind="info" Size="16" Margin="0,0,11,0"/><TextBlock Text="О программе" VerticalAlignment="Center"/></StackPanel>
+                    </RadioButton>
+                </StackPanel>
             </DockPanel>
-            </StackPanel>
         </Border>
 
-        <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" MaxHeight="620" Padding="0,0,10,0">
-            <StackPanel>
-                <!-- Проверка серверов -->
-                <TextBlock Text="ПРОВЕРКА СЕРВЕРОВ" Style="{StaticResource SectionTitle}"/>
-                <Border Style="{StaticResource Card}" Padding="18">
-                    <StackPanel>
-                        <TextBlock Text="Эталонный DoH" Style="{StaticResource FieldLabel}"/>
-                        <TextBox x:Name="RefDoh" Style="{StaticResource FieldBox}"/>
-                        <TextBlock Text="Сравнение с ним показывает, подменяет ли сервер адреса ИИ. Адрес начинается с https://" Style="{StaticResource FieldHint}"/>
-
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Таймаут проверки, сек" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="TimeoutBox" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="от 2 до 30. Рекомендуем 6" Style="{StaticResource FieldHint}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Проверок одновременно" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="ParallelBox" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="от 1 до 64. Рекомендуем 24: больше быстрее, но выше нагрузка на сеть" Style="{StaticResource FieldHint}"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Обновлять пинг, мин" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="PingBox" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="от 1 до 60. Рекомендуем 10. Таблица, шапка и трей" Style="{StaticResource FieldHint}"/>
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- Трей и сторож -->
-                <TextBlock Text="ТРЕЙ И СТОРОЖ" Style="{StaticResource SectionTitle}"/>
-                <Border Style="{StaticResource Card}" Padding="18">
-                    <StackPanel>
-                        <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)"/>
-                        <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                        <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию в фоне (рекомендуем)" Margin="0,12,0,0"/>
-                        <TextBlock Text="При запуске и раз в 6 часов. Программа покажет, что вышло нового, а обновится по кнопке «Обновить» и сама перезапустится" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                        <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows (рекомендуем)" Margin="0,12,0,0"/>
-                        <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-
-                        <Grid Margin="0,18,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="18"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <TextBlock Text="Проверка сервисов в трее, мин" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="TrayMinutesBox" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="от 1 до 60. Рекомендуем 5. Также при запуске и подключении" Style="{StaticResource FieldHint}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="Сторож DNS, сек" Style="{StaticResource FieldLabel}"/>
-                                <TextBox x:Name="WatchdogBox" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="от 15 до 600. Рекомендуем 60. Работает, пока подключено" Style="{StaticResource FieldHint}"/>
-                            </StackPanel>
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- Свои цвета интерфейса (SettingsColors.cs) -->
-                <TextBlock Text="ЦВЕТА ИНТЕРФЕЙСА" Style="{StaticResource SectionTitle}"/>
-                <Border Style="{StaticResource Card}" Padding="18" Margin="0,0,0,18">
-                    <StackPanel x:Name="ColorsHost"/>
-                </Border>
-
-                <!-- Данные и о программе -->
-                <TextBlock Text="ДВА DNS (ЭКСПЕРИМЕНТ)" Style="{StaticResource SectionTitle}"/>
-                <Border Style="{StaticResource Card}" Padding="18" Margin="0,0,0,18">
-                    <StackPanel>
-                        <TextBlock x:Name="SplitStatus" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                        <TextBlock Text="Общий DNS для всего интернета и Smart DNS только для ChatGPT, Claude и Gemini. Домены ИИ Windows отправляет в Smart DNS по своим правилам, остальное идет через общий DNS"
-                                   Style="{StaticResource FieldHint}" Margin="0,6,0,0" TextWrapping="Wrap"/>
-                        <Button Content="Настроить два DNS" Click="SplitDns_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
-                    </StackPanel>
-                </Border>
-
-                <TextBlock Text="ДАННЫЕ И О ПРОГРАММЕ" Style="{StaticResource SectionTitle}"/>
-                <Border Style="{StaticResource Card}" Padding="18">
-                    <StackPanel>
-                        <TextBlock x:Name="VersionText" Text="CHIMERION" FontWeight="SemiBold"/>
-                        <TextBlock Text="Папка данных" Style="{StaticResource FieldLabel}" Margin="0,14,0,6"/>
-                        <Border Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,9" BorderBrush="{DynamicResource Border}" BorderThickness="1">
-                            <TextBlock x:Name="DataPathText" TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas"/>
-                        </Border>
-                        <TextBlock Text="Здесь лежат settings.json, servers.json, журнал ошибок и резервная копия DNS. Не передавайте эти файлы другим: в settings.json могут быть Cookie."
-                                   Style="{StaticResource FieldHint}" Margin="0,8,0,0"/>
-                        <Button Content="Открыть папку данных" Click="OpenData_Click" Style="{StaticResource Ghost}"
-                                HorizontalAlignment="Left" Margin="-18,10,0,0"/>
-                        <StackPanel x:Name="RollbackPanel" Visibility="Collapsed" Margin="0,8,0,0">
-                            <TextBlock x:Name="RollbackHint" Style="{StaticResource FieldHint}" TextWrapping="Wrap"/>
-                            <Button x:Name="RollbackButton" Click="Rollback_Click" Style="{StaticResource Ghost}" HorizontalAlignment="Left" Margin="-18,6,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+        <!-- ===== Содержимое вкладки ===== -->
+        <DockPanel Grid.Column="1">
+            <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0">
+                <TextBlock x:Name="PageTitle" Text="Основные" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock x:Name="PageHint" Style="{StaticResource Label}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
             </StackPanel>
-        </ScrollViewer>
-    </DockPanel>
+
+            <!-- Нижняя панель: сообщение отдельной строкой, кнопки справа -->
+            <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Padding="32,14,32,16">
+                <StackPanel>
+                    <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Bad}" TextWrapping="Wrap" Margin="0,0,0,10" FontSize="12">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                <Style.Triggers>
+                                    <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <DockPanel LastChildFill="False">
+                        <Button Content="Сохранить" DockPanel.Dock="Right" Style="{StaticResource Primary}" IsDefault="True" Click="Save_Click" MinWidth="130"/>
+                        <Button Content="Отмена" DockPanel.Dock="Right" Style="{StaticResource Ghost}" IsCancel="True" Click="Cancel_Click"/>
+                        <Button Content="Рекомендуемые значения" DockPanel.Dock="Left" Style="{StaticResource Ghost}" Click="Defaults_Click" Margin="-16,0,0,0"
+                                ToolTip="Поставить во все поля рекомендуемые значения. Сохранятся только после «Сохранить»"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" Padding="32,6,22,24" controls:SmoothScroll.IsEnabled="True">
+                <Grid x:Name="Pages">
+
+                    <!-- Основные -->
+                    <StackPanel x:Name="PageGeneral" Tag="Основные|Как программа запускается, прячется и обновляется">
+                        <TextBlock Text="ЗАПУСК И ОКНО" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows (рекомендуем)"/>
+                                <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)" Margin="0,14,0,0"/>
+                                <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="ОБНОВЛЕНИЯ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию в фоне (рекомендуем)"/>
+                                <TextBlock Text="При запуске и раз в 6 часов. Программа покажет, что вышло нового, а обновится по кнопке «Обновить» и сама перезапустится" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <StackPanel x:Name="RollbackPanel" Visibility="Collapsed" Margin="0,14,0,0">
+                                    <TextBlock x:Name="RollbackHint" Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0"/>
+                                    <Button x:Name="RollbackButton" Click="Rollback_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Приватность (PrivacyGuard) -->
+                    <StackPanel x:Name="PagePrivacy" Visibility="Collapsed" Tag="Приватность|Чтобы ваши данные не попали на скриншот, запись или трансляцию экрана">
+                        <TextBlock Text="СКРЫТИЕ ДАННЫХ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="PrivacyBox" Content="Скрывать данные от записи экрана"/>
+                                <TextBlock Text="Окна программы не попадут ни на скриншот, ни на запись, ни в демонстрацию экрана, а ваш IP, город и провайдер на экране заменятся на «скрыто». Пригодится, если вы снимаете видео, стримите или показываете экран"
+                                           Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="ЧТО ЗАЩИЩАЕТ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Text="Захват экрана"/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Print Screen, «Ножницы», Xbox Game Bar, OBS, демонстрация экрана в Discord, Zoom, Teams и браузере. Windows не отдает им окна программы, вместе с меню, подсказками и меню трея: на записи вместо окна видно то, что под ним"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Миниатюры"/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="На панели задач, в Alt+Tab и при наведении на панель задач вместо содержимого окна показывается значок"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Сам экран"/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Ваш внешний IP, город, регион и провайдер заменяются на «скрыто» в журнале, на панели проверки и в диагностике. Это на случай фото экрана телефоном или взгляда через плечо. Адреса DNS-серверов и страны остаются: без них не понять, как работает подключение"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Уведомления и копирование"/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Уведомления Windows рисует сама система, поэтому в их тексте личных данных нет. Скопированный журнал и отчеты очищаются от IP, имени пользователя и почты"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="ЧЕГО РЕЖИМ НЕ МОЖЕТ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="Записи, сделанные до включения режима, уже не изменить. Запись строк в журнал тоже необратима: строки, замаскированные в режиме, не раскроются после его выключения."/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Программа с правами администратора или собственным драйвером захвата может обойти защиту Windows. От камеры, направленной на монитор, спасает только маскировка на экране."/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="На Windows 10 старше версии 2004 окно на записи будет не прозрачным, а черным."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Проверка серверов -->
+                    <StackPanel x:Name="PageCheck" Visibility="Collapsed" Tag="Проверка серверов|Как CHIMERION проверяет, работает ли сервер с ИИ-сервисами">
+                        <TextBlock Text="ЭТАЛОН" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="Эталонный DoH" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="RefDoh" Style="{StaticResource FieldBox}"/>
+                                <TextBlock Text="Сравнение с ним показывает, подменяет ли сервер адреса ИИ. Адрес начинается с https://" Style="{StaticResource FieldHint}"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="СКОРОСТЬ И НАГРУЗКА" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Таймаут проверки, сек" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="TimeoutBox" Style="{StaticResource FieldBox}"/>
+                                    <TextBlock Text="от 2 до 30. Рекомендуем 6" Style="{StaticResource FieldHint}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Проверок одновременно" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="ParallelBox" Style="{StaticResource FieldBox}"/>
+                                    <TextBlock Text="от 1 до 64. Рекомендуем 24: больше быстрее, но выше нагрузка на сеть" Style="{StaticResource FieldHint}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="Обновлять пинг, мин" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="PingBox" Style="{StaticResource FieldBox}"/>
+                                    <TextBlock Text="от 1 до 60. Рекомендуем 10. Таблица, шапка и трей" Style="{StaticResource FieldHint}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Сторож и трей -->
+                    <StackPanel x:Name="PageWatch" Visibility="Collapsed" Tag="Сторож и трей|Как часто программа следит за подключением и проверяет сервисы">
+                        <TextBlock Text="ИНТЕРВАЛЫ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Сторож DNS, сек" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="WatchdogBox" Style="{StaticResource FieldBox}"/>
+                                    <TextBlock Text="от 15 до 600. Рекомендуем 60. Работает, пока подключено" Style="{StaticResource FieldHint}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Проверка сервисов в трее, мин" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox x:Name="TrayMinutesBox" Style="{StaticResource FieldBox}"/>
+                                    <TextBlock Text="от 1 до 60. Рекомендуем 5. Также при запуске и подключении" Style="{StaticResource FieldHint}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="ПРОВЕРКА СЕРВИСОВ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, программа в фоне проверяет ChatGPT, Claude и Gemini через текущий сервер и сам DNS-сервер прямым запросом. Если сервис перестал открываться или сервер замолчал, придет уведомление с причиной. После первой неудачи проверка повторяется через минуту, чтобы не было ложных тревог."/>
+                                <CheckBox x:Name="AutoSwitchBox" Content="Сразу переключаться на лучший рабочий сервер" Margin="0,14,0,0"/>
+                                <TextBlock Text="Без галочки программа только сообщит, а сменить сервер можно щелчком по уведомлению. Избранные серверы тоже проверяются: если какой-то перестал отвечать, придет уведомление" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="ЧТО ДЕЛАЕТ СТОРОЖ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож проверяет, что DNS на месте и отвечает. Если его сбросила другая программа или Windows, он вернет подключение. Если сервер перестал отвечать, переключит на следующий по стабильности."/>
+                                <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0" Text="Пока работает сторонний VPN, сторож с ним не спорит. Если DNS сбрасывают снова и снова, он перестает вмешиваться и подсказывает, что делать."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Два DNS -->
+                    <StackPanel x:Name="PageSplit" Visibility="Collapsed" Tag="Два DNS|ИИ через Smart DNS, остальной интернет через обычный DNS">
+                        <TextBlock Text="РЕЖИМ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock x:Name="SplitStatus" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                                <TextBlock Text="Общий DNS для всего интернета и Smart DNS только для ChatGPT, Claude и Gemini. Домены ИИ Windows отправляет в Smart DNS по своим правилам, остальное идет через общий DNS. Банки и российские сайты работают как обычно"
+                                           Style="{StaticResource FieldHint}" Margin="0,6,0,0"/>
+                                <Button Content="Настроить два DNS" Click="SplitDns_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Внешний вид (SettingsColors.cs) -->
+                    <StackPanel x:Name="PageLook" Visibility="Collapsed" Tag="Внешний вид|Тема и цвета интерфейса. Меняются сразу, чтобы было видно результат">
+                        <TextBlock Text="ТЕМА И ЦВЕТА" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel x:Name="ColorsHost"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Данные -->
+                    <StackPanel x:Name="PageData" Visibility="Collapsed" Tag="Данные|Где программа хранит настройки, список серверов и журнал">
+                        <TextBlock Text="ПАПКА ДАННЫХ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <Border Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,9" BorderBrush="{DynamicResource Border}" BorderThickness="1">
+                                    <TextBlock x:Name="DataPathText" TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas"/>
+                                </Border>
+                                <TextBlock Text="Здесь лежат settings.json, servers.json, журнал ошибок, резервная копия DNS и копия прежней версии для отката. Не передавайте эти файлы другим: в settings.json могут быть Cookie."
+                                           Style="{StaticResource FieldHint}" Margin="0,8,0,0"/>
+                                <Button Content="Открыть папку данных" Click="OpenData_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- О программе -->
+                    <StackPanel x:Name="PageAbout" Visibility="Collapsed" Tag="О программе|Что это, кто автор и на каких условиях можно пользоваться">
+                        <Border Style="{StaticResource Card}" Padding="22" Margin="0,16,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Width="64" Height="64" CornerRadius="18" Background="{DynamicResource AccentSoft}">
+                                        <controls:BrandMark Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Margin="18,0,0,0" VerticalAlignment="Center">
+                                        <controls:BrandWordmark Height="20" HorizontalAlignment="Left"/>
+                                        <TextBlock x:Name="VersionText" Text="CHIMERION" Style="{StaticResource Label}" FontSize="12" Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Para}" Margin="0,18,0,0" Foreground="{DynamicResource Text}"
+                                           Text="Сетевые инструменты для открытого интернета. CHIMERION открывает ChatGPT, Claude и Gemini без VPN через Smart DNS, обходит замедление YouTube и Discord с помощью zapret и ускоряет Telegram."/>
+                                <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
+                                           Text="Программа сама находит и проверяет серверы, подключается в один клик, следит за подключением и возвращает исходные настройки, если что-то пошло не так. Работает без прав администратора и спрашивает их, только когда меняет DNS."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="АВТОР И ЛИЦЕНЗИЯ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                    <TextBlock Text="Автор" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Column="1" Text="under2ker" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Row="1" Text="Лицензия" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="PolyForm Noncommercial 1.0.0" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Row="2" Text="Исходный код" Style="{StaticResource Label}"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="1">
+                                        <Hyperlink Click="Repo_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">github.com/under2ker/chimerion</Hyperlink>
+                                    </TextBlock>
+                                </Grid>
+                                <TextBlock Style="{StaticResource FieldHint}" Margin="0,14,0,0" FontSize="12"
+                                           Text="Программу можно использовать, копировать и менять в некоммерческих целях. Продавать ее или брать деньги за сборки нельзя."/>
+                                <WrapPanel Margin="-16,10,0,0">
+                                    <Button Content="Текст лицензии" Click="License_Click" Style="{StaticResource Ghost}"/>
+                                    <Button Content="История изменений" Click="Changelog_Click" Style="{StaticResource Ghost}"/>
+                                    <Button Content="Сообщить о проблеме" Click="Issues_Click" Style="{StaticResource Ghost}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="СТОРОННИЕ КОМПОНЕНТЫ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="TG WS Proxy и zapret-discord-youtube (Flowseal, bol-van; WinDivert, basil00): лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы."/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Списки сайтов и адресов: v2fly/domain-list-community, Re:filter, eduard256/russia-blocked-ips, RussiaFancyLists (MIT)."/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Иконки Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+        </DockPanel>
+    </Grid>
 </Window>

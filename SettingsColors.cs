@@ -140,7 +140,7 @@ public partial class SettingsWindow
             Content = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(color),
                                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1) },
         };
-        var hex = new TextBox { Text = ThemeColors.Hex(color), Width = 92, MaxLength = 7, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Tag = "#RRGGBB" };
+        var hex = new TextBox { Text = ThemeColors.Hex(color), Width = 112, MaxLength = 7, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Tag = "#RRGGBB" };
         void Set(Color c)
         {
             if (!derived && ThemeColors.Hex(c) == std) _colors.Remove(K(slot.Key)); else _colors[K(slot.Key)] = ThemeColors.Hex(c);

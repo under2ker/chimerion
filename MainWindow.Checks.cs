@@ -491,6 +491,7 @@ public partial class MainWindow
                 s.LatencyMs = p.Median;
                 s.JitterMs = p.Jitter;
             }
+            CheckFavorites(results.Select(r => r.Server).ToHashSet());
             UpdateHeaderStats();
             Grid_SelectionChanged(this, null!); // строка выбранного сервера под таблицей тоже показывает пинг
             var active = DnsSwitcher.GetActive();

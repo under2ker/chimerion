@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -174,9 +174,9 @@ internal sealed class DiagnosticsWindow
             Width = 8, Height = 8, Fill = (Brush)Res[color], VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0),
         });
         var text = new StackPanel();
-        text.Children.Add(new TextBlock { Text = i.Title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Title), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (i.Detail.Length > 0)
-            text.Children.Add(new TextBlock { Text = i.Detail, Foreground = (Brush)Res["Muted"], FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Detail), Foreground = (Brush)Res["Muted"], FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
         Grid.SetColumn(text, 1);
         g.Children.Add(text);
         if (i.Action != null && i.ActionText != null)

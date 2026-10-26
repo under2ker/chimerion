@@ -463,3 +463,89 @@ public class MonitorVpnAndConflictTests
         Assert.Equal(ConnectionMonitor.Verdict.Restore, await m.TickAsync(Active(), true, Reset, true, () => Task.FromResult(true)));
     }
 }
+
+/// <summary>Фоновая проверка сервисов: когда сообщать о падении и восстановлении.</summary>
+public class ServiceHealthTests
+{
+    private static ServiceState Svc(string name, string access, bool proxied = true, string ip = "83.217.211.149") => new(name, "api", ip, proxied, access);
+    private static readonly ServiceHealth.Problem Ok = ServiceHealth.Problem.None;
+
+    [Theory]
+    [InlineData("✓ доступен", true, "83.217.211.149", ServiceHealth.Problem.None)]
+    [InlineData("✗ нет ответа", true, "не резолвится", ServiceHealth.Problem.NoDns)]
+    [InlineData("✗ доступ закрыт", false, "160.79.104.10", ServiceHealth.Problem.NotProxied)]
+    [InlineData("✗ доступ закрыт", true, "83.217.211.149", ServiceHealth.Problem.Closed)]
+    [InlineData("✗ сервис не отвечает", true, "83.217.211.149", ServiceHealth.Problem.NoResponse)]
+    public void Failure_reason_is_recognized(string access, bool proxied, string ip, ServiceHealth.Problem expected) =>
+        Assert.Equal(expected, ServiceHealth.Classify(Svc("ChatGPT", access, proxied, ip)));
+
+    [Fact]
+    public void One_failed_check_is_not_an_alert_two_are()
+    {
+        var h = new ServiceHealth();
+        Assert.Empty(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NotProxied), ("Claude", Ok) }));
+        Assert.True(h.Suspicious); // повторная проверка пойдет через минуту
+        var ch = Assert.Single(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NotProxied), ("Claude", Ok) }));
+        Assert.True(ch.Down);
+        Assert.Equal("ChatGPT", ch.Service);
+        Assert.False(h.Suspicious);
+        // Пока сервис лежит, повторных уведомлений нет
+        Assert.Empty(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NotProxied), ("Claude", Ok) }));
+    }
+
+    [Fact]
+    public void Flapping_once_does_not_alert()
+    {
+        var h = new ServiceHealth();
+        h.Update(new[] { ("Gemini", ServiceHealth.Problem.Closed) });
+        Assert.Empty(h.Update(new[] { ("Gemini", Ok) }));
+        Assert.Empty(h.Update(new[] { ("Gemini", ServiceHealth.Problem.Closed) }));
+    }
+
+    [Fact]
+    public void Recovery_is_reported_once()
+    {
+        var h = new ServiceHealth();
+        h.Update(new[] { ("Claude", ServiceHealth.Problem.NoResponse) });
+        h.Update(new[] { ("Claude", ServiceHealth.Problem.NoResponse) });
+        var up = Assert.Single(h.Update(new[] { ("Claude", Ok) }));
+        Assert.False(up.Down);
+        Assert.Empty(h.Update(new[] { ("Claude", Ok) }));
+    }
+
+    [Fact]
+    public void Silent_server_is_reported_after_two_checks_and_its_return_too()
+    {
+        var h = new ServiceHealth();
+        Assert.Null(h.UpdateServer(false));
+        Assert.True(h.Suspicious);
+        Assert.True(h.UpdateServer(false));
+        Assert.True(h.ServerDown);
+        Assert.Null(h.UpdateServer(false));
+        Assert.False(h.UpdateServer(true));
+        Assert.Null(h.UpdateServer(true));
+    }
+
+    [Fact]
+    public void New_connection_starts_clean()
+    {
+        var h = new ServiceHealth();
+        h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NoDns) });
+        h.Reset();
+        Assert.Empty(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NoDns) }));
+    }
+
+    [Fact]
+    public void Notification_text_groups_services_by_reason()
+    {
+        var down = new[]
+        {
+            new ServiceHealth.Change("ChatGPT", true, ServiceHealth.Problem.NotProxied),
+            new ServiceHealth.Change("Claude", true, ServiceHealth.Problem.NotProxied),
+            new ServiceHealth.Change("Gemini", true, ServiceHealth.Problem.Closed),
+        };
+        var t = ServiceHealth.DownText("kayonedns", down);
+        Assert.Equal("kayonedns: ChatGPT и Claude перестали открываться (сервер перестал подменять адреса); Gemini перестал открываться (доступ закрыт, прокси сервера попал под блокировку)", t);
+        Assert.Equal("kayonedns: ChatGPT снова открывается", ServiceHealth.UpText("kayonedns", new[] { new ServiceHealth.Change("ChatGPT", false, ServiceHealth.Problem.None) }));
+    }
+}

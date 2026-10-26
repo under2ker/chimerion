@@ -1,4 +1,4 @@
-using Dnex.Services;
+﻿using Dnex.Services;
 namespace Dnex.Models;
 
 /// <summary>Что проверять: сервис ИИ и признаки гео-блокировки в ответе.</summary>
@@ -72,6 +72,10 @@ public class AppSettings
     public string? SkippedUpdate { get; set; }
     /// <summary>Как часто обновляется пинг всех серверов в таблице, в шапке и в трее (минуты, 1–60).</summary>
     public int PingRefreshMinutes { get; set; } = 10;
+    /// <summary>Режим скрытия данных: окна не попадают в захват экрана, личные данные на экране заменены на «скрыто» (PrivacyGuard).</summary>
+    public bool PrivacyMode { get; set; }
+    /// <summary>Если ИИ-сервисы перестали открываться через текущий сервер, переключаться на лучший рабочий сам (иначе только уведомление).</summary>
+    public bool AutoSwitchOnServiceDown { get; set; }
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
     public int WatchdogSeconds { get; set; } = 60;
 

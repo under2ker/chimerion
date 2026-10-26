@@ -598,7 +598,7 @@ public partial class MainWindow
             Log("Смена страны выхода: " + text);
             ShowToast(text, c.ToClosed ? "Bad" : "Warn");
             if (!IsVisible)
-                _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: сменилась страна выхода"), Loc.T(text),
+                _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: сменилась страна выхода"), PrivacyGuard.Mask(Loc.T(text)),
                     c.ToClosed ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
         }
     }

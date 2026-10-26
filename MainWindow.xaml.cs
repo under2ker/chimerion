@@ -52,6 +52,10 @@ public partial class MainWindow : Window
         Loc.Changed += OnLanguageChanged;
         ThemeColors.Changed += OnThemeChanged;
         ThemeColors.Apply(_settings.Colors, _settings.Theme);
+        // Режим скрытия данных: до появления первого окна, чтобы ни один кадр не попал в захват
+        PrivacyGuard.Install();
+        PrivacyGuard.Set(_settings.PrivacyMode);
+        PrivacyGuard.Changed += OnPrivacyChanged;
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
         _pingTimer.Tick += async (_, _) => await RefreshPingsAsync();
