@@ -388,14 +388,14 @@ public sealed class UpdateScenarioTests : IDisposable
         var dnex = Exe;
         var chimerion = Path.Combine(_dir, "app", "CHIMERION.exe");
         MakeLink(Path.Combine(_links, "DNEX.lnk"), dnex);
-        MakeLink(Path.Combine(_links, "Другая программа.lnk"), Path.Combine(_dir, "other.exe"));
+        MakeLink(Path.Combine(_links, "Other app.lnk"), Path.Combine(_dir, "other.exe"));
         Publish();
         await Install();
         Assert.Equal(NewExe, File.ReadAllBytes(chimerion));
         Assert.False(File.Exists(dnex));
         Assert.Equal(chimerion, LinkTarget(Path.Combine(_links, "CHIMERION.lnk")));
         Assert.False(File.Exists(Path.Combine(_links, "DNEX.lnk")));
-        Assert.Equal(Path.Combine(_dir, "other.exe"), LinkTarget(Path.Combine(_links, "Другая программа.lnk")));
+        Assert.Equal(Path.Combine(_dir, "other.exe"), LinkTarget(Path.Combine(_links, "Other app.lnk")));
         Assert.Contains(Updater.ZipUrl(V), _gh.Requested);
 
         // Новая версия запустилась: отложенный DNEX.bad.exe убирается, в папке один файл
