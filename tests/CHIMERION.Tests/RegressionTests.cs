@@ -423,3 +423,64 @@ public class PolicyAndStartupTests
     public void Jsdelivr_versions_parse(string json, string? latest) =>
         Assert.Equal(latest, UpdateChecker.CdnLatest(json)?.ToString(3));
 }
+
+/// <summary>Режим скрытия данных: что маскируется и что остается.</summary>
+[Collection("scenarios")]
+public class PrivacyMaskTests : IDisposable
+{
+    public PrivacyMaskTests()
+    {
+        PrivacyGuard.ForgetPersonal();
+        PrivacyGuard.RememberPersonal("203.0.113.45", "RU, Zorkin Oblast, Zorkgrad", "AS64500 ZORKNET ISP");
+    }
+
+    public void Dispose() { PrivacyGuard.Set(false); PrivacyGuard.ForgetPersonal(); }
+
+    private const string Line = "После отключения: IP 203.0.113.45 (RU, Zorkin Oblast, Zorkgrad, AS64500 ZORKNET ISP), DNS 83.217.211.149";
+
+    [Fact]
+    public void Personal_values_are_hidden_when_mode_is_on()
+    {
+        PrivacyGuard.Set(true);
+        var r = PrivacyGuard.Mask(Line);
+        Assert.DoesNotContain("203.0.113.45", r);
+        Assert.DoesNotContain("Zorkgrad", r);
+        Assert.DoesNotContain("Zorkin", r);
+        Assert.DoesNotContain("ZORKNET", r);
+        Assert.DoesNotContain("AS64500", r);
+        Assert.Contains("83.217.211.149", r); // адрес DNS-сервера нужен для работы и остается
+        Assert.Contains("RU", r);             // страна остается
+    }
+
+    [Fact]
+    public void Nothing_changes_when_mode_is_off() => Assert.Equal(Line, PrivacyGuard.Mask(Line));
+
+    [Fact]
+    public void Only_whole_values_are_masked()
+    {
+        PrivacyGuard.Set(true);
+        Assert.Equal("1203.0.113.45 и 203.0.113.451", PrivacyGuard.Mask("1203.0.113.45 и 203.0.113.451"));
+        Assert.Equal("IP скрыто, город скрыто", PrivacyGuard.Mask("IP 203.0.113.45, город Zorkgrad"));
+    }
+
+    [Fact]
+    public void Copied_text_is_also_cleaned_of_local_addresses_and_user_name()
+    {
+        PrivacyGuard.Set(true);
+        var r = PrivacyGuard.ForExport(Line + @" DNS 192.168.1.1, путь C:\Users\" + Environment.UserName + @"\AppData");
+        Assert.DoesNotContain("203.0.113.45", r);
+        Assert.DoesNotContain("192.168.1.1", r);
+        if (Environment.UserName.Length >= 2) Assert.DoesNotContain(@"\" + Environment.UserName + @"\", r);
+    }
+
+    [Fact]
+    public void Turning_mode_on_raises_change_for_the_window()
+    {
+        int n = 0;
+        void H() => n++;
+        PrivacyGuard.Changed += H;
+        try { PrivacyGuard.Set(true); PrivacyGuard.Set(true); PrivacyGuard.Set(false); }
+        finally { PrivacyGuard.Changed -= H; }
+        Assert.Equal(2, n);
+    }
+}

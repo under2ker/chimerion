@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
@@ -21,6 +21,7 @@ public sealed class Icon : Viewbox
         ["arrow-left-right"] = "M 8 3 L 4 7 l 4 4 | M 4 7 h 16 | M 16 21 l 4 -4 l -4 -4 | M 20 17 H 4",
         ["zap"] = "M 4 14 a 1 1 0 0 1 -.78 -1.63 l 9.9 -10.2 a .5 .5 0 0 1 .86 .46 l -1.92 6.02 A 1 1 0 0 0 13 10 h 7 a 1 1 0 0 1 .78 1.63 l -9.9 10.2 a .5 .5 0 0 1 -.86 -.46 l 1.92 -6.02 A 1 1 0 0 0 11 14 z",
         ["stethoscope"] = "M 11 2 v 2 | M 5 2 v 2 | M 5 3 H 4 a 2 2 0 0 0 -2 2 v 4 a 6 6 0 0 0 12 0 V 5 a 2 2 0 0 0 -2 -2 h -1 | M 8 15 a 6 6 0 0 0 12 0 v -3 | M18,10 A2,2 0 1 0 22,10 A2,2 0 1 0 18,10 Z",
+        ["eye-off"] = "M 10.733 5.076 a 10.744 10.744 0 0 1 11.205 6.575 a 1 1 0 0 1 0 .696 a 10.747 10.747 0 0 1 -1.444 2.49 | M 14.084 14.158 a 3 3 0 0 1 -4.242 -4.242 | M 17.479 17.499 a 10.75 10.75 0 0 1 -15.417 -5.151 a 1 1 0 0 1 0 -.696 a 10.75 10.75 0 0 1 4.446 -5.143 | M 2 2 l 20 20",
         ["info"] = "M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z | M 12 16 v -4 | M 12 8 h .01",
         ["triangle-alert"] = "M 21.73 18 l -8 -14 a 2 2 0 0 0 -3.48 0 l -8 14 A 2 2 0 0 0 4 21 h 16 a 2 2 0 0 0 1.73 -3 | M 12 9 v 4 | M 12 17 h .01",
         ["circle-check"] = "M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z | M 9 12 l 2 2 l 4 -4",

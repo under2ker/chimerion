@@ -44,6 +44,7 @@ public partial class MainWindow
 
     private void LogSnapshot(string title, NetSnapshot n)
     {
+        PrivacyGuard.RememberPersonal(n.PublicIp, n.Location, n.Provider);
         Log($"{title}: IP {n.PublicIp} ({n.Location}, {n.Provider}), DNS {n.SystemDns}");
         // Без подключения адрес, не совпавший с эталоном, — это обычно CDN сервиса, а не Smart DNS: так и пишем
         bool connected = DnsSwitcher.GetActive() != null;
@@ -86,6 +87,7 @@ public partial class MainWindow
 
     private void ShowCompare(bool disconnected = false)
     {
+        foreach (var snap in new[] { _before, _after }) if (snap != null) PrivacyGuard.RememberPersonal(snap.PublicIp, snap.Location, snap.Provider);
         Brush B(string k) => (Brush)FindResource(k);
         var host = CompareGrid;
         // В компактном виде блок сам показывает последнюю проверку сервисов (фоновую или при подключении)
@@ -119,7 +121,7 @@ public partial class MainWindow
         {
             var tb = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
             foreach (var (t, br, bold) in runs)
-                tb.Inlines.Add(new System.Windows.Documents.Run(t) { Foreground = br, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal });
+                tb.Inlines.Add(new System.Windows.Documents.Run(PrivacyGuard.Mask(t)) { Foreground = br, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal });
             return tb;
         }
 

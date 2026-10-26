@@ -42,6 +42,7 @@ public partial class MainWindow
             _traySnap = snap;
             SyncActiveSummary(snap);
             CheckEgressChange(snap);
+            _ = CheckServiceHealthAsync(snap);
         }
         UpdateTrayServices();
         UpdateHeaderStats();
@@ -168,6 +169,9 @@ public partial class MainWindow
         FixWidths(modes.DropDownItems, 190);
         menu.Opening += (_, _) => FitMenu(menu, TrayWidth.Menu);
         modes.DropDown.Opening += (_, _) => FitMenu(modes.DropDown, 190);
+        // Режим скрытия данных: меню трея тоже не попадает в захват экрана
+        menu.Opened += (_, _) => PrivacyGuard.MarkHandle(menu.Handle);
+        modes.DropDown.Opened += (_, _) => PrivacyGuard.MarkHandle(modes.DropDown.Handle);
 
         _tray = new System.Windows.Forms.NotifyIcon
         {

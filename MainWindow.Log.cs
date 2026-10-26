@@ -41,9 +41,27 @@ public partial class MainWindow
     }
 
     /// <summary>Журнал копится в очереди и выводится пачкой раз в 200 мс — сотни строк от парсера не тормозят интерфейс.</summary>
+    /// <summary>
+    /// Режим скрытия данных включили или выключили: уже записанные строки журнала маскируются заново (снять маску с
+    /// записанного нельзя, личные значения туда больше не попадают), панель проверки перерисовывается.
+    /// </summary>
+    private void OnPrivacyChanged()
+    {
+        if (PrivacyGuard.Enabled)
+            for (int i = 0; i < _log.Count; i++)
+            {
+                var masked = PrivacyGuard.Mask(_log[i].Text);
+                if (masked != _log[i].Text) _log[i] = new LogEntry(_log[i].Time, masked);
+            }
+        if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
+        Log(PrivacyGuard.Enabled ? "Режим скрытия данных включен: окна не попадают в захват экрана, личные данные скрыты"
+                                 : "Режим скрытия данных выключен");
+    }
+
     private void Log(string msg)
     {
-        _logQueue.Enqueue(new LogEntry(DateTime.Now, msg));
+        // В режиме скрытия данных личные значения не попадают в журнал вовсе, даже в память
+        _logQueue.Enqueue(new LogEntry(DateTime.Now, PrivacyGuard.Mask(msg)));
         if (Dispatcher.CheckAccess()) EnsureLogTimer(); else Dispatcher.InvokeAsync(EnsureLogTimer);
     }
 
@@ -103,7 +121,7 @@ public partial class MainWindow
 
     private void CopyEntries(IEnumerable<LogEntry> items, string done)
     {
-        var text = string.Join(Environment.NewLine, items.Select(x => $"[{x.TimeText}] {x.Text}"));
+        var text = PrivacyGuard.ForExport(string.Join(Environment.NewLine, items.Select(x => $"[{x.TimeText}] {x.Text}")));
         if (text.Length == 0) return;
         try
         {

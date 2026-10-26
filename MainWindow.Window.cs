@@ -398,7 +398,7 @@ public partial class MainWindow
         // Окно в трее или свернуто: уведомление в окне никто не увидит. Важное показываем значком в трее
         if (!IsVisible || WindowState == WindowState.Minimized)
         {
-            if (colorKey is "Warn" or "Bad") _tray?.ShowBalloonTip(6000, "CHIMERION", Loc.T(text),
+            if (colorKey is "Warn" or "Bad") _tray?.ShowBalloonTip(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)),
                 colorKey == "Bad" ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
             return;
         }
