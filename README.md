@@ -4,7 +4,16 @@
 
 # CHIMERION
 
+<p align="center">
+  <a href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a> ·
+  <a href="https://t.me/chimeriondns">Telegram-канал</a> ·
+  <a href="https://t.me/+rXN4fR7HWcxlMTYy">Чат</a> ·
+  <a href="https://github.com/under2ker/chimerion/issues">Сообщить об ошибке</a>
+</p>
+
 Программа для Windows, с которой ChatGPT, Claude и Gemini открываются из России без VPN. Она сама находит Smart DNS, проверяет, какие из них правда пускают к нейросетям, и подключает лучший в один клик. Рядом живут обход замедления YouTube и Discord, ускорение Telegram и проверка сайтов, которые не открываются.
+
+Новости о версиях выходят в Telegram-канале [@chimeriondns](https://t.me/chimeriondns), а вопросы, рабочие DNS и идеи обсуждаются в [чате](https://t.me/+rXN4fR7HWcxlMTYy).
 
 > **CHIMERION раньше назывался DNEX.** Если у вас стоит старая версия, скачайте CHIMERION из релиза и запустите: настройки и список серверов подхватятся сами.
 
@@ -144,6 +153,13 @@ dotnet publish CHIMERION.csproj -c Release -r win-x64 --self-contained false -p:
 | `reset-dns.cmd` | аварийный сброс DNS |
 
 </details>
+
+## Telegram
+
+- [Канал @chimeriondns](https://t.me/chimeriondns): новости о версиях. Каждый пост помечен: крупное обновление, обновление или хотфикс.
+- [Чат](https://t.me/+rXN4fR7HWcxlMTYy): темы «Помощь», «Баг-репорты», «Рабочие DNS» и «Идеи». Там же закреплена инструкция по установке.
+
+Об ошибках можно писать и в [issues на GitHub](https://github.com/under2ker/chimerion/issues): приложите отчет из «Диагностики», кнопка «Копировать для GitHub».
 
 ## Благодарности
 
