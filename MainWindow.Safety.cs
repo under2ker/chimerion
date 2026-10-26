@@ -10,6 +10,8 @@ public partial class MainWindow
     /// <summary>О каких сервисах уже предупредили в этом подключении: повторять каждые 5 минут незачем.</summary>
     private readonly HashSet<string> _safetyWarned = new(StringComparer.OrdinalIgnoreCase);
     private string? _safetyFor;
+    /// <summary>Сервис и чужая страна, увиденные в прошлой проверке: предупреждаем, только если повторилось.</summary>
+    private readonly Dictionary<string, string> _safetyPending = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Подбор замены и запасного сервера с учетом страны выхода, если защита включена.</summary>
     private Func<DnsServer, int>? SafetyFit => _settings.AccountSafetyGuard ? _safety.Fit : null;
@@ -37,14 +39,21 @@ public partial class MainWindow
     {
         if (!_settings.AccountSafetyGuard || DnsSwitcher.GetActive() is not { } active || SystemCheck.ActiveVpns().Count > 0) return;
         var key = $"{active.ServerId}|{active.Since:O}";
-        if (_safetyFor != key) { _safetyWarned.Clear(); _safetyFor = key; }
+        if (_safetyFor != key) { _safetyWarned.Clear(); _safetyPending.Clear(); _safetyFor = key; }
         var now = snap.Services.Where(x => x.Egress != null && x.Access.StartsWith('✓'))
                                .Select(x => new KeyValuePair<string, string?>(x.Name, x.Egress!.Country)).ToList();
-        var fresh = _safety.Compare(now).Where(m => _safetyWarned.Add(m.Service)).ToList();
+        // Чужая страна засчитывается со второй проверки подряд: разовый уход Windows на запасной DNS не повод пугать
+        var mism = _safety.Compare(now);
+        var confirmed = mism.Where(m => _safetyPending.TryGetValue(m.Service, out var c) && c == m.Now).ToList();
+        _safetyPending.Clear();
+        foreach (var m in mism) _safetyPending[m.Service] = m.Now;
+        var fresh = confirmed.Where(m => _safetyWarned.Add(m.Service)).ToList();
         if (fresh.Count > 0)
             Notify($"Защита аккаунтов: сервисы видят вас не из привычной страны ({AccountSafety.Describe(fresh)}). Частая смена страны повышает риск блокировки", "Warn");
+        // В историю пишем только подтвержденную страну: разовый скачок не должен становиться «привычным»
         bool changed = false;
-        foreach (var (service, country) in now) changed |= _safety.Record(service, country);
+        foreach (var (service, country) in now)
+            if (!mism.Any(m => m.Service == service) || confirmed.Any(m => m.Service == service)) changed |= _safety.Record(service, country);
         if (changed) _safety.Save();
     }
 }

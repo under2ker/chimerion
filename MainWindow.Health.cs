@@ -65,7 +65,7 @@ public partial class MainWindow
     private void ReportDown(DnsSwitcher.ActiveConnection active, string name, string text)
     {
         Log("Проверка сервисов: " + text);
-        if (_settings.AutoSwitchOnServiceDown && !_uacDeclined)
+        if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
         {
             Notify(text + ". Переключаюсь на лучший рабочий сервер", "Bad");
             _ = SwitchToNextBestAsync(active);
@@ -79,7 +79,7 @@ public partial class MainWindow
                 ShowFromTray();
                 if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
                     DnexDialog.Ask("Сменить сервер?", text + ".\n\nCHIMERION подключится к лучшему рабочему серверу из списка.", "Сменить", windowTitle: "Проверка сервисов"))
-                    _ = SwitchToNextBestAsync(now);
+                    _ = SwitchToNextBestAsync(now, byUser: true);
             };
             _tray.ShowBalloonTip(10000, Loc.T("CHIMERION: сервисы перестали открываться"), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сменить сервер"),
                 System.Windows.Forms.ToolTipIcon.Warning);
@@ -91,7 +91,7 @@ public partial class MainWindow
     {
         var text = $"{name} не отвечает, работает запасной сервер {backup.ShortName}";
         Log("Проверка сервисов: " + text);
-        if (_settings.AutoSwitchOnServiceDown && !_uacDeclined)
+        if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
         {
             Notify(text + ". Делаю его основным", "Warn");
             _ = ConnectToAsync(backup, auto: true);

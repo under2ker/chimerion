@@ -141,21 +141,30 @@ public sealed class ConnectionMonitor
             .ToList();
     }
 
+    /// <summary>По каждому сервису, у которого известна страна выхода основного, запасной выводит туда же.</summary>
+    public static bool SameCountry(DnsServer primary, DnsServer backup) =>
+        primary.EgressBy.All(kv => backup.EgressBy.TryGetValue(kv.Key, out var e) && string.Equals(e.Country, kv.Value.Country, StringComparison.OrdinalIgnoreCase));
+
     private static int Stability(DnsServer s) => s.AllStability ?? (s.ChecksTotal == 0 ? 0 : s.ChecksOk * 100 / s.ChecksTotal);
 
     /// <summary>
     /// Запасной сервер для подключения к primary: рабочий, с обычным IPv4-адресом, не совпадающим с адресами primary
-    /// (другой сервер, а не второй адрес того же). Windows переходит на него сама, если основной перестал отвечать.
-    /// Выше тот, что выводит сервисы в ту же страну (fit), затем стабильность и пинг.
+    /// (другой сервер, а не второй адрес того же). Windows переходит на него сама, если основной перестал отвечать,
+    /// а иногда и разово, если основной ответил медленно.
+    /// Поэтому запасной обязан выводить сервисы в ту же страну, что и основной: иначе ChatGPT и Claude видели бы
+    /// вход то из Нидерландов, то из Казахстана, а такая смена страны грозит блокировкой аккаунта. Если страна выхода
+    /// основного или кандидата неизвестна, запасного нет: лучше без него, чем с чужой страной.
+    /// Среди подходящих выше тот, что лучше по истории стран (fit), затем стабильность и пинг.
     /// </summary>
     public static DnsServer? Backup(IEnumerable<DnsServer> servers, DnsServer primary, Func<DnsServer, int>? fit = null, DateTime? now = null)
     {
         var own = new HashSet<string>(new[] { primary.Primary, primary.Secondary }.Where(a => !string.IsNullOrEmpty(a))!, StringComparer.OrdinalIgnoreCase);
         var t = now ?? DateTime.Now;
+        if (primary.EgressBy.Count == 0) return null;
         return servers
             .Where(s => s.Id != primary.Id && !s.IsJunk && s.Status == ServerStatus.Ok
                         && IPAddress.TryParse(s.Primary, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                        && !own.Contains(s.Primary!))
+                        && !own.Contains(s.Primary!) && SameCountry(primary, s))
             .OrderByDescending(s => fit?.Invoke(s) ?? 0)
             .ThenByDescending(s => Stability(s) / 10)
             .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)

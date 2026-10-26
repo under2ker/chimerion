@@ -61,6 +61,7 @@ public class EgressWatchTests
     {
         var w = new Dnex.Services.EgressWatch();
         Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"NL"), ("ChatGPT", (string?)"NL") }));
+        Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"RU"), ("ChatGPT", (string?)"NL") })); // один раз: ждем подтверждения
         var c = w.Update("s1", new[] { ("Claude", (string?)"RU"), ("ChatGPT", (string?)"NL") });
         var only = Assert.Single(c);
         Assert.Equal(("Claude", "NL", "RU", true), (only.Service, only.From, only.To, only.ToClosed));
@@ -74,8 +75,22 @@ public class EgressWatchTests
         Assert.Empty(w.Update("s2", new[] { ("Claude", (string?)"DE") }));   // другой сервер: заново
         Assert.Empty(w.Update("s2", new[] { ("Claude", (string?)null) }));   // проверка не дала страну
         Assert.Empty(w.Update(null, new[] { ("Claude", (string?)"FR") }));   // не подключено
-        var c = Assert.Single(w.Update("s2", new[] { ("Claude", (string?)"DE") }).Concat(w.Update("s2", new[] { ("Claude", (string?)"FR") })));
+        w.Update("s2", new[] { ("Claude", (string?)"DE") });
+        Assert.Empty(w.Update("s2", new[] { ("Claude", (string?)"FR") }));
+        var c = Assert.Single(w.Update("s2", new[] { ("Claude", (string?)"FR") }));
         Assert.False(c.ToClosed);
+    }
+
+    [Fact]
+    public void Single_jump_and_back_is_not_reported()
+    {
+        // Журнал пользователя: Windows разово ушла на запасной DNS с выходом в Казахстане и вернулась. Пугать незачем
+        var w = new Dnex.Services.EgressWatch();
+        w.Update("s1", new[] { ("Claude", (string?)"NL") });
+        Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"KZ") }));
+        Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"NL") }));
+        Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"KZ") }));
+        Assert.Empty(w.Update("s1", new[] { ("Claude", (string?)"NL") }));
     }
 }
 
