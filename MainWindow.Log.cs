@@ -54,8 +54,9 @@ public partial class MainWindow
                 if (masked != _log[i].Text) _log[i] = new LogEntry(_log[i].Time, masked);
             }
         if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
-        Log(PrivacyGuard.Enabled ? "Режим скрытия данных включен: окна не попадают в захват экрана, личные данные скрыты"
-                                 : "Режим скрытия данных выключен");
+        Log(!PrivacyGuard.Enabled ? "Режим скрытия данных выключен"
+            : PrivacyGuard.HidesWindows ? "Режим скрытия данных включен: окна не попадают в захват экрана, личные данные скрыты"
+            : "Режим скрытия данных включен: личные данные на экране скрыты, окна на записи видны");
     }
 
     private void Log(string msg)

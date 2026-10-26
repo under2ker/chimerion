@@ -1,0 +1,12 @@
+name = "chimerion-crowd"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "chimerion-crowd"
+database_id = "c8c7ba38-5447-4208-9f69-8eb045316922"
+
+[triggers]
+crons = ["17 3 * * *"]

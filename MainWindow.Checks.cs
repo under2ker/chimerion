@@ -26,8 +26,12 @@ public partial class MainWindow
     private string? _topSig;
 
     /// <summary>Лучший сервер для каждого ИИ и для всех сразу (см. ServerRanking).</summary>
-    private List<ServerRanking.TopPick> PickBest() =>
-        ServerRanking.PickBest(_servers, _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList());
+    private List<ServerRanking.TopPick> PickBest()
+    {
+        var picks = ServerRanking.PickBest(_servers, _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList());
+        if (ProviderPick() is { } net) picks.Add(net); // общая карта: лучший у пользователей той же сети провайдера
+        return picks;
+    }
 
     /// <summary>Бейджи «лучший …» в таблице и блок «Лучшие по стабильности». Блок перестраивается, только если выбор изменился.</summary>
     private void UpdateTopList()
@@ -37,7 +41,7 @@ public partial class MainWindow
         // Лучший для всех важнее, чем лучший для одного сервиса
         foreach (var s in _servers)
         {
-            var mine = picks.Where(p => p.Best == s).ToList();
+            var mine = picks.Where(p => p.Best == s && p.Key != "net").ToList();
             s.BestFor = mine.Count == 0 ? null
                       : mine.Any(p => p.Key == "*") ? "лучший для всех"
                       : "лучший: " + string.Join(", ", mine.Select(p => p.Title));
@@ -84,7 +88,7 @@ public partial class MainWindow
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             // Логотип сервиса; у «Все три» три маленьких логотипа
-            var logos = (p.Key == "*" ? _settings.Targets.Where(t => t.Enabled).Select(t => AiLogo(t.Name)) : new[] { AiLogo(p.Key) })
+            var logos = (p.Key is "*" or "net" ? _settings.Targets.Where(t => t.Enabled).Select(t => AiLogo(t.Name)) : new[] { AiLogo(p.Key) })
                 .Where(l => l != null).ToList();
             var logoPanel = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
                                              HorizontalAlignment = HorizontalAlignment.Center }; // одиночный и тройной по одной оси
@@ -121,7 +125,7 @@ public partial class MainWindow
                 });
                 right.Children.Add(new TextBlock
                 {
-                    Text = (b.LatencyMs is { } ms ? $"{ms} мс · " : "") + $"{b.ServiceChecks} пров.",
+                    Text = p.Sub ?? (b.LatencyMs is { } ms ? $"{ms} мс · " : "") + $"{b.ServiceChecks} пров.",
                     Foreground = B("Muted"), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right,
                 });
                 Grid.SetColumn(right, 2);
@@ -133,6 +137,7 @@ public partial class MainWindow
                 Child = g, Padding = new Thickness(8, 4, 8, 4), CornerRadius = new CornerRadius(8),
                 Background = Brushes.Transparent, Tag = p.Best, Cursor = p.Best != null ? Cursors.Hand : null,
                 ToolTip = p.Best == null ? null
+                    : p.Key == "net" ? $"{p.Best.DisplayName}\n{p.Best.Address}\nУ пользователей CHIMERION в вашей сети провайдера работает в {p.Stability}% проверок за сутки ({p.Sub})\nЩелчок выбирает сервер в списке"
                     : $"{p.Best.DisplayName}\n{p.Best.Address}\nСтабильность по сервису {p.Stability}% за {p.Best.ServiceChecks} проверок\nЩелчок выбирает сервер в списке",
             };
             row.MouseEnter += (_, _) => row.Background = B("Surface2");
@@ -386,6 +391,7 @@ public partial class MainWindow
         }
 
         SaveServers();
+        if (!outage) CrowdCollect(list.Where(s => s.LastChecked > DateTime.Now.AddMinutes(-30))); // в общую карту, если согласились
         _ = ResolveLocationsAsync();      // после проверки появился адрес прокси — определим его страну
         ApplyFocusRanks();                // порядок «лучшие для сервиса» по свежим результатам
         _view?.Refresh();

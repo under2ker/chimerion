@@ -136,6 +136,26 @@ internal sealed class DiagnosticsWindow
         foreach (var b in _buttons) b.IsEnabled = true;
     }
 
+    /// <summary>
+    /// Включить DNS-туннель WSL: строка в .wslconfig (прежний файл в .wslconfig.chimerion.bak) и, с согласия,
+    /// перезапуск WSL, без которого настройка не подействует.
+    /// </summary>
+    public static void EnableWslTunnel(Action<string> log)
+    {
+        if (!DnexDialog.Ask("Включить DNS-туннель WSL?",
+                "В файл .wslconfig добавится строка dnsTunneling=true, прежний файл сохранится рядом. Тогда запросы из WSL пойдут через DNS Windows и правила «Двух DNS».",
+                "Включить", windowTitle: "WSL")) return;
+        DevTools.EnableTunnel();
+        log("WSL: DNS-туннель включен в .wslconfig");
+        if (DnexDialog.Ask("Перезапустить WSL сейчас?", "Настройка подействует после перезапуска WSL. Открытые терминалы WSL и запущенные в нем программы закроются.",
+                "Перезапустить", windowTitle: "WSL"))
+        {
+            using var p = Process.Start(new ProcessStartInfo("wsl.exe", "--shutdown") { UseShellExecute = false, CreateNoWindow = true });
+            p?.WaitForExit(15000);
+            log("WSL перезапущен");
+        }
+    }
+
     /// <summary>Исправление по кнопке в строке. Действия главного окна (подключение, обновление) идут через _fix.</summary>
     private async Task FixAsync(DiagItem i, Button b)
     {
@@ -149,6 +169,7 @@ internal sealed class DiagnosticsWindow
                 // Блокнот с правами администратора: без них hosts не сохранить
                 Process.Start(new ProcessStartInfo("notepad.exe", Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts"))
                               { UseShellExecute = true, Verb = "runas" });
+            else if (a == "wsl-tunnel") EnableWslTunnel(_log);
             else if (a.StartsWith("tool:") && _tools.FirstOrDefault(t => t.Id == a[5..]) is { } tool)
             {
                 await tool.EnableAsync(new Progress<string>(_ => { }), CancellationToken.None);

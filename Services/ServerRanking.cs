@@ -5,8 +5,9 @@ namespace Dnex.Services;
 /// <summary>Выбор лучших серверов: отдельно для каждого ИИ-сервиса и для всех сразу.</summary>
 public static class ServerRanking
 {
-    /// <summary>Лучший сервер категории и его стабильность по сервису. Key — имя сервиса или «*» для всех сразу.</summary>
-    public sealed record TopPick(string Title, string Key, DnsServer? Best, int? Stability);
+    /// <summary>Лучший сервер категории и его стабильность по сервису. Key — имя сервиса, «*» для всех сразу или «net» для
+    /// провайдера (общая карта). Sub — своя подпись под процентом вместо пинга и числа проверок.</summary>
+    public sealed record TopPick(string Title, string Key, DnsServer? Best, int? Stability, string? Sub = null);
 
     /// <summary>
     /// Кандидат должен работать с сервисом сейчас, не быть мусором и иметь проверки по сервисам. Порядок: стабильность

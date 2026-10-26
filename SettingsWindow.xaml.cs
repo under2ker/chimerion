@@ -51,8 +51,13 @@ public partial class SettingsWindow : Window
         TrayMinutesBox.Text = settings.TrayCheckMinutes.ToString();
         WatchdogBox.Text = settings.WatchdogSeconds.ToString();
         PingBox.Text = settings.PingRefreshMinutes.ToString();
-        PrivacyBox.IsChecked = settings.PrivacyMode;
+        PrivacyBox.IsChecked = settings.PrivacyMode && settings.PrivacyHideWindows;
+        MaskOnlyBox.IsChecked = settings.PrivacyMode && !settings.PrivacyHideWindows;
+        StartCompactBox.IsChecked = settings.StartCompact;
         AutoSwitchBox.IsChecked = settings.AutoSwitchOnServiceDown;
+        BackupBox.IsChecked = settings.UseBackupServer;
+        SafetyBox.IsChecked = settings.AccountSafetyGuard;
+        CrowdBox.IsChecked = settings.CrowdConsent == true;
 
         var v = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"Версия {v?.Major}.{v?.Minor}.{v?.Build} · Windows 10 и 11 · .NET 8";
@@ -114,6 +119,24 @@ public partial class SettingsWindow : Window
     private void Changelog_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/CHANGELOG.md");
     private void Issues_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(Diagnostics.IssuesUrl);
 
+    // Telegram: канал, чат и его темы. Ссылки на темы (t.me/c/...) открываются у тех, кто уже вступил в чат
+    private const string TgChannel = "https://t.me/chimeriondns", TgChat = "https://t.me/+rXN4fR7HWcxlMTYy", TgChatTopic = "https://t.me/c/4330210118/";
+    private static readonly Dictionary<string, int> TgTopics = new() { ["bugs"] = 10, ["ideas"] = 14, ["help"] = 13 };
+
+    private void TgChannel_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(TgChannel);
+    private void TgChat_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(TgChat);
+    private void TgTopic_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string key } && TgTopics.TryGetValue(key, out var id)) AutoStart.OpenUrl(TgChatTopic + id);
+    }
+
+    /// <summary>Два варианта скрытия данных взаимоисключающие: включили один, второй выключается.</summary>
+    private void Privacy_Checked(object sender, RoutedEventArgs e)
+    {
+        if (sender == PrivacyBox) MaskOnlyBox.IsChecked = false;
+        else PrivacyBox.IsChecked = false;
+    }
+
     /// <summary>
     /// Язык интерфейса: применяется сразу во всех окнах и сохраняется в файл тут же, не дожидаясь «Сохранить»
     /// (иначе после «Отмена» интерфейс остался бы на языке, который не записан).
@@ -137,7 +160,7 @@ public partial class SettingsWindow : Window
         TrayMinutesBox.Text = d.TrayCheckMinutes.ToString();
         WatchdogBox.Text = d.WatchdogSeconds.ToString();
         PingBox.Text = d.PingRefreshMinutes.ToString();
-        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = true;
+        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = true;
         ErrorText.Foreground = (System.Windows.Media.Brush)FindResource("Muted");
         ErrorText.Text = "Рекомендуемые значения расставлены. Нажмите «Сохранить»";
     }
@@ -175,9 +198,15 @@ public partial class SettingsWindow : Window
         _settings.TrayCheckMinutes = trayMinutes;
         _settings.WatchdogSeconds = watchdog;
         _settings.PingRefreshMinutes = pingMinutes;
-        _settings.PrivacyMode = PrivacyBox.IsChecked == true;
+        _settings.PrivacyMode = PrivacyBox.IsChecked == true || MaskOnlyBox.IsChecked == true;
+        if (_settings.PrivacyMode) _settings.PrivacyHideWindows = PrivacyBox.IsChecked == true;
+        _settings.StartCompact = StartCompactBox.IsChecked == true;
         _settings.AutoSwitchOnServiceDown = AutoSwitchBox.IsChecked == true;
-        PrivacyGuard.Set(_settings.PrivacyMode);
+        _settings.UseBackupServer = BackupBox.IsChecked == true;
+        _settings.AccountSafetyGuard = SafetyBox.IsChecked == true;
+        // Не спрашивали и галочку не трогали: вопрос при запуске остается. Иначе выбор в настройках и есть ответ
+        if (_settings.CrowdConsent != null || CrowdBox.IsChecked == true) _settings.CrowdConsent = CrowdBox.IsChecked == true;
+        PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
         try
         {
             SaveColors();

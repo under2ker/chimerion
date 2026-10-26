@@ -58,6 +58,13 @@ public static class DnsSwitcher
         public bool Split { get; set; }
         public List<string> AdapterAddresses { get; set; } = new();
         public string? GeneralName { get; set; }
+        /// <summary>
+        /// Запасной сервер: его адреса стоят в Addresses после адресов основного (без DoH). Windows сама переходит на
+        /// него, если основной не ответил. Пусто — запасного нет.
+        /// </summary>
+        public Guid? BackupId { get; set; }
+        public string? BackupName { get; set; }
+        public List<string> BackupAddresses { get; set; } = new();
         /// <summary>Что должно стоять на адаптерах: общий DNS в режиме «Два DNS» (может быть пусто: адаптер не меняли), иначе сервер.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public List<string> OnAdapters => Split ? AdapterAddresses : Addresses;
@@ -128,7 +135,9 @@ public static class DnsSwitcher
             .Distinct()
             .ToList());
 
-    public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log)
+    /// <param name="backup">Запасной сервер (ConnectionMonitor.Backup): его IPv4-адрес встает после адресов основного,
+    /// на адаптеры и в правила NRPT, без DoH. null — без запасного.</param>
+    public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log, DnsServer? backup = null)
     {
         var addrs = new List<string>();
         if (IPAddress.TryParse(s.Primary, out var p)) addrs.Add(p.ToString());
@@ -174,6 +183,15 @@ public static class DnsSwitcher
         }
         if (addrs.Count == 0) throw new InvalidOperationException("У сервера нет IP-адреса");
 
+        // Запасной сервер: только обычный IPv4 и только если он не совпадает с адресами основного. DoH для него не
+        // регистрируется (его шаблон неизвестен или другой), поэтому список адресов для DoH — только основной
+        var primaryAddrs = addrs.ToList();
+        var backupAddrs = new List<string>();
+        if (backup != null && backup.Id != s.Id && IPAddress.TryParse(backup.Primary, out var bip)
+            && bip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && !addrs.Contains(bip.ToString()))
+            backupAddrs.Add(bip.ToString());
+        addrs.AddRange(backupAddrs);
+
         // Режим «Два DNS»: на адаптеры идет общий DNS (или ничего, если его не меняем), сервер получает только домены ИИ
         var split = settings.SplitDns is { Enabled: true } sd ? sd : null;
         var adapterAddrs = addrs;
@@ -214,7 +232,7 @@ public static class DnsSwitcher
         // DoH: для адресов сервера (и в режиме «Два DNS» для адресов общего DNS). Windows знает эти адреса как DoH,
         // и запросы по правилам NRPT к ним тоже идут через DoH
         var dohPairs = new List<(string Ip, string Template)>();
-        if (doh != null) dohPairs.AddRange(addrs.Select(a => (a, doh)));
+        if (doh != null) dohPairs.AddRange(primaryAddrs.Select(a => (a, doh)));
         if (split != null && adapterDoh != null) dohPairs.AddRange(adapterAddrs.Where(a => !addrs.Contains(a)).Select(a => (a, adapterDoh)));
         if (dohPairs.Count > 0)
         {
@@ -271,6 +289,7 @@ public static class DnsSwitcher
             DohAddedFor = prev?.DohAddedFor.ToList() ?? new(),
             Ipv6Disabled = prevV6,
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
+            BackupId = backupAddrs.Count > 0 ? backup!.Id : null, BackupName = backupAddrs.Count > 0 ? backup!.Name : null, BackupAddresses = backupAddrs,
         };
         Storage.Save(ActiveFile, active);
 
@@ -309,8 +328,10 @@ public static class DnsSwitcher
             throw;
         }
         log(split != null
-            ? $"Подключено, два DNS: ИИ через {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
-            : $"Подключено: {s.Name} ({string.Join(", ", addrs)}{(doh != null ? " + DoH" : "")})");
+            ? $"Подключено, два DNS: ИИ через {s.Name} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
+            : $"Подключено: {s.Name} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")})");
+        if (backupAddrs.Count > 0)
+            log($"Запасной сервер: {backup!.Name} ({string.Join(", ", backupAddrs)}). Если основной перестанет отвечать, Windows перейдет на него сама");
     }
 
     /// <summary>Запоминаем исходные настройки один раз — до первой смены.</summary>
