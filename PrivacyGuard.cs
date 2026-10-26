@@ -29,7 +29,10 @@ namespace Dnex;
 /// </summary>
 public static class PrivacyGuard
 {
+    /// <summary>Режим включен: личные данные маскируются.</summary>
     public static bool Enabled { get; private set; }
+    /// <summary>Окна еще и исключены из захвата экрана (стример мод). Без него режим только маскирует данные.</summary>
+    public static bool HidesWindows { get; private set; }
     public static event Action? Changed;
 
     public const string Hidden = "скрыто";
@@ -60,24 +63,31 @@ public static class PrivacyGuard
     {
         if (_installed) return;
         _installed = true;
-        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler((s, _) => { if (Enabled) MarkOf((Visual)s); }));
-        EventManager.RegisterClassHandler(typeof(ToolTip), ToolTip.OpenedEvent, new RoutedEventHandler((s, _) => { if (Enabled) MarkOf((Visual)s); }));
-        EventManager.RegisterClassHandler(typeof(ContextMenu), ContextMenu.OpenedEvent, new RoutedEventHandler((s, _) => { if (Enabled) MarkOf((Visual)s); }));
-        EventManager.RegisterClassHandler(typeof(MenuItem), MenuItem.SubmenuOpenedEvent, new RoutedEventHandler((_, _) => { if (Enabled) MarkAll(); }));
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler((s, _) => { if (HidesWindows) MarkOf((Visual)s); }));
+        EventManager.RegisterClassHandler(typeof(ToolTip), ToolTip.OpenedEvent, new RoutedEventHandler((s, _) => { if (HidesWindows) MarkOf((Visual)s); }));
+        EventManager.RegisterClassHandler(typeof(ContextMenu), ContextMenu.OpenedEvent, new RoutedEventHandler((s, _) => { if (HidesWindows) MarkOf((Visual)s); }));
+        EventManager.RegisterClassHandler(typeof(MenuItem), MenuItem.SubmenuOpenedEvent, new RoutedEventHandler((_, _) => { if (HidesWindows) MarkAll(); }));
         Scan.Tick += (_, _) => MarkAll();
     }
 
-    public static void Set(bool on)
+    /// <param name="on">Маскировать личные данные.</param>
+    /// <param name="hideWindows">Еще и исключить окна из захвата экрана (стример мод).</param>
+    public static void Set(bool on, bool hideWindows = true)
     {
-        if (on == Enabled) return;
+        bool hide = on && hideWindows;
+        if (on == Enabled && hide == HidesWindows) return;
         Enabled = on;
-        if (on) Scan.Start(); else Scan.Stop();
-        MarkAll(clear: !on);
+        if (hide != HidesWindows)
+        {
+            HidesWindows = hide;
+            if (hide) Scan.Start(); else Scan.Stop();
+            MarkAll(clear: !hide);
+        }
         Changed?.Invoke();
     }
 
     /// <summary>Окно WinForms (меню трея): пометить сразу при открытии.</summary>
-    public static void MarkHandle(IntPtr h) { if (Enabled && IsWindowVisible(h)) Apply(h, true); }
+    public static void MarkHandle(IntPtr h) { if (HidesWindows && IsWindowVisible(h)) Apply(h, true); }
 
     private static void MarkOf(Visual v)
     {

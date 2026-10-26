@@ -184,7 +184,8 @@ internal sealed class SplitDnsWindow
         if (catalog != null)
         {
             var recIds = catalog.Groups.Where(g => g.Recommend == "smartdns").Select(g => g.Id).ToHashSet();
-            sets.Children.Add(Ui.ChoiceBar(_groupChecks, c => recIds.Contains((string)c.Tag)).With(w => w.Margin = new Thickness(0, 10, 0, 10)));
+            sets.Children.Add(Ui.ChoiceBar(_groupChecks, c => recIds.Contains((string)c.Tag)).With(w => w.Margin = new Thickness(0, 10, 0, 4)));
+            sets.Children.Add(SupportBar(catalog));
             // Сначала разделы с рекомендуемыми для Smart DNS наборами
             foreach (var cat in catalog.Groups.GroupBy(g => g.Category.Length > 0 ? g.Category : "Другое")
                                               .OrderByDescending(c => c.Any(g => g.Recommend == "smartdns")))
@@ -204,8 +205,93 @@ internal sealed class SplitDnsWindow
             }
         }
         sets.Children.Add(Ui.Scroll(list, 230));
-        page.Children.Add(Ui.Card(sets, bottom: 0));
+        page.Children.Add(Ui.Card(sets));
+        page.Children.Add(Ui.Card(DevCard(), bottom: 0));
         return page;
+    }
+
+    /// <summary>
+    /// «Что открывает сервер»: наборы проверяются на подключенном Smart DNS, у каждой галочки появляется пометка:
+    /// открывает, не подменяет или не ответил. Без подключения проверять не на чем.
+    /// </summary>
+    private FrameworkElement SupportBar(BypassCatalog.Data catalog)
+    {
+        var state = new TextBlock { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = Ui.B("Muted"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+        var btn = Ui.Action("Что открывает сервер", "Ghost", () => { });
+        btn.Click += async (_, _) =>
+        {
+            if (DnsSwitcher.GetActive() is not { } active || active.Addresses.Count == 0)
+            {
+                state.Text = "Сначала подключитесь: наборы проверяются на подключенном Smart DNS";
+                return;
+            }
+            var server = new DnsServer
+            {
+                Name = active.Name, Primary = active.Addresses[0],
+                Secondary = active.Addresses.Count > 1 && active.BackupAddresses.Count == 0 ? active.Addresses[1] : null, DohUrl = active.DohTemplate,
+            };
+            btn.IsEnabled = false;
+            state.Text = $"Проверяю наборы на «{DnsServer.Clip(active.Name)}»…";
+            try
+            {
+                var res = await CatalogCheck.RunAsync(new ServerChecker(_settings), server, _settings.Targets, catalog.Groups, CancellationToken.None);
+                foreach (var cb in _groupChecks)
+                {
+                    if (cb.Content is not TextBlock tb || !res.TryGetValue((string)cb.Tag, out var sup)) continue;
+                    foreach (var old in tb.Inlines.OfType<System.Windows.Documents.Run>().Where(r => r.Tag as string == "support").ToList()) tb.Inlines.Remove(old);
+                    tb.Inlines.Add(new System.Windows.Documents.Run(" · " + CatalogCheck.Describe(sup))
+                    {
+                        Tag = "support", FontSize = 11,
+                        Foreground = Ui.B(sup switch { CatalogCheck.Support.Proxied => "Ok", CatalogCheck.Support.Different => "Warn", _ => "Muted" }),
+                    });
+                }
+                int open = res.Count(r => r.Value == CatalogCheck.Support.Proxied);
+                state.Text = $"«{DnsServer.Clip(active.Name)}» открывает наборов: {open} из {res.Count}. Включайте те, что открывает: остальные через этот сервер не заработают";
+            }
+            catch (Exception ex) { state.Text = "Проверка не удалась: " + ex.Message; }
+            finally { btn.IsEnabled = true; }
+        };
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        DockPanel.SetDock(btn, Dock.Left);
+        row.Children.Add(btn);
+        row.Children.Add(state);
+        return row;
+    }
+
+    /// <summary>
+    /// «Для разработчиков»: одной кнопкой наборы для Cursor, Copilot, Windsurf, JetBrains AI и других LLM, плюс
+    /// проверка WSL, где без DNS-туннеля Claude Code и pip внутри Linux идут мимо Smart DNS.
+    /// </summary>
+    private FrameworkElement DevCard()
+    {
+        var card = new StackPanel();
+        card.Children.Add(Ui.CardTitle("Для разработчиков"));
+        card.Children.Add(Ui.Hint("Cursor, GitHub Copilot, Windsurf, JetBrains AI, Cline, Continue, а также Hugging Face, DeepSeek, Perplexity и OpenRouter. " +
+                                  "Claude Code ходит в те же адреса, что и Claude, и работает без набора", 4).With(t => t.FontSize = 11));
+        var pick = Ui.Action("Включить наборы для разработчиков", "Strong", () =>
+        {
+            foreach (var cb in _groupChecks.Where(c => DevTools.Groups.Contains((string)c.Tag))) cb.IsChecked = true;
+        });
+        pick.HorizontalAlignment = HorizontalAlignment.Left;
+        pick.Margin = new Thickness(0, 10, 0, 0);
+        card.Children.Add(pick);
+
+        var wsl = DevTools.Check();
+        if (wsl.State != DevTools.WslState.None)
+        {
+            bool bad = wsl.State != DevTools.WslState.Ok;
+            card.Children.Add(Ui.Separator());
+            card.Children.Add(new TextBlock { Text = bad ? "WSL: запросы идут мимо Smart DNS" : "WSL: все в порядке", Foreground = Ui.B(bad ? "Warn" : "Ok"), Margin = new Thickness(0, 0, 0, 4) });
+            card.Children.Add(Ui.Hint(DevTools.Describe(wsl), 0).With(t => t.FontSize = 11));
+            if (bad)
+            {
+                var fix = Ui.Action("Включить DNS-туннель", "Ghost", () => DiagnosticsWindow.EnableWslTunnel(_ => { }));
+                fix.HorizontalAlignment = HorizontalAlignment.Left;
+                fix.Margin = new Thickness(-10, 6, 0, 0);
+                card.Children.Add(fix);
+            }
+        }
+        return card;
     }
 
     public bool ShowDialog() { _w.ShowDialog(); return Saved; }

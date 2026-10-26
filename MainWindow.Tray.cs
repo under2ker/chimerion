@@ -42,6 +42,7 @@ public partial class MainWindow
             _traySnap = snap;
             SyncActiveSummary(snap);
             CheckEgressChange(snap);
+            TrackEgress(snap);
             _ = CheckServiceHealthAsync(snap);
         }
         UpdateTrayServices();

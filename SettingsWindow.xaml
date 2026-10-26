@@ -174,6 +174,8 @@
                                 <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="StartCompactBox" Content="Открывать программу в компактном виде" Margin="0,14,0,0"/>
+                                <TextBlock Text="Узкое окно: кнопка подключения, плитки сервисов и только рабочие серверы. Обычный вид открывается кнопкой «Полный вид». Если выключено, программа открывается в том виде, в котором ее закрыли" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="ОБНОВЛЕНИЯ" Style="{StaticResource SectionTitle}"/>
@@ -194,8 +196,11 @@
                         <TextBlock Text="СКРЫТИЕ ДАННЫХ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <CheckBox x:Name="PrivacyBox" Content="Скрывать данные от записи экрана"/>
+                                <CheckBox x:Name="PrivacyBox" Content="Скрывать данные от записи экрана (Стример мод)" Checked="Privacy_Checked"/>
                                 <TextBlock Text="Окна программы не попадут ни на скриншот, ни на запись, ни в демонстрацию экрана, а ваш IP, город и провайдер на экране заменятся на «скрыто». Пригодится, если вы снимаете видео, стримите или показываете экран"
+                                           Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="MaskOnlyBox" Content="Только скрывать данные" Checked="Privacy_Checked" Margin="0,14,0,0"/>
+                                <TextBlock Text="Ваш IP, город и провайдер на экране заменятся на «скрыто», а окна программы на скриншотах и записи видны как обычно. Подойдет, если нужно показать программу на видео или скриншоте, но без личных данных"
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
@@ -218,6 +223,14 @@
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="Записи, сделанные до включения режима, уже не изменить. Запись строк в журнал тоже необратима: строки, замаскированные в режиме, не раскроются после его выключения."/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Программа с правами администратора или собственным драйвером захвата может обойти защиту Windows. От камеры, направленной на монитор, спасает только маскировка на экране."/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="На Windows 10 старше версии 2004 окно на записи будет не прозрачным, а черным."/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="ОБЩАЯ КАРТА СЕРВЕРОВ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="CrowdBox" Content="Помогать общей карте серверов"/>
+                                <TextBlock Text="Раз в час программа отправляет итоги своих проверок: адрес Smart DNS, его название и открываются ли через него ChatGPT, Claude и Gemini. О вас ничего не уходит: ни IP, ни имени, ни списка сайтов. Сервер видит только сеть провайдера и считает по ней рейтинг. Рейтинг для вашего провайдера показывается в блоке лучших серверов, даже если галочка выключена"
+                                           Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -285,6 +298,15 @@
                                 <TextBlock Text="Без галочки программа только сообщит, а сменить сервер можно щелчком по уведомлению. Избранные серверы тоже проверяются: если какой-то перестал отвечать, придет уведомление" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
+                        <TextBlock Text="ЗАПАСНОЙ СЕРВЕР И АККАУНТЫ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)"/>
+                                <TextBlock Text="Вместе с выбранным сервером в Windows прописывается второй рабочий. Если основной замолчит, Windows за секунды перейдет на запасной сама, и нейросети не пропадут. Программа сообщит об этом и предложит сделать запасной основным" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
+                                <TextBlock Text="Программа помнит, из какой страны сервисы обычно видят вас. Перед подключением к серверу с другой страной выхода спросит, а замену и запасной сервер подбирает с той же страной. Частая смена страны входа повышает риск блокировки аккаунта" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text="ЧТО ДЕЛАЕТ СТОРОЖ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
@@ -347,6 +369,33 @@
                                            Text="Сетевые инструменты для открытого интернета. CHIMERION открывает ChatGPT, Claude и Gemini без VPN через Smart DNS, обходит замедление YouTube и Discord с помощью zapret и ускоряет Telegram."/>
                                 <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
                                            Text="Программа сама находит и проверяет серверы, подключается в один клик, следит за подключением и возвращает исходные настройки, если что-то пошло не так. Работает без прав администратора и спрашивает их, только когда меняет DNS."/>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="TELEGRAM" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                    <TextBlock Text="Канал" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                    <TextBlock Grid.Column="1" Margin="0,0,0,10">
+                                        <Hyperlink Click="TgChannel_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
+                                        <Run Text=" · новости о версиях" Foreground="{DynamicResource Muted}"/>
+                                    </TextBlock>
+                                    <TextBlock Grid.Row="1" Text="Чат" Style="{StaticResource Label}"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="1">
+                                        <Hyperlink Click="TgChat_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
+                                        <Run Text=" · помощь, рабочие DNS, идеи" Foreground="{DynamicResource Muted}"/>
+                                    </TextBlock>
+                                </Grid>
+                                <WrapPanel Margin="-16,10,0,0">
+                                    <Button Content="Баг-репорты" Click="TgTopic_Click" Tag="bugs" Style="{StaticResource Ghost}"/>
+                                    <Button Content="Идеи" Click="TgTopic_Click" Tag="ideas" Style="{StaticResource Ghost}"/>
+                                    <Button Content="Ошибки" Click="TgTopic_Click" Tag="help" Style="{StaticResource Ghost}"/>
+                                </WrapPanel>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,6,0,0"
+                                           Text="Кнопки открывают темы чата в Telegram. Если вы еще не в чате, сначала вступите по ссылке выше."/>
                             </StackPanel>
                         </Border>
 

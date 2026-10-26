@@ -54,7 +54,7 @@ public partial class MainWindow : Window
         ThemeColors.Apply(_settings.Colors, _settings.Theme);
         // Режим скрытия данных: до появления первого окна, чтобы ни один кадр не попал в захват
         PrivacyGuard.Install();
-        PrivacyGuard.Set(_settings.PrivacyMode);
+        PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
         PrivacyGuard.Changed += OnPrivacyChanged;
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
@@ -160,13 +160,15 @@ public partial class MainWindow : Window
             }
             UpdateStats();
             ShowCompare();
-            try { if (Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) SetCompact(true, animate: false); }
+            // «Открывать в компактном виде» сильнее запомненного вида: иначе открывается тот, в котором закрыли
+            try { if (_settings.StartCompact || Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) SetCompact(true, animate: false); }
             catch (Exception) { }
             await RefreshConnectionAsync();
             _ = AutoStart.RefreshPathAsync(Log);
             await EnsureConnectionAfterStartAsync();
             _ = StartToolsAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
+            StartCrowd();
             ScheduleUpdateCheck(); // настройку «Проверять новую версию» смотрит сама проверка: ее можно включить на ходу
             if (DnsSwitcher.GetActive() is { } a)
                 Log($"Активно подключение «{a.Name}» с {a.Since:dd.MM HH:mm}.");

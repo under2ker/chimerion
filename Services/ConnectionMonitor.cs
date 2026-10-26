@@ -123,16 +123,43 @@ public sealed class ConnectionMonitor
     /// сразу» (у старых данных общая), потом избранные, потом пинг. Не проверявшиеся давно идут после свежих
     /// при равной стабильности: их результат мог устареть.
     /// </summary>
-    public static List<DnsServer> Replacements(IEnumerable<DnsServer> servers, DnsSwitcher.ActiveConnection active, int take = 3, DateTime? now = null)
+    /// <param name="fit">Насколько сервер подходит по стране выхода (AccountSafety.Fit): при близкой стабильности
+    /// (в пределах 10%) выше тот, что не меняет привычную страну сервисов.</param>
+    public static List<DnsServer> Replacements(IEnumerable<DnsServer> servers, DnsSwitcher.ActiveConnection active, int take = 3, DateTime? now = null,
+                                               Func<DnsServer, int>? fit = null)
     {
         var t = now ?? DateTime.Now;
         return servers
             .Where(s => s.Id != active.ServerId && !s.IsJunk && s.Status == ServerStatus.Ok)
-            .OrderByDescending(s => s.AllStability ?? (s.ChecksTotal == 0 ? 0 : s.ChecksOk * 100 / s.ChecksTotal))
+            .OrderByDescending(s => Stability(s) / 10)
+            .ThenByDescending(s => fit?.Invoke(s) ?? 0)
+            .ThenByDescending(s => Stability(s))
             .ThenByDescending(s => s.IsFavorite)
             .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)
             .ThenBy(s => s.LatencyMs ?? long.MaxValue)
             .Take(take)
             .ToList();
+    }
+
+    private static int Stability(DnsServer s) => s.AllStability ?? (s.ChecksTotal == 0 ? 0 : s.ChecksOk * 100 / s.ChecksTotal);
+
+    /// <summary>
+    /// Запасной сервер для подключения к primary: рабочий, с обычным IPv4-адресом, не совпадающим с адресами primary
+    /// (другой сервер, а не второй адрес того же). Windows переходит на него сама, если основной перестал отвечать.
+    /// Выше тот, что выводит сервисы в ту же страну (fit), затем стабильность и пинг.
+    /// </summary>
+    public static DnsServer? Backup(IEnumerable<DnsServer> servers, DnsServer primary, Func<DnsServer, int>? fit = null, DateTime? now = null)
+    {
+        var own = new HashSet<string>(new[] { primary.Primary, primary.Secondary }.Where(a => !string.IsNullOrEmpty(a))!, StringComparer.OrdinalIgnoreCase);
+        var t = now ?? DateTime.Now;
+        return servers
+            .Where(s => s.Id != primary.Id && !s.IsJunk && s.Status == ServerStatus.Ok
+                        && IPAddress.TryParse(s.Primary, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
+                        && !own.Contains(s.Primary!))
+            .OrderByDescending(s => fit?.Invoke(s) ?? 0)
+            .ThenByDescending(s => Stability(s) / 10)
+            .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)
+            .ThenBy(s => s.LatencyMs ?? long.MaxValue)
+            .FirstOrDefault();
     }
 }

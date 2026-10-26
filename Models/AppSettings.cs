@@ -72,10 +72,26 @@ public class AppSettings
     public string? SkippedUpdate { get; set; }
     /// <summary>Как часто обновляется пинг всех серверов в таблице, в шапке и в трее (минуты, 1–60).</summary>
     public int PingRefreshMinutes { get; set; } = 10;
-    /// <summary>Режим скрытия данных: окна не попадают в захват экрана, личные данные на экране заменены на «скрыто» (PrivacyGuard).</summary>
+    /// <summary>Режим скрытия данных: личные данные на экране заменены на «скрыто» (PrivacyGuard).</summary>
     public bool PrivacyMode { get; set; }
+    /// <summary>
+    /// При включенном PrivacyMode еще и окна не попадают в захват экрана (стример мод). false — только маскировка
+    /// данных, окна на записи видны как обычно.
+    /// </summary>
+    public bool PrivacyHideWindows { get; set; } = true;
+    /// <summary>Открывать программу сразу в компактном виде, независимо от того, в каком виде ее закрыли.</summary>
+    public bool StartCompact { get; set; }
     /// <summary>Если ИИ-сервисы перестали открываться через текущий сервер, переключаться на лучший рабочий сам (иначе только уведомление).</summary>
     public bool AutoSwitchOnServiceDown { get; set; }
+    /// <summary>Ставить вместе с сервером запасной: если основной перестал отвечать, Windows за секунды переходит на запасной сама.</summary>
+    public bool UseBackupServer { get; set; } = true;
+    /// <summary>
+    /// Защита аккаунтов: помнить, из какой страны сервисы обычно видят вас, предупреждать перед подключением к серверу
+    /// с другой страной выхода и при выборе замены предпочитать серверы с той же страной (AccountSafety).
+    /// </summary>
+    public bool AccountSafetyGuard { get; set; } = true;
+    /// <summary>Отправлять итоги проверок в общую карту серверов (Crowd). null — еще не спрашивали.</summary>
+    public bool? CrowdConsent { get; set; }
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
     public int WatchdogSeconds { get; set; } = 60;
 

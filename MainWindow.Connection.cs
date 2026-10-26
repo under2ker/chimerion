@@ -108,6 +108,7 @@ public partial class MainWindow
                 !DnexDialog.Ask($"«{s.DisplayName}» сейчас не работает", $"Последняя проверка: {s.LastError}\n\nВсе равно подключиться?",
                     "Подключиться", windowTitle: "Подключение")))
                 return false;
+            if (!auto && !ConfirmCountryChange(s)) return false;
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
             ProgressText.Text = "Запоминаю состояние до подключения…";
@@ -117,7 +118,8 @@ public partial class MainWindow
 
             // 2. Смена DNS (UAC).
             ProgressText.Text = "Меняю DNS…";
-            await DnsSwitcher.ApplyAsync(s, _settings, Log);
+            var backup = _settings.UseBackupServer ? ConnectionMonitor.Backup(_servers, s, SafetyFit) : null;
+            await DnsSwitcher.ApplyAsync(s, _settings, Log, backup);
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
             _uacDeclined = false;
             if (!auto) _monitor.ForgetRestores();
@@ -441,7 +443,10 @@ public partial class MainWindow
     private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active)
     {
         HideUndo(); // подключение меняется без пользователя: прежняя отмена больше не про то же состояние
-        var next = ConnectionMonitor.Replacements(_servers, active);
+        // Сначала запасной сервер подключения: Windows, скорее всего, уже работает через него
+        var next = ConnectionMonitor.Replacements(_servers, active, fit: SafetyFit);
+        if (active.BackupId is { } bid && _servers.FirstOrDefault(x => x.Id == bid && x.Status == ServerStatus.Ok && !x.IsJunk) is { } bk)
+            next = next.Where(x => x.Id != bid).Prepend(bk).ToList();
         foreach (var s in next)
         {
             if (_uacDeclined) return; // в правах отказали: ни следующих серверов, ни отключения без пользователя

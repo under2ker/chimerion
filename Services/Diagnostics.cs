@@ -54,6 +54,11 @@ public static class Diagnostics
                 : active.Split ? $"Два DNS: домены ИИ через {active.Name} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
                 : $"DNS системы: {string.Join(", ", current)}" + (active.DohTemplate != null ? $", DoH {active.DohTemplate}" : ""),
                 onAdapters ? null : "reconnect", "Переподключить"));
+            items.Add(active.BackupName != null
+                ? new DiagItem(DiagLevel.Ok, $"Запасной сервер: {active.BackupName}", $"{string.Join(", ", active.BackupAddresses)}. Если основной перестанет отвечать, Windows перейдет на него сама")
+                : new DiagItem(DiagLevel.Info, "Запасного сервера нет", st.UseBackupServer
+                    ? "При подключении не нашлось второго рабочего сервера с обычным IPv4-адресом. Проверьте серверы и переподключитесь"
+                    : "Выключено в настройках: «Сторож и трей», «Запасной сервер»"));
         }
 
         // Сервисы: доступ, через что идут и откуда их видит сервис
@@ -69,6 +74,47 @@ public static class Diagnostics
                 route + where + (s.Note != null ? ". " + s.Note : ""),
                 bad && active != null ? "switch" : null, "Сменить сервер")); // без подключения кнопка одна, в строке «Не подключено»
         }
+        // Защита аккаунтов: из каких стран сервисы видели вас за последние 30 дней
+        if (st.AccountSafetyGuard)
+        {
+            var safety = AccountSafety.Load();
+            var mism = safety.Compare(snap.Services.Where(x => x.Egress != null).Select(x => new KeyValuePair<string, string?>(x.Name, x.Egress!.Country)));
+            var many = snap.Services.Select(x => x.Name).Where(n => safety.CountryCount(n) > AccountSafety.ManyCountries).ToList();
+            var homes = snap.Services.Select(x => (x.Name, Home: safety.Home(x.Name))).Where(x => x.Home != null)
+                                     .Select(x => $"{x.Name}: {GeoLocation.CountryName(x.Home!)} (стран за 30 дней: {safety.CountryCount(x.Name)})").ToList();
+            if (homes.Count == 0)
+                items.Add(new DiagItem(DiagLevel.Info, "Защита аккаунтов: истории пока нет", "Программа запоминает, из какой страны сервисы видят вас, и предупредит, если страна начнет меняться"));
+            else if (mism.Count > 0 || many.Count > 0)
+                items.Add(new DiagItem(DiagLevel.Warn, "Защита аккаунтов: страна входа меняется",
+                    (mism.Count > 0 ? $"Сейчас не из привычной страны: {AccountSafety.Describe(mism)}. " : "") +
+                    (many.Count > 0 ? $"Много разных стран за 30 дней: {string.Join(", ", many)}. " : "") +
+                    "Частая смена страны повышает риск блокировки аккаунта: выбирайте серверы с той же страной выхода. Обычно: " + string.Join("; ", homes),
+                    active != null ? "switch" : null, "Сменить сервер"));
+            else
+                items.Add(new DiagItem(DiagLevel.Ok, "Защита аккаунтов: страна входа постоянная", string.Join("; ", homes)));
+        }
+
+        // Общая карта серверов: что работает у пользователей той же сети провайдера
+        if (Crowd.LoadStats() is { } crowd && crowd.Provider.Count > 0 && System.IO.File.Exists(Storage.PathOf("servers.json")))
+        {
+            var servers = Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>());
+            items.Add(Crowd.BestForProvider(crowd, servers) is { } best
+                ? new DiagItem(DiagLevel.Info, $"У вашего провайдера лучше всего работает {best.Server.DisplayName}",
+                    $"{Crowd.NetName(crowd)}: {best.Rate}% удачных проверок из {best.Total} за сутки по данным общей карты серверов")
+                : new DiagItem(DiagLevel.Info, "Общая карта: по вашему провайдеру пока мало данных", Crowd.NetName(crowd)));
+        }
+
+        // WSL для разработчиков: без DNS-туннеля запросы из Linux идут мимо правил «Двух DNS»
+        var wsl = DevTools.Check();
+        if (wsl.State != DevTools.WslState.None)
+        {
+            bool bad = wsl.State != DevTools.WslState.Ok;
+            items.Add(new DiagItem(!bad ? DiagLevel.Ok : st.SplitDns.Enabled ? DiagLevel.Warn : DiagLevel.Info,
+                bad ? "WSL: запросы идут мимо «Двух DNS»" : "WSL: DNS-туннель включен",
+                DevTools.Describe(wsl) + (bad && !st.SplitDns.Enabled ? ". Сейчас «Два DNS» выключены, и это не мешает" : ""),
+                bad ? "wsl-tunnel" : null, "Включить DNS-туннель"));
+        }
+
         if (snap.Resolvers.Count > 0)
             items.Add(new DiagItem(DiagLevel.Info, "Резолверы, дошедшие до тестового сервера",
                 string.Join("; ", snap.Resolvers.Select(r => $"{r.Org} ({r.Place})").Distinct())));
