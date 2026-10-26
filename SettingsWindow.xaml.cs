@@ -56,6 +56,8 @@ public partial class SettingsWindow : Window
         StartCompactBox.IsChecked = settings.StartCompact;
         AutoSwitchBox.IsChecked = settings.AutoSwitchOnServiceDown;
         BackupBox.IsChecked = settings.UseBackupServer;
+        AllowSwitchBox.IsChecked = settings.AllowServerSwitch;
+        AllowSwitch_Changed(this, new RoutedEventArgs());
         SafetyBox.IsChecked = settings.AccountSafetyGuard;
         CrowdBox.IsChecked = settings.CrowdConsent == true;
 
@@ -130,6 +132,13 @@ public partial class SettingsWindow : Window
         if (sender is FrameworkElement { Tag: string key } && TgTopics.TryGetValue(key, out var id)) AutoStart.OpenUrl(TgChatTopic + id);
     }
 
+    /// <summary>Без права менять сервер запасной сервер и автопереключение не действуют: их галочки неактивны.</summary>
+    private void AllowSwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (AllowSwitchBox == null || BackupBox == null || AutoSwitchBox == null) return;
+        BackupBox.IsEnabled = AutoSwitchBox.IsEnabled = AllowSwitchBox.IsChecked == true;
+    }
+
     /// <summary>Два варианта скрытия данных взаимоисключающие: включили один, второй выключается.</summary>
     private void Privacy_Checked(object sender, RoutedEventArgs e)
     {
@@ -160,7 +169,7 @@ public partial class SettingsWindow : Window
         TrayMinutesBox.Text = d.TrayCheckMinutes.ToString();
         WatchdogBox.Text = d.WatchdogSeconds.ToString();
         PingBox.Text = d.PingRefreshMinutes.ToString();
-        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = true;
+        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = AllowSwitchBox.IsChecked = true;
         ErrorText.Foreground = (System.Windows.Media.Brush)FindResource("Muted");
         ErrorText.Text = "Рекомендуемые значения расставлены. Нажмите «Сохранить»";
     }
@@ -203,6 +212,7 @@ public partial class SettingsWindow : Window
         _settings.StartCompact = StartCompactBox.IsChecked == true;
         _settings.AutoSwitchOnServiceDown = AutoSwitchBox.IsChecked == true;
         _settings.UseBackupServer = BackupBox.IsChecked == true;
+        _settings.AllowServerSwitch = AllowSwitchBox.IsChecked == true;
         _settings.AccountSafetyGuard = SafetyBox.IsChecked == true;
         // Не спрашивали и галочку не трогали: вопрос при запуске остается. Иначе выбор в настройках и есть ответ
         if (_settings.CrowdConsent != null || CrowdBox.IsChecked == true) _settings.CrowdConsent = CrowdBox.IsChecked == true;

@@ -27,6 +27,20 @@ public static class SystemCheck
         "softether", "cloudflare warp", "sing-tun", "hiddify", "v2ray", "xray", "clash", "kaspersky secure connection",
     };
 
+    // Сети для игр и локальной сети поверх интернета: трафик в интернет через них обычно не идет, даже если у
+    // адаптера есть свой шлюз или DNS (у Radmin VPN бывает). Помеха, только если через них идет маршрут в интернет
+    private static readonly string[] LanOverlay = { "radmin", "hamachi", "zerotier" };
+
+    [System.Runtime.InteropServices.DllImport("iphlpapi.dll")]
+    private static extern int GetBestInterface(uint destAddr, out uint bestIfIndex);
+
+    /// <summary>Номер адаптера, через который идет маршрут в интернет (к 8.8.8.8). -1 — не узнали.</summary>
+    private static int InternetInterface()
+    {
+        try { return GetBestInterface(BitConverter.ToUInt32(IPAddress.Parse("8.8.8.8").GetAddressBytes(), 0), out var idx) == 0 ? (int)idx : -1; }
+        catch (Exception) { return -1; }
+    }
+
     // Служебные туннели Windows: всегда есть в системе и VPN не являются
     private static readonly string[] NotVpn = { "teredo", "isatap", "6to4", "ip-https", "loopback", "vethernet", "hyper-v" };
 
@@ -39,13 +53,17 @@ public static class SystemCheck
     {
         try
         {
+            int inet = InternetInterface();
             return NetworkInterface.GetAllNetworkInterfaces()
                 .Where(n => n.OperationalStatus == OperationalStatus.Up)
                 .Where(n =>
                 {
                     var ip = n.GetIPProperties();
+                    int idx = -2;
+                    try { idx = ip.GetIPv4Properties()?.Index ?? -2; } catch (Exception) { }
                     return IsInterferingVpn(n.Name, n.Description, n.NetworkInterfaceType, ip.UnicastAddresses.Count,
-                        ip.DnsAddresses.Count(a => !a.IsIPv6SiteLocal), ip.GatewayAddresses.Count(g => !g.Address.Equals(IPAddress.Any)));
+                        ip.DnsAddresses.Count(a => !a.IsIPv6SiteLocal), ip.GatewayAddresses.Count(g => !g.Address.Equals(IPAddress.Any)),
+                        internetRoute: inet < 0 || idx == inet);
                 })
                 .Select(n => string.IsNullOrWhiteSpace(n.Description) ? n.Name : $"{n.Name} ({n.Description})")
                 .Distinct()
@@ -55,10 +73,13 @@ public static class SystemCheck
     }
 
     /// <summary>Похож на VPN и может перехватить DNS: у него свои DNS-серверы или шлюз (через него идет трафик).</summary>
-    internal static bool IsInterferingVpn(string name, string description, NetworkInterfaceType type, int unicast, int dns, int gateways)
+    /// <param name="internetRoute">Через этот адаптер идет маршрут в интернет. Для сетей вроде Radmin VPN это единственный
+    /// признак помехи: без маршрута они запросы к DNS не перехватывают, даже со своим шлюзом.</param>
+    internal static bool IsInterferingVpn(string name, string description, NetworkInterfaceType type, int unicast, int dns, int gateways, bool internetRoute = false)
     {
         var text = (name + " " + description).ToLowerInvariant();
         if (NotVpn.Any(text.Contains)) return false;
+        if (LanOverlay.Any(text.Contains)) return internetRoute;
         bool vpn = type is NetworkInterfaceType.Ppp || VpnWords.Any(text.Contains) || (type == NetworkInterfaceType.Tunnel && unicast > 0);
         return vpn && (dns > 0 || gateways > 0 || type is NetworkInterfaceType.Ppp);
     }

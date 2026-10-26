@@ -137,6 +137,16 @@ public class RegressionTests
     public void Vpn_warning_only_for_adapters_that_can_take_dns(string name, string desc, int dns, int gw, bool warn) =>
         Assert.Equal(warn, SystemCheck.IsInterferingVpn(name, desc, System.Net.NetworkInformation.NetworkInterfaceType.Ethernet, 1, dns, gw));
 
+    [Fact]
+    public void Lan_overlay_with_gateway_is_not_vpn_unless_internet_goes_through_it()
+    {
+        // Второй журнал пользователя: Radmin VPN со своим шлюзом считался VPN, и все проверки серверов не засчитывались
+        var eth = System.Net.NetworkInformation.NetworkInterfaceType.Ethernet;
+        Assert.False(SystemCheck.IsInterferingVpn("Radmin VPN", "Famatech Radmin VPN Ethernet Adapter", eth, 1, 1, 1, internetRoute: false));
+        Assert.True(SystemCheck.IsInterferingVpn("Radmin VPN", "Famatech Radmin VPN Ethernet Adapter", eth, 1, 1, 1, internetRoute: true));
+        Assert.True(SystemCheck.IsInterferingVpn("WireGuard", "WireGuard Tunnel", eth, 1, 1, 0, internetRoute: false)); // обычный VPN как раньше
+    }
+
     // ---------- Отчет для GitHub ----------
 
     [Fact]

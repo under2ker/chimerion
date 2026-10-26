@@ -118,7 +118,7 @@ public partial class MainWindow
 
             // 2. Смена DNS (UAC).
             ProgressText.Text = "Меняю DNS…";
-            var backup = _settings.UseBackupServer ? ConnectionMonitor.Backup(_servers, s, SafetyFit) : null;
+            var backup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers, s, SafetyFit) : null;
             await DnsSwitcher.ApplyAsync(s, _settings, Log, backup);
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
             _uacDeclined = false;
@@ -440,8 +440,16 @@ public partial class MainWindow
         _busyConn || DnsSwitcher.GetActive() is not { } now || now.ServerId != seen.ServerId || now.Since != seen.Since;
 
     /// <summary>Сервер умер: пробуем до трех следующих по стабильности (при равенстве избранные и с меньшим пингом).</summary>
-    private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active)
+    /// <param name="byUser">Пользователь сам согласился сменить сервер (щелчок по уведомлению): тогда настройка
+    /// «Программа может сама менять сервер» не мешает.</param>
+    private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active, bool byUser = false)
     {
+        if (!byUser && !_settings.AllowServerSwitch)
+        {
+            // Смена сервера выключена в настройках: подключение не трогаем, только сообщаем
+            Notify($"«{DnsServer.Clip(active.Name)}» не отвечает. Сервер сам не меняю: это выключено в настройках («Сторож и трей»). Смените сервер вручную, когда будет удобно", "Bad");
+            return;
+        }
         HideUndo(); // подключение меняется без пользователя: прежняя отмена больше не про то же состояние
         // Сначала запасной сервер подключения: Windows, скорее всего, уже работает через него
         var next = ConnectionMonitor.Replacements(_servers, active, fit: SafetyFit);
@@ -592,19 +600,34 @@ public partial class MainWindow
     /// Страна, из которой сервис видит подключение, сменилась без смены сервера: прокси перевел трафик на другой узел.
     /// Предупреждение в журнал, на экран и в трей (если окно скрыто). Выход в страну, где сервис закрыт, отмечается красным.
     /// </summary>
+    /// <summary>
+    /// Страна выхода сменилась и подтвердилась двумя проверками подряд (EgressWatch). Одно спокойное уведомление на
+    /// все сервисы сразу: что сменилось, почему (прокси сервера или запасной сервер) и что сделать, если страну нужно
+    /// сохранить. Слово «регион» не используем: аккаунт от этого регион не меняет.
+    /// </summary>
     private void CheckEgressChange(NetSnapshot snap)
     {
         var active = DnsSwitcher.GetActive();
         var changes = _egressWatch.Update(active?.ServerId.ToString(), snap.Services.Select(s => (s.Name, s.Egress?.Country)));
-        foreach (var c in changes)
+        if (changes.Count == 0 || active == null) return;
+        foreach (var g in changes.GroupBy(c => (c.From, c.To, c.ToClosed)))
         {
-            var text = $"{c.Service} теперь видит вас из страны {GeoLocation.CountryName(c.To)}, раньше {GeoLocation.CountryName(c.From)}";
-            if (c.ToClosed) text += $". В этой стране {c.Service} не работает: попробуйте другой сервер";
+            var names = g.Select(c => c.Service).ToList();
+            var who = names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " и " + names[^1];
+            var verb = names.Count == 1 ? "видит" : "видят";
+            var from = GeoLocation.CountryName(g.Key.From);
+            var to = GeoLocation.CountryName(g.Key.To);
+            var backup = active.BackupId is { } bid ? _servers.FirstOrDefault(x => x.Id == bid) : null;
+            bool viaBackup = backup != null && backup.EgressBy.Values.Any(e => string.Equals(e.Country, g.Key.To, StringComparison.OrdinalIgnoreCase));
+            var text = viaBackup
+                ? $"{who} сейчас {verb} вас из страны {to}, а не {from}: основной сервер не ответил вовремя, и Windows пошла через запасной {backup!.ShortName}. Чтобы страна не менялась, выключите запасной сервер в настройках («Сторож и трей»)"
+                : $"Прокси сервера {DnsServer.Clip(active.Name)} сменил страну выхода: {who} теперь {verb} вас из страны {to}, раньше {from}. Если важно сохранить прежнюю страну, переключитесь на сервер с выходом в стране {from}";
+            if (g.Key.ToClosed) text = $"{who} {verb} вас из страны {to}, там сервис не работает. Переключитесь на другой сервер";
             Log("Смена страны выхода: " + text);
-            ShowToast(text, c.ToClosed ? "Bad" : "Warn");
+            ShowToast(text, g.Key.ToClosed ? "Bad" : "Warn");
             if (!IsVisible)
                 _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: сменилась страна выхода"), PrivacyGuard.Mask(Loc.T(text)),
-                    c.ToClosed ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
+                    g.Key.ToClosed ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
         }
     }
 

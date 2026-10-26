@@ -83,6 +83,11 @@ public class AppSettings
     public bool StartCompact { get; set; }
     /// <summary>Если ИИ-сервисы перестали открываться через текущий сервер, переключаться на лучший рабочий сам (иначе только уведомление).</summary>
     public bool AutoSwitchOnServiceDown { get; set; }
+    /// <summary>
+    /// Программа может сама переходить на другой сервер: запасной сервер в Windows, замена умершего сервера сторожем,
+    /// автопереключение при падении сервисов. Выключено — сервер меняет только пользователь, а программа сообщает.
+    /// </summary>
+    public bool AllowServerSwitch { get; set; } = true;
     /// <summary>Ставить вместе с сервером запасной: если основной перестал отвечать, Windows за секунды переходит на запасной сама.</summary>
     public bool UseBackupServer { get; set; } = true;
     /// <summary>

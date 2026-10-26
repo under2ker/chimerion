@@ -298,11 +298,13 @@
                                 <TextBlock Text="Без галочки программа только сообщит, а сменить сервер можно щелчком по уведомлению. Избранные серверы тоже проверяются: если какой-то перестал отвечать, придет уведомление" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
-                        <TextBlock Text="ЗАПАСНОЙ СЕРВЕР И АККАУНТЫ" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="СМЕНА СЕРВЕРА И АККАУНТЫ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)"/>
-                                <TextBlock Text="Вместе с выбранным сервером в Windows прописывается второй рабочий. Если основной замолчит, Windows за секунды перейдет на запасной сама, и нейросети не пропадут. Программа сообщит об этом и предложит сделать запасной основным" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
+                                <TextBlock Text="Если выключить, сервер меняете только вы. Запасной сервер не ставится, а если сервер перестанет отвечать, программа только сообщит об этом и ничего не переключит. Так страна, из которой нейросети видят вас, не поменяется без вашего ведома" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="26,14,0,0"/>
+                                <TextBlock Text="Вместе с выбранным сервером в Windows прописывается второй рабочий с той же страной выхода. Если основной замолчит, Windows за секунды перейдет на запасной сама, и нейросети не пропадут. Если сервера с той же страной нет, запасной не ставится" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
                                 <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Программа помнит, из какой страны сервисы обычно видят вас. Перед подключением к серверу с другой страной выхода спросит, а замену и запасной сервер подбирает с той же страной. Частая смена страны входа повышает риск блокировки аккаунта" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
@@ -310,7 +312,7 @@
                         <TextBlock Text="ЧТО ДЕЛАЕТ СТОРОЖ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож проверяет, что DNS на месте и отвечает. Если его сбросила другая программа или Windows, он вернет подключение. Если сервер перестал отвечать, переключит на следующий по стабильности."/>
+                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож проверяет, что DNS на месте и отвечает. Если его сбросила другая программа или Windows, он вернет подключение. Если сервер перестал отвечать, переключит на следующий по стабильности, если смена сервера разрешена выше."/>
                                 <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0" Text="Пока работает сторонний VPN, сторож с ним не спорит. Если DNS сбрасывают снова и снова, он перестает вмешиваться и подсказывает, что делать."/>
                             </StackPanel>
                         </Border>

@@ -72,14 +72,14 @@ public class BackupChoiceTests
     [Fact]
     public void Backup_skips_main_addresses_ipv6_only_and_broken_servers()
     {
-        var main = Srv("Основной", "203.0.113.10", 90); main.Secondary = "203.0.113.11";
+        var main = Srv("Основной", "203.0.113.10", 90, "NL"); main.Secondary = "203.0.113.11";
         var list = new[]
         {
             main,
-            Srv("Тот же адрес", "203.0.113.11", 99),
-            Srv("Только IPv6", "2001:db8::1", 99),
-            Srv("Сломан", "198.51.100.1", 99, status: ServerStatus.Fail),
-            Srv("Годный", "198.51.100.2", 70),
+            Srv("Тот же адрес", "203.0.113.11", 99, "NL"),
+            Srv("Только IPv6", "2001:db8::1", 99, "NL"),
+            Srv("Сломан", "198.51.100.1", 99, "NL", status: ServerStatus.Fail),
+            Srv("Годный", "198.51.100.2", 70, "NL"),
         };
         Assert.Equal("Годный", ConnectionMonitor.Backup(list, main)!.Name);
         Assert.Null(ConnectionMonitor.Backup(new[] { main }, main));
@@ -94,7 +94,24 @@ public class BackupChoiceTests
         var de = Srv("Германия", "198.51.100.3", 99, "DE");
         var nl = Srv("Нидерланды", "198.51.100.4", 80, "NL");
         Assert.Equal("Нидерланды", ConnectionMonitor.Backup(new[] { main, de, nl }, main, safety.Fit)!.Name);
-        Assert.Equal("Германия", ConnectionMonitor.Backup(new[] { main, de, nl }, main)!.Name);
+        Assert.Equal("Нидерланды", ConnectionMonitor.Backup(new[] { main, de, nl }, main)!.Name); // чужая страна не годится даже без истории
+    }
+
+    [Fact]
+    public void Backup_with_another_or_unknown_country_is_never_chosen()
+    {
+        // Журнал пользователя: основной Zapret DNS выводил в Нидерланды, запасной wifigid.ru в Казахстан, и сервисы
+        // видели вход то оттуда, то отсюда. Такого запасного быть не должно
+        var main = Srv("Zapret DNS", "83.217.211.149", 90, "NL");
+        var kz = Srv("wifigid.ru", "195.133.25.16", 99, "KZ");
+        var unknown = Srv("Без данных", "198.51.100.9", 99);
+        Assert.Null(ConnectionMonitor.Backup(new[] { main, kz, unknown }, main));
+        var noData = Srv("Основной без данных", "203.0.113.10", 90);
+        Assert.Null(ConnectionMonitor.Backup(new[] { noData, Srv("NL", "198.51.100.4", 99, "NL") }, noData)); // страна основного неизвестна
+
+        var mixed = Srv("Смешанный", "198.51.100.7", 99, "NL");
+        mixed.EgressBy["Claude"] = new Egress("192.0.2.1", "KZ"); // ChatGPT в NL, Claude в KZ: не годится
+        Assert.Null(ConnectionMonitor.Backup(new[] { main, mixed }, main));
     }
 
     [Fact]
