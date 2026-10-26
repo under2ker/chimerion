@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media;
 
 namespace Dnex.Services;
@@ -38,6 +38,11 @@ public static class ThemeColors
         ("Изумруд", new() { ["Accent"] = "#34D399", ["AccentButton"] = "#0B7A54", ["ToggleOn"] = "#34D399", ["AccentSoft"] = "#123B2E", ["Selection"] = "#17473A", ["Lime"] = "#34D399" }),
         ("Янтарь", new() { ["Accent"] = "#F5B03C", ["AccentButton"] = "#A8650A", ["ToggleOn"] = "#F5B03C", ["AccentSoft"] = "#3D2E12", ["Selection"] = "#4A3816", ["Lime"] = "#F5B03C" }),
         ("Монохром", new() { ["Accent"] = "#A3A8B0", ["AccentButton"] = "#4B5058", ["ToggleOn"] = "#A3A8B0", ["AccentSoft"] = "#2A2D31", ["Selection"] = "#33363B", ["Lime"] = "#C9CDD3" }),
+        ("Розовый", new() { ["Accent"] = "#F472B6", ["AccentButton"] = "#BE3B84", ["ToggleOn"] = "#F472B6", ["AccentSoft"] = "#3D1A2E", ["Selection"] = "#4A2038", ["Lime"] = "#F472B6" }),
+        ("Коралл", new() { ["Accent"] = "#FF8A65", ["AccentButton"] = "#C2502C", ["ToggleOn"] = "#FF8A65", ["AccentSoft"] = "#3E2219", ["Selection"] = "#4B291E", ["Lime"] = "#FF8A65" }),
+        ("Синий", new() { ["Accent"] = "#60A5FA", ["AccentButton"] = "#2563EB", ["ToggleOn"] = "#60A5FA", ["AccentSoft"] = "#172A45", ["Selection"] = "#1B3354", ["MenuBg"] = "#171D27", ["Lime"] = "#60A5FA" }),
+        ("Мята", new() { ["Accent"] = "#7FF0D2", ["AccentButton"] = "#17A383", ["ToggleOn"] = "#7FF0D2", ["AccentSoft"] = "#163A33", ["Selection"] = "#1A453C", ["Lime"] = "#7FF0D2" }),
+        ("Рубин", new() { ["Accent"] = "#F87171", ["AccentButton"] = "#C0303A", ["ToggleOn"] = "#F87171", ["AccentSoft"] = "#3F1A1C", ["Selection"] = "#4C2023", ["StrongButton"] = "#2C2426", ["Lime"] = "#F87171" }),
     };
 
     /// <summary>Сменились цвета: открытые окна, которые рисуют части интерфейса кодом, перерисовывают их.</summary>
