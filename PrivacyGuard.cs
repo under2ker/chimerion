@@ -22,8 +22,10 @@ namespace Dnex;
 /// 4. Уведомления Windows рисует система, их из захвата не исключить: в их тексте личных данных нет (Mask).
 /// 5. Копирование журнала и отчетов очищает текст от личного.
 ///
-/// Метка ставится в момент появления окна (Loaded, открытие подсказки или меню) и дополнительно обходом всех окон
-/// процесса четыре раза в секунду: так не пропускается ни одно всплывающее окно.
+/// Метка ставится в момент появления окна (Loaded, открытие подсказки или меню) и дополнительно обходом видимых окон
+/// процесса четыре раза в секунду: так не пропускается ни одно всплывающее окно. Скрытые служебные окна (WPF и WinForms
+/// держат их в левом верхнем углу экрана) не трогаются: смена метки у скрытого окна заставляла DWM нарисовать на его
+/// месте белый прямоугольник. Снимается метка только с тех окон, которые помечали сами.
 /// </summary>
 public static class PrivacyGuard
 {
@@ -41,6 +43,12 @@ public static class PrivacyGuard
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc f, IntPtr p);
     [DllImport("user32.dll")] private static extern bool EnumThreadWindows(uint threadId, EnumProc f, IntPtr p);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr h, int index);
+    private const uint GW_OWNER = 4;
+    private const int GWL_EXSTYLE = -20, WS_EX_TOOLWINDOW = 0x80, WS_EX_APPWINDOW = 0x40000;
     private delegate bool EnumProc(IntPtr h, IntPtr p);
 
     private static readonly DispatcherTimer Scan = new(DispatcherPriority.Send) { Interval = TimeSpan.FromMilliseconds(250) };
@@ -69,28 +77,41 @@ public static class PrivacyGuard
     }
 
     /// <summary>Окно WinForms (меню трея): пометить сразу при открытии.</summary>
-    public static void MarkHandle(IntPtr h) { if (Enabled) Apply(h, true); }
+    public static void MarkHandle(IntPtr h) { if (Enabled && IsWindowVisible(h)) Apply(h, true); }
 
     private static void MarkOf(Visual v)
     {
-        if (PresentationSource.FromVisual(v) is HwndSource src) Apply(src.Handle, true);
+        if (PresentationSource.FromVisual(v) is HwndSource src && IsWindowVisible(src.Handle)) Apply(src.Handle, true);
         MarkAll();
     }
 
-    /// <summary>Все окна процесса, включая скрытые всплывающие (подсказки, меню): пометить или снять пометку.</summary>
+    /// <summary>Видимые окна процесса (главное, диалоги, открытые подсказки и меню) пометить, или снять пометку с помеченных.</summary>
     private static void MarkAll(bool clear = false)
     {
+        if (clear)
+        {
+            foreach (var h in Marked.ToList()) if (IsWindow(h)) Apply(h, false);
+            Marked.Clear();
+            return;
+        }
         uint me = (uint)Environment.ProcessId;
         var list = new List<IntPtr>();
         EnumWindows((h, _) =>
         {
             GetWindowThreadProcessId(h, out uint pid);
-            if (pid == me) list.Add(h);
+            if (pid == me && IsWindowVisible(h)) list.Add(h);
             return true;
         }, IntPtr.Zero);
-        foreach (var h in list) Apply(h, !clear);
-        if (clear) Marked.Clear();
-        else Marked.RemoveWhere(h => !list.Contains(h));
+        foreach (var h in list) Apply(h, true);
+        Marked.RemoveWhere(h => !IsWindow(h));
+    }
+
+    /// <summary>Окно с кнопкой на панели задач (главное, диалоги): только им нужна замена миниатюры значком.</summary>
+    private static bool HasTaskbarButton(IntPtr h)
+    {
+        int ex = GetWindowLong(h, GWL_EXSTYLE);
+        if ((ex & WS_EX_TOOLWINDOW) != 0) return false;
+        return (ex & WS_EX_APPWINDOW) != 0 || GetWindow(h, GW_OWNER) == IntPtr.Zero;
     }
 
     private static void Apply(IntPtr h, bool on)
@@ -103,6 +124,7 @@ public static class PrivacyGuard
             Marked.Add(h);
         }
         else SetWindowDisplayAffinity(h, WDA_NONE);
+        if (!HasTaskbarButton(h)) return;
         int v = on ? 1 : 0;
         DwmSetWindowAttribute(h, DWMWA_FORCE_ICONIC_REPRESENTATION, ref v, sizeof(int));
         DwmSetWindowAttribute(h, DWMWA_DISALLOW_PEEK, ref v, sizeof(int));
