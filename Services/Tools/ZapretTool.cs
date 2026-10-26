@@ -123,9 +123,16 @@ public sealed class ZapretTool : Tool
     /// <summary>Сколько доменов уйдет в обход: свои плюс домены выбранных наборов (без повторов).</summary>
     public int SitesCount(Dnex.Services.BypassCatalog.Data? catalog) => BuildList(catalog).Count;
 
+    /// <summary>
+    /// Адреса, с которых CHIMERION скачивает обновления: быстрые исправления с Cloudflare R2 и релизы с GitHub. Всегда в
+    /// списке обхода, даже если их нет в своих сайтах: у части провайдеров Cloudflare замедлен, и обновление шло 1 КБ/с.
+    /// </summary>
+    public static readonly string[] UpdateHosts = { "r2.dev", "github.com", "githubusercontent.com" };
+
     private List<string> BuildList(Dnex.Services.BypassCatalog.Data? catalog)
     {
         var all = new List<string>(UserDomains());
+        all.AddRange(UpdateHosts);
         all.AddRange(Dnex.Services.BypassCatalog.DomainsOf(catalog, State.Groups));
         foreach (var l in State.BigLists.Select(RemoteLists.Get).OfType<RemoteList>().Where(l => !l.IsIp))
             all.AddRange(RemoteLists.Cached(l));
@@ -252,8 +259,8 @@ public sealed class ZapretTool : Tool
             await RemoteLists.EnsureAsync(l);
         ApplyIpSet();
         // Наборы могли обновиться с прошлого запуска: список пересобирается из последних принятых
-        if (State.OwnSites != null || State.Groups.Count > 0 || State.BigLists.Count > 0)
-            try { WriteUserList(Dnex.Services.BypassCatalog.LoadCached()); } catch (ToolException) { }
+        // Список пишется всегда: в нем адреса обновлений CHIMERION, даже если своих сайтов нет
+        try { WriteUserList(Dnex.Services.BypassCatalog.LoadCached()); } catch (ToolException) { }
         var args = ParseArgs(await File.ReadAllTextAsync(Path.Combine(Dir, strategy)), Bin, Lists, games)
                    ?? throw new ToolException($"В стратегии {strategy} не нашлась строка запуска winws.exe. Возможно, формат сборки изменился");
         EnsureUserLists();
