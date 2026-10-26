@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -456,61 +456,87 @@ public static class DnsSwitcher
 
     /// <summary>
     /// Запуск PowerShell. Программа работает без прав администратора; права запрашиваются (UAC)
-    /// только на сам скрипт смены DNS. Скрипт передается через -EncodedCommand прямо в аргументах,
-    /// без временного .ps1-файла, который другой процесс мог бы подменить до запуска.
+    /// только на сам скрипт смены DNS. Сам скрипт может быть длинным (в режиме «Два DNS» с наборами сайтов
+    /// это тысячи доменов), а командная строка Windows ограничена 32767 символами. Поэтому скрипт пишется
+    /// в файл в профиле пользователя, а в аргументах идет только короткий загрузчик с SHA-256 этого файла:
+    /// загрузчик читает файл один раз, сверяет хеш и выполняет именно прочитанное. Подмененный до запуска
+    /// файл не выполнится.
     /// </summary>
     public static async Task<(int Code, string Output)> RunPsAsync(string script, bool elevated = false)
     {
         var powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                                       "WindowsPowerShell", "v1.0", "powershell.exe"); // полный путь — не подхватим чужой powershell.exe из PATH
-        if (!elevated || IsAdmin()) return await RunHiddenAsync(powershell, script);
-
-        // Повышенный процесс не дает перенаправить вывод, поэтому он пишет его в файл в профиле пользователя.
         Directory.CreateDirectory(Storage.Dir);
-        var outFile = Path.Combine(Storage.Dir, $"ps-{Guid.NewGuid():N}.log");
-        // Скрипт передается внутрь как строка и разбирается через [scriptblock]::Create внутри try:
-        // так даже синтаксическая ошибка попадает в журнал, а не теряется молча.
-        var inner = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-        var of = outFile.Replace("'", "''");
-        var wrapped =
-            "$ProgressPreference = 'SilentlyContinue'\n" +
-            "try {\n" +
-            $"  $code = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('{inner}'))\n" +
-            $"  & ([scriptblock]::Create($code)) *>&1 | Out-File -FilePath '{of}' -Encoding utf8\n" +
-            "  exit 0\n" +
-            $"}} catch {{ ('ОШИБКА: ' + $_.Exception.Message) | Out-File -FilePath '{of}' -Append -Encoding utf8; exit 1 }}";
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(wrapped));
-        var psi = new ProcessStartInfo(powershell,
-            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand {encoded}")
-        {
-            UseShellExecute = true,
-            Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
+        var id = Guid.NewGuid().ToString("N");
+        var scriptFile = Path.Combine(Storage.Dir, $"ps-{id}.ps1");
+        var outFile = Path.Combine(Storage.Dir, $"ps-{id}.log");
+        var bytes = new UTF8Encoding(false).GetBytes(script);
+        await File.WriteAllBytesAsync(scriptFile, bytes);
         try
         {
-            using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Не удалось запустить PowerShell");
-            await proc.WaitForExitAsync();
-            var text = File.Exists(outFile) ? (await File.ReadAllTextAsync(outFile)).Trim() : "";
-            return (proc.ExitCode, text);
-        }
-        catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
-        {
-            throw new OperationCanceledException("Запрос прав администратора отклонен");
+            if (!elevated || IsAdmin()) return await RunHiddenAsync(powershell, Launcher(scriptFile, bytes, null));
+
+            // Повышенный процесс не дает перенаправить вывод, поэтому он пишет его в файл в профиле пользователя.
+            var psi = new ProcessStartInfo(powershell, Arguments(Launcher(scriptFile, bytes, outFile), hidden: true))
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            try
+            {
+                using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Не удалось запустить PowerShell");
+                await proc.WaitForExitAsync();
+                var text = File.Exists(outFile) ? (await File.ReadAllTextAsync(outFile)).Trim() : "";
+                return (proc.ExitCode, text);
+            }
+            catch (System.ComponentModel.Win32Exception e) when (e.NativeErrorCode == 1223)
+            {
+                throw new OperationCanceledException("Запрос прав администратора отклонен");
+            }
         }
         finally
         {
+            try { File.Delete(scriptFile); } catch (IOException) { }
             try { File.Delete(outFile); } catch (IOException) { }
         }
     }
 
-    private static async Task<(int Code, string Output)> RunHiddenAsync(string powershell, string script)
+    /// <summary>
+    /// Короткий загрузчик: читает файл скрипта, сверяет SHA-256 и выполняет прочитанный текст через
+    /// [scriptblock]::Create внутри try, чтобы даже синтаксическая ошибка попала в журнал, а не терялась молча.
+    /// outFile задан: весь вывод уходит в этот файл (повышенный процесс), иначе в stdout.
+    /// </summary>
+    public static string Launcher(string scriptFile, byte[] scriptBytes, string? outFile)
     {
-        // $ProgressPreference: иначе PowerShell пишет в stderr служебный CLIXML («Подготовка модулей…»).
-        var full = "$ProgressPreference = 'SilentlyContinue'\n[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n" + script;
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(full));
-        var psi = new ProcessStartInfo(powershell,
-            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}")
+        var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(scriptBytes));
+        var sf = scriptFile.Replace("'", "''");
+        var load =
+            "$ProgressPreference = 'SilentlyContinue'\n" +
+            "try {\n" +
+            $"  $b = [IO.File]::ReadAllBytes('{sf}')\n" +
+            "  $h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-', '')\n" +
+            $"  if ($h -ne '{hash}') {{ throw 'файл скрипта изменен до запуска, выполнение отменено' }}\n" +
+            "  $code = [Text.Encoding]::UTF8.GetString($b)\n";
+        if (outFile == null)
+            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n" + load +
+                   "  & ([scriptblock]::Create($code))\n" +
+                   "} catch { [Console]::Error.WriteLine('ОШИБКА: ' + $_.Exception.Message); exit 1 }";
+        var of = outFile.Replace("'", "''");
+        return load +
+               $"  & ([scriptblock]::Create($code)) *>&1 | Out-File -FilePath '{of}' -Encoding utf8\n" +
+               "  exit 0\n" +
+               $"}} catch {{ ('ОШИБКА: ' + $_.Exception.Message) | Out-File -FilePath '{of}' -Append -Encoding utf8; exit 1 }}";
+    }
+
+    public static string Arguments(string launcher, bool hidden) =>
+        $"-NoProfile -NonInteractive -ExecutionPolicy Bypass{(hidden ? " -WindowStyle Hidden" : "")} -EncodedCommand " +
+        Convert.ToBase64String(Encoding.Unicode.GetBytes(launcher));
+
+    private static async Task<(int Code, string Output)> RunHiddenAsync(string powershell, string launcher)
+    {
+        // $ProgressPreference в загрузчике: иначе PowerShell пишет в stderr служебный CLIXML («Подготовка модулей…»).
+        var psi = new ProcessStartInfo(powershell, Arguments(launcher, hidden: false))
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,

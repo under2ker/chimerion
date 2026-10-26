@@ -91,3 +91,50 @@ public class RenameUpdateTests
         Assert.EndsWith("/v0.1.24/DNEX-0.1.24-win-x64.zip", Dnex.Services.Updater.ZipUrl(new Version(0, 1, 24), legacy));
     }
 }
+
+public class PowerShellLaunchTests
+{
+    // Скрипт «Двух DNS» со всеми наборами сайтов: тысячи доменов, раньше не влезал в командную строку
+    private static string BigScript(int domains) =>
+        "$n = @(" + string.Join(",", Enumerable.Range(0, domains).Select(i => $"'site{i}.example.com','.site{i}.example.com'")) + ")\n" +
+        "Write-Output ('правил: ' + $n.Count)";
+
+    [Fact]
+    public void Command_line_stays_short_for_huge_script()
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(BigScript(20000));
+        var args = Dnex.Services.DnsSwitcher.Arguments(Dnex.Services.DnsSwitcher.Launcher(@"C:\Users\x\AppData\Roaming\DNEX\ps-1.ps1", bytes, @"C:\Users\x\AppData\Roaming\DNEX\ps-1.log"), hidden: true);
+        Assert.True(bytes.Length > 500_000);
+        Assert.True(args.Length < 8000, $"командная строка {args.Length} символов");
+    }
+
+    [Fact]
+    public async Task Huge_script_runs()
+    {
+        var (code, output) = await Dnex.Services.DnsSwitcher.RunPsAsync(BigScript(5000));
+        Assert.Equal(0, code);
+        Assert.Contains("правил: 10000", output);
+    }
+
+    [Fact]
+    public async Task Changed_script_file_is_not_executed()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"chimerion-test-{Guid.NewGuid():N}.ps1");
+        File.WriteAllText(file, "Write-Output 'ПОДМЕНА'");
+        try
+        {
+            var launcher = Dnex.Services.DnsSwitcher.Launcher(file, System.Text.Encoding.UTF8.GetBytes("Write-Output 'исходный'"), null);
+            var ps = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+            var psi = new System.Diagnostics.ProcessStartInfo(ps, Dnex.Services.DnsSwitcher.Arguments(launcher, hidden: false))
+            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
+              StandardOutputEncoding = System.Text.Encoding.UTF8, StandardErrorEncoding = System.Text.Encoding.UTF8 };
+            using var p = System.Diagnostics.Process.Start(psi)!;
+            var output = await p.StandardOutput.ReadToEndAsync() + await p.StandardError.ReadToEndAsync();
+            await p.WaitForExitAsync();
+            Assert.NotEqual(0, p.ExitCode);
+            Assert.DoesNotContain("ПОДМЕНА", output);
+            Assert.Contains("изменен до запуска", output);
+        }
+        finally { File.Delete(file); }
+    }
+}
