@@ -143,7 +143,7 @@ internal sealed class DiagnosticsWindow
     public static void EnableWslTunnel(Action<string> log)
     {
         if (!DnexDialog.Ask("Включить DNS-туннель WSL?",
-                "В файл .wslconfig добавится строка dnsTunneling=true, прежний файл сохранится рядом. Тогда запросы из WSL пойдут через DNS Windows и правила «Двух DNS».",
+                "В .wslconfig добавится dnsTunneling=true (прежний файл сохранится рядом), и запросы из WSL пойдут через «Два DNS».",
                 "Включить", windowTitle: "WSL")) return;
         DevTools.EnableTunnel();
         log("WSL: DNS-туннель включен в .wslconfig");

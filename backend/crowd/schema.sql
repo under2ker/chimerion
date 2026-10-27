@@ -17,7 +17,8 @@ CREATE INDEX IF NOT EXISTS stats_asn ON stats (asn, hour);
 CREATE TABLE IF NOT EXISTS servers (
   server  TEXT PRIMARY KEY,
   name    TEXT NOT NULL,
-  updated INTEGER NOT NULL
+  updated INTEGER NOT NULL,
+  url     TEXT                       -- полный адрес DoH, если сервер DoH (для обнаружения)
 );
 
 -- Названия сетей провайдеров

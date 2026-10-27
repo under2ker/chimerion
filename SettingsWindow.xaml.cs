@@ -60,6 +60,7 @@ public partial class SettingsWindow : Window
         AllowSwitch_Changed(this, new RoutedEventArgs());
         SafetyBox.IsChecked = settings.AccountSafetyGuard;
         CrowdBox.IsChecked = settings.CrowdConsent == true;
+        SiteWatchBox.IsChecked = settings.SiteWatch;
 
         var v = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"Версия {v?.Major}.{v?.Minor}.{v?.Build} · Windows 10 и 11 · .NET 8";
@@ -169,7 +170,9 @@ public partial class SettingsWindow : Window
         TrayMinutesBox.Text = d.TrayCheckMinutes.ToString();
         WatchdogBox.Text = d.WatchdogSeconds.ToString();
         PingBox.Text = d.PingRefreshMinutes.ToString();
-        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = AllowSwitchBox.IsChecked = true;
+        CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = SiteWatchBox.IsChecked = AllowSwitchBox.IsChecked = true;
+        StartCompactBox.IsChecked = AutoSwitchBox.IsChecked = false;
+        // Скрытие данных и общая карта — личный выбор: не сбрасываем (выключить стример мод посреди трансляции опасно)
         ErrorText.Foreground = (System.Windows.Media.Brush)FindResource("Muted");
         ErrorText.Text = "Рекомендуемые значения расставлены. Нажмите «Сохранить»";
     }
@@ -214,6 +217,7 @@ public partial class SettingsWindow : Window
         _settings.UseBackupServer = BackupBox.IsChecked == true;
         _settings.AllowServerSwitch = AllowSwitchBox.IsChecked == true;
         _settings.AccountSafetyGuard = SafetyBox.IsChecked == true;
+        _settings.SiteWatch = SiteWatchBox.IsChecked == true;
         // Не спрашивали и галочку не трогали: вопрос при запуске остается. Иначе выбор в настройках и есть ответ
         if (_settings.CrowdConsent != null || CrowdBox.IsChecked == true) _settings.CrowdConsent = CrowdBox.IsChecked == true;
         PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);

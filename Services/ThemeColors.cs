@@ -169,16 +169,20 @@ public static class ThemeColors
         var surface = Base("Surface");
         var paper = dark ? bg : White;                     // с чем смешивать для мягких подложек
         var accentHue = Get(custom, "Accent", dark);
-        var button = Get(custom, "AccentButton", dark);
+        // Свой акцент без своих производных цветов: выделение, вкладки, метки и кнопки выводятся из акцента.
+        // Раньше они оставались стандартными лаймовыми, и при синем акценте выделенная строка была оливковой
+        bool ownAccent = Custom(custom, "Accent", dark) != null;
+        Color Derived(string key, Func<Color> fromAccent) => Custom(custom, key, dark) ?? (ownAccent ? fromAccent() : Get(custom, key, dark));
+        var button = Derived("AccentButton", () => dark ? Mix(accentHue, Dark, 0.25) : accentHue);
         var strong = Get(custom, "StrongButton", dark);
-        var toggle = Get(custom, "ToggleOn", dark);
+        var toggle = Derived("ToggleOn", () => accentHue);
         var menu = Get(custom, "MenuBg", dark);
-        var limeHue = Get(custom, "Lime", dark);
+        var limeHue = Derived("Lime", () => accentHue);
         // Светлая: лайм на белом как текст не читается — акцент и метки затемняются до контраста 4.5, заливки остаются
         var accent = dark ? accentHue : EnsureContrast(accentHue, surface, 4.5);
         var lime = dark ? limeHue : EnsureContrast(limeHue, Mix(limeHue, White, 0.8), 4.5);
-        var tab = Custom(custom, "AccentSoft", dark) ?? (dark ? Get(custom, "AccentSoft", true) : Mix(accentHue, White, 0.78));
-        var sel = Custom(custom, "Selection", dark) ?? (dark ? Get(custom, "Selection", true) : Mix(accentHue, White, 0.72));
+        var tab = Custom(custom, "AccentSoft", dark) ?? (!dark ? Mix(accentHue, White, 0.78) : ownAccent ? Mix(accentHue, bg, 0.84) : Get(custom, "AccentSoft", true));
+        var sel = Custom(custom, "Selection", dark) ?? (!dark ? Mix(accentHue, White, 0.72) : ownAccent ? Mix(accentHue, bg, 0.79) : Get(custom, "Selection", true));
 
         Set("Accent", accent);
         Set("AccentHover", dark ? Mix(accent, White, 0.15) : Mix(accent, Dark, 0.15));
@@ -194,6 +198,18 @@ public static class ThemeColors
         Set("InfoSoft", Mix(accentHue, paper, dark ? 0.82 : 0.84));
         Set("Selection", sel);
         Set("SelectionInactive", Mix(sel, paper, dark ? 0.2 : 0.35));
+        // Строка подключенного сервера: градиент от акцента; у выбранной подключенной он переходит в цвет выделения
+        Color A(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
+        Brush Gradient(Color from, Color to)
+        {
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            g.GradientStops.Add(new GradientStop(from, 0));
+            g.GradientStops.Add(new GradientStop(to, 1));
+            g.Freeze();
+            return g;
+        }
+        res["ConnectedRow"] = Gradient(A(accentHue, dark ? (byte)0x55 : (byte)0x40), A(accentHue, 0));
+        res["ConnectedRowSelected"] = Gradient(A(accentHue, dark ? (byte)0x80 : (byte)0x66), sel);
         Set("MenuBg", menu);
         Set("MenuHover", dark ? Mix(menu, White, 0.07) : Mix(menu, Dark, 0.06));
         Set("Lime", lime);

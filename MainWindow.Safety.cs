@@ -12,6 +12,8 @@ public partial class MainWindow
     private string? _safetyFor;
     /// <summary>Сервис и чужая страна, увиденные в прошлой проверке: предупреждаем, только если повторилось.</summary>
     private readonly Dictionary<string, string> _safetyPending = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Сервер, к которому человек подключился, сам согласившись на другую страну: о ней не напоминаем.</summary>
+    private Guid? _countryAccepted;
 
     /// <summary>Подбор замены и запасного сервера с учетом страны выхода, если защита включена.</summary>
     private Func<DnsServer, int>? SafetyFit => _settings.AccountSafetyGuard ? _safety.Fit : null;
@@ -25,10 +27,11 @@ public partial class MainWindow
         var mism = _safety.Compare(AccountSafety.EgressOf(s));
         if (mism.Count == 0) return true;
         Log($"Защита аккаунтов: «{s.DisplayName}» сменит страну для сервисов ({AccountSafety.Describe(mism)})");
-        return DnexDialog.Ask("Сменится страна для сервисов",
-            $"{AccountSafety.Describe(mism)}.\n\nСервисы привыкли видеть вас из другой страны. Частая смена страны входа повышает риск блокировки аккаунта. " +
-            "Если есть выбор, лучше сервер с той же страной: она видна в колонке «Где» и в подсказке к ней.",
+        bool yes = DnexDialog.Ask("Сменится страна для сервисов",
+            $"{AccountSafety.Describe(mism)}.\n\nЧастая смена страны входа повышает риск блокировки аккаунта. Лучше сервер с той же страной (колонка «Где»).",
             "Подключиться все равно", windowTitle: "Защита аккаунтов");
+        if (yes) _countryAccepted = s.Id; // решение принято: через пару минут не переспрашиваем уведомлением
+        return yes;
     }
 
     /// <summary>
@@ -47,9 +50,10 @@ public partial class MainWindow
         var confirmed = mism.Where(m => _safetyPending.TryGetValue(m.Service, out var c) && c == m.Now).ToList();
         _safetyPending.Clear();
         foreach (var m in mism) _safetyPending[m.Service] = m.Now;
-        var fresh = confirmed.Where(m => _safetyWarned.Add(m.Service)).ToList();
+        var fresh = active.ServerId == _countryAccepted ? new List<AccountSafety.Mismatch>() : confirmed.Where(m => _safetyWarned.Add(m.Service)).ToList();
         if (fresh.Count > 0)
-            Notify($"Защита аккаунтов: сервисы видят вас не из привычной страны ({AccountSafety.Describe(fresh)}). Частая смена страны повышает риск блокировки", "Warn");
+            Notify($"Защита аккаунтов: сервисы видят вас не из привычной страны ({AccountSafety.Describe(fresh)}). Частая смена страны повышает риск блокировки", "Warn",
+                   logLine: $"Защита аккаунтов: сервисы видят вас не из привычной страны ({AccountSafety.Describe(fresh)})");
         // В историю пишем только подтвержденную страну: разовый скачок не должен становиться «привычным»
         bool changed = false;
         foreach (var (service, country) in now)

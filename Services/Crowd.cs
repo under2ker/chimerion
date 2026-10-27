@@ -28,7 +28,11 @@ public static class Crowd
     internal static HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(20) };
     internal static Func<string> BaseUrl = () => Endpoint;
 
-    public sealed record Item(string Server, string Service, bool Ok, string? Name);
+    /// <param name="Url">Полный адрес DoH, если сервер DoH: по нему другие программы смогут добавить сервер к себе.</param>
+    public sealed record Item(string Server, string Service, bool Ok, string? Name, string? Url = null);
+
+    /// <summary>Сервер, который у многих работает (общая карта): ключ, имя, адрес DoH, доля удачных, проверок, сетей провайдеров.</summary>
+    public sealed record Found(string Server, string? Name, string? Url, int Rate, int Checks, int Nets);
 
     public sealed class Queue
     {
@@ -61,11 +65,14 @@ public static class Crowd
     /// </summary>
     public static void Enqueue(Queue q, DnsServer s)
     {
+        // Сервер, добавленный вручную, может быть личным (свой VPS, домашний DNS) с личным названием: в общую карту
+        // не отправляется никогда, иначе его адрес попал бы в публичный рейтинг и ответы бота
+        if (s.Manual) return;
         if (KeyOf(s) is not { } key) return;
         foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail"))
         {
             q.Items.RemoveAll(i => i.Server == key && i.Service == chip.Name);
-            q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48)));
+            q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), DohOf(s)));
         }
         if (q.Items.Count > MaxQueue) q.Items.RemoveRange(0, q.Items.Count - MaxQueue);
     }
@@ -85,7 +92,7 @@ public static class Crowd
         var body = JsonSerializer.Serialize(new
         {
             v = 1, app = UpdateChecker.CurrentVersion.ToString(3),
-            items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name }),
+            items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = i.Url }),
         });
         using var resp = await Http.PostAsync(BaseUrl() + "/v1/report", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
         // 429: с этого адреса уже прислали (несколько компьютеров за одним IP). Не повторяем до следующего часа
@@ -139,6 +146,64 @@ public static class Crowd
             .OrderByDescending(x => x.Rate).ThenByDescending(x => x.Total)
             .Cast<(DnsServer, int, int)?>()
             .FirstOrDefault();
+    }
+
+    /// <summary>Адрес DoH сервера без шаблона «{?dns}»: https и только он, иначе null.</summary>
+    public static string? DohOf(DnsServer s) =>
+        !string.IsNullOrWhiteSpace(s.DohUrl) && Uri.TryCreate(s.DohUrl.Split('{')[0], UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
+            ? u.GetLeftPart(UriPartial.Path) : null;
+
+    /// <summary>Серверы, которые у многих пользователей работают (сервер отбирает: 20+ проверок, 70%+ удачных, 2+ сети провайдеров).</summary>
+    public static async Task<List<Found>> DiscoverAsync(CancellationToken ct = default)
+    {
+        using var resp = await Http.GetAsync(BaseUrl() + "/v1/discover", ct).ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        var list = new List<Found>();
+        if (!doc.RootElement.TryGetProperty("servers", out var arr) || arr.ValueKind != JsonValueKind.Array) return list;
+        foreach (var e in arr.EnumerateArray())
+        {
+            string? Str(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            int Int(string n) => e.TryGetProperty(n, out var v) && v.TryGetInt32(out var i) ? i : 0;
+            if (Str("server") is { Length: > 0 } server) list.Add(new Found(server, Str("name"), Str("url"), Int("rate"), Int("checks"), Int("nets")));
+        }
+        return list;
+    }
+
+    /// <summary>
+    /// Найденный сервер как новая строка списка. Адрес — IP или DoH. DoH без полного адреса (сервер прислал только
+    /// хост) получает обычный путь /dns-query. Имя чистится от управляющих символов. null — ключ не похож ни на что.
+    /// </summary>
+    public static DnsServer? ToServer(Found f)
+    {
+        var name = new string((f.Name ?? f.Server).Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (name.Length == 0) name = f.Server;
+        if (System.Net.IPAddress.TryParse(f.Server, out var ip))
+            return new DnsServer { Name = DnsServer.Clip(name, 48), Primary = ip.ToString(), Source = "Общая карта", SourceUrl = Endpoint };
+        if (Uri.CheckHostName(f.Server) != UriHostNameType.Dns) return null;
+        var url = Uri.TryCreate(f.Url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && u.Host.Equals(f.Server, StringComparison.OrdinalIgnoreCase)
+            ? u.GetLeftPart(UriPartial.Path) : $"https://{f.Server}/dns-query";
+        return new DnsServer { Name = DnsServer.Clip(name, 48), DohUrl = url, Source = "Общая карта", SourceUrl = Endpoint };
+    }
+
+    public sealed record ServiceState(string Indicator, string Text);
+
+    /// <summary>
+    /// Состояние ChatGPT и Claude по их страницам статуса (через сервер общей карты: сами страницы из России
+    /// открываются не всегда). Indicator: none, minor, major, critical или unknown.
+    /// </summary>
+    public static async Task<Dictionary<string, ServiceState>> ServiceStatusAsync(CancellationToken ct = default)
+    {
+        using var resp = await Http.GetAsync(BaseUrl() + "/v1/services", ct).ConfigureAwait(false);
+        resp.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+        var map = new Dictionary<string, ServiceState>(StringComparer.OrdinalIgnoreCase);
+        if (doc.RootElement.TryGetProperty("services", out var svc) && svc.ValueKind == JsonValueKind.Object)
+            foreach (var p in svc.EnumerateObject())
+                map[p.Name] = new ServiceState(
+                    p.Value.TryGetProperty("indicator", out var i) ? i.GetString() ?? "unknown" : "unknown",
+                    p.Value.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "");
+        return map;
     }
 
     /// <summary>Название сети: «Rostelecom (AS12389)» или «AS12389».</summary>

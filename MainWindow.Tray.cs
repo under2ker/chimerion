@@ -141,6 +141,8 @@ public partial class MainWindow
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Открыть", () => ShowFromTray()));
         menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync()));
+        menu.Items.Add(TrayItem("Не открывается…", () => { ShowFromTray(); OpenHelpWizard(); }));
+        menu.Items.Add(TrayItem("Сайты", () => { ShowFromTray(); OpenSites(); }));
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         _trayTg = TrayItem("Telegram: включить", () => _ = ToggleToolFromTrayAsync(_tools[0]));
         _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]));
@@ -269,7 +271,18 @@ public partial class MainWindow
     /// <summary>Действие по щелчку на текущем уведомлении в трее. Сбрасывается, когда уведомление закрылось.</summary>
     private Action? _balloonClick;
 
-    private void ShowFromTray()
+    /// <summary>
+    /// Уведомление Windows. Каждое ставит свое действие по щелчку или сбрасывает прежнее: раньше обычное уведомление
+    /// оставляло действие предыдущего, и щелчок по «DNS был сброшен» открывал вопрос о смене сервера.
+    /// </summary>
+    private void Balloon(int ms, string title, string text, System.Windows.Forms.ToolTipIcon icon, Action? click = null)
+    {
+        if (_tray == null) return;
+        _balloonClick = click;
+        _tray.ShowBalloonTip(ms, title, text, icon);
+    }
+
+    internal void ShowFromTray()
     {
         Show();
         WindowState = WindowState.Normal;

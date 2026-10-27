@@ -241,8 +241,7 @@ public static class SystemCheck
 
         foreach (var (name, dns) in found)
             yield return new Issue($"На адаптере «{name}» есть DNS по IPv6: {string.Join(", ", dns)}",
-                "Часть запросов может идти по IPv6 мимо CHIMERION к DNS роутера или провайдера. Подключитесь заново: " +
-                "у сервера без IPv6 CHIMERION на время подключения выключает IPv6 на адаптере. Если предупреждение осталось, выключите IPv6 в свойствах адаптера.");
+                "Часть запросов может идти по IPv6 мимо CHIMERION. Переподключитесь, а если не поможет, выключите IPv6 в свойствах адаптера");
     }
 
     /// <summary>

@@ -45,18 +45,22 @@ public partial class MainWindow
     private void LogSnapshot(string title, NetSnapshot n)
     {
         PrivacyGuard.RememberPersonal(n.PublicIp, n.Location, n.Provider);
-        Log($"{title}: IP {n.PublicIp} ({n.Location}, {n.Provider}), DNS {n.SystemDns}");
+        // Внешний IP, город и провайдер в журнал не пишутся: для разбора проблем хватает страны и DNS
+        var country = n.Location.Split(',')[0].Trim();
+        Log($"{title}: страна {(country.Length is > 0 and <= 3 ? country : "не определена")}, DNS {n.SystemDns}");
         // Без подключения адрес, не совпавший с эталоном, — это обычно CDN сервиса, а не Smart DNS: так и пишем
         bool connected = DnsSwitcher.GetActive() != null;
         string Route(bool proxied) => !proxied ? "(напрямую)" : connected ? "(через Smart DNS)" : "(адрес не совпал с эталоном)";
+        // Адреса нет совсем: «напрямую» тут сбивает с толку, это DNS ничего не вернул
+        string Where(string ip, bool proxied) => ip is "не резолвится" or "—" or "" ? "DNS не дал адрес" : $"{ip} {Route(proxied)}";
         foreach (var x in n.Services)
-            Log($"  {x.Name}: {x.Host} → {x.ResolvedIp} {Route(x.Proxied)}, {x.Access}{(x.Note != null ? ". " + x.Note : "")}");
+            Log($"  {x.Name}: {x.Host} → {Where(x.ResolvedIp, x.Proxied)}, {x.Access}{(x.Note != null ? ". " + x.Note : "")}");
         foreach (var x in n.Hosts)
-            Log($"  доп. {x.Name} → {x.ResolvedIp} {Route(x.Proxied)}, {x.Access}");
+            Log($"  доп. {x.Name} → {Where(x.ResolvedIp, x.Proxied)}, {x.Access}");
         foreach (var r in n.Resolvers)
-            Log($"  резолвер: {r.Ip} · {r.Org} · {r.Place}");
+            Log($"  резолвер: {r.Org} · {r.Place.Split(',')[^1].Trim()}");
         if (n.Egress is { } eg)
-            Log($"  ИИ видят выход: {GeoLocation.CountryName(eg.Country)}{(string.IsNullOrEmpty(n.EgressCity) ? "" : ", " + n.EgressCity)} ({eg.Ip}{(string.IsNullOrWhiteSpace(n.EgressOrg) ? "" : ", " + n.EgressOrg)})");
+            Log($"  ИИ видят выход: {GeoLocation.CountryName(eg.Country)}{(string.IsNullOrWhiteSpace(n.EgressOrg) ? "" : " (" + n.EgressOrg + ")")}");
         // В режиме «Два DNS» тестовый домен идет через общий DNS: разные резолверы там не утечка
         if (DnsSwitcher.GetActive() is { Split: false } && LeakTest.LooksLikeLeak(n.Resolvers))
             Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");

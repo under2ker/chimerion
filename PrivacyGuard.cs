@@ -20,7 +20,7 @@ namespace Dnex;
 /// 3. Маскировка: известные личные значения заменяются на «скрыто» в журнале, на панели проверки, в диагностике и трее,
 ///    на случай фото экрана телефоном или взгляда через плечо.
 /// 4. Уведомления Windows рисует система, их из захвата не исключить: в их тексте личных данных нет (Mask).
-/// 5. Копирование журнала и отчетов очищает текст от личного.
+/// 5. Журнал (на экране, на диске и при копировании) очищается от личного всегда, независимо от режима (Scrub).
 ///
 /// Метка ставится в момент появления окна (Loaded, открытие подсказки или меню) и дополнительно обходом видимых окон
 /// процесса четыре раза в секунду: так не пропускается ни одно всплывающее окно. Скрытые служебные окна (WPF и WinForms
@@ -185,8 +185,20 @@ public static class PrivacyGuard
         System.Text.RegularExpressions.Regex.Replace(text,
             $@"(?<![\w.:]){System.Text.RegularExpressions.Regex.Escape(value)}(?![\w.:])", Hidden, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-    /// <summary>Для копирования наружу: маска плюс очистка, как у отчета для GitHub (локальные адреса, имя пользователя, почта).</summary>
-    public static string ForExport(string text) => Enabled ? Services.Diagnostics.Sanitize(Mask(text), null) : text;
+    /// <summary>
+    /// Для журнала: личные значения убираются всегда, даже без режима скрытия, плюс локальные адреса, имя пользователя
+    /// Windows и почта. Журнал хранится на диске 3 дня и уходит в отчеты, поэтому личного в нем быть не должно.
+    /// </summary>
+    public static string Scrub(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        foreach (var v in Personal.Keys.OrderByDescending(k => k.Length))
+            text = ReplaceWord(text, v);
+        return Services.Diagnostics.Sanitize(text, null);
+    }
+
+    /// <summary>Для копирования наружу: то же, что в журнале (Scrub), и маска режима скрытия.</summary>
+    public static string ForExport(string text) => Mask(Scrub(text));
 
     /// <summary>Сбросить запомненные значения (тесты).</summary>
     internal static void ForgetPersonal() => Personal.Clear();

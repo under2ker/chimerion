@@ -154,8 +154,8 @@ internal sealed class ToolsWindow
         body.Children.Add(Ui.CardTitle(t.Title, foreign ? "работает ваша копия" : running ? "работает" : installed ? "выключено" : "не установлено",
             running ? "Ok" : "Muted"));
         body.Children.Add(Ui.Hint(t is TgProxyTool
-            ? "Локальный прокси для Telegram Desktop: трафик к серверам Telegram идет через WebSocket. У прокси свой значок в трее и свои настройки"
-            : "zapret: обход замедления YouTube, Discord и сайтов из списка. Нужны права администратора, антивирус может ругаться на драйвер WinDivert"));
+            ? "Прокси для Telegram Desktop через WebSocket. У него свой значок в трее"
+            : "Обход замедления YouTube, Discord и сайтов из списка. Нужны права администратора, антивирус может ругаться на WinDivert"));
 
         var ver = foreign ? "Запущена ваша копия, не из CHIMERION: выключается через ее значок в трее. Ссылка для Telegram берется из ее настроек"
                 : installed ? $"Версия {t.InstalledVersion}" : "Скачается при первом включении";
@@ -171,7 +171,7 @@ internal sealed class ToolsWindow
         if (!foreign && !running)
             body.Children.Add(Ui.Steps(t is TgProxyTool
                 ? "Что нажать: «Включить», потом «Подключить Telegram» и подтвердить прокси в окне Telegram"
-                : "Что нажать: «Включить». CHIMERION скачает zapret и запустит обход с основной стратегией"));
+                : "Что нажать: «Включить». Программа скачает zapret и запустит обход"));
         else if (t is ZapretTool && running && _pick == null)
             body.Children.Add(Ui.Steps("Если какой-то сайт не открывается: добавьте его в «Сайты для обхода», затем нажмите «Подобрать стратегию» и выберите лучшую"));
         else if (t is TgProxyTool && running)
@@ -238,6 +238,7 @@ internal sealed class ToolsWindow
             var src = Ui.Picker(SourceTitle(z.State.IpSetSource), b => Menu(b, sources.Select(s => (s.Title, (string?)s.Note, z.State.IpSetSource == s.Id,
                 (Action)(() => ChangeZapret(z, $"Адреса для обхода: {s.Title}", () => z.State.IpSetSource = s.Id,
                     async p => { if (s.Id != null && RemoteLists.Get(s.Id) is { } rl) { p.Report("Скачиваю список адресов…"); await RemoteLists.EnsureAsync(rl); } }))))));
+            src.IsEnabled = !_busy; // во время другого действия выбор молча не применился бы
             body.Children.Add(Ui.Row("Источник адресов", "Рекомендуем «CDN и хостинги»: он уже других и меньше задевает лишнее", src).With(g => g.Margin = new Thickness(0, 8, 0, 0)));
         }
 
@@ -385,8 +386,7 @@ internal sealed class ToolsWindow
         w.ShowInTaskbar = false;
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Сайты для обхода",
-            "zapret применяет обход к этим сайтам и к своему основному списку (YouTube, Discord). Сервисам, которые сами закрылись " +
-            "для России, обход не поможет: их можно отправить в Smart DNS в «Настройки» → «Два DNS»"));
+            "Обход действует на эти сайты и на YouTube с Discord. Сайтам, закрытым для России, нужен Smart DNS, а не обход"));
 
         // Готовые наборы: две колонки галочек, пояснение в подсказке
         root.Children.Add(Ui.Section("Готовые наборы", first: true));
@@ -507,6 +507,9 @@ internal sealed class ToolsWindow
             if (bad.Count > 0) { err.Text = "Не похоже на домен: " + string.Join(", ", bad.Take(3)); return; }
             var groups = checks.Where(c => c.Box.IsChecked == true).Select(c => c.Id).ToList();
             var big = bigChecks.Where(c => c.Box.IsChecked == true).Select(c => c.Id).ToList();
+            // Идет другое действие (подбор стратегии, обновление): RunAsync его не прервет и молча пропустит сохранение.
+            // Раньше окно при этом закрывалось, и введенные сайты терялись
+            if (_busy) { err.Text = "Подождите: идет другое действие с zapret. Сохраните, когда оно закончится"; return; }
             w.Close();
             _ = RunAsync(z, $"Сайты для обхода сохранены: наборов {groups.Count}, больших списков {big.Count}, своих {lines.Count}", async p =>
             {

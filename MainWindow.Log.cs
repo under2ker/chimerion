@@ -61,8 +61,8 @@ public partial class MainWindow
 
     private void Log(string msg)
     {
-        // В режиме скрытия данных личные значения не попадают в журнал вовсе, даже в память
-        _logQueue.Enqueue(new LogEntry(DateTime.Now, PrivacyGuard.Mask(msg)));
+        // Личные значения (IP, место, провайдер, имя пользователя) в журнал не попадают вовсе, ни в память, ни на диск
+        _logQueue.Enqueue(new LogEntry(DateTime.Now, PrivacyGuard.Scrub(msg)));
         if (Dispatcher.CheckAccess()) EnsureLogTimer(); else Dispatcher.InvokeAsync(EnsureLogTimer);
     }
 
@@ -80,7 +80,9 @@ public partial class MainWindow
     {
         _logTimer?.Stop();
         if (_logQueue.IsEmpty) return;
-        while (_logQueue.TryDequeue(out var entry)) _log.Add(entry);
+        var added = new List<LogEntry>();
+        while (_logQueue.TryDequeue(out var entry)) { _log.Add(entry); added.Add(entry); }
+        LogStore.Append(added.Select(x => (x.Time, x.Text)));
         while (_log.Count > MaxLogEntries) _log.RemoveAt(0);
         UpdateLogCount();
         if (_logView?.Cast<object>().LastOrDefault() is { } last) LogList.ScrollIntoView(last);
@@ -120,16 +122,17 @@ public partial class MainWindow
     private List<LogEntry> SelectedLog() =>
         _logView == null ? new() : _logView.Cast<LogEntry>().Where(x => LogList.SelectedItems.Contains(x)).ToList();
 
-    private void CopyEntries(IEnumerable<LogEntry> items, string done)
+    private void CopyEntries(IEnumerable<LogEntry> items, string done, bool withDate = false)
     {
-        var text = PrivacyGuard.ForExport(string.Join(Environment.NewLine, items.Select(x => $"[{x.TimeText}] {x.Text}")));
+        var text = PrivacyGuard.ForExport(string.Join(Environment.NewLine,
+            items.Select(x => $"[{(withDate ? x.Time.ToString("dd.MM HH:mm:ss") : x.TimeText)}] {x.Text}")));
         if (text.Length == 0) return;
         try
         {
             Clipboard.SetText(text);
             ShowToast(done);
         }
-        catch (Exception) { ShowToast("Не удалось скопировать"); }
+        catch (Exception) { ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn"); }
     }
 
     /// <summary>Кнопка «Копировать»: выбранные строки, а если их нет, все видимые.</summary>
@@ -140,7 +143,29 @@ public partial class MainWindow
         if (_logView == null) return;
         var sel = SelectedLog();
         if (sel.Count > 0) CopyEntries(sel, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
-        else CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован");
+        else CopyStored();
+    }
+
+    /// <summary>Весь журнал с диска за 3 дня (все запуски), с учетом фильтра уровня.</summary>
+    private List<LogEntry> StoredLog()
+    {
+        FlushLog();
+        return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).Where(FilterLog).ToList();
+    }
+
+    private void CopyStored()
+    {
+        var all = StoredLog();
+        if (all.Count == 0) { if (_logView != null) CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован"); return; }
+        CopyEntries(all, $"Журнал за 3 дня скопирован: {all.Count} строк", withDate: true);
+    }
+
+    /// <summary>Журнал для отчета диагностики: все записи за 3 дня с датой.</summary>
+    private IEnumerable<string> LogForReport()
+    {
+        var all = StoredLog();
+        if (all.Count == 0) all = _log.ToList();
+        return all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}");
     }
 
     /// <summary>Контекстное меню и Ctrl+C: выбранные строки, а если ничего не выбрано, текущая строка.</summary>
@@ -153,7 +178,7 @@ public partial class MainWindow
 
     private void CopyAll_Click(object sender, RoutedEventArgs e)
     {
-        if (_logView != null) CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован");
+        CopyStored();
     }
 
     /// <summary>Двойной щелчок по строке копирует ее одну.</summary>

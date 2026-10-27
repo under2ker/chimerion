@@ -63,12 +63,22 @@ public static class Diagnostics
 
         // Сервисы: доступ, через что идут и откуда их видит сервис
         var snap = await ConnectionProbe.TakeAsync(st, ct, leakTest: active != null);
+        bool noDns = snap.Services.Count > 0 && snap.Services.All(x => x.ResolvedIp is "не резолвится" or "—" or "");
+        // Без подключения в Windows может стоять Smart DNS, выставленный вручную (например, Xbox DNS). Если он не дает
+        // адреса ИИ, программа об этом должна сказать прямо, а не писать «напрямую не резолвится»
+        if (active == null && current.Count > 0 && ManualServer(current) is { } manual)
+            items.Add(noDns
+                ? new DiagItem(DiagLevel.Bad, $"В Windows вручную стоит {manual}, и он не дает адреса ИИ",
+                    "Сервер перестал работать или просит привязать IP на своем сайте. Подключите рабочий сервер кнопкой ниже", "connect", "Подключить лучший")
+                : new DiagItem(DiagLevel.Info, $"В Windows вручную стоит {manual}",
+                    "CHIMERION им не управляет: сторож и запасной сервер не работают. Лучше подключиться через программу", "connect", "Подключить лучший"));
         foreach (var s in snap.Services)
         {
             var ok = s.Access.StartsWith('✓');
             var where = s.Egress is { } e ? $", видит вас из страны {GeoLocation.CountryName(e.Country)}" : "";
             var closedEgress = s.Egress is { } e2 && EgressWatch.Closed.Contains(e2.Country);
-            var route = s.Proxied ? $"через Smart DNS {s.ResolvedIp}" : $"напрямую {s.ResolvedIp}";
+            var route = s.ResolvedIp is "не резолвится" or "—" or "" ? "DNS не дал адрес"
+                      : s.Proxied ? $"через Smart DNS {s.ResolvedIp}" : $"напрямую {s.ResolvedIp}";
             var bad = !(ok && !closedEgress);
             items.Add(new DiagItem(bad ? DiagLevel.Bad : DiagLevel.Ok, $"{s.Name}: {s.Access.TrimStart('✓', '✗', ' ')}",
                 route + where + (s.Note != null ? ". " + s.Note : ""),
@@ -100,8 +110,8 @@ public static class Diagnostics
             var servers = Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>());
             items.Add(Crowd.BestForProvider(crowd, servers) is { } best
                 ? new DiagItem(DiagLevel.Info, $"У вашего провайдера лучше всего работает {best.Server.DisplayName}",
-                    $"{Crowd.NetName(crowd)}: {best.Rate}% удачных проверок из {best.Total} за сутки по данным общей карты серверов")
-                : new DiagItem(DiagLevel.Info, "Общая карта: по вашему провайдеру пока мало данных", Crowd.NetName(crowd)));
+                    $"{best.Rate}% удачных проверок из {best.Total} за сутки по данным общей карты серверов")
+                : new DiagItem(DiagLevel.Info, "Общая карта: по вашему провайдеру пока мало данных"));
         }
 
         // WSL для разработчиков: без DNS-туннеля запросы из Linux идут мимо правил «Двух DNS»
@@ -117,10 +127,12 @@ public static class Diagnostics
 
         if (snap.Resolvers.Count > 0)
             items.Add(new DiagItem(DiagLevel.Info, "Резолверы, дошедшие до тестового сервера",
-                string.Join("; ", snap.Resolvers.Select(r => $"{r.Org} ({r.Place})").Distinct())));
+                string.Join("; ", snap.Resolvers.Select(r => $"{r.Org} ({r.Place.Split(',')[^1].Trim()})").Distinct())));
 
         // Помехи в системе: VPN, безопасный DNS в браузере, прокси, hosts, IPv6
         var issues = SystemCheck.Run(active?.OnAdapters ?? new List<string>());
+        if (tools.OfType<ZapretTool>().Any(z => z.IsInstalled) && ZapretTool.Conflict() is { } zc)
+            issues.Add(new SystemCheck.Issue("две копии zapret", zc, "tools", "Открыть обход"));
         if (issues.Count == 0) items.Add(new DiagItem(DiagLevel.Ok, "Помех в системе не найдено"));
         foreach (var i in issues) items.Add(new DiagItem(DiagLevel.Warn, "Помеха: " + i.Title, i.Fix, i.Action, i.ActionText));
 
@@ -168,10 +180,23 @@ public static class Diagnostics
         if (tail.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine("Журнал (последние записи):");
+            sb.AppendLine("Журнал за 3 дня:");
             foreach (var l in tail) sb.AppendLine(l);
         }
         return Sanitize(sb.ToString(), r.PublicIp);
+    }
+
+    /// <summary>Название сервера из списка, если адреса в Windows — его адреса: Smart DNS, выставленный вручную.</summary>
+    private static string? ManualServer(IReadOnlyCollection<IPAddress> current)
+    {
+        try
+        {
+            if (!System.IO.File.Exists(Storage.PathOf("servers.json"))) return null;
+            var servers = Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>());
+            var cur = current.Select(a => a.ToString()).ToHashSet();
+            return servers.FirstOrDefault(s => s.Primary.Length > 0 && cur.Contains(s.Primary))?.DisplayName is { } n ? $"«{n}»" : null;
+        }
+        catch (Exception) { return null; }
     }
 
     private static readonly Regex Ipv4 = new(@"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b", RegexOptions.Compiled);

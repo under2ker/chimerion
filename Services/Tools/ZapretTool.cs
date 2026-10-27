@@ -37,11 +37,27 @@ public sealed class ZapretTool : Tool
     public override bool IsInstalled => File.Exists(Path.Combine(Bin, "winws.exe"));
     public override bool NeedsAdmin => true;
 
-    public override bool IsRunning()
+    public override bool IsRunning() => WinwsCount() > 0;
+
+    /// <summary>Сколько копий winws.exe запущено. Больше одной — две копии обхода мешают друг другу.</summary>
+    public static int WinwsCount()
     {
         var list = Process.GetProcessesByName("winws");
         foreach (var p in list) p.Dispose();
-        return list.Length > 0;
+        return list.Length;
+    }
+
+    /// <summary>
+    /// Что мешает обходу: служба zapret из service.bat (запускает свою копию, обычно при старте Windows, и CHIMERION
+    /// ею не управляет) или несколько копий winws сразу. Null — помех нет.
+    /// </summary>
+    public static string? Conflict()
+    {
+        if (ForeignServiceInstalled())
+            return "Установлена служба zapret из service.bat: она запускает свою копию обхода, и две копии мешают друг другу. Удалите ее: service.bat → Remove Services";
+        if (WinwsCount() > 1)
+            return "Запущено несколько копий zapret (winws.exe), они мешают друг другу. Выключите обход и включите снова";
+        return null;
     }
 
     protected override ReleaseAsset? PickAsset(Release r) =>
@@ -218,7 +234,7 @@ public sealed class ZapretTool : Tool
     }
 
     /// <summary>Служба zapret, поставленная через service.bat: тогда обходом уже управляет она, две копии мешают друг другу.</summary>
-    private static bool ForeignServiceInstalled()
+    internal static bool ForeignServiceInstalled()
     {
         try
         {
@@ -233,6 +249,7 @@ public sealed class ZapretTool : Tool
 
     public override async Task StartAsync()
     {
+        EnsureNoForeignService();
         if (IsRunning())
         {
             if (State.Enabled) return; // уже работает наша копия (например, после перезапуска CHIMERION)

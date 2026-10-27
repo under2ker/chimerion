@@ -14,7 +14,7 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.36</Version>
+    <Version>0.1.37</Version>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -32,6 +32,7 @@
     <EmbeddedResource Include="catalog/bypass.json" LogicalName="bypass.json" />
     <EmbeddedResource Include="catalog/bypass.json.sig" LogicalName="bypass.json.sig" />
     <EmbeddedResource Include="i18n/en.json" LogicalName="i18n.en.json" />
+    <EmbeddedResource Include="Assets/animated-icons.json.gz" LogicalName="animated-icons.json.gz" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,6 +46,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 

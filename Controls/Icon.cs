@@ -8,8 +8,10 @@ using System.Windows.Shapes;
 namespace Dnex.Controls;
 
 /// <summary>
-/// Векторная иконка. Контурные иконки из набора Lucide (лицензия ISC, https://lucide.dev), логотипы сервисов из
-/// Simple Icons (CC0, https://simpleicons.org). Цвет берется у текста вокруг (Foreground наследуется), размер Size.
+/// Векторная иконка. Анимированные иконки useanimations.com (MIT, https://useanimations.com): в покое стоит один кадр,
+/// при наведении на кнопку или пункт меню с иконкой и при нажатии проигрывается анимация (AnimatedIcons). Для
+/// остальных контурные иконки Lucide (ISC, https://lucide.dev), логотипы сервисов из Simple Icons (CC0,
+/// https://simpleicons.org). Цвет берется у текста вокруг (Foreground наследуется), размер Size.
 /// В XAML: &lt;controls:Icon Kind="star" Size="16"/&gt;, в коде: new Icon { Kind = "zap", Size = 18 }.
 /// </summary>
 public sealed class Icon : Viewbox
@@ -22,6 +24,8 @@ public sealed class Icon : Viewbox
         ["zap"] = "M 4 14 a 1 1 0 0 1 -.78 -1.63 l 9.9 -10.2 a .5 .5 0 0 1 .86 .46 l -1.92 6.02 A 1 1 0 0 0 13 10 h 7 a 1 1 0 0 1 .78 1.63 l -9.9 10.2 a .5 .5 0 0 1 -.86 -.46 l 1.92 -6.02 A 1 1 0 0 0 11 14 z",
         ["stethoscope"] = "M 11 2 v 2 | M 5 2 v 2 | M 5 3 H 4 a 2 2 0 0 0 -2 2 v 4 a 6 6 0 0 0 12 0 V 5 a 2 2 0 0 0 -2 -2 h -1 | M 8 15 a 6 6 0 0 0 12 0 v -3 | M18,10 A2,2 0 1 0 22,10 A2,2 0 1 0 18,10 Z",
         ["eye-off"] = "M 10.733 5.076 a 10.744 10.744 0 0 1 11.205 6.575 a 1 1 0 0 1 0 .696 a 10.747 10.747 0 0 1 -1.444 2.49 | M 14.084 14.158 a 3 3 0 0 1 -4.242 -4.242 | M 17.479 17.499 a 10.75 10.75 0 0 1 -15.417 -5.151 a 1 1 0 0 1 0 -.696 a 10.75 10.75 0 0 1 4.446 -5.143 | M 2 2 l 20 20",
+        ["smartphone"] = "M 7 2 h 10 a 2 2 0 0 1 2 2 v 16 a 2 2 0 0 1 -2 2 h -10 a 2 2 0 0 1 -2 -2 v -16 a 2 2 0 0 1 2 -2 z | M 12 18 h 0.01",
+        ["circle-help"] = "M 22 12 a 10 10 0 1 1 -20 0 a 10 10 0 1 1 20 0 z | M 9.09 9 a 3 3 0 0 1 5.83 1 c 0 2 -3 3 -3 3 | M 12 17 h 0.01",
         ["info"] = "M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z | M 12 16 v -4 | M 12 8 h .01",
         ["triangle-alert"] = "M 21.73 18 l -8 -14 a 2 2 0 0 0 -3.48 0 l -8 14 A 2 2 0 0 0 4 21 h 16 a 2 2 0 0 0 1.73 -3 | M 12 9 v 4 | M 12 17 h .01",
         ["circle-check"] = "M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z | M 9 12 l 2 2 l 4 -4",
@@ -83,6 +87,77 @@ public sealed class Icon : Viewbox
         Stretch = Stretch.Uniform;
         SnapsToDevicePixels = true;
         VerticalAlignment = VerticalAlignment.Center;
+        Loaded += (_, _) => Attach();
+        Unloaded += (_, _) => { Detach(); Stop(); };
+    }
+
+    // ---------- Анимация ----------
+
+    private AnimatedGlyph? _glyph;
+    private UIElement? _trigger;
+    private System.Diagnostics.Stopwatch? _clock;
+
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.Property == ForegroundProperty) _glyph?.InvalidateVisual(); // цвет темы сменился: кадр перерисовывается
+    }
+
+    /// <summary>Что запускает анимацию: ближайшая кнопка, пункт меню или вкладка вокруг иконки, иначе сама иконка.</summary>
+    private UIElement FindTrigger()
+    {
+        DependencyObject? d = this;
+        for (int i = 0; i < 8 && d != null; i++)
+        {
+            d = VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d);
+            if (d is System.Windows.Controls.Primitives.ButtonBase or MenuItem or ListBoxItem) return (UIElement)d;
+        }
+        return this;
+    }
+
+    private void Attach()
+    {
+        Detach();
+        if (_glyph == null) return;
+        _trigger = FindTrigger();
+        _trigger.MouseEnter += OnEnter;
+        _trigger.PreviewMouseLeftButtonDown += OnPress;
+    }
+
+    private void Detach()
+    {
+        if (_trigger == null) return;
+        _trigger.MouseEnter -= OnEnter;
+        _trigger.PreviewMouseLeftButtonDown -= OnPress;
+        _trigger = null;
+    }
+
+    private void OnEnter(object sender, System.Windows.Input.MouseEventArgs e) { if (_clock == null) Play(); }
+    private void OnPress(object sender, System.Windows.Input.MouseButtonEventArgs e) => Play();
+
+    /// <summary>Проиграть анимацию один раз с начала. Если в Windows выключены анимации, иконка не двигается.</summary>
+    public void Play()
+    {
+        if (_glyph == null || !SystemParameters.ClientAreaAnimation) return;
+        if (_clock == null) CompositionTarget.Rendering += OnFrame;
+        _clock = System.Diagnostics.Stopwatch.StartNew();
+        _glyph.Frame = 0;
+    }
+
+    private void Stop()
+    {
+        if (_clock == null) return;
+        CompositionTarget.Rendering -= OnFrame;
+        _clock = null;
+        if (_glyph != null) _glyph.Frame = _glyph.Anim.RestFrame;
+    }
+
+    private void OnFrame(object? sender, EventArgs e)
+    {
+        if (_glyph == null || _clock == null) { Stop(); return; }
+        int frame = (int)(_clock.Elapsed.TotalSeconds * _glyph.Anim.Fps);
+        if (frame >= _glyph.Anim.Frames.Length) { Stop(); return; }
+        _glyph.Frame = frame;
     }
 
     /// <summary>Контуры через «|»: каждый своей фигурой, как отдельные элементы в исходном SVG.</summary>
@@ -97,6 +172,21 @@ public sealed class Icon : Viewbox
 
     private void Build()
     {
+        Stop();
+        _glyph = null;
+        // Анимированная версия, если она есть (кроме залитых: залитая звезда избранного остается статичной)
+        if (!Solid && AnimatedIcons.Get(Kind) is { } anim)
+        {
+            _glyph = new AnimatedGlyph(this, anim);
+            // Рисунок занимает середину поля 32×32: показываем центральные 24×24, тогда размер и толщина линии как у Lucide
+            double inset = (anim.Size - 24) / 2;
+            Canvas.SetLeft(_glyph, -inset);
+            Canvas.SetTop(_glyph, -inset);
+            Child = new Canvas { Width = 24, Height = 24, ClipToBounds = true, Children = { _glyph } };
+            if (IsLoaded) Attach();
+            return;
+        }
+        if (IsLoaded) Detach();
         var canvas = new Canvas { Width = 24, Height = 24 };
         var path = new Path();
         var color = new Binding(nameof(Foreground)) { Source = this };

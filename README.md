@@ -170,7 +170,7 @@ dotnet publish CHIMERION.csproj -c Release -r win-x64 --self-contained false -p:
 
 ## Благодарности
 
-Спасибо авторам [TG WS Proxy](https://github.com/Flowseal/tg-ws-proxy) и [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) (Flowseal, bol-van, WinDivert от basil00), списков [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community), [Re:filter](https://github.com/1andrevich/Re-filter-lists), [eduard256/russia-blocked-ips](https://github.com/eduard256/russia-blocked-ips) и [RussiaFancyLists](https://github.com/Noktomezo/RussiaFancyLists). Иконки интерфейса из [Lucide](https://lucide.dev) (ISC), логотипы ChatGPT, Claude и Gemini из [Simple Icons](https://simpleicons.org) (CC0), они принадлежат своим владельцам. Полоса прогресса сделана по мотивам элемента satyamchaudharydev с [uiverse.io](https://uiverse.io) (MIT).
+Спасибо авторам [TG WS Proxy](https://github.com/Flowseal/tg-ws-proxy) и [zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube) (Flowseal, bol-van, WinDivert от basil00), списков [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community), [Re:filter](https://github.com/1andrevich/Re-filter-lists), [eduard256/russia-blocked-ips](https://github.com/eduard256/russia-blocked-ips) и [RussiaFancyLists](https://github.com/Noktomezo/RussiaFancyLists). Анимированные иконки из [useanimations](https://useanimations.com) (MIT), остальные из [Lucide](https://lucide.dev) (ISC), логотипы ChatGPT, Claude и Gemini из [Simple Icons](https://simpleicons.org) (CC0), они принадлежат своим владельцам. Полоса прогресса сделана по мотивам элемента satyamchaudharydev с [uiverse.io](https://uiverse.io) (MIT).
 
 ## Лицензия
 

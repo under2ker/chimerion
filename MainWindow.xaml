@@ -176,7 +176,7 @@
                 <Rectangle x:Name="HeaderSep" Width="1" Height="24" Fill="{DynamicResource Border}" Margin="12,0"/>
                 <StackPanel x:Name="ApplyActions" Orientation="Horizontal">
                     <CheckBox x:Name="Watchdog" Content="Следить" IsChecked="True" Margin="0,0,14,0"
-                              ToolTip="Пока подключено, DNS проверяется периодически (интервал задается в настройках). После трех неудач подряд подключение безопасно отключается"/>
+                              ToolTip="Пока подключено, сторож проверяет DNS. Если сервер не отвечает три раза подряд, переключит на другой, когда это разрешено в настройках"/>
                     <Button x:Name="SwitchButton" Content="Переключить сюда" Click="Switch_Click" Margin="0,0,8,0"
                             Padding="16,9" Visibility="Collapsed"
                             ToolTip="Подключиться к выбранному серверу вместо текущего"/>
@@ -316,11 +316,6 @@
                             <MenuItem Header="Удалить" Click="Delete_Click" InputGestureText="Del"/>
                         </ContextMenu>
                     </DataGrid.ContextMenu>
-                    <DataGrid.Resources>
-                        <StaticResource x:Key="{x:Static SystemColors.HighlightBrushKey}" ResourceKey="Selection"/>
-                        <StaticResource x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" ResourceKey="SelectionInactive"/>
-                        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#F3F4F1"/>
-                    </DataGrid.Resources>
                     <DataGrid.Columns>
 
                         <!-- Статус -->
@@ -576,6 +571,19 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
+                        <!-- Скорость нейросетей через прокси сервера -->
+                        <DataGridTemplateColumn x:Name="ColAi" Header="ИИ" Width="84" SortMemberPath="AiMs">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock VerticalAlignment="Center" FontWeight="Normal"
+                                               ToolTip="Как быстро отвечают нейросети через прокси этого сервера. Пинг меряет только DNS">
+                                        <Run Text="{Binding AiText, Mode=OneWay}"/>
+                                        <Run Text="мс" Foreground="{DynamicResource Muted}" FontSize="12"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
                         <!-- Оценка -->
                         <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="130" SortMemberPath="Score">
                             <DataGridTemplateColumn.CellTemplate>
@@ -654,6 +662,8 @@
                               Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="14" Margin="0,0,7,0"/><TextBlock Text="Режим"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="DiagToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
                               Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="14" Margin="0,0,7,0"/><TextBlock Text="Диагностика"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="HelpToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
+                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="14" Margin="0,0,7,0"/><TextBlock Text="Помощь"/></StackPanel></ToggleButton>
                 <!-- Версия и проверка обновления: справа внизу, на виду и не теснят шапку. В компактном виде версия в заголовке окна -->
                 <StackPanel x:Name="UpdateGroup" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Значок итога проверки обновления (галочка или предупреждение), виден вместе с итогом -->
@@ -683,7 +693,7 @@
                         <Button Content="Закрыть" Click="CloseLog_Click" Style="{StaticResource Ghost}" DockPanel.Dock="Right"
                                 ToolTip="Спрятать журнал. Открыть снова: «Журнал» внизу окна"/>
                         <Button Content="Копировать" Click="CopyLog_Click" Style="{StaticResource Ghost}" DockPanel.Dock="Right"
-                                ToolTip="Скопировать записи, которые сейчас видны"/>
+                                ToolTip="Выделенные строки, а если ничего не выделено, весь журнал за 3 дня"/>
                         <Button Content="Очистить" Click="ClearLog_Click" Style="{StaticResource Ghost}" DockPanel.Dock="Right"/>
                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                             <TextBlock Text="Журнал" Style="{StaticResource H2}" VerticalAlignment="Center"/>
@@ -706,7 +716,7 @@
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Копировать строку" Click="CopyLine_Click" InputGestureText="Ctrl+C"/>
-                                <MenuItem Header="Копировать всё видимое" Click="CopyAll_Click"/>
+                                <MenuItem Header="Копировать журнал за 3 дня" Click="CopyAll_Click"/>
                                 <Separator/>
                                 <MenuItem Header="Очистить журнал" Click="ClearLog_Click"/>
                             </ContextMenu>

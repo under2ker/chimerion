@@ -186,6 +186,7 @@ public partial class MainWindow
         VerdictCard.Padding = compact ? new Thickness(6, 6, 6, 6) : new Thickness(16, 12, 16, 12);
         VerdictHeader.Visibility = v;
         CompareGrid.Visibility = Visibility.Visible;
+        CompareToggle.Content = "Скрыть"; // кнопка у блока сравнения в лад с ним: блок снова раскрыт
         CompareGrid.Margin = compact ? new Thickness(0) : new Thickness(0, 12, 0, 0); // в компактном виде без шапки блока: без пустого отступа
         _compareSig = null; // плитки пересобираются с отступами текущего вида
         SelectionBar.Visibility = v;
@@ -224,6 +225,10 @@ public partial class MainWindow
             Grid.SetRow(HeaderStats, 0); Grid.SetColumn(HeaderStats, 1); Grid.SetColumnSpan(HeaderStats, 1);
             HeaderStats.Margin = new Thickness(18, 0, 0, 0);
             HeaderStats.HorizontalAlignment = HorizontalAlignment.Left;
+            // Фильтр снова по выбранной вкладке: компактный вид ставил «Рабочие», и при вкладке «Все» таблица
+            // показывала только рабочие серверы
+            _filterIndex = AllTab.IsChecked == true ? 0 : FavTab.IsChecked == true ? 6 : 5;
+            _view?.Refresh();
             if (_fullBounds.Width > 0) ResizeTo(_fullBounds.Width, _fullBounds.Height, animate);
         }
         ApplyResponsive();
@@ -249,6 +254,7 @@ public partial class MainWindow
         // с ними от ~1360 px, со всеми колонками от ~1540 px окна.
         ColSource.Visibility = full ? Visibility.Visible : Visibility.Collapsed; // узкая колонка с одной кнопкой: место есть всегда
         ColStab.Visibility = ColScore.Visibility = full && w >= 1360 ? Visibility.Visible : Visibility.Collapsed;
+        ColAi.Visibility = full && w >= 1200 ? Visibility.Visible : Visibility.Collapsed;
 
         // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
         TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
@@ -355,9 +361,6 @@ public partial class MainWindow
         // Знак CHIMERION в значках окон и трея: полосы следуют за акцентом
         Controls.Brand.RefreshWindowIcons();
         if (_tray != null) { var old = _tray.Icon; _tray.Icon = Controls.Brand.TrayIcon(); old?.Dispose(); }
-        ServerGrid.Resources[SystemColors.HighlightBrushKey] = FindResource("Selection");
-        ServerGrid.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = FindResource("SelectionInactive");
-        ServerGrid.Resources[SystemColors.HighlightTextBrushKey] = FindResource("Text"); // текст выделенной строки читается и на светлой теме
         foreach (Window w in Application.Current.Windows) Services.DarkTitle.Apply(w); // заголовок окна Windows в цвет темы
         if (!IsLoaded) return; // при запуске цвета ставятся до загрузки списка: перерисовывать еще нечего
         if (_connBrush != null) AnimateConnectColor(DnsSwitcher.GetActive() != null ? "BadButton" : "AccentButton");
@@ -398,7 +401,7 @@ public partial class MainWindow
         // Окно в трее или свернуто: уведомление в окне никто не увидит. Важное показываем значком в трее
         if (!IsVisible || WindowState == WindowState.Minimized)
         {
-            if (colorKey is "Warn" or "Bad") _tray?.ShowBalloonTip(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)),
+            if (colorKey is "Warn" or "Bad") Balloon(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)),
                 colorKey == "Bad" ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
             return;
         }

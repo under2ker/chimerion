@@ -562,8 +562,7 @@ public static class DnsSwitcher
     /// <summary>Понятное предупреждение, если PowerShell ограничен политикой. Null, если все в порядке или режим неизвестен.</summary>
     public static string? LanguageModeWarning(string? mode) =>
         mode is null or "FullLanguage" ? null
-        : $"PowerShell на этом компьютере ограничен политикой ({mode}). CHIMERION меняет DNS через PowerShell и здесь не сможет " +
-          "подключиться и отключиться. Обычно так настроены рабочие компьютеры (AppLocker, WDAC): обратитесь к администратору";
+        : $"PowerShell ограничен политикой ({mode}), и CHIMERION не сможет менять DNS. Так бывает на рабочих компьютерах: обратитесь к администратору";
 
     public static bool IsAdmin()
     {

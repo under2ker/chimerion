@@ -50,6 +50,12 @@ public class CrowdTests
         Assert.Equal(2, q.Items.Count);
         Assert.False(q.Items.Single(i => i.Service == "ChatGPT").Ok);
         Assert.True(q.Items.Single(i => i.Service == "Claude").Ok);
+
+        // Свой сервер, добавленный вручную, в общую карту не уходит
+        var mine = Srv("Мой VPS", "203.0.113.77", "ChatGPT ✓");
+        mine.Manual = true;
+        Crowd.Enqueue(q, mine);
+        Assert.DoesNotContain(q.Items, i => i.Server == "203.0.113.77");
     }
 
     [Fact]

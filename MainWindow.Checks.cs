@@ -163,9 +163,12 @@ public partial class MainWindow
 
     private async void Fetch_Click(object sender, RoutedEventArgs e)
     {
+        // Источники правят в settings.json руками: перечитываем файл, чтобы правка подхватилась без перезапуска
+        if (!_settings.Sources.Any(s => s.Enabled)) _settings = LoadSettings();
         if (!_settings.Sources.Any(s => s.Enabled))
         {
-            Log("Нет включенных источников. Откройте «Данные» → settings.json, добавьте адреса в sources, поставьте enabled: true и нажмите «Перечитать настройки».");
+            Log("Нет включенных источников. Откройте «Данные» → settings.json, добавьте адреса в sources с enabled: true, сохраните файл и нажмите «Найти новые серверы» еще раз.");
+            ShowToast("Нет включенных источников: как добавить, написано в журнале", "Warn");
             return;
         }
         var ct = BeginWork();

@@ -171,18 +171,18 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="AutoStartBox" Content="Запускать вместе с Windows (рекомендуем)"/>
-                                <TextBlock Text="Программа стартует в трее без прав администратора. Если после загрузки DNS оказался сброшен, Windows спросит права, чтобы вернуть подключение" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Стартует в трее без прав администратора. Права спросит, только чтобы вернуть DNS" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="StartCompactBox" Content="Открывать программу в компактном виде" Margin="0,14,0,0"/>
-                                <TextBlock Text="Узкое окно: кнопка подключения, плитки сервисов и только рабочие серверы. Обычный вид открывается кнопкой «Полный вид». Если выключено, программа открывается в том виде, в котором ее закрыли" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Узкое окно с кнопкой подключения и рабочими серверами. Если выключено, открывается в том виде, в каком закрыли" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="ОБНОВЛЕНИЯ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="CheckUpdatesBox" Content="Проверять новую версию в фоне (рекомендуем)"/>
-                                <TextBlock Text="При запуске и раз в 6 часов. Программа покажет, что вышло нового, а обновится по кнопке «Обновить» и сама перезапустится" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="При запуске и раз в 6 часов. Обновление ставится одной кнопкой, программа сама перезапустится" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <StackPanel x:Name="RollbackPanel" Visibility="Collapsed" Margin="0,14,0,0">
                                     <TextBlock x:Name="RollbackHint" Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0"/>
                                     <Button x:Name="RollbackButton" Click="Rollback_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,10,0,0"/>
@@ -197,39 +197,28 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="PrivacyBox" Content="Скрывать данные от записи экрана (Стример мод)" Checked="Privacy_Checked"/>
-                                <TextBlock Text="Окна программы не попадут ни на скриншот, ни на запись, ни в демонстрацию экрана, а ваш IP, город и провайдер на экране заменятся на «скрыто». Пригодится, если вы снимаете видео, стримите или показываете экран"
+                                <TextBlock Text="Окна не попадут на скриншоты, запись и трансляции, а IP, город и провайдер скрыты"
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="MaskOnlyBox" Content="Только скрывать данные" Checked="Privacy_Checked" Margin="0,14,0,0"/>
-                                <TextBlock Text="Ваш IP, город и провайдер на экране заменятся на «скрыто», а окна программы на скриншотах и записи видны как обычно. Подойдет, если нужно показать программу на видео или скриншоте, но без личных данных"
+                                <TextBlock Text="IP, город и провайдер скрыты, а окна на записи видны как обычно"
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
-                        <TextBlock Text="ЧТО ЗАЩИЩАЕТ" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="ЧТО СКРЫВАЕТСЯ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Text="Захват экрана"/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Print Screen, «Ножницы», Xbox Game Bar, OBS, демонстрация экрана в Discord, Zoom, Teams и браузере. Windows не отдает им окна программы, вместе с меню, подсказками и меню трея: на записи вместо окна видно то, что под ним"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Миниатюры"/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="На панели задач, в Alt+Tab и при наведении на панель задач вместо содержимого окна показывается значок"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Сам экран"/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Ваш внешний IP, город, регион и провайдер заменяются на «скрыто» в журнале, на панели проверки и в диагностике. Это на случай фото экрана телефоном или взгляда через плечо. Адреса DNS-серверов и страны остаются: без них не понять, как работает подключение"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" FontWeight="SemiBold" Margin="0,12,0,0" Text="Уведомления и копирование"/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Text="Уведомления Windows рисует сама система, поэтому в их тексте личных данных нет. Скопированный журнал и отчеты очищаются от IP, имени пользователя и почты"/>
-                            </StackPanel>
-                        </Border>
-                        <TextBlock Text="ЧЕГО РЕЖИМ НЕ МОЖЕТ" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="Записи, сделанные до включения режима, уже не изменить. Запись строк в журнал тоже необратима: строки, замаскированные в режиме, не раскроются после его выключения."/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Программа с правами администратора или собственным драйвером захвата может обойти защиту Windows. От камеры, направленной на монитор, спасает только маскировка на экране."/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="На Windows 10 старше версии 2004 окно на записи будет не прозрачным, а черным."/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0" Text="• Окна, меню и подсказки: их не видят OBS, Discord, Zoom, Teams, «Ножницы» и Print Screen"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Миниатюры на панели задач и в Alt+Tab: вместо окна значок"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Ваш IP, город и провайдер в журнале, проверке и диагностике. Адреса DNS и страны остаются"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Скопированный журнал и отчеты: без IP, имени пользователя и почты"/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,12,0,0" Text="Не скроет то, что уже записано, и не защитит от камеры или программ с правами администратора. На Windows 10 до версии 2004 окно на записи будет черным"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="ОБЩАЯ КАРТА СЕРВЕРОВ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="CrowdBox" Content="Помогать общей карте серверов"/>
-                                <TextBlock Text="Раз в час программа отправляет итоги своих проверок: адрес Smart DNS, его название и открываются ли через него ChatGPT, Claude и Gemini. О вас ничего не уходит: ни IP, ни имени, ни списка сайтов. Сервер видит только сеть провайдера и считает по ней рейтинг. Рейтинг для вашего провайдера показывается в блоке лучших серверов, даже если галочка выключена"
+                                <TextBlock Text="Раз в час уходят итоги проверок: адрес сервера и открываются ли через него нейросети. Ваш IP и сайты не уходят. Рейтинг по вашему провайдеру виден и без галочки"
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
@@ -293,27 +282,34 @@
                         <TextBlock Text="ПРОВЕРКА СЕРВИСОВ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, программа в фоне проверяет ChatGPT, Claude и Gemini через текущий сервер и сам DNS-сервер прямым запросом. Если сервис перестал открываться или сервер замолчал, придет уведомление с причиной. После первой неудачи проверка повторяется через минуту, чтобы не было ложных тревог."/>
+                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, программа следит за ChatGPT, Claude, Gemini и самим сервером. Если что-то упало, придет уведомление с причиной"/>
                                 <CheckBox x:Name="AutoSwitchBox" Content="Сразу переключаться на лучший рабочий сервер" Margin="0,14,0,0"/>
-                                <TextBlock Text="Без галочки программа только сообщит, а сменить сервер можно щелчком по уведомлению. Избранные серверы тоже проверяются: если какой-то перестал отвечать, придет уведомление" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Иначе только уведомление: сменить сервер можно щелчком по нему. Избранные серверы тоже под присмотром" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="НАБЛЮДЕНИЕ ЗА САЙТАМИ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <CheckBox x:Name="SiteWatchBox" Content="Следить за сайтами, которыми я пользуюсь (рекомендуем)"/>
+                                <TextBlock Text="Сообщит, если сайт, которым вы пользуетесь, перестал открываться, и скажет почему. Список хранится только у вас: «Помощь» → «Сайты под наблюдением»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="СМЕНА СЕРВЕРА И АККАУНТЫ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
-                                <TextBlock Text="Если выключить, сервер меняете только вы. Запасной сервер не ставится, а если сервер перестанет отвечать, программа только сообщит об этом и ничего не переключит. Так страна, из которой нейросети видят вас, не поменяется без вашего ведома" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Выключите, чтобы сервер меняли только вы. Тогда страна, из которой вас видят нейросети, не поменяется сама" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="26,14,0,0"/>
-                                <TextBlock Text="Вместе с выбранным сервером в Windows прописывается второй рабочий с той же страной выхода. Если основной замолчит, Windows за секунды перейдет на запасной сама, и нейросети не пропадут. Если сервера с той же страной нет, запасной не ставится" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
+                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной замолчит, Windows перейдет на него за секунды" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
                                 <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
-                                <TextBlock Text="Программа помнит, из какой страны сервисы обычно видят вас. Перед подключением к серверу с другой страной выхода спросит, а замену и запасной сервер подбирает с той же страной. Частая смена страны входа повышает риск блокировки аккаунта" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="ЧТО ДЕЛАЕТ СТОРОЖ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож проверяет, что DNS на месте и отвечает. Если его сбросила другая программа или Windows, он вернет подключение. Если сервер перестал отвечать, переключит на следующий по стабильности, если смена сервера разрешена выше."/>
-                                <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0" Text="Пока работает сторонний VPN, сторож с ним не спорит. Если DNS сбрасывают снова и снова, он перестает вмешиваться и подсказывает, что делать."/>
+                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда это разрешено выше."/>
+                                <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0" Text="Со сторонним VPN сторож не спорит. Если DNS сбрасывают снова и снова, он отступит и подскажет, что делать."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -324,7 +320,7 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <TextBlock x:Name="SplitStatus" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                                <TextBlock Text="Общий DNS для всего интернета и Smart DNS только для ChatGPT, Claude и Gemini. Домены ИИ Windows отправляет в Smart DNS по своим правилам, остальное идет через общий DNS. Банки и российские сайты работают как обычно"
+                                <TextBlock Text="Нейросети через Smart DNS, остальной интернет через обычный DNS. Банки и российские сайты работают как обычно"
                                            Style="{StaticResource FieldHint}" Margin="0,6,0,0"/>
                                 <Button Content="Настроить два DNS" Click="SplitDns_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
                             </StackPanel>
@@ -347,7 +343,7 @@
                                 <Border Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,9" BorderBrush="{DynamicResource Border}" BorderThickness="1">
                                     <TextBlock x:Name="DataPathText" TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas"/>
                                 </Border>
-                                <TextBlock Text="Здесь лежат settings.json, servers.json, журнал ошибок, резервная копия DNS и копия прежней версии для отката. Не передавайте эти файлы другим: в settings.json могут быть Cookie."
+                                <TextBlock Text="Настройки, серверы, журнал ошибок и резервная копия DNS. Не передавайте settings.json: в нем могут быть ваши Cookie."
                                            Style="{StaticResource FieldHint}" Margin="0,8,0,0"/>
                                 <Button Content="Открыть папку данных" Click="OpenData_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
                             </StackPanel>
@@ -368,9 +364,9 @@
                                     </StackPanel>
                                 </StackPanel>
                                 <TextBlock Style="{StaticResource Para}" Margin="0,18,0,0" Foreground="{DynamicResource Text}"
-                                           Text="Сетевые инструменты для открытого интернета. CHIMERION открывает ChatGPT, Claude и Gemini без VPN через Smart DNS, обходит замедление YouTube и Discord с помощью zapret и ускоряет Telegram."/>
+                                           Text="Сетевые инструменты для открытого интернета: ChatGPT, Claude и Gemini без VPN, обход замедления YouTube и Discord, быстрый Telegram."/>
                                 <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
-                                           Text="Программа сама находит и проверяет серверы, подключается в один клик, следит за подключением и возвращает исходные настройки, если что-то пошло не так. Работает без прав администратора и спрашивает их, только когда меняет DNS."/>
+                                           Text="Сама находит и проверяет серверы, подключается в один клик и все возвращает, если что-то пошло не так. Права администратора нужны только для смены DNS."/>
                             </StackPanel>
                         </Border>
 
@@ -431,7 +427,7 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="TG WS Proxy и zapret-discord-youtube (Flowseal, bol-van; WinDivert, basil00): лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы."/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Списки сайтов и адресов: v2fly/domain-list-community, Re:filter, eduard256/russia-blocked-ips, RussiaFancyLists (MIT)."/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Иконки Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
+                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Анимированные иконки useanimations.com (MIT), остальные Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

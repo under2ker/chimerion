@@ -250,6 +250,7 @@ public partial class MainWindow
             ShowToast($"Такой сервер уже есть: {existing.DisplayName}", "Warn");
             Log($"Такой сервер уже есть: {existing.DisplayName}");
             existing.Manual = true;
+            SaveServers();
             AllTab.IsChecked = true;
             SearchBox.Clear();
             _view?.Refresh();
@@ -382,6 +383,11 @@ public partial class MainWindow
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
         var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
+        // Подключенный сервер не удаляется: DNS на нем работает, а без строки в списке сторож и проверка сервисов
+        // его не находили, и после перезапуска программа сама переключалась на другой
+        var activeId = DnsSwitcher.GetActive()?.ServerId;
+        if (sel.RemoveAll(s => s.Id == activeId) > 0)
+            ShowToast("Подключенный сервер не удаляется: сначала отключитесь или переключитесь на другой", "Warn");
         if (sel.Count == 0) return;
         if (sel.Count > 1 && !DnexDialog.Ask($"Удалить {sel.Count} {ServersWord(sel.Count)}?", "Удаление можно отменить кнопкой «Отменить» внизу окна.",
                 "Удалить", danger: true, windowTitle: "Удаление")) return;
