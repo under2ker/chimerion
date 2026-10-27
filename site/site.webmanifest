@@ -1,0 +1,10 @@
+{
+  "name": "CHIMERION",
+  "short_name": "CHIMERION",
+  "description": "ChatGPT, Claude и Gemini из России без VPN",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#111214",
+  "theme_color": "#111214",
+  "icons": [{ "src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+}

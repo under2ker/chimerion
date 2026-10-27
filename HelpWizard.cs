@@ -43,7 +43,7 @@ internal sealed class HelpWizard
 
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Что не открывается?",
-            "Выберите сервис или впишите сайт. Программа проверит по шагам все, что может мешать, и подскажет, что сделать", glyph: "?"));
+            "Выберите сервис или впишите сайт. Программа проверит по шагам все, что может мешать, и подскажет, что сделать", glyph: "circle-help"));
         var pick = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
         foreach (var t in settings.Targets.Where(t => t.Enabled))
         {
