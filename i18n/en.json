@@ -22,6 +22,7 @@
  " · доступна {0}": " · {0} available",
  " · новости о версиях": " · release news",
  " · помощь, рабочие DNS, идеи": " · help, working DNS, ideas",
+ " · сайт программы": " · the app website",
  " Вернуть исходные DNS можно и через reset-dns.cmd.": " You can also restore the original DNS with reset-dns.cmd.",
  " выключатся": " will be turned off",
  " и ": " and ",

@@ -164,7 +164,7 @@ async function tgSend(env, chatId, text) {
 const HELP =
   "Бот CHIMERION. Показывает, какие Smart DNS сейчас открывают ChatGPT, Claude и Gemini, по проверкам программ CHIMERION.\n\n" +
   "/dns — лучшие серверы за последние 6 часов\n/status — сколько проверок пришло\n\n" +
-  "Программа: github.com/under2ker/chimerion\nКанал: @chimeriondns";
+  "Сайт: chimerion.dev\nИсходный код: github.com/under2ker/chimerion\nКанал: @chimeriondns";
 
 async function telegram(req, env) {
   if (req.headers.get("x-telegram-bot-api-secret-token") !== env.TG_WEBHOOK_SECRET) return new Response("forbidden", { status: 403 });
@@ -368,7 +368,7 @@ a{color:var(--lime)}
 <div class="card stats"><div><b>${s?.checks || 0}</b><span class="muted">проверок за сутки</span></div><div><b>${s?.servers || 0}</b><span class="muted">серверов</span></div><div><b>${s?.asns || 0}</b><span class="muted">сетей провайдеров</span></div></div>
 <div class="card">${list}</div>
 <div class="card"><b>CHIMERION</b> сам находит Smart DNS, проверяет их и подключает лучший в один клик. Бесплатно, для Windows.<br>
-<a class="btn" href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a><a class="btn" href="https://t.me/chimeriondns" style="background:transparent;color:var(--lime);border:1px solid var(--lime)">Telegram-канал</a>
+<a class="btn" href="https://chimerion.dev">Скачать</a><a class="btn" href="https://t.me/chimeriondns" style="background:transparent;color:var(--lime);border:1px solid var(--lime)">Telegram-канал</a>
 <p class="muted" style="margin-bottom:0">Бот <a href="https://t.me/CHIMERIONDNS_BOT">@CHIMERIONDNS_BOT</a> отвечает на /dns. Обновлено ${new Date().toISOString().slice(11, 16)} UTC.</p></div>
 </main></body></html>`;
   const resp = new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });

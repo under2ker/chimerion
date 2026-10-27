@@ -117,6 +117,8 @@ public partial class SettingsWindow : Window
         if (field is System.Windows.Controls.TextBox tb) tb.SelectAll();
     }
 
+    public const string SiteUrl = "https://chimerion.dev";
+    private void Site_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(SiteUrl);
     private void Repo_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}");
     private void License_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/LICENSE");
     private void Changelog_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/CHANGELOG.md");
