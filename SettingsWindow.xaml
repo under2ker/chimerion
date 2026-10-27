@@ -367,6 +367,10 @@
                                            Text="Сетевые инструменты для открытого интернета: ChatGPT, Claude и Gemini без VPN, обход замедления YouTube и Discord, быстрый Telegram."/>
                                 <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
                                            Text="Сама находит и проверяет серверы, подключается в один клик и все возвращает, если что-то пошло не так. Права администратора нужны только для смены DNS."/>
+                                <TextBlock Margin="0,14,0,0">
+                                    <Hyperlink Click="Site_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">chimerion.dev</Hyperlink>
+                                    <Run Text=" · сайт программы" Foreground="{DynamicResource Muted}"/>
+                                </TextBlock>
                             </StackPanel>
                         </Border>
 

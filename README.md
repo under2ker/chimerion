@@ -14,7 +14,7 @@
 
 Программа для Windows, с которой ChatGPT, Claude и Gemini открываются из России без VPN. Она сама находит Smart DNS, проверяет, какие из них правда пускают к нейросетям, и подключает лучший в один клик. Рядом живут обход замедления YouTube и Discord, ускорение Telegram и проверка сайтов, которые не открываются.
 
-Новости о версиях выходят в Telegram-канале [@chimeriondns](https://t.me/chimeriondns), а вопросы, рабочие DNS и идеи обсуждаются в [чате](https://t.me/+rXN4fR7HWcxlMTYy).
+Сайт программы: [chimerion.dev](https://chimerion.dev). Новости о версиях выходят в Telegram-канале [@chimeriondns](https://t.me/chimeriondns), а вопросы, рабочие DNS и идеи обсуждаются в [чате](https://t.me/+rXN4fR7HWcxlMTYy).
 
 > **CHIMERION раньше назывался DNEX.** Если у вас стоит старая версия, скачайте CHIMERION из релиза и запустите: настройки и список серверов подхватятся сами.
 
@@ -22,7 +22,7 @@
 
 ## Скачать
 
-Последняя версия лежит на странице [релизов](https://github.com/under2ker/chimerion/releases/latest): архив `CHIMERION-x.y.z-win-x64.zip`, внутри `CHIMERION.exe` и аварийный сброс DNS `reset-dns.cmd`. Устанавливать ничего не нужно, нужен только [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) и Windows 10 или 11 (64-бит). Дальше программа обновляется сама, по кнопке.
+Последняя версия лежит на [chimerion.dev](https://chimerion.dev) и на странице [релизов](https://github.com/under2ker/chimerion/releases/latest): архив `CHIMERION-x.y.z-win-x64.zip`, внутри `CHIMERION.exe` и аварийный сброс DNS `reset-dns.cmd`. Устанавливать ничего не нужно, нужен только [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) и Windows 10 или 11 (64-бит). Дальше программа обновляется сама, по кнопке.
 
 ## Как это выглядит
 
