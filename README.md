@@ -5,6 +5,7 @@
 # CHIMERION
 
 <p align="center">
+  <a href="https://chimerion.dev">Сайт</a> ·
   <a href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a> ·
   <a href="https://t.me/chimeriondns">Telegram-канал</a> ·
   <a href="https://t.me/+rXN4fR7HWcxlMTYy">Чат</a> ·

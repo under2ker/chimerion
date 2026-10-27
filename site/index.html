@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIMERION: ChatGPT, Claude и Gemini из России без VPN</title>
+<meta name="description" content="Бесплатная программа для Windows. Сама находит рабочий Smart DNS для ChatGPT, Claude и Gemini, снимает замедление YouTube и Discord, ускоряет Telegram. Банки и российские сайты работают как обычно.">
+<link rel="canonical" href="https://chimerion.dev/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://chimerion.dev/">
+<meta property="og:title" content="CHIMERION: нейросети из России без VPN">
+<meta property="og:description" content="Программа для Windows сама находит рабочий Smart DNS для ChatGPT, Claude и Gemini. Бесплатно, с открытым кодом.">
+<meta property="og:image" content="https://chimerion.dev/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#121315">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" sizes="64x64">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<link rel="preconnect" href="https://api.github.com" crossorigin>
+<link rel="preload" href="fonts/unbounded-cyr.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/unbounded-lat.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/onest-cyr.woff2" as="font" type="font/woff2" crossorigin>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"CHIMERION","operatingSystem":"Windows 10, Windows 11",
+ "applicationCategory":"UtilitiesApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"RUB"},
+ "downloadUrl":"https://github.com/under2ker/chimerion/releases/latest","author":{"@type":"Person","name":"under2ker"},
+ "description":"Smart DNS для ChatGPT, Claude и Gemini, обход замедления YouTube и Discord, ускорение Telegram."}
+</script>
+<script>document.documentElement.classList.add("js")</script>
+<style>
+@font-face { font-family: "Unbounded"; src: url(fonts/unbounded-cyr.woff2) format("woff2"); font-weight: 200 900; font-display: swap;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Unbounded"; src: url(fonts/unbounded-lat.woff2) format("woff2"); font-weight: 200 900; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Onest"; src: url(fonts/onest-cyr.woff2) format("woff2"); font-weight: 100 900; font-display: swap;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; src: url(fonts/onest-lat.woff2) format("woff2"); font-weight: 100 900; font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+/* Цвета логотипа: кость и камень. Салатовый только для «работает» и главного действия, красный для «закрыто» */
+:root {
+  --graphite: #111214; --deep: #0C0D0F; --band: #15161A; --panel: #1A1C20; --panel2: #22252A; --line: #2A2D33; --line-soft: #202328;
+  --bone: #F3F2EC; --stone: #B5B29C; --fog: #8E928F; --soft: #C4C5BE;
+  --lime: #C5F23A; --lime-deep: #253010; --signal: #F2626E; --signal-deep: #3A1A1E; --amber: #F5B941;
+  --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --text: "Onest", "Segoe UI", system-ui, sans-serif;
+  --measure: 62ch;
+  --edge: inset 0 1px 0 rgba(255,255,255,.055);
+  /* Фирменный узор: полосы под углом логотипа */
+  --stripes: repeating-linear-gradient(-40deg, rgba(243,242,236,.06) 0 1px, transparent 1px 22px);
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; }
+body { margin: 0; background: var(--graphite); color: var(--bone); font: 400 17px/1.6 var(--text); -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; border-radius: 6px; }
+::selection { background: var(--lime); color: #12150a; }
+.wrap { width: min(1180px, 100% - 40px); margin-inline: auto; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--lime); color: #111; padding: 8px 14px; border-radius: 8px; z-index: 20; }
+.skip:focus { left: 12px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- Шапка ---------- */
+.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--graphite) 80%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2); border-bottom: 1px solid transparent; transition: border-color .2s; }
+.top.scrolled { border-bottom-color: var(--line-soft); }
+.top .wrap { display: flex; align-items: center; gap: 28px; height: 68px; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 600 13px/1 var(--display); letter-spacing: .32em; }
+.brand svg { width: 30px; height: 30px; }
+.top nav { margin-left: auto; display: flex; align-items: center; gap: 28px; font-size: 15px; }
+.top nav a { color: var(--fog); text-decoration: none; transition: color .15s; }
+.top nav a:hover { color: var(--bone); }
+.top nav .get { color: #12150a; background: var(--lime); padding: 9px 18px; border-radius: 10px; font-weight: 600; }
+.top nav .get:hover { color: #12150a; background: #d6fa6a; }
+
+/* ---------- Кнопки ---------- */
+.btn { display: inline-flex; align-items: center; gap: 12px; padding: 16px 26px; border-radius: 14px; font: 600 16px/1.2 var(--text);
+  text-decoration: none; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--edge);
+  transition: background .15s, border-color .15s, box-shadow .2s; }
+.btn:hover { border-color: #41454c; background: var(--panel2); }
+.btn.go { background: var(--lime); border-color: var(--lime); color: #12150a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 10px 30px -10px rgba(197,242,58,.45); }
+.btn.go:hover { background: #d6fa6a; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 14px 36px -10px rgba(197,242,58,.6); }
+.btn svg { width: 20px; height: 20px; flex: none; }
+.btn small { font-weight: 500; opacity: .65; font-size: 14px; }
+
+/* ---------- Первый экран ---------- */
+.hero { position: relative; padding: clamp(48px, 7vw, 104px) 0 clamp(64px, 8vw, 120px); overflow: hidden; isolation: isolate; }
+.hero::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--stripes);
+  -webkit-mask-image: radial-gradient(70% 90% at 78% 40%, #000 0%, transparent 75%); mask-image: radial-gradient(70% 90% at 78% 40%, #000 0%, transparent 75%); }
+.hero::after { content: ""; position: absolute; z-index: -1; width: 760px; height: 760px; right: -120px; top: -140px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(197,242,58,.10), rgba(181,178,156,.05) 55%, transparent); pointer-events: none; }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(36px, 5vw, 80px); align-items: center; }
+h1 { font: 650 clamp(32px, 4vw, 54px)/1.06 var(--display); letter-spacing: -.04em; margin: 0 0 26px; text-wrap: balance; }
+.lead { font-size: clamp(18px, 1.6vw, 20px); color: var(--soft); margin: 0 0 34px; max-width: 33em; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.fine { margin: 20px 0 0; color: var(--fog); font-size: 14px; }
+.fine a { color: var(--stone); }
+
+/* Демонстрация: что видит браузер без программы и с ней */
+.demo { position: relative; background: linear-gradient(180deg, #1D1F24, var(--panel) 40%); border: 1px solid var(--line); border-radius: 22px; padding: 10px;
+  box-shadow: var(--edge), 0 50px 120px -40px rgba(0,0,0,.9), 0 0 0 1px rgba(0,0,0,.4); }
+.demo-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 12px; color: var(--fog); font-size: 13px; }
+.demo-head i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.demo-head span { margin-left: auto; }
+.switch { display: grid; grid-template-columns: 1fr 1fr; background: var(--deep); border-radius: 13px; padding: 4px; position: relative; }
+.switch button { position: relative; z-index: 1; appearance: none; border: 0; background: none; color: var(--fog); font: 600 14px/1 var(--text);
+  padding: 13px 8px; border-radius: 10px; cursor: pointer; transition: color .25s; }
+.switch button[aria-pressed="true"] { color: var(--bone); }
+.switch .thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); border-radius: 10px; background: var(--panel2);
+  box-shadow: var(--edge), 0 2px 8px rgba(0,0,0,.4); transition: transform .5s cubic-bezier(.65,0,.25,1); }
+.demo[data-on="1"] .switch .thumb { transform: translateX(100%); }
+.rows { list-style: none; margin: 0; padding: 8px 6px 2px; }
+.rows li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 8px; }
+.rows li + li { border-top: 1px solid var(--line-soft); }
+.rows li.gap { border-top: 0; padding: 16px 8px 4px; display: block; color: var(--fog); font-size: 13px; }
+.rows li.gap + li { border-top: 0; }
+.rows .logo { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--panel2); box-shadow: var(--edge); }
+.rows .logo svg { width: 17px; height: 17px; }
+.rows .name { min-width: 0; }
+.rows .name b { display: block; font-weight: 600; font-size: 15px; }
+.rows .name span { display: block; color: var(--fog); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 6px 11px; border-radius: 99px; white-space: nowrap;
+  transition: background .35s, color .35s; }
+.state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.state.bad { background: var(--signal-deep); color: var(--signal); }
+.state.slow { background: #33280f; color: var(--amber); }
+.state.ok { background: var(--lime-deep); color: var(--lime); }
+.state.same { background: transparent; color: var(--fog); font-weight: 500; }
+.state.same::before { background: var(--fog); }
+.dns { margin: 8px 4px 4px; padding: 13px 14px; border-radius: 13px; background: var(--deep); color: var(--fog); font-size: 13px; line-height: 1.5; min-height: 4.6em; }
+
+/* ---------- Полоса фактов ---------- */
+.facts { background: var(--band); border-block: 1px solid var(--line-soft); }
+.facts ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.facts li { padding: 30px 28px; }
+.facts li + li { border-left: 1px solid var(--line-soft); }
+.facts b { display: block; font: 600 clamp(22px, 2.4vw, 30px)/1.1 var(--display); letter-spacing: -.03em; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.facts li > span { color: var(--fog); font-size: 15px; }
+.facts .num { display: inline-block; min-width: .6em; }
+
+/* ---------- Разделы ---------- */
+.band { padding: clamp(72px, 9vw, 128px) 0; overflow-x: clip; }
+.band.alt { background: var(--band); }
+h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.035em; margin: 0 0 18px; text-wrap: balance; max-width: 19em; }
+.intro { color: var(--soft); max-width: var(--measure); margin: 0 0 clamp(36px, 4.5vw, 56px); font-size: 18px; }
+
+/* Скриншот программы с подписями */
+.screen { margin: 0; position: relative; }
+.screen .frame { position: relative; border-radius: 16px; padding: 8px; background: linear-gradient(180deg, #23262B, #16181B);
+  box-shadow: var(--edge), 0 60px 140px -50px rgba(0,0,0,.95), 0 0 0 1px var(--line); }
+.screen img { border-radius: 10px; }
+.pin { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--lime); color: #12150a; font: 700 13px/1 var(--display); box-shadow: 0 0 0 6px rgba(197,242,58,.18), 0 6px 18px rgba(0,0,0,.5); }
+.legend { list-style: none; margin: 28px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; counter-reset: l; }
+.legend li { counter-increment: l; display: grid; grid-template-columns: 26px 1fr; gap: 12px; color: var(--soft); font-size: 15px; }
+.legend li::before { content: counter(l); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--stone);
+  color: var(--stone); font: 700 12px/1 var(--display); }
+.legend b { display: block; color: var(--bone); font-weight: 600; }
+
+/* Что случилось → что делает программа: заголовок стоит, список прокручивается */
+.cases-wrap { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
+.cases-wrap .side { position: sticky; top: 108px; }
+.cases-wrap .intro { margin-bottom: 0; }
+.cases { list-style: none; margin: 0; padding: 0; }
+.cases li { padding: 28px 0; border-top: 1px solid var(--line); }
+.cases li:first-child { border-top: 0; padding-top: 4px; }
+.cases q { quotes: none; display: block; font: 500 clamp(17px, 1.5vw, 19px)/1.4 var(--display); letter-spacing: -.02em; color: var(--bone);
+  padding-left: 24px; position: relative; margin-bottom: 10px; }
+.cases q::before { content: ""; position: absolute; left: 0; top: .5em; width: 8px; height: 8px; border-radius: 50%; background: var(--signal);
+  box-shadow: 0 0 0 4px var(--signal-deep); }
+.cases p { margin: 0; color: var(--soft); padding-left: 24px; position: relative; max-width: var(--measure); }
+.cases p::before { content: ""; position: absolute; left: 0; top: .62em; width: 8px; height: 8px; border-radius: 50%; background: var(--lime);
+  box-shadow: 0 0 0 4px var(--lime-deep); }
+.cases p b { color: var(--bone); font-weight: 600; }
+
+/* Две колонки: текст и снимок */
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(36px, 6vw, 96px); align-items: center; }
+.pair .shot { justify-self: center; position: relative; }
+.pair.flip > .shot { order: -1; }
+.pair .shot::before { content: ""; position: absolute; inset: -60px; z-index: -1; background: radial-gradient(closest-side, rgba(181,178,156,.12), transparent); }
+.pair .shot { padding: 8px; border-radius: 18px; background: linear-gradient(180deg, #23262B, #16181B);
+  box-shadow: var(--edge), 0 50px 120px -40px rgba(0,0,0,.9), 0 0 0 1px var(--line); }
+.pair img { border-radius: 11px; max-height: 620px; width: auto; }
+.ticks { list-style: none; padding: 0; margin: 0; }
+.ticks li { padding: 14px 0 14px 36px; position: relative; color: var(--soft); border-top: 1px solid var(--line); }
+.ticks li:first-child { border-top: 0; }
+.ticks li::before { content: ""; position: absolute; left: 3px; top: 21px; width: 13px; height: 7px; border-left: 2px solid var(--lime);
+  border-bottom: 2px solid var(--lime); transform: rotate(-45deg); }
+.ticks b { color: var(--bone); font-weight: 600; }
+
+/* Три шага: настоящая последовательность */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: s; }
+.steps li { counter-increment: s; padding: 30px 28px 30px; background: var(--panel); border-radius: 18px; box-shadow: var(--edge); border: 1px solid var(--line-soft); }
+.steps li::before { content: counter(s); font: 650 48px/1 var(--display); color: transparent; -webkit-text-stroke: 1.5px var(--stone);
+  display: block; margin-bottom: 22px; letter-spacing: -.04em; }
+.steps b { display: block; font-size: 18px; margin-bottom: 8px; }
+.steps span { color: var(--soft); font-size: 16px; }
+
+/* Вопросы */
+.faq-wrap { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
+.faq details { border-top: 1px solid var(--line); }
+.faq details:last-child { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; list-style: none; padding: 24px 48px 24px 0; position: relative; font: 500 18px/1.4 var(--display); letter-spacing: -.02em; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: ""; position: absolute; right: 10px; top: 50%; width: 10px; height: 10px; margin-top: -7px;
+  border-right: 2px solid var(--stone); border-bottom: 2px solid var(--stone); transform: rotate(45deg); transition: transform .25s; }
+.faq summary:hover { color: #fff; }
+.faq details[open] summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.faq details p { margin: 0 0 26px; color: var(--soft); max-width: var(--measure); }
+.faq a { color: var(--lime); }
+
+/* Финал */
+.final { position: relative; overflow: hidden; isolation: isolate; }
+.final .card { position: relative; border-radius: 28px; padding: clamp(36px, 6vw, 72px); background: linear-gradient(135deg, #1C1F17, #16181B 60%);
+  border: 1px solid var(--line); box-shadow: var(--edge); overflow: hidden; isolation: isolate;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px 48px; align-items: end; }
+.final .card::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--stripes);
+  -webkit-mask-image: linear-gradient(90deg, transparent 30%, #000); mask-image: linear-gradient(90deg, transparent 30%, #000); }
+.final .mark { position: absolute; right: -40px; bottom: -60px; width: 340px; height: 340px; z-index: -1; opacity: .07; }
+.final h2 { margin-bottom: 12px; }
+.final .intro { margin: 0; }
+.final .news { color: var(--lime); white-space: nowrap; }
+.risk { margin: 28px auto 0; color: var(--fog); font-size: 14px; max-width: 70ch; text-align: center; }
+
+.foot { padding: 36px 0 52px; color: var(--fog); font-size: 15px; border-top: 1px solid var(--line-soft); }
+.foot .wrap { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+.foot .brand { color: var(--bone); }
+.foot nav { display: flex; flex-wrap: wrap; gap: 24px; margin-left: auto; }
+.foot a { text-decoration: none; }
+.foot nav a:hover { color: var(--bone); }
+
+@media (max-width: 1000px) {
+  .hero .wrap, .pair, .cases-wrap, .faq-wrap { grid-template-columns: 1fr; }
+  .cases-wrap .side { position: static; }
+  .pair.flip > .shot { order: 0; }
+  .pair img { max-height: 540px; }
+  .steps { grid-template-columns: 1fr; }
+  .facts ul, .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts li:nth-child(3) { border-left: 0; }
+  .facts li:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
+  .final .card { grid-template-columns: 1fr; align-items: start; }
+}
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .actions .btn { flex: 1 1 100%; justify-content: center; }
+  .rows .name span { display: none; }
+  .state { font-size: 12px; padding: 5px 9px; }
+  .facts li { padding: 22px 18px; }
+  .legend { grid-template-columns: 1fr; }
+  .pin { width: 22px; height: 22px; margin: -11px 0 0 -11px; font-size: 11px; box-shadow: 0 0 0 4px rgba(197,242,58,.18); }
+  .foot nav { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; }
+}
+/* ---------- Движение ---------- */
+/* Полоса прочитанного над шапкой */
+.progress { position: absolute; left: 0; top: 0; height: 2px; width: 100%; background: var(--lime); transform-origin: 0 50%;
+  transform: scaleX(var(--read, 0)); box-shadow: 0 0 12px rgba(197,242,58,.6); }
+.top.scrolled .wrap { height: 60px; }
+.top .wrap { transition: height .3s ease; }
+
+/* Появление при прокрутке */
+.js .reveal { opacity: 0; transform: translateY(26px); transition: opacity .9s cubic-bezier(.2,.7,.2,1) var(--d, 0s), transform .9s cubic-bezier(.2,.7,.2,1) var(--d, 0s); }
+.js .reveal.in { opacity: 1; transform: none; }
+.js .reveal.soft { transform: translateY(14px) scale(.985); }
+.js .reveal.soft.in { transform: none; }
+
+/* Первый экран: свет и узор чуть отстают от прокрутки */
+.hero::before { transform: translateY(calc(var(--py, 0) * .35px)); }
+.hero::after { transform: translateY(calc(var(--py, 0) * .6px)); }
+.demo { transition: transform .9s cubic-bezier(.2,.7,.2,1); }
+
+/* Скриншот выпрямляется по мере прокрутки */
+.screen .frame { transform: perspective(1800px) rotateX(calc(var(--tilt, 0) * 14deg)) scale(calc(1 - var(--tilt, 0) * .06)); transform-origin: 50% 100%;
+  will-change: transform; }
+
+/* Метки на скриншоте: по одной, наведение на пункт подсвечивает метку */
+.js .pin { opacity: 0; transform: scale(.4); transition: opacity .5s, transform .6s cubic-bezier(.3,1.6,.5,1), box-shadow .3s; }
+.screen.in .pin { opacity: 1; transform: none; }
+.screen.in .pin:nth-of-type(1) { transition-delay: .3s; }
+.screen.in .pin:nth-of-type(2) { transition-delay: .5s; }
+.screen.in .pin:nth-of-type(3) { transition-delay: .7s; }
+.screen.in .pin:nth-of-type(4) { transition-delay: .9s; }
+.pin.hot { transform: scale(1.25) !important; box-shadow: 0 0 0 10px rgba(197,242,58,.22), 0 6px 18px rgba(0,0,0,.5); transition-delay: 0s !important; }
+.legend li { cursor: default; transition: color .2s; }
+.legend li:hover b { color: var(--lime); }
+.legend li:hover::before { background: var(--lime); border-color: var(--lime); color: #12150a; }
+.legend li::before { transition: background .2s, border-color .2s, color .2s; }
+
+/* Ситуации: та, что в середине экрана, загорается */
+.cases q, .cases p { transition: color .5s, opacity .5s; }
+.cases q::before, .cases p::before { transition: background .5s, box-shadow .5s, transform .5s; }
+.js .cases li:not(.lit) q { color: #A9ABA4; }
+.js .cases li:not(.lit) p { opacity: .78; }
+.js .cases li:not(.lit) p::before { background: #4b5320; box-shadow: none; }
+.js .cases li.lit q::before { background: #5a2a2f; box-shadow: none; transform: scale(.8); }
+.js .cases li.lit p::before { box-shadow: 0 0 0 5px var(--lime-deep), 0 0 18px rgba(197,242,58,.55); }
+
+/* Ответы раскрываются плавно */
+.faq details .answer { overflow: hidden; }
+.faq details p { transition: opacity .35s; }
+
+/* Финал: логотип выезжает */
+.js .final .mark { transform: translate(60px, 40px) rotate(-8deg); opacity: 0; transition: transform 1.4s cubic-bezier(.2,.7,.2,1), opacity 1.4s; }
+.js .final .card.in .mark { transform: none; opacity: .07; }
+
+/* Кнопки чуть приподнимаются */
+.btn { transition: background .15s, border-color .15s, box-shadow .2s, transform .2s; }
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .js .reveal, .js .pin, .js .final .mark { opacity: 1 !important; transform: none !important; }
+  .screen .frame { transform: none; }
+  .hero::before, .hero::after { transform: none; }
+  .js .cases li:not(.lit) q, .js .cases li:not(.lit) p { color: inherit; opacity: 1; }
+  .progress { display: none; }
+}
+/* ---------- Меню на телефоне ---------- */
+.menu { display: none; appearance: none; border: 0; background: none; width: 44px; height: 44px; margin-left: auto; padding: 0; cursor: pointer;
+  border-radius: 10px; position: relative; }
+.menu span { position: absolute; left: 12px; right: 12px; height: 2px; border-radius: 2px; background: var(--bone); transition: transform .3s, top .3s; }
+.menu span:first-child { top: 17px; } .menu span:last-child { top: 25px; }
+.menu[aria-expanded="true"] span:first-child { top: 21px; transform: rotate(45deg); }
+.menu[aria-expanded="true"] span:last-child { top: 21px; transform: rotate(-45deg); }
+
+/* ---------- Сравнение ---------- */
+.compare { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 16px; }
+.compare th, .compare td { padding: 18px 20px; text-align: left; vertical-align: top; border-top: 1px solid var(--line); }
+.compare thead th { border-top: 0; font: 600 15px/1.3 var(--display); letter-spacing: -.01em; color: var(--fog); padding-bottom: 14px; }
+.compare thead th.us { color: var(--bone); }
+.compare tbody th { font-weight: 500; color: var(--soft); width: 28%; }
+.compare .us { background: linear-gradient(180deg, rgba(197,242,58,.06), rgba(197,242,58,.03)); }
+.compare thead .us { border-radius: 16px 16px 0 0; box-shadow: inset 0 1px 0 rgba(197,242,58,.35); }
+.compare tbody tr:last-child .us { border-radius: 0 0 16px 16px; }
+.compare td { color: var(--soft); }
+.mk { display: inline-flex; align-items: center; gap: 9px; }
+.mk::before { content: ""; flex: none; width: 18px; height: 18px; border-radius: 50%; background-position: center; background-repeat: no-repeat; }
+.mk.y::before { background-color: var(--lime-deep); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.2l2.6 2.6L13 6.4' fill='none' stroke='%23C5F23A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.mk.n::before { background-color: var(--signal-deep); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M6 6l6 6M12 6l-6 6' fill='none' stroke='%23F2626E' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.mk.m::before { background-color: #33280f; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5.5 9h7' fill='none' stroke='%23F5B941' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.compare-note { color: var(--fog); font-size: 15px; margin: 22px 0 0; max-width: var(--measure); }
+.code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 14px; background: var(--deep); border: 1px solid var(--line); padding: 2px 7px; border-radius: 6px; color: var(--bone); word-break: break-all; }
+
+@media (max-width: 760px) {
+  .compare thead th:first-child { display: none; }
+  .compare tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .compare tbody th { grid-column: 1 / -1; width: auto; padding: 16px 4px 6px; color: var(--bone); }
+  .compare td { border-top: 0; padding: 4px 8px 16px; font-size: 14px; }
+  .compare thead th { padding: 10px 8px; font-size: 13px; }
+  .compare .mk { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .compare tbody tr + tr th { border-top: 1px solid var(--line); }
+  .compare thead .us, .compare tbody tr:last-child .us { border-radius: 0; }
+}
+@media (max-width: 640px) {
+  .menu { display: block; }
+  .top nav { position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch; gap: 0; padding: 8px 20px 20px;
+    background: var(--graphite); border-bottom: 1px solid var(--line); box-shadow: 0 30px 60px -20px rgba(0,0,0,.7);
+    visibility: hidden; opacity: 0; transform: translateY(-8px); transition: opacity .25s, transform .25s, visibility 0s .25s; }
+  .top nav.open { visibility: visible; opacity: 1; transform: none; transition: opacity .25s, transform .25s; }
+  .top nav a:not(.get) { display: block; padding: 14px 4px; font-size: 17px; color: var(--bone); border-bottom: 1px solid var(--line-soft); }
+  .top nav .get { margin-top: 14px; text-align: center; padding: 14px; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">К содержанию</a>
+
+<header class="top">
+  <div class="progress" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CHIMERION, на главную">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="3,71 18,71 69.85,10 54.85,10" fill="#F3F2EC"/><polygon points="8.85,90 23.85,90 91.85,10 76.85,10" fill="#F3F2EC"/><polygon points="35.1,85 50.1,85 96.85,30 81.85,30" fill="#B5B29C"/></svg>
+      CHIMERION
+    </a>
+    <button class="menu" type="button" aria-expanded="false" aria-controls="nav" aria-label="Меню"><span></span><span></span></button>
+    <nav id="nav" aria-label="Разделы">
+      <a href="#cases">Что умеет</a>
+      <a href="#compare">Сравнение</a>
+      <a href="#faq">Вопросы</a>
+      <a href="https://t.me/chimeriondns">Telegram</a>
+      <a href="https://github.com/under2ker/chimerion">GitHub</a>
+      <a class="get dl" href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <h1>ChatGPT, Claude и Gemini из России без VPN</h1>
+        <p class="lead">Программа для Windows сама находит рабочий Smart DNS, проверяет его на нейросетях и подключает в один клик. Банки, Госуслуги и остальной интернет работают как раньше.</p>
+        <div class="actions">
+          <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/latest">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+            <span class="dl-text">Скачать для Windows</span>
+          </a>
+          <a class="btn" href="https://t.me/chimeriondns">Новости в Telegram</a>
+        </div>
+        <p class="fine"><span class="dl-meta">Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
+      </div>
+
+      <div class="demo" data-on="0" role="region" aria-label="Что открывается без программы и с ней">
+        <div class="demo-head" aria-hidden="true"><i></i><i></i><i></i><span>Что открывается</span></div>
+        <div class="switch" role="group" aria-label="Показать">
+          <span class="thumb" aria-hidden="true"></span>
+          <button type="button" aria-pressed="true" data-v="0">Без программы</button>
+          <button type="button" aria-pressed="false" data-v="1">С CHIMERION</button>
+        </div>
+        <ul class="rows" aria-live="polite">
+          <li>
+            <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#F3F2EC"><path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .75 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.8.8 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5zM3.6 18.3a4.47 4.47 0 0 1-.53-3.01l.14.09 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.48 4.48 0 0 1 2.37-1.97V11.6a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.86-5.84-3.39 2.02-1.16a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2.01-3.02-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86 6.29 11.7a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08-4.78 2.76a.8.8 0 0 0-.39.68zm1.1-2.37 2.6-1.5 2.61 1.5v3l-2.6 1.5-2.61-1.5z"/></svg></span>
+            <span class="name"><b>ChatGPT</b><span>chatgpt.com</span></span>
+            <span class="state bad" data-off="Регион не поддерживается" data-on="Открывается" data-on-class="ok">Регион не поддерживается</span>
+          </li>
+          <li>
+            <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="#D97757"><path d="m4.71 15.96 4.72-2.65.08-.23-.08-.13h-.23l-.79-.05-2.7-.07-2.34-.1-2.27-.12-.57-.12L0 11.79l.05-.35.48-.32.69.06 1.52.1 2.28.16 1.65.1 2.45.25h.39l.05-.16-.13-.1-.1-.1-2.36-1.6-2.55-1.69-1.34-.97-.72-.5-.36-.46-.16-1.01.66-.72.88.06.22.06.9.69 1.91 1.48 2.5 1.84.36.3.15-.1.02-.07-.17-.27-1.36-2.450-1.45-2.5-.65-1.04-.17-.62a3 3 0 0 1-.1-.74L6.33.13 6.75 0l1 .13.42.37.62 1.42 1.01 2.24 1.56 3.05.46.9.24.83.09.26h.16V9.06l.13-1.7.24-2.1.23-2.7.08-.76.37-.9.74-.48.57.28.47.67-.07.43-.28 1.8-.55 2.86-.36 1.92h.21l.24-.24.97-1.29 1.63-2.04.72-.81.84-.9.54-.42h1.02l.75 1.12-.34 1.150-1.05 1.33-.87 1.13-1.25 1.68-.78 1.35.07.11h.19l2.82-.6 1.52-.28 1.82-.31.82.38.09.39-.32.8-1.95.48-2.29.46-3.4.8-.04.03.05.06 1.53.15.66.03h1.6l2.99.23.78.51.47.63-.08.48-1.2.62-1.63-.39-3.79-.9-1.3-.33h-.18v.11l1.08 1.06 1.99 1.8 2.49 2.31.12.58-.31.45-.34-.05-2.2-1.65-.85-.75-1.92-1.62h-.13v.17l.44.65 2.34 3.52.12 1.08-.17.35-.61.21-.66-.12-1.37-1.92-1.41-2.16-1.14-1.94-.14.08-.67 7.23-.32.37-.73.28-.61-.46-.32-.75.32-1.48.39-1.92.31-1.53.29-1.9.17-.63-.01-.04-.14.02-1.44 1.97-2.18 2.95-1.73 1.85-.42.16-.71-.37.06-.66.4-.59 2.38-3.03 1.43-1.87.93-1.08-.01-.16h-.05l-6.33 4.11-1.13.15-.48-.46.06-.74.23-.25 1.9-1.31z"/></svg></span>
+            <span class="name"><b>Claude</b><span>claude.ai</span></span>
+            <span class="state bad" data-off="Регион не поддерживается" data-on="Открывается" data-on-class="ok">Регион не поддерживается</span>
+          </li>
+          <li>
+            <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4285F4"/><stop offset=".6" stop-color="#9B72CB"/><stop offset="1" stop-color="#D96570"/></linearGradient></defs><path fill="url(#gm)" d="M12 24A14.3 14.3 0 0 0 0 12 14.3 14.3 0 0 0 12 0a14.3 14.3 0 0 0 12 12 14.3 14.3 0 0 0-12 12"/></svg></span>
+            <span class="name"><b>Gemini</b><span>gemini.google.com</span></span>
+            <span class="state bad" data-off="Регион не поддерживается" data-on="Открывается" data-on-class="ok">Регион не поддерживается</span>
+          </li>
+          <li>
+            <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="4" fill="#F2626E"/><path d="m10 9 5 3-5 3z" fill="#fff"/></svg></span>
+            <span class="name"><b>YouTube</b><span>youtube.com</span></span>
+            <span class="state slow" data-off="Видео не грузится" data-on="Открывается через zapret" data-on-class="ok">Видео не грузится</span>
+          </li>
+          <li class="gap">Остальной интернет</li>
+          <li>
+            <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#B5B29C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18M5 10v8m4-8v8m6-8v8m4-8v8M3 21h18M12 3l9 5H3z"/></svg></span>
+            <span class="name"><b>Банк и Госуслуги</b><span>sberbank.ru, gosuslugi.ru</span></span>
+            <span class="state same" data-off="Как обычно" data-on="Как обычно" data-on-class="same">Как обычно</span>
+          </li>
+        </ul>
+        <p class="dns" data-off="Запросы идут к DNS провайдера, и сервисы видят адрес из России." data-on="Запросы к нейросетям идут через проверенный Smart DNS, остальные через обычный DNS. Ваш IP не меняется.">Запросы идут к DNS провайдера, и сервисы видят адрес из России.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="facts" aria-label="Коротко о программе">
+    <div class="wrap">
+      <ul>
+        <li><b><span class="num" data-to="3">3</span> нейросети</b><span>ChatGPT, Claude и Gemini проверяются на каждом сервере</span></li>
+        <li><b><span class="num" data-to="80">80</span> тысяч</b><span>заблокированных сайтов в готовом списке обхода</span></li>
+        <li><b><span class="num" data-to="38">38</span> наборов</b><span>сайтов для zapret: соцсети, видео, игры, работа</span></li>
+        <li><b><span class="num" data-to="0">0</span> рублей</b><span>открытый код и подписанные сборки на GitHub</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="look">
+    <div class="wrap">
+      <h2 id="look">Серверы ищет и проверяет программа, а не вы</h2>
+      <p class="intro">Она собирает Smart DNS с форумов, сайтов и Telegram-каналов и проверяет каждый по-настоящему: открывается ли сервис, отвечает ли API, из какой страны вас видят. Надежные наверху, подключение одной кнопкой.</p>
+      <figure class="screen">
+        <div class="frame">
+          <img src="img/main.webp" srcset="img/main-480.webp 480w, img/main-800.webp 800w, img/main-1200.webp 1200w, img/main.webp 1600w" sizes="(max-width: 1220px) calc(100vw - 56px), 1164px" width="1600" height="1000" loading="lazy" alt="Главное окно CHIMERION: подключение к серверу в Нидерландах, проверка ChatGPT, Claude и Gemini и таблица проверенных серверов">
+          <span class="pin" style="left: 1.6%; top: 4.6%" aria-hidden="true">1</span>
+          <span class="pin" style="left: 1.6%; top: 14%" aria-hidden="true">2</span>
+          <span class="pin" style="left: 69.6%; top: 14%" aria-hidden="true">3</span>
+          <span class="pin" style="left: 1.6%; top: 49%" aria-hidden="true">4</span>
+        </div>
+        <ol class="legend">
+          <li data-pin="1"><span><b>Подключение</b>Сервер и страна, через которую нейросети видят вас.</span></li>
+          <li data-pin="2"><span><b>Проверка сервисов</b>Что открывается сейчас и через какой адрес.</span></li>
+          <li data-pin="3"><span><b>Лучшие серверы</b>Самый стабильный для каждого сервиса, щелчок подключает.</span></li>
+          <li data-pin="4"><span><b>Все найденные</b>Пинг, скорость нейросетей и стабильность по истории проверок.</span></li>
+        </ol>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band alt" id="cases" aria-labelledby="cases-h">
+    <div class="wrap cases-wrap">
+      <div class="side">
+        <h2 id="cases-h">Узнаете что-то из этого?</h2>
+        <p class="intro">Красным то, с чем к нам приходят. Салатовым то, что делает программа.</p>
+      </div>
+      <ul class="cases">
+        <li><q>ChatGPT пишет «not available in your country», а Claude просит VPN</q>
+          <p><b>Подключает Smart DNS</b>, который правда открывает нейросети. Перед подключением сервер проверяется на всех трех сервисах.</p></li>
+        <li><q>С VPN не пускает банк, а без него не открываются нейросети</q>
+          <p><b>Два DNS:</b> только нейросети идут через Smart DNS, все остальное как раньше. VPN не нужен, IP остается вашим.</p></li>
+        <li><q>YouTube грузится по минуте, Discord не подключается</q>
+          <p><b>Ставит и настраивает zapret</b> сама и подбирает стратегию обхода под вашего провайдера.</p></li>
+        <li><q>Вчерашний DNS сегодня уже не работает</q>
+          <p><b>Сторож замечает</b>, что сервер упал, а запасной подхватывает за секунды. Программа предложит замену.</p></li>
+        <li><q>Сайт не открывается, и непонятно почему</q>
+          <p><b>Проверяет сам сайт</b> и называет причину: блокирует провайдер, лежит у всех или закрыт для России.</p></li>
+        <li><q>Нейросети нужны и на телефоне</q>
+          <p><b>Переносит тот же сервер</b> на iPhone по QR-коду, для Android дает короткую инструкцию.</p></li>
+        <li><q>Telegram Desktop долго грузит картинки и видео</q>
+          <p><b>Включает ускорение Telegram</b> одной кнопкой: прокси работает на вашем компьютере.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="sites-h">
+    <div class="wrap pair">
+      <div>
+        <h2 id="sites-h">Скажет, почему сайт не открывается</h2>
+        <p class="intro">Программа следит за сайтами, которыми вы пользуетесь. Если какой-то перестал открываться, придет уведомление с причиной и кнопкой, которая поможет.</p>
+        <ul class="ticks">
+          <li><b>Блокирует провайдер:</b> одна кнопка добавит сайт в обход zapret.</li>
+          <li><b>Закрыт для России:</b> сайт отправится в Smart DNS.</li>
+          <li><b>Лежит у всех:</b> программа проверит снаружи России и скажет, что сеть ни при чем.</li>
+          <li><b>Список хранится у вас.</b> Наружу уходит только имя сайта, который не открылся.</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="img/sites.webp" width="584" height="709" decoding="async" alt="Окно «Сайты»: LinkedIn и X блокирует провайдер, Spotify закрыт для России, у каждого кнопка решения"></div>
+    </div>
+  </section>
+
+  <section class="band alt" aria-labelledby="acc">
+    <div class="wrap pair flip">
+      <div>
+        <h2 id="acc">Бережет аккаунт, а не только открывает сайт</h2>
+        <p class="intro">Сервисы чаще банят не за сам вход, а за то, что страна входа все время меняется. Программа это учитывает.</p>
+        <ul class="ticks">
+          <li><b>Помнит страну</b>, из которой ChatGPT, Claude и Gemini обычно видят вас.</li>
+          <li><b>Спрашивает</b> перед подключением к серверу с другой страной выхода.</li>
+          <li><b>Подбирает замену</b> и запасной сервер с той же страной.</li>
+          <li><b>Не меняет сервер без вас</b>, если вы так решили в настройках.</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="img/compact.webp" width="485" height="775" decoding="async" alt="Компактный вид CHIMERION: кнопка отключения, доступность ChatGPT, Claude и Gemini и список серверов"></div>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="phone-h">
+    <div class="wrap pair">
+      <div>
+        <h2 id="phone-h">И на телефоне тоже</h2>
+        <p class="intro">Тот же проверенный сервер переносится на телефон за минуту. Никаких приложений ставить не нужно.</p>
+        <ul class="ticks">
+          <li><b>iPhone и iPad:</b> наведите камеру на QR-код и установите профиль.</li>
+          <li><b>Android 9 и новее:</b> впишите адрес в «Частный DNS», программа покажет куда.</li>
+          <li><b>Работает везде:</b> и в Wi-Fi, и в мобильной сети.</li>
+        </ul>
+      </div>
+      <div class="shot"><img src="img/phone.webp" width="584" height="478" decoding="async" alt="Окно «Smart DNS на телефоне»: выбор сервера и QR-код с профилем для iPhone"></div>
+    </div>
+  </section>
+
+  <section class="band alt" id="compare" aria-labelledby="cmp-h">
+    <div class="wrap">
+      <h2 id="cmp-h">Чем это отличается от VPN</h2>
+      <p class="intro">Честно, без рекламы. У VPN есть свои плюсы, но для нейросетей из России он часто лишний.</p>
+      <table class="compare">
+        <thead><tr><th scope="col"><span class="sr">Что важно</span></th><th scope="col" class="us">CHIMERION</th><th scope="col">VPN</th><th scope="col">DNS вручную</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">ChatGPT, Claude и Gemini</th><td class="us"><span class="mk y">Открываются</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk m">Пока сервер жив</span></td></tr>
+          <tr><th scope="row">Банки и Госуслуги</th><td class="us"><span class="mk y">Как обычно</span></td><td><span class="mk n">Часто не пускают</span></td><td><span class="mk y">Как обычно</span></td></tr>
+          <tr><th scope="row">Скорость интернета</th><td class="us"><span class="mk y">Не меняется</span></td><td><span class="mk m">Падает</span></td><td><span class="mk y">Не меняется</span></td></tr>
+          <tr><th scope="row">Если сервер упал</th><td class="us"><span class="mk y">Переключит сама</span></td><td><span class="mk m">Сменить вручную</span></td><td><span class="mk n">Искать новый</span></td></tr>
+          <tr><th scope="row">YouTube и Discord</th><td class="us"><span class="mk y">zapret внутри</span></td><td><span class="mk y">Работают</span></td><td><span class="mk n">Не помогает</span></td></tr>
+          <tr><th scope="row">Сайты, закрытые по адресу</th><td class="us"><span class="mk m">Часть через zapret</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk n">Не помогает</span></td></tr>
+          <tr><th scope="row">Цена</th><td class="us"><span class="mk y">Бесплатно</span></td><td><span class="mk m">Обычно платно</span></td><td><span class="mk y">Бесплатно</span></td></tr>
+        </tbody>
+      </table>
+      <p class="compare-note">Если вам нужен доступ вообще ко всему заблокированному, VPN надежнее. Если нужны нейросети, YouTube и Telegram без потери скорости и без проблем с банками, хватит CHIMERION.</p>
+    </div>
+  </section>
+
+  <section class="band" aria-labelledby="start">
+    <div class="wrap">
+      <h2 id="start">Запуск за пару минут</h2>
+      <p class="intro">Устанавливать ничего не нужно, программа работает из папки и дальше обновляется сама.</p>
+      <ol class="steps">
+        <li><b>Скачайте архив</b><span>Распакуйте в любую папку и запустите CHIMERION.exe.</span></li>
+        <li><b>Дождитесь проверки</b><span>Программа соберет серверы и проверит их на нейросетях. Лучшие окажутся наверху.</span></li>
+        <li><b>Нажмите «Подключить»</b><span>Windows один раз спросит разрешение. «Отключить» возвращает все как было.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band alt" id="faq" aria-labelledby="faq-h">
+    <div class="wrap faq-wrap">
+      <div>
+        <h2 id="faq-h">Частые вопросы</h2>
+        <p class="intro">Не нашли ответ? Спросите в <a href="https://t.me/+rXN4fR7HWcxlMTYy" style="color: var(--lime)">чате</a>, там отвечают быстро.</p>
+      </div>
+      <div class="faq">
+        <details>
+          <summary>Это безопасно?</summary>
+          <p>Код открыт на <a href="https://github.com/under2ker/chimerion">GitHub</a>. Архив собирается на GitHub Actions и подписан ключом автора: без верной подписи программа обновление не поставит. Права администратора нужны только в момент смены DNS.</p>
+        </details>
+        <details>
+          <summary>Как проверить, что архив настоящий?</summary>
+          <p>Каждый архив собирается на GitHub Actions из открытого кода, а GitHub подтверждает происхождение. Проверить можно командой <span class="code">gh attestation verify CHIMERION-0.1.37-win-x64.zip -R under2ker/chimerion</span>. Программа сама проверяет подпись каждого обновления.</p>
+        </details>
+        <details>
+          <summary>Чем это лучше VPN?</summary>
+          <p>Меняется только DNS. Скорость не падает, банки и российские сайты работают как обычно, IP остается вашим. Подробнее в <a href="#compare">сравнении</a>.</p>
+        </details>
+        <details>
+          <summary>Могут ли заблокировать аккаунт?</summary>
+          <p>Обход региональных ограничений нарушает условия сервисов, риск есть всегда. Чтобы его снизить, программа держит одну страну входа и предупреждает, если она меняется.</p>
+        </details>
+        <details>
+          <summary>Что программа отправляет в сеть?</summary>
+          <p>Запросы для проверки серверов и сервисов и проверку обновлений. Итоги проверок для общей карты серверов уходят только с вашего согласия, без IP и списка сайтов. Полный список есть в <a href="https://github.com/under2ker/chimerion#что-уходит-в-сеть">README</a>.</p>
+        </details>
+        <details>
+          <summary>Если после программы что-то сломалось?</summary>
+          <p>«Отключить» возвращает исходные DNS. Если программа не запускается, в архиве лежит reset-dns.cmd: он вернет все как было. С вопросами приходите в <a href="https://t.me/+rXN4fR7HWcxlMTYy">чат</a>.</p>
+        </details>
+        <details>
+          <summary>Есть версия для Mac или Linux?</summary>
+          <p>Пока только Windows 10 и 11. Для телефона программа выдаст настройку того же сервера.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="band final" aria-labelledby="fin">
+    <div class="wrap">
+      <div class="card">
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true"><polygon points="3,71 18,71 69.85,10 54.85,10" fill="#F3F2EC"/><polygon points="8.85,90 23.85,90 91.85,10 76.85,10" fill="#F3F2EC"/><polygon points="35.1,85 50.1,85 96.85,30 81.85,30" fill="#B5B29C"/></svg>
+      <div>
+        <h2 id="fin">Попробуйте на своем компьютере</h2>
+        <p class="intro">Бесплатно. Новые версии ставятся кнопкой внутри программы. <a class="news" href="https://github.com/under2ker/chimerion/blob/main/CHANGELOG.md">Что нового</a></p>
+      </div>
+      <div class="actions">
+        <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
+          <span class="dl-text">Скачать для Windows</span>
+        </a>
+        <a class="btn" href="https://t.me/+rXN4fR7HWcxlMTYy">Чат и помощь</a>
+      </div>
+      </div>
+      <p class="risk">Обход региональных ограничений нарушает условия использования ИИ-сервисов, аккаунт могут заблокировать. Пользуйтесь программой на свой риск.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="CHIMERION, на главную"><svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="3,71 18,71 69.85,10 54.85,10" fill="#F3F2EC"/><polygon points="8.85,90 23.85,90 91.85,10 76.85,10" fill="#F3F2EC"/><polygon points="35.1,85 50.1,85 96.85,30 81.85,30" fill="#B5B29C"/></svg>CHIMERION</a>
+    <span>Автор under2ker</span>
+    <nav aria-label="Ссылки">
+      <a href="https://t.me/chimeriondns">Канал</a>
+      <a href="https://t.me/+rXN4fR7HWcxlMTYy">Чат</a>
+      <a href="https://github.com/under2ker/chimerion">GitHub</a>
+      <a href="https://github.com/under2ker/chimerion/blob/main/CHANGELOG.md">Что нового</a>
+      <a href="https://github.com/under2ker/chimerion/issues">Сообщить об ошибке</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // Демонстрация: один раз сама переключается на «С CHIMERION», дальше переключает посетитель
+  const demo = document.querySelector(".demo");
+  const buttons = demo.querySelectorAll(".switch button");
+  const states = demo.querySelectorAll(".state");
+  const note = demo.querySelector(".dns");
+  const offClass = [...states].map(s => [...s.classList].find(c => c !== "state"));
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function show(on, stagger) {
+    demo.dataset.on = on ? "1" : "0";
+    buttons.forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (on ? "1" : "0"))));
+    states.forEach((s, i) => {
+      const apply = () => {
+        s.className = "state " + (on ? s.dataset.onClass : offClass[i]);
+        s.textContent = on ? s.dataset.on : s.dataset.off;
+      };
+      stagger && !reduce ? setTimeout(apply, 140 + i * 120) : apply();
+    });
+    note.textContent = on ? note.dataset.on : note.dataset.off;
+  }
+
+  const top = document.querySelector(".top");
+  const menu = top.querySelector(".menu"), nav = top.querySelector("nav");
+  const setMenu = open => { menu.setAttribute("aria-expanded", String(open)); nav.classList.toggle("open", open); };
+  menu.addEventListener("click", () => setMenu(menu.getAttribute("aria-expanded") !== "true"));
+  nav.addEventListener("click", e => { if (e.target.closest("a")) setMenu(false); });
+  // Переход к разделу: если по пути подгрузились картинки и страница сдвинулась, доводим прокрутку до цели
+  document.addEventListener("click", e => {
+    const a = e.target.closest('a[href^="#"]');
+    const target = a && a.hash.length > 1 && document.querySelector(a.hash);
+    if (!target) return;
+    e.preventDefault();
+    history.pushState(null, "", a.hash);
+    const go = smooth => target.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    go(!reduce);
+    let last = -1, tries = 0;
+    const settle = () => {
+      const top = Math.round(target.getBoundingClientRect().top);
+      if (Math.abs(top - 80) > 4 && top === last) go(false);
+      else if (++tries < 20) { last = top; setTimeout(settle, 120); }
+    };
+    setTimeout(settle, 450);
+  });
+  addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
+  const onScroll = () => top.classList.toggle("scrolled", scrollY > 8);
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  let touched = false;
+  buttons.forEach(b => b.addEventListener("click", () => { touched = true; show(b.dataset.v === "1", true); }));
+  // Ссылка с #on сразу показывает итог: для тех, кто делится сайтом, и для проверки
+  if (reduce || location.hash === "#on") show(true, false);
+  else setTimeout(() => { if (!touched) show(true, true); }, 1800);
+
+
+  // ---------- Движение ----------
+  const motion = !reduce;
+  const root = document.documentElement;
+
+  // Полоса прочитанного, свет первого экрана и наклон скриншота считаются в одном кадре
+  const hero = document.querySelector(".hero");
+  const frame = document.querySelector(".screen .frame");
+  let ticking = false;
+  function frameUpdate() {
+    ticking = false;
+    const max = root.scrollHeight - innerHeight;
+    root.style.setProperty("--read", max > 0 ? (scrollY / max).toFixed(4) : 0);
+    if (!motion) return;
+    if (scrollY < innerHeight * 1.2) hero.style.setProperty("--py", scrollY.toFixed(1));
+    const r = frame.getBoundingClientRect();
+    // 1 когда скриншот только показался снизу, 0 когда его верх дошел до трети экрана
+    const t = Math.min(1, Math.max(0, (r.top - innerHeight * .25) / (innerHeight * .7)));
+    frame.style.setProperty("--tilt", t.toFixed(3));
+  }
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(frameUpdate); } }, { passive: true });
+  addEventListener("resize", frameUpdate);
+  frameUpdate();
+
+  // Появление: первый экран сразу по очереди, остальное при прокрутке
+  const groups = [
+    // Заголовок и текст видны сразу: это главное содержимое экрана, его не прячем ради анимации
+    [".hero .actions, .hero .fine, .demo", true],
+    [".facts li", false], [".band h2", false], [".band .intro", false], [".screen", false], [".legend li", false],
+    [".pair .shot", false], [".ticks li", false], [".steps li", false], [".faq details", false], [".final .card", false], [".compare tbody tr", false], [".compare-note", false],
+  ];
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add("in");
+    io.unobserve(e.target);
+    if (e.target.matches(".facts li")) count(e.target.querySelector(".num"));
+  }), { rootMargin: "0px 0px -12% 0px", threshold: .12 });
+  groups.forEach(([sel, now]) => {
+    document.querySelectorAll(sel).forEach((el, i, all) => {
+      el.classList.add("reveal");
+      if (el.matches(".screen, .pair .shot, .final .card")) el.classList.add("soft");
+      // Соседи в одном ряду появляются друг за другом
+      const siblings = [...el.parentElement.children].filter(c => c.matches(sel));
+      el.style.setProperty("--d", (now ? i * .12 : Math.min(siblings.indexOf(el), 5) * .08) + "s");
+      if (!motion) { el.classList.add("in"); return; }
+      now ? requestAnimationFrame(() => setTimeout(() => el.classList.add("in"), 60)) : io.observe(el);
+    });
+  });
+
+  // Счетчики в полосе фактов
+  function count(el) {
+    if (!el || !motion) return;
+    const to = +el.dataset.to, t0 = performance.now(), dur = 1100;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = Math.round(to * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    el.textContent = "0";
+    requestAnimationFrame(step);
+  }
+
+  // Наведение на пункт расшифровки подсвечивает его метку на скриншоте
+  const pins = document.querySelectorAll(".pin");
+  document.querySelectorAll(".legend li[data-pin]").forEach(li => {
+    const pin = pins[+li.dataset.pin - 1];
+    li.addEventListener("mouseenter", () => pin && pin.classList.add("hot"));
+    li.addEventListener("mouseleave", () => pin && pin.classList.remove("hot"));
+  });
+
+  // Ситуация в середине экрана загорается
+  const cases = document.querySelectorAll(".cases li");
+  if (motion) {
+    const mid = new IntersectionObserver(entries => entries.forEach(e => e.target.classList.toggle("lit", e.isIntersecting)),
+      { rootMargin: "-38% 0px -38% 0px" });
+    cases.forEach(li => mid.observe(li));
+  } else cases.forEach(li => li.classList.add("lit"));
+
+  // Ответы на вопросы раскрываются плавно
+  document.querySelectorAll(".faq details").forEach(d => {
+    const sum = d.querySelector("summary"), body = d.querySelector("p");
+    const wrapEl = document.createElement("div");
+    wrapEl.className = "answer";
+    body.replaceWith(wrapEl); wrapEl.append(body);
+    sum.addEventListener("click", ev => {
+      if (!motion) return;
+      ev.preventDefault();
+      if (d.open) {
+        const h = wrapEl.scrollHeight;
+        wrapEl.animate([{ height: h + "px", opacity: 1 }, { height: "0px", opacity: 0 }], { duration: 260, easing: "cubic-bezier(.4,0,.2,1)" })
+          .onfinish = () => { d.open = false; };
+      } else {
+        d.open = true;
+        const h = wrapEl.scrollHeight;
+        wrapEl.animate([{ height: "0px", opacity: 0 }, { height: h + "px", opacity: 1 }], { duration: 320, easing: "cubic-bezier(.2,.7,.2,1)" });
+      }
+    });
+  });
+
+  // Кнопки «Скачать» ведут прямо на архив последней версии. Без ответа GitHub остается ссылка на страницу релиза
+  fetch("https://api.github.com/repos/under2ker/chimerion/releases/latest")
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(rel => {
+      const zip = (rel.assets || []).find(a => /^CHIMERION-.*-win-x64\.zip$/.test(a.name));
+      if (!zip) return;
+      const ver = rel.tag_name.replace(/^v/, "");
+      document.querySelectorAll("a.dl").forEach(a => { a.href = zip.browser_download_url; });
+      document.querySelectorAll(".dl-text").forEach(t => { t.innerHTML = "Скачать " + ver + " <small>" + (zip.size / 1048576).toFixed(1).replace(".", ",") + " МБ</small>"; });
+      document.querySelector(".dl-meta").textContent = "Бесплатно и с открытым кодом. Версия " + ver + ".";
+      document.querySelectorAll(".code").forEach(c => { c.textContent = c.textContent.replace(/CHIMERION-[\d.]+-win-x64\.zip/, zip.name); });
+      const date = new Date(rel.published_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+      const news = document.querySelector(".news");
+      news.textContent = "Что нового в " + ver + " от " + date;
+      news.href = rel.html_url;
+    })
+    .catch(() => {});
+})();
+</script>
+</body>
+</html>

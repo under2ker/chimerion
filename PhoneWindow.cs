@@ -35,7 +35,7 @@ internal sealed class PhoneWindow
 
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Smart DNS на телефоне",
-            "Нейросети на iPhone и Android через тот же сервер. Нужен сервер с DoH", glyph: "▯"));
+            "Нейросети на iPhone и Android через тот же сервер. Нужен сервер с DoH", glyph: "smartphone"));
 
         var withDoh = servers.Where(s => !s.IsJunk && PhoneSetup.Doh(s) != null && s.Status is ServerStatus.Ok or ServerStatus.Partial)
                              .OrderBy(s => s.Status == ServerStatus.Ok ? 0 : 1).ThenByDescending(s => s.AllStability ?? 0).ToList();

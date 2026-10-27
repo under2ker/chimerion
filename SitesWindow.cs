@@ -41,7 +41,7 @@ internal sealed class SitesWindow
         _w.Closed += (_, _) => _open = null;
 
         var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Сайты", "Открываются ли сайты, которыми вы пользуетесь", glyph: "◎"));
+        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Сайты", "Открываются ли сайты, которыми вы пользуетесь", glyph: "globe"));
         root.Children.Add(_state.With(t => t.Margin = new Thickness(2, 12, 0, 8)));
         root.Children.Add(Ui.Card(Ui.Scroll(_list, 460), bottom: 0).With(c => c.Padding = new Thickness(14, 10, 8, 10)));
         root.Children.Add(Ui.Hint("Список хранится только у вас. Наружу уходит лишь имя сайта, который не открылся", 8).With(t => t.FontSize = 11));
