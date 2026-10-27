@@ -97,6 +97,8 @@ public class AppSettings
     public bool AccountSafetyGuard { get; set; } = true;
     /// <summary>Отправлять итоги проверок в общую карту серверов (Crowd). null — еще не спрашивали.</summary>
     public bool? CrowdConsent { get; set; }
+    /// <summary>Следить за сайтами, которыми пользуется человек (SiteWatch): открываются ли и почему нет.</summary>
+    public bool SiteWatch { get; set; } = true;
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
     public int WatchdogSeconds { get; set; } = 60;
 

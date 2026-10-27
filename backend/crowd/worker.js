@@ -5,6 +5,11 @@
 // GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий.
 // POST /tg/<secret> Telegram-бот: /dns — что работает сейчас, /status — сколько данных.
 // POST /tg-setup    подключить бота (заголовок X-Admin-Key): адрес вебхука и команды.
+// GET  /v1/discover серверы, которые у многих работают: программы добавляют их к себе и проверяют сами.
+// GET  /v1/probe    открывается ли сайт снаружи России (с узла Cloudflare): «лежит у всех» или «не открывается у вас».
+// GET  /v1/services состояние ChatGPT, Claude и Gemini по их страницам статуса.
+// GET  /v1/ios      профиль DNS для iPhone (.mobileconfig) с DoH выбранного сервера.
+// GET  /            страница со статусом серверов для людей.
 //
 // Переменные: DB (D1), SALT, TG_BOT_TOKEN, TG_WEBHOOK_SECRET, ADMIN_KEY (секреты wrangler).
 
@@ -39,6 +44,17 @@ export function serverKey(raw) {
   return HOST_RE.test(s) ? s : null;
 }
 
+/** Адрес DoH: https, хост по правилам, путь без пробелов и кавычек, не длиннее 200 символов. */
+export function dohUrl(raw) {
+  if (typeof raw !== "string" || raw.length > 200) return null;
+  try {
+    const u = new URL(raw.trim());
+    if (u.protocol !== "https:" || !HOST_RE.test(u.hostname) || u.username || u.password) return null;
+    if (!/^[A-Za-z0-9/_.~%+-]*$/.test(u.pathname)) return null;
+    return `https://${u.hostname.toLowerCase()}${u.port ? ":" + u.port : ""}${u.pathname === "/" ? "/dns-query" : u.pathname}`;
+  } catch { return null; }
+}
+
 const cleanName = (n) => typeof n === "string" ? n.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 48) : "";
 
 async function sha256(text) {
@@ -68,6 +84,7 @@ async function report(req, env) {
   // Внутри отчета один сервер и сервис считаются один раз: повтор не добавляет веса
   const agg = new Map();
   const names = new Map();
+  const urls = new Map();
   for (const it of body.items.slice(0, MAX_ITEMS)) {
     const server = serverKey(it?.server);
     const service = typeof it?.service === "string" ? it.service.trim() : "";
@@ -75,6 +92,8 @@ async function report(req, env) {
     agg.set(`${server}\u0000${service}`, { server, service, ok: it.ok });
     const name = cleanName(it.name);
     if (name) names.set(server, name);
+    const url = dohUrl(it.url);
+    if (url && serverKey(url) === server) urls.set(server, url);
   }
   if (agg.size === 0) return json({ accepted: 0 });
 
@@ -85,6 +104,8 @@ async function report(req, env) {
   for (const { server, service, ok } of agg.values()) stmts.push(up.bind(hour, server, service, asn, ok ? 1 : 0, ok ? 0 : 1));
   const nm = env.DB.prepare("INSERT INTO servers (server, name, updated) VALUES (?, ?, ?) ON CONFLICT (server) DO UPDATE SET name = excluded.name, updated = excluded.updated");
   for (const [server, name] of names) stmts.push(nm.bind(server, name, hour));
+  const su = env.DB.prepare("UPDATE servers SET url = ? WHERE server = ?");
+  for (const [server, url] of urls) stmts.push(su.bind(url, server));
   if (asn && org) stmts.push(env.DB.prepare("INSERT INTO asns (asn, org) VALUES (?, ?) ON CONFLICT (asn) DO UPDATE SET org = excluded.org").bind(asn, org));
   await env.DB.batch(stmts);
   return json({ accepted: agg.size, asn });
@@ -186,6 +207,175 @@ async function setup(req, env) {
   return json({ webhook: hook.ok, commands: cmds.ok });
 }
 
+
+/** Не больше limit запросов в час с одного адреса для дорогих проверок (probe). */
+async function allow(env, req, kind, limit) {
+  const hour = nowHour();
+  const k = await sha256(`${kind}|${req.headers.get("cf-connecting-ip") || ""}|${hour}|${env.SALT || ""}`);
+  const r = await env.DB.prepare("INSERT INTO seen (k, hour, n) VALUES (?, ?, 1) ON CONFLICT (k) DO UPDATE SET n = n + 1 RETURNING n").bind(k, hour).first();
+  return (r?.n || 0) <= limit;
+}
+
+/**
+ * Серверы для обнаружения: за сутки не меньше 20 проверок, не меньше 70% удачных и отчеты хотя бы из двух сетей
+ * провайдеров (один человек с накрученными отчетами так сервер не протолкнет). Программа все равно проверит сама.
+ */
+export async function discover(env) {
+  const h = nowHour();
+  const res = await env.DB.prepare(
+    `SELECT s.server AS server, MAX(n.name) AS name, MAX(n.url) AS url, SUM(ok) AS ok, SUM(fail) AS fail, COUNT(DISTINCT asn) AS nets
+     FROM stats s LEFT JOIN servers n ON n.server = s.server
+     WHERE hour >= ? GROUP BY s.server
+     HAVING SUM(ok) + SUM(fail) >= 20 AND SUM(ok) * 100 >= 70 * (SUM(ok) + SUM(fail)) AND COUNT(DISTINCT asn) >= 2
+     ORDER BY SUM(ok) DESC LIMIT 100`).bind(h - 24).all();
+  return (res.results || []).map((r) => ({ server: r.server, name: r.name || r.server, url: r.url || null, rate: Math.round((100 * r.ok) / (r.ok + r.fail)), checks: r.ok + r.fail, nets: r.nets }));
+}
+
+/** Открывается ли сайт с узла Cloudflare. Любой HTTP-ответ, даже 403 от защиты от ботов, значит «сайт жив». */
+async function probe(req, env) {
+  const host = (new URL(req.url).searchParams.get("host") || "").trim().toLowerCase();
+  if (!HOST_RE.test(host) || host.endsWith(".workers.dev") || host.endsWith(".local") || host.endsWith(".lan")) return json({ error: "bad host" }, 400);
+  if (!(await allow(env, req, "probe", 300))) return json({ error: "too many probes" }, 429);
+  const cache = caches.default;
+  const key = new Request(`https://probe.cache/${host}`);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const t0 = Date.now();
+  let out;
+  try {
+    const r = await fetch(`https://${host}/`, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(8000), headers: { "user-agent": "Mozilla/5.0 CHIMERION-probe" } });
+    out = { host, up: r.status < 500 || r.status === 503, status: r.status, ms: Date.now() - t0 };
+    try { r.body?.cancel(); } catch {}
+  } catch (e) {
+    out = { host, up: false, status: 0, ms: Date.now() - t0, error: String(e?.name || "error") };
+  }
+  const resp = json(out, 200, { "cache-control": "public, max-age=120" });
+  await cache.put(key, resp.clone());
+  return resp;
+}
+
+const STATUS_PAGES = {
+  ChatGPT: "https://status.openai.com/api/v2/status.json",
+  Claude: "https://status.claude.com/api/v2/status.json",
+};
+
+/** Состояние сервисов по страницам статуса (формат Atlassian Statuspage). indicator: none, minor, major, critical. */
+async function services(env, ctx) {
+  const cache = caches.default;
+  const key = new Request("https://status.cache/v1");
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const result = {};
+  await Promise.all(Object.entries(STATUS_PAGES).map(async ([name, url]) => {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      const d = await r.json();
+      result[name] = { indicator: d?.status?.indicator || "unknown", text: d?.status?.description || "" };
+    } catch { result[name] = { indicator: "unknown", text: "" }; }
+  }));
+  const resp = json({ v: 1, updated: new Date().toISOString(), services: result }, 200, { "cache-control": "public, max-age=120" });
+  ctx.waitUntil(cache.put(key, resp.clone()));
+  return resp;
+}
+
+const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Профиль iOS/macOS: DNS по HTTPS через выбранный сервер для всего устройства. Без подписи: iPhone покажет «не проверен». */
+export function mobileconfig(doh, name, uuid1, uuid2) {
+  const host = new URL(doh).hostname;
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>DNSSettings</key>
+      <dict>
+        <key>DNSProtocol</key><string>HTTPS</string>
+        <key>ServerURL</key><string>${xml(doh)}</string>
+      </dict>
+      <key>PayloadDisplayName</key><string>${xml(name)}</string>
+      <key>PayloadIdentifier</key><string>com.chimerion.dns.${xml(host)}</string>
+      <key>PayloadType</key><string>com.apple.dnsSettings.managed</string>
+      <key>PayloadUUID</key><string>${uuid1}</string>
+      <key>PayloadVersion</key><integer>1</integer>
+    </dict>
+  </array>
+  <key>PayloadDescription</key><string>DNS через ${xml(name)} для ChatGPT, Claude и Gemini. Создано CHIMERION.</string>
+  <key>PayloadDisplayName</key><string>CHIMERION: ${xml(name)}</string>
+  <key>PayloadIdentifier</key><string>com.chimerion.profile.${xml(host)}</string>
+  <key>PayloadRemovalDisallowed</key><false/>
+  <key>PayloadType</key><string>Configuration</string>
+  <key>PayloadUUID</key><string>${uuid2}</string>
+  <key>PayloadVersion</key><integer>1</integer>
+</dict>
+</plist>
+`;
+}
+
+function ios(req) {
+  const p = new URL(req.url).searchParams;
+  const doh = dohUrl(p.get("doh") || "");
+  if (!doh) return new Response("bad doh", { status: 400 });
+  const name = cleanName(p.get("name") || "") || new URL(doh).hostname;
+  return new Response(mobileconfig(doh, name, crypto.randomUUID().toUpperCase(), crypto.randomUUID().toUpperCase()), {
+    headers: {
+      "content-type": "application/x-apple-aspen-config",
+      "content-disposition": `attachment; filename="chimerion-${new URL(doh).hostname}.mobileconfig"`,
+    },
+  });
+}
+
+/** Страница статуса для людей: лучшие серверы за 6 часов и по сервисам. */
+async function statusPage(env, ctx) {
+  const cache = caches.default;
+  const key = new Request("https://page.cache/");
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const rows = await summary(env, null);
+  const top = topServers(rows, 10, 15);
+  const h = nowHour();
+  const s = await env.DB.prepare("SELECT COUNT(DISTINCT server) AS servers, COUNT(DISTINCT asn) AS asns, SUM(ok + fail) AS checks FROM stats WHERE hour >= ?").bind(h - 24).first();
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const color = (r) => (r >= 90 ? "#3dd68c" : r >= 60 ? "#f5b941" : "#f2626e");
+  const list = top.length === 0
+    ? `<p class="muted">Пока мало данных: ни у одного сервера нет 10 проверок за последние 6 часов. Загляните позже.</p>`
+    : `<table><thead><tr><th>Сервер</th><th>Работает</th><th>По сервисам</th><th>Проверок</th></tr></thead><tbody>` +
+      top.map((t) => `<tr><td><b>${esc(t.name)}</b>${t.name !== t.server ? `<div class="muted mono">${esc(t.server)}</div>` : ""}</td>` +
+        `<td><span class="pct" style="color:${color(t.rate)}">${t.rate}%</span></td>` +
+        `<td>${Object.entries(t.services).map(([n, r]) => `<span class="chip" style="border-color:${color(r)}">${esc(n)} ${r}%</span>`).join(" ")}</td>` +
+        `<td class="muted">${t.total}</td></tr>`).join("") + `</tbody></table>`;
+  const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHIMERION: какие Smart DNS работают сейчас</title>
+<meta name="description" content="Живой рейтинг Smart DNS для ChatGPT, Claude и Gemini по проверкам программ CHIMERION за последние 6 часов.">
+<style>
+:root{--bg:#111316;--card:#1a1d21;--text:#f3f4f1;--muted:#8f949b;--lime:#d4ff3f;--line:#2a2e33}
+@media (prefers-color-scheme:light){:root{--bg:#f4f5f2;--card:#fff;--text:#16181b;--muted:#5f646b;--lime:#5c7a00;--line:#e3e5e0}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 48px}h1{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}
+.muted{color:var(--muted)}.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:18px;overflow-x:auto}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:0 10px 10px 0}
+td{padding:10px 10px 10px 0;border-top:1px solid var(--line);vertical-align:top}.pct{font-size:18px;font-weight:700}
+.chip{display:inline-block;border:1px solid;border-radius:999px;padding:1px 8px;font-size:12px;margin:0 4px 4px 0;white-space:nowrap}
+.stats{display:flex;gap:24px;flex-wrap:wrap}.stats b{font-size:22px;display:block}
+a.btn{display:inline-block;background:var(--lime);color:#111;font-weight:700;text-decoration:none;padding:10px 18px;border-radius:10px;margin:8px 12px 0 0}
+a{color:var(--lime)}
+</style></head><body><main>
+<h1>Какие Smart DNS работают сейчас</h1>
+<p class="muted">Живой рейтинг по проверкам программ CHIMERION за последние 6 часов: открываются ли через сервер ChatGPT, Claude и Gemini. У разных провайдеров результат может отличаться, программа подбирает сервер под вашего провайдера сама.</p>
+<div class="card stats"><div><b>${s?.checks || 0}</b><span class="muted">проверок за сутки</span></div><div><b>${s?.servers || 0}</b><span class="muted">серверов</span></div><div><b>${s?.asns || 0}</b><span class="muted">сетей провайдеров</span></div></div>
+<div class="card">${list}</div>
+<div class="card"><b>CHIMERION</b> сам находит Smart DNS, проверяет их и подключает лучший в один клик. Бесплатно, для Windows.<br>
+<a class="btn" href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a><a class="btn" href="https://t.me/chimeriondns" style="background:transparent;color:var(--lime);border:1px solid var(--lime)">Telegram-канал</a>
+<p class="muted" style="margin-bottom:0">Бот <a href="https://t.me/CHIMERIONDNS_BOT">@CHIMERIONDNS_BOT</a> отвечает на /dns. Обновлено ${new Date().toISOString().slice(11, 16)} UTC.</p></div>
+</main></body></html>`;
+  const resp = new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+  ctx.waitUntil(cache.put(key, resp.clone()));
+  return resp;
+}
+
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
@@ -194,7 +384,11 @@ export default {
       if (req.method === "GET" && url.pathname === "/v1/stats") return await stats(req, env, ctx);
       if (req.method === "POST" && env.TG_WEBHOOK_SECRET && url.pathname === `/tg/${env.TG_WEBHOOK_SECRET}`) return await telegram(req, env);
       if (req.method === "POST" && url.pathname === "/tg-setup") return await setup(req, env);
-      if (req.method === "GET" && url.pathname === "/") return new Response("CHIMERION crowd");
+      if (req.method === "GET" && url.pathname === "/v1/discover") return json({ v: 1, servers: await discover(env) }, 200, { "cache-control": "public, max-age=900" });
+      if (req.method === "GET" && url.pathname === "/v1/probe") return await probe(req, env);
+      if (req.method === "GET" && url.pathname === "/v1/services") return await services(env, ctx);
+      if (req.method === "GET" && url.pathname === "/v1/ios") return ios(req);
+      if (req.method === "GET" && url.pathname === "/") return await statusPage(env, ctx);
       return new Response("not found", { status: 404 });
     } catch (e) {
       return json({ error: "internal" }, 500);

@@ -105,8 +105,7 @@ public partial class SettingsWindow
         ColorsHost.Children.Add(reset);
         ColorsHost.Children.Add(new TextBlock
         {
-            Text = "Цвета меняются сразу, чтобы было видно результат. Сохранятся по «Сохранить», «Отмена» вернет прежние. " +
-                   "Оттенки наведения, рамок и текста на кнопках CHIMERION подбирает сама, чтобы все читалось",
+            Text = "Цвета видно сразу, сохранятся по «Сохранить». Оттенки рамок и наведения программа подберет сама",
             Style = (Style)FindResource("FieldHint"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
         });
     }
@@ -114,7 +113,9 @@ public partial class SettingsWindow
     private FrameworkElement ColorRow(ThemeColors.Slot slot)
     {
         // На светлой теме подложки без своего цвета выводятся из акцента: показываем то, что применено
-        var derived = !Dark && slot.LightDefault.Length == 0 && ThemeColors.Custom(_colors, slot.Key, false) == null;
+        // Цвет выводится сам: в светлой теме из акцента, в темной при своем акценте (выделение, вкладки, метки, кнопки)
+        bool ownAccent = Dark && ThemeColors.Custom(_colors, "Accent", true) != null && slot.Key is "AccentButton" or "ToggleOn" or "AccentSoft" or "Selection" or "Lime";
+        var derived = ThemeColors.Custom(_colors, slot.Key, Dark) == null && (!Dark && slot.LightDefault.Length == 0 || ownAccent);
         var color = derived && Application.Current.TryFindResource(slot.Key) is SolidColorBrush applied
             ? applied.Color : ThemeColors.Get(_colors, slot.Key, Dark);
         var std = ThemeColors.Hex(ThemeColors.Get(null, slot.Key, Dark));

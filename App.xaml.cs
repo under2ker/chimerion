@@ -6,6 +6,9 @@ namespace Dnex;
 public partial class App : Application
 {
     private static Mutex? _single;
+    /// <summary>Сигнал от второй копии: «покажи окно». Вторая копия будит первую и закрывается.</summary>
+    private const string ShowSignal = @"Local\DNEX-show-window";
+    private static EventWaitHandle? _show;
 
     /// <summary>Только один экземпляр: две копии CHIMERION, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
     protected override void OnStartup(StartupEventArgs e)
@@ -25,7 +28,13 @@ public partial class App : Application
         if (first && Dnex.Services.Updater.OnStartup()) { Shutdown(); return; }
         if (!first)
         {
-            DnexDialog.Show("CHIMERION уже запущена", "Значок программы в трее, рядом с часами. Если его не видно, раскройте скрытые значки стрелкой.", DialogKind.Info);
+            // Повторный запуск ярлыком: просим работающую копию показать окно, как привыкли в других программах.
+            // Если сигнал передать нельзя (копия с правами администратора или старая версия), подсказываем, где значок
+            bool woke = false;
+            try { using var ev = EventWaitHandle.OpenExisting(ShowSignal); woke = ev.Set(); }
+            catch (Exception) { }
+            if (!woke)
+                DnexDialog.Show("CHIMERION уже запущена", "Значок программы в трее, рядом с часами. Если его не видно, раскройте скрытые значки стрелкой.", DialogKind.Info);
             Shutdown();
             return;
         }
@@ -36,6 +45,15 @@ public partial class App : Application
 
         var win = new MainWindow();
         MainWindow = win;
+        try
+        {
+            _show = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSignal);
+            new Thread(() =>
+            {
+                while (_show.WaitOne()) Dispatcher.BeginInvoke(new Action(win.ShowFromTray));
+            }) { IsBackground = true, Name = "CHIMERION show signal" }.Start();
+        }
+        catch (Exception) { /* без сигнала вторая копия просто подскажет, где значок */ }
         // Запуск вместе с Windows: окно не создается вовсе, работает трей. Окно, показанное в первые секунды
         // после входа в систему (пока не готовы видеодрайвер и DWM), оставалось черным до закрытия.
         // Теперь оно создается при первом открытии из трея, когда система уже загружена.

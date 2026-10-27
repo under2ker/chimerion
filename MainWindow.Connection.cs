@@ -81,7 +81,12 @@ public partial class MainWindow
     /// Возвращает true, если после смены DNS сайты открываются.</summary>
     private async Task<bool> ConnectToAsync(DnsServer s, bool auto = false)
     {
-        if (_busyConn) return false;
+        if (_busyConn)
+        {
+            // Нажатие во время подключения (свое или сторожа) раньше молча пропадало
+            if (!auto) ShowToast("Подождите: идет подключение", "Warn");
+            return false;
+        }
         // Работает сторонний VPN: DNS из CHIMERION при нем обычно не действует. Предупреждаем до запроса прав, а не после
         if (!auto && SystemCheck.ActiveVpns() is { Count: > 0 } vpnsNow &&
             !DnexDialog.Ask("Работает VPN", $"Включен {string.Join(", ", vpnsNow)}. Пока он работает, запросы идут через него, " +
@@ -129,6 +134,22 @@ public partial class MainWindow
             await Task.Delay(800);
             if (!await DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)))
             {
+                // Переключение вручную с рабочего сервера: возвращаем прежний сервер, а не исходные DNS. Раньше
+                // неудачное переключение оставляло человека совсем без Smart DNS
+                if (!auto && prevServer != null && prevServer.Id != s.Id)
+                {
+                    Log($"После переключения на «{s.DisplayName}» сайты не открываются. Возвращаю «{prevServer.DisplayName}»");
+                    try
+                    {
+                        var prevBackup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers, prevServer, SafetyFit) : null;
+                        await DnsSwitcher.ApplyAsync(prevServer, _settings, Log, prevBackup);
+                        ShowToast($"«{s.DisplayName}» не отвечает, вернул «{prevServer.DisplayName}»", "Bad");
+                        DnexDialog.Show("Сервер не отвечает", $"После переключения на «{s.DisplayName}» сайты не открывались, поэтому подключение к «{prevServer.DisplayName}» возвращено.",
+                            DialogKind.Warn, "Подключение");
+                        return false;
+                    }
+                    catch (Exception ex) { Log("Вернуть прежний сервер не удалось: " + ex.Message); }
+                }
                 Log("После подключения сайты не открываются. Откатываю настройки.");
                 await DnsSwitcher.RestoreAsync(Log);
                 ShowToast("Откат: сервер не отвечает", "Bad");
@@ -205,6 +226,7 @@ public partial class MainWindow
     /// <summary>Отключение по действию пользователя: после него можно отменить и подключиться обратно.</summary>
     private async Task DisconnectByUserAsync()
     {
+        if (_busyConn) { ShowToast("Подождите: идет подключение, отключиться можно после него", "Warn"); return; }
         var active = DnsSwitcher.GetActive();
         var srv = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
         if (await DisconnectAsync("по запросу") && srv != null)
@@ -442,12 +464,18 @@ public partial class MainWindow
     /// <summary>Сервер умер: пробуем до трех следующих по стабильности (при равенстве избранные и с меньшим пингом).</summary>
     /// <param name="byUser">Пользователь сам согласился сменить сервер (щелчок по уведомлению): тогда настройка
     /// «Программа может сама менять сервер» не мешает.</param>
+    private DateTime _noSwitchNotified = DateTime.MinValue;
+
     private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active, bool byUser = false)
     {
         if (!byUser && !_settings.AllowServerSwitch)
         {
+            // Сторож зовет сюда каждые три неудачи подряд: без ограничения уведомление повторялось бы каждые 3 минуты
+            if (DateTime.Now - _noSwitchNotified < TimeSpan.FromMinutes(30)) return;
+            _noSwitchNotified = DateTime.Now;
             // Смена сервера выключена в настройках: подключение не трогаем, только сообщаем
-            Notify($"«{DnsServer.Clip(active.Name)}» не отвечает. Сервер сам не меняю: это выключено в настройках («Сторож и трей»). Смените сервер вручную, когда будет удобно", "Bad");
+            Notify($"«{DnsServer.Clip(active.Name)}» не отвечает. Сервер сам не меняю: это выключено в настройках («Сторож и трей»). Смените сервер вручную, когда будет удобно", "Bad",
+                   logLine: $"Сторож: «{active.Name}» не отвечает, смена сервера выключена в настройках");
             return;
         }
         HideUndo(); // подключение меняется без пользователя: прежняя отмена больше не про то же состояние
@@ -493,10 +521,7 @@ public partial class MainWindow
         if (added.Count == 0 || DnsSwitcher.GetActive() == null) return;
         var text = $"Включен VPN: {string.Join(", ", added)}. Пока он работает, DNS из CHIMERION может не действовать";
         Log(text);
-        ShowToast(text, "Warn");
-        // Окно может быть спрятано в трей: уведомление Windows видно всегда
-        _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: включен VPN"), Loc.T("Пока VPN работает, DNS из CHIMERION может не действовать. Отключите VPN или CHIMERION."),
-            System.Windows.Forms.ToolTipIcon.Warning);
+        ShowToast(text, "Warn"); // при спрятанном окне ShowToast сам покажет уведомление Windows (раньше их было два)
     }
     private Func<Task>? _undo;
     private readonly DispatcherTimer _undoTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
@@ -624,10 +649,7 @@ public partial class MainWindow
                 : $"Прокси сервера {DnsServer.Clip(active.Name)} сменил страну выхода: {who} теперь {verb} вас из страны {to}, раньше {from}. Если важно сохранить прежнюю страну, переключитесь на сервер с выходом в стране {from}";
             if (g.Key.ToClosed) text = $"{who} {verb} вас из страны {to}, там сервис не работает. Переключитесь на другой сервер";
             Log("Смена страны выхода: " + text);
-            ShowToast(text, g.Key.ToClosed ? "Bad" : "Warn");
-            if (!IsVisible)
-                _tray?.ShowBalloonTip(8000, Loc.T("CHIMERION: сменилась страна выхода"), PrivacyGuard.Mask(Loc.T(text)),
-                    g.Key.ToClosed ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
+            ShowToast(text, g.Key.ToClosed ? "Bad" : "Warn"); // при спрятанном окне ShowToast сам покажет уведомление Windows
         }
     }
 

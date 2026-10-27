@@ -48,6 +48,7 @@ public partial class MainWindow : Window
         };
 
         _settings = LoadSettings();
+        SiteCheck.ZapretRunning = () => _tools.OfType<ZapretTool>().FirstOrDefault()?.IsRunning() == true;
         Loc.SetLanguage(_settings.Language);
         Loc.Changed += OnLanguageChanged;
         ThemeColors.Changed += OnThemeChanged;
@@ -169,6 +170,7 @@ public partial class MainWindow : Window
             _ = StartToolsAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
             StartCrowd();
+            StartSiteWatch();
             ScheduleUpdateCheck(); // настройку «Проверять новую версию» смотрит сама проверка: ее можно включить на ходу
             if (DnsSwitcher.GetActive() is { } a)
                 Log($"Активно подключение «{a.Name}» с {a.Since:dd.MM HH:mm}.");
@@ -264,12 +266,6 @@ public partial class MainWindow : Window
     private void OpenData_Click(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo("explorer.exe", Storage.Dir) { UseShellExecute = true });
 
-    private void Reload_Click(object sender, RoutedEventArgs e)
-    {
-        _settings = LoadSettings();
-        Log($"Настройки перечитаны: источников {_settings.Sources.Count(s => s.Enabled)}, сервисов для проверки {_settings.Targets.Count(t => t.Enabled)}");
-    }
-
     /// <summary>Загружает настройки и сразу шифрует открытые Cookie, если пользователь вписал их вручную.</summary>
     private static AppSettings LoadSettings()
     {
@@ -354,6 +350,9 @@ public partial class MainWindow : Window
                 _settings = LoadSettings();
                 ApplyTimerSettings();
                 ThemeColors.Apply(_settings.Colors, _settings.Theme); // отмена возвращает и прежние цвета
+                // и режим скрытия данных с языком: раньше файл возвращался, а окна оставались скрытыми от записи
+                PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
+                Loc.SetLanguage(_settings.Language);
                 Log("Сохранение настроек отменено");
             });
         }

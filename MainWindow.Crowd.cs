@@ -32,9 +32,8 @@ public partial class MainWindow
     {
         if (_settings.CrowdConsent != null || !IsVisible) return;
         bool yes = DnexDialog.Ask("Помогать общей карте серверов?",
-            "Программа будет раз в час отправлять итоги своих проверок: адрес Smart DNS, его название и открываются ли через него ChatGPT, Claude и Gemini.\n\n" +
-            "О вас ничего не уходит: ни IP, ни имени, ни списка сайтов. Сервер видит только сеть провайдера, чтобы считать рейтинг для нее.\n\n" +
-            "Взамен программа узнает, какие серверы работают у пользователей вашего провайдера прямо сейчас, и подскажет лучший. Изменить можно в настройках, вкладка «Приватность».",
+            "Раз в час программа будет отправлять итоги проверок: адрес сервера и открываются ли через него нейросети. Ваш IP и сайты не уходят.\n\n" +
+            "Взамен она подскажет, какой сервер лучше работает у вашего провайдера. Изменить можно в настройках, во вкладке «Приватность».",
             "Помогать", "Не сейчас", DialogKind.Info, windowTitle: "Общая карта серверов");
         _settings.CrowdConsent = yes;
         try { Storage.Save("settings.json", _settings); } catch (Exception) { }
@@ -64,9 +63,37 @@ public partial class MainWindow
                 _crowd = await Crowd.FetchAsync();
                 _topSig = null;
                 UpdateTopList();
+                await CrowdDiscoverAsync();
             }
         }
         catch (Exception) { }
+    }
+
+    /// <summary>
+    /// Серверы, которые нашли и проверили другие пользователи: новые для этого списка добавляются и сразу
+    /// проверяются здесь. Сервер из мусора не возвращается, а в рабочие попадает только после своей проверки.
+    /// </summary>
+    private async Task CrowdDiscoverAsync()
+    {
+        List<Crowd.Found> found;
+        try { found = await Crowd.DiscoverAsync(); }
+        catch (Exception) { return; }
+        var keys = _servers.Select(Crowd.KeyOf).Where(k => k != null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var added = new List<DnsServer>();
+        foreach (var f in found.Where(f => !keys.Contains(f.Server)).Take(10))
+        {
+            if (Crowd.ToServer(f) is not { } s || _junk.ContainsKey(s.Key) || !_known.Add(s.Key)) continue;
+            _servers.Add(s);
+            added.Add(s);
+        }
+        if (added.Count == 0) return;
+        Log($"Общая карта: добавлено серверов {added.Count}, которые работают у других пользователей. Проверяю");
+        SaveServers();
+        foreach (var s in added)
+        {
+            if (_busyConn) break;
+            await CheckOneAsync(s, null);
+        }
     }
 
     /// <summary>Строка «У вашего провайдера» для блока лучших: сервер, доля удачных проверок в той же сети и их число.</summary>

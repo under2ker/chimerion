@@ -483,6 +483,7 @@ public class ServiceHealthTests
     public void One_failed_check_is_not_an_alert_two_are()
     {
         var h = new ServiceHealth();
+        Assert.Empty(h.Update(new[] { ("ChatGPT", Ok), ("Claude", Ok) }));
         Assert.Empty(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NotProxied), ("Claude", Ok) }));
         Assert.True(h.Suspicious); // повторная проверка пойдет через минуту
         var ch = Assert.Single(h.Update(new[] { ("ChatGPT", ServiceHealth.Problem.NotProxied), ("Claude", Ok) }));
@@ -503,9 +504,21 @@ public class ServiceHealthTests
     }
 
     [Fact]
+    public void Service_closed_from_the_start_is_not_reported_as_fallen()
+    {
+        // Журнал пользователя: Gemini на Zapret DNS был закрыт сразу после подключения, а через 6 минут пришло
+        // «Gemini перестал открываться». Он не переставал: сообщаем только о том, что открывалось в этом подключении
+        var h = new ServiceHealth();
+        for (int i = 0; i < 5; i++)
+            Assert.Empty(h.Update(new[] { ("ChatGPT", Ok), ("Gemini", ServiceHealth.Problem.Closed) }));
+        Assert.False(h.Suspicious); // и проверка не ускоряется до раза в минуту из-за него
+    }
+
+    [Fact]
     public void Recovery_is_reported_once()
     {
         var h = new ServiceHealth();
+        h.Update(new[] { ("Claude", Ok) });
         h.Update(new[] { ("Claude", ServiceHealth.Problem.NoResponse) });
         h.Update(new[] { ("Claude", ServiceHealth.Problem.NoResponse) });
         var up = Assert.Single(h.Update(new[] { ("Claude", Ok) }));

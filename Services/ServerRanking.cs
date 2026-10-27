@@ -31,6 +31,7 @@ public static class ServerRanking
                 .OrderByDescending(s => c.Stab(s))
                 .ThenByDescending(s => ServerMetrics.ConfidenceOf(s))
                 .ThenByDescending(s => s.ServiceChecks)
+                .ThenBy(s => s.AiMs ?? long.MaxValue / 2)   // при равной надежности выше тот, через кого нейросети отвечают быстрее
                 .ThenBy(s => s.LatencyMs ?? long.MaxValue)
                 .FirstOrDefault();
             picks.Add(new TopPick(c.Title, c.Key, best, best == null ? null : c.Stab(best)));

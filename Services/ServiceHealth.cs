@@ -20,7 +20,9 @@ public sealed class ServiceHealth
     /// <summary>Изменение для уведомления: сервис упал (Down) или снова работает.</summary>
     public sealed record Change(string Service, bool Down, Problem Problem);
 
-    private sealed class State { public int Fails; public bool Down; public Problem Last; }
+    /// <param name="EverOk">Сервис хоть раз открылся в этом подключении. Если он был закрыт с самого начала (например,
+    /// Gemini на сервере, который его не поддерживает), «перестал открываться» было бы неправдой: о нем не сообщаем.</param>
+    private sealed class State { public int Fails; public bool Down; public Problem Last; public bool EverOk; }
 
     private readonly Dictionary<string, State> _services = new(StringComparer.OrdinalIgnoreCase);
     private int _serverFails;
@@ -29,7 +31,7 @@ public sealed class ServiceHealth
     public bool ServerDown { get; private set; }
 
     /// <summary>Есть неподтвержденная неудача: стоит проверить раньше обычного, чтобы быстрее узнать о падении.</summary>
-    public bool Suspicious => _serverFails > 0 && !ServerDown || _services.Values.Any(s => s.Fails > 0 && !s.Down);
+    public bool Suspicious => _serverFails > 0 && !ServerDown || _services.Values.Any(s => s.Fails > 0 && !s.Down && s.EverOk);
 
     /// <summary>Какие сервисы сейчас упали.</summary>
     public IReadOnlyList<string> DownServices => _services.Where(kv => kv.Value.Down).Select(kv => kv.Key).ToList();
@@ -65,12 +67,12 @@ public sealed class ServiceHealth
             if (problem == Problem.None)
             {
                 if (st.Down) changes.Add(new Change(name, false, Problem.None));
-                st.Fails = 0; st.Down = false; st.Last = Problem.None;
+                st.Fails = 0; st.Down = false; st.Last = Problem.None; st.EverOk = true;
                 continue;
             }
             st.Fails++;
             st.Last = problem;
-            if (!st.Down && st.Fails >= FailsToAlert)
+            if (!st.Down && st.EverOk && st.Fails >= FailsToAlert)
             {
                 st.Down = true;
                 changes.Add(new Change(name, true, problem));

@@ -338,6 +338,24 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string PingText => LatencyMs is null ? "—" : $"{LatencyMs}";
 
+    private long? _aiMs;
+    /// <summary>
+    /// Скорость нейросетей через сервер: сколько отвечает API сервиса через его прокси (мс), сглажено по проверкам.
+    /// Пинг меряет только DNS, а скорость ответа ChatGPT зависит от прокси: через один ответы идут бегом, через
+    /// другой с задержкой в секунды.
+    /// </summary>
+    public long? AiMs { get => _aiMs; set { _aiMs = value; On(); On(nameof(AiText)); } }
+
+    /// <summary>Новый замер: сглаживание (половина нового, половина прежнего), чтобы один медленный ответ не ронял сервер.</summary>
+    public void AddAiSample(long? ms)
+    {
+        if (ms is not { } v) return;
+        AiMs = AiMs is { } old ? (old + v) / 2 : v;
+    }
+
+    [JsonIgnore]
+    public string AiText => AiMs is null ? "—" : $"{AiMs}";
+
     /// <summary>Итоговая оценка 0–100: доля успешных проверок, пинг, разброс, свежесть.</summary>
     [JsonIgnore]
     public int Score
@@ -389,8 +407,7 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string ScoreHint =>
         ServerMetrics.Of(this).Describe() + "\n\n" +
-        "Оценка 0–100 нужна только для порядка в таблице: стабильность до 60 баллов, пинг до 25, разброс до 15. " +
-        "«Частично» снижает оценку. Лучший сервер выбирается по стабильности для каждого сервиса и уверенности, а не по оценке";
+        "Оценка 0–100 только для порядка в таблице: стабильность 60, пинг 25, разброс 15. Лучший сервер выбирается по стабильности";
 
     /// <summary>Порядок сортировки: рабочие сверху, нерабочие внизу.</summary>
     [JsonIgnore]

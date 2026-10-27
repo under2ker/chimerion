@@ -40,6 +40,14 @@
         <SolidColorBrush x:Key="ChipLime" Color="#2B3D12"/>
         <!-- Выделение строк, линии таблицы, обводка акцентных элементов -->
         <SolidColorBrush x:Key="Selection" Color="#2B3816"/>
+        <LinearGradientBrush x:Key="ConnectedRow" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#55C5F23A" Offset="0"/>
+            <GradientStop Color="#00C5F23A" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="ConnectedRowSelected" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#80C5F23A" Offset="0"/>
+            <GradientStop Color="#FF2B3816" Offset="1"/>
+        </LinearGradientBrush>
         <SolidColorBrush x:Key="SelectionInactive" Color="#252F15"/>
         <SolidColorBrush x:Key="GridLine" Color="#212428"/>
         <SolidColorBrush x:Key="AccentBorder" Color="#86A231"/>
@@ -631,16 +639,27 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="ToolTip" Value="{Binding LastError}"/>
             <Style.Triggers>
+                <!-- Выделение целиком из цветов темы (DynamicResource): меняется вместе с набором и своими цветами.
+                     Ячейки прозрачные (стиль DataGridCell), поэтому видна только заливка строки -->
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-                    <Setter Property="BorderBrush" Value="#3A4150"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
                 </Trigger>
-                <!-- Выбранная строка: синяя заливка + яркая полоса слева + жирный текст -->
+                <!-- Выбранная строка, таблица в фокусе: заливка «Выделенные строки» и яркая полоса цветом акцента -->
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#263F66"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource Lime}"/>
+                    <Setter Property="Background" Value="{DynamicResource Selection}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
                 </Trigger>
+                <!-- Выбранная строка, фокус в другом месте (поиск, кнопки): заливка и полоса приглушены, выбор все равно виден -->
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True"/>
+                        <Condition Property="Selector.IsSelectionActive" Value="False"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource SelectionInactive}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}"/>
+                </MultiTrigger>
                 <!-- Новый рабочий сервер: строка проявляется и поднимается снизу на место -->
                 <DataTrigger Binding="{Binding JustAdded}" Value="True">
                     <DataTrigger.EnterActions>
@@ -665,18 +684,21 @@
                         </BeginStoryboard>
                     </DataTrigger.EnterActions>
                 </DataTrigger>
-                <!-- Подключенный сервер: градиент лайм к прозрачности. Стоит после выделения, поэтому виден и у выбранной строки -->
+                <!-- Подключенный сервер: градиент от цвета акцента к прозрачности и полоса акцента (ConnectedRow из ThemeColors).
+                     Раньше градиент был зашит лаймовым и не менялся с темой -->
                 <DataTrigger Binding="{Binding IsConnected}" Value="True">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <!-- Лайм у левого края, плавно в прозрачность к правому -->
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#55A3E635" Offset="0"/>
-                                <GradientStop Color="#00A3E635" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
+                    <Setter Property="Background" Value="{DynamicResource ConnectedRow}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}"/>
                 </DataTrigger>
+                <!-- Подключенный и выбранный: градиент от акцента к цвету выделения, яркая полоса. Видно и подключение, и выбор -->
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsConnected}" Value="True"/>
+                        <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Background" Value="{DynamicResource ConnectedRowSelected}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                </MultiDataTrigger>
             </Style.Triggers>
         </Style>
 

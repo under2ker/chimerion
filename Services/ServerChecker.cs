@@ -34,7 +34,9 @@ public class ServerChecker
     private readonly SynchronizationContext? _ui;
 
     /// <summary>ProxyIp — адрес, который сервер выдал вместо настоящего (Smart DNS): это и есть прокси сервиса.</summary>
-    private sealed record TargetResult(string Part, bool Ok, long? Ms, bool Compared, bool Proxied, string? Error, string? ProxyIp = null);
+    /// <param name="ApiMs">Сколько занял запрос к API сервиса через прокси сервера (соединение, TLS и ответ): так видно,
+    /// насколько быстро через этот сервер отвечает сама нейросеть, а не только DNS.</param>
+    private sealed record TargetResult(string Part, bool Ok, long? Ms, bool Compared, bool Proxied, string? Error, string? ProxyIp = null, long? ApiMs = null);
 
     private readonly CheckOptions _opt;
 
@@ -151,6 +153,10 @@ public class ServerChecker
             error = "Не подменяет адреса ИИ-сервисов, обычный DNS";
         }
 
+        // Скорость нейросетей через сервер: медиана времени ответа API по открывшимся сервисам
+        var apiTimes = results.Where(r => r.ApiMs.HasValue).Select(r => r.ApiMs!.Value).OrderBy(x => x).ToList();
+        long? aiMs = apiTimes.Count == 0 ? null : apiTimes[apiTimes.Count / 2];
+
         // Адрес прокси Smart DNS: если новый — сбрасываем его страну, чтобы определить заново
         var proxyIp = results.Select(r => r.ProxyIp).FirstOrDefault(x => x != null);
 
@@ -176,6 +182,7 @@ public class ServerChecker
             s.NotifyEgress();
             s.LatencyMs = median;
             s.JitterMs = jitter;
+            s.AddAiSample(aiMs);
             s.NoProxy = noProxy;
             s.Summary = string.Join(" · ", parts);
             s.LastError = error;
@@ -244,7 +251,9 @@ public class ServerChecker
             ? t.ExtraHosts.Select(h => (Host: h, Task: ProbeSiteAsync(s, new CheckTarget { Name = t.Name, Host = h, Path = "/" }, side.Token, ct))).ToList()
             : new();
 
+        var apiWatch = System.Diagnostics.Stopwatch.StartNew();
         var (state, note) = await ProbeHttpsAsync(ips[0], t, ct).ConfigureAwait(false);
+        long apiMs = apiWatch.ElapsedMilliseconds;
         if (state == Probe.Ok && webTask != null)
         {
             var (webState, webNote) = await webTask.ConfigureAwait(false);
@@ -263,7 +272,7 @@ public class ServerChecker
         // Капча Google — не региональная блокировка: в браузере ее иногда можно пройти. Отдельная пометка
         var mark = state switch { Probe.Ok => "✓", Probe.Blocked when note.Contains("капч") => "✗ капча", Probe.Blocked => "✗ регион", _ => "✗" };
         return new($"{t.Name} {mark}", state == Probe.Ok, ms, compared, proxied,
-                   state == Probe.Ok ? null : $"{t.Name}: {note}", proxied ? ips[0].ToString() : null);
+                   state == Probe.Ok ? null : $"{t.Name}: {note}", proxied ? ips[0].ToString() : null, state == Probe.Ok ? apiMs : null);
     }
 
     /// <summary>

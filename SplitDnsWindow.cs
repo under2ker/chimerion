@@ -94,12 +94,14 @@ internal sealed class SplitDnsWindow
         void Tab(string text, FrameworkElement page, bool on)
         {
             var rb = new RadioButton { Content = text, GroupName = "split", IsChecked = on, Style = (Style)Res["Tab"] };
-            rb.Checked += (_, _) => { pageGeneral.Visibility = page == pageGeneral ? Visibility.Visible : Visibility.Hidden; pageSmart.Visibility = page == pageSmart ? Visibility.Visible : Visibility.Hidden; };
+            // Скрытая вкладка места не занимает (Collapsed): раньше окно держало высоту самой длинной вкладки,
+            // и под «Общим DNS» оставалась пустота. Окно подстраивается под открытую вкладку, длинная прокручивается
+            rb.Checked += (_, _) => { pageGeneral.Visibility = page == pageGeneral ? Visibility.Visible : Visibility.Collapsed; pageSmart.Visibility = page == pageSmart ? Visibility.Visible : Visibility.Collapsed; };
             tabs.Children.Add(rb);
         }
         Tab("Общий DNS", pageGeneral, true);
         Tab("ИИ и наборы", pageSmart, false);
-        pageSmart.Visibility = Visibility.Hidden;
+        pageSmart.Visibility = Visibility.Collapsed;
         root.Children.Add(tabBox);
         var pages = new Grid();
         pages.Children.Add(pageGeneral);
@@ -266,8 +268,7 @@ internal sealed class SplitDnsWindow
     {
         var card = new StackPanel();
         card.Children.Add(Ui.CardTitle("Для разработчиков"));
-        card.Children.Add(Ui.Hint("Cursor, GitHub Copilot, Windsurf, JetBrains AI, Cline, Continue, а также Hugging Face, DeepSeek, Perplexity и OpenRouter. " +
-                                  "Claude Code ходит в те же адреса, что и Claude, и работает без набора", 4).With(t => t.FontSize = 11));
+        card.Children.Add(Ui.Hint("Cursor, Copilot, Windsurf, JetBrains AI, Cline и другие LLM. Claude Code работает и без набора", 4).With(t => t.FontSize = 11));
         var pick = Ui.Action("Включить наборы для разработчиков", "Strong", () =>
         {
             foreach (var cb in _groupChecks.Where(c => DevTools.Groups.Contains((string)c.Tag))) cb.IsChecked = true;

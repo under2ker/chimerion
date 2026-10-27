@@ -98,8 +98,15 @@ public static class SiteCheck
         if (page.Error != null)
         {
             lines.Add($"Соединение: {page.Error}");
-            return new SiteReport(host, SiteVerdict.Blocked, lines,
-                "Сайт не отвечает по адресу, который дал DNS: скорее всего, провайдер блокирует его адрес. DNS это не исправит. Попробуйте zapret («Свои сайты» и обход по адресам) или VPN");
+            // DNS системы может подменять адрес сайта своим прокси (так делают Smart DNS вроде Xbox DNS и для YouTube).
+            // Тогда сайт идет через чужой прокси: когда он не отвечает, zapret бессилен, помогает только смена DNS
+            if (await SubstitutedAsync(host, ips, org, ct) is { } realOrg)
+                return new SiteReport(host, SiteVerdict.Blocked, lines,
+                    $"DNS системы подменяет адрес сайта на свой прокси ({(org.Length > 0 ? org : ips[0].ToString())} вместо {realOrg}), и прокси не отвечает. " +
+                    "zapret тут не поможет: верните автоматический DNS или подключитесь через CHIMERION");
+            return new SiteReport(host, SiteVerdict.Blocked, lines, ZapretRunning?.Invoke() == true
+                ? "Похоже, провайдер блокирует адрес сайта, а zapret его не обходит. Нажмите «Подобрать стратегию» в «Telegram и YouTube»"
+                : "Похоже, провайдер блокирует адрес сайта. DNS не поможет, поможет zapret в «Telegram и YouTube»");
         }
         lines.Add($"Страница: код {page.Status}, {Kb(page.Bytes)} за {page.Ms / 1000.0:0.0} с{(page.Stalled ? ", загрузка оборвалась" : "")}");
         if (page.Stalled) return Throttled(host, lines, page.Bytes, cloudflare);
@@ -108,10 +115,9 @@ public static class SiteCheck
         // поэтому честно говорим, что программа сайт как браузер загрузить не может
         if (page.Status is 403 or 503 && Regex.IsMatch(page.Body, @"cf-error|cf-wrapper|Attention Required|Just a moment|challenge-platform|cf_chl", RegexOptions.IgnoreCase))
             return new SiteReport(host, SiteVerdict.Protected, lines,
-                "Сайт закрыт проверкой Cloudflare «вы не робот»: программа не может загрузить его так, как браузер, и оценить загрузку. " +
-                "Соединение с сайтом есть. Если в браузере сайт не догружается, это замедление: помогает zapret («Сайты для обхода» или обход по адресам)");
+                "Соединение есть, но сайт закрыт проверкой «вы не робот», дальше программа не видит. Если в браузере он не догружается, поможет zapret");
         if (page.Status is 403 or 451 && Regex.IsMatch(page.Body, "country|region|страна|регион|not available|unavailable", RegexOptions.IgnoreCase))
-            return new SiteReport(host, SiteVerdict.Refused, lines, "Сайт сам не пускает из вашей страны. DNS и zapret тут не помогут, нужен VPN или прокси в другой стране");
+            return new SiteReport(host, SiteVerdict.Refused, lines, "Сайт не пускает из вашей страны. Поможет только VPN или прокси в другой стране");
 
         // 3. Большой файл страницы (стили или скрипт с того же сайта): обрыв часто начинается после 15–30 КБ
         var assets = Regex.Matches(page.Body, @"(?:src|href)=""(/[^""/][^""]*?\.(?:css|js))""").Select(m => m.Groups[1].Value).Distinct().Take(4).ToList();
@@ -128,9 +134,29 @@ public static class SiteCheck
 
     private static SiteReport Throttled(string host, List<string> lines, long bytes, bool cloudflare) =>
         new(host, SiteVerdict.Throttled, lines,
-            $"Загрузка обрывается на {Kb(bytes)}: " + (cloudflare ? "так провайдеры замедляют сайты на Cloudflare. " : "похоже на замедление провайдером. ") +
-            "DNS это не исправит, все DNS ведут на те же адреса. Помогает zapret: включите его в «Telegram и YouTube», добавьте сайт в «Свои сайты» " +
-            "или включите «Обход по адресам (IPSet)»");
+            $"Загрузка обрывается на {Kb(bytes)}: " + (cloudflare ? "провайдер замедляет сайты на Cloudflare. " : "провайдер замедляет сайт. ") +
+            (ZapretRunning?.Invoke() == true
+                ? "zapret включен, но не помогает: добавьте сайт в «Свои сайты» или нажмите «Подобрать стратегию»"
+                : "DNS не поможет, поможет zapret в «Telegram и YouTube»"));
+
+    /// <summary>
+    /// Подменяет ли DNS системы адрес сайта: ни один адрес не совпал с эталонным DoH, и сеть-владелец другая.
+    /// Возвращает владельца настоящих адресов или null, если подмены нет или эталон не ответил.
+    /// </summary>
+    private static async Task<string?> SubstitutedAsync(string host, IPAddress[] ips, string org, CancellationToken ct)
+    {
+        try
+        {
+            var (real, _) = await DnsWire.ResolveDohAsync(new Models.AppSettings().ReferenceDoh, host, TimeSpan.FromSeconds(6), ct);
+            if (real.Count == 0 || real.Intersect(ips).Any()) return null;
+            var realOrg = await GeoLocation.OrgAsync(real[0].ToString(), ct) ?? "";
+            return realOrg.Length > 0 && !string.Equals(realOrg, org, StringComparison.OrdinalIgnoreCase) ? realOrg : null;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return null; }
+    }
+
+    /// <summary>Работает ли сейчас zapret: тогда совет другой (подобрать стратегию, а не включить). Задает главное окно.</summary>
+    public static Func<bool>? ZapretRunning;
 
     /// <summary>Домены хранилищ без сайта на самом домене и пример настоящего адреса для проверки.</summary>
     private static readonly Dictionary<string, string> ServiceRoots = new(StringComparer.OrdinalIgnoreCase)

@@ -50,7 +50,14 @@ public partial class MainWindow
                 ReportDown(active, name, $"{name} не отвечает на DNS-запросы. Windows перешла на запасной DNS, ИИ-сервисы через Smart DNS не работают");
         }
         var down = changes.Where(x => x.Down).ToList();
-        if (down.Count > 0 && serverChange != true) ReportDown(active, name, ServiceHealth.DownText(name, down));
+        if (down.Count > 0 && serverChange != true)
+        {
+            // Сбой у самого сервиса (страница статуса): сервер ни при чем, менять его бесполезно. Сообщаем и не переключаем
+            if (await ServiceOutageAsync(down.Select(x => x.Service)) is { } outage)
+                Notify($"{outage}. Сервер {name} ни при чем, менять его не нужно", "Warn");
+            else
+                ReportDown(active, name, ServiceHealth.DownText(name, down));
+        }
         var up = changes.Where(x => !x.Down).ToList();
         if (serverChange == false) Notify($"{name} снова отвечает на DNS-запросы", "Ok");
         if (up.Count > 0) Notify(ServiceHealth.UpText(name, up), "Ok");
@@ -67,23 +74,19 @@ public partial class MainWindow
         Log("Проверка сервисов: " + text);
         if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
         {
-            Notify(text + ". Переключаюсь на лучший рабочий сервер", "Bad");
+            Notify(text + ". Переключаюсь на лучший рабочий сервер", "Bad", logLine: null);
             _ = SwitchToNextBestAsync(active);
             return;
         }
-        ShowToast(text, "Bad");
-        if (_tray != null)
+        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Bad"); // спрятано: одно уведомление Windows, с действием
+        Balloon(10000, Loc.T("CHIMERION: сервисы перестали открываться"), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сменить сервер"),
+            System.Windows.Forms.ToolTipIcon.Warning, () =>
         {
-            _balloonClick = () =>
-            {
-                ShowFromTray();
-                if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
-                    DnexDialog.Ask("Сменить сервер?", text + ".\n\nCHIMERION подключится к лучшему рабочему серверу из списка.", "Сменить", windowTitle: "Проверка сервисов"))
-                    _ = SwitchToNextBestAsync(now, byUser: true);
-            };
-            _tray.ShowBalloonTip(10000, Loc.T("CHIMERION: сервисы перестали открываться"), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сменить сервер"),
-                System.Windows.Forms.ToolTipIcon.Warning);
-        }
+            ShowFromTray();
+            if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
+                DnexDialog.Ask("Сменить сервер?", text + ".\n\nCHIMERION подключится к лучшему рабочему серверу из списка.", "Сменить", windowTitle: "Проверка сервисов"))
+                _ = SwitchToNextBestAsync(now, byUser: true);
+        });
     }
 
     /// <summary>Основной сервер молчит, работает запасной: уведомление и предложение сделать запасной основным.</summary>
@@ -93,32 +96,29 @@ public partial class MainWindow
         Log("Проверка сервисов: " + text);
         if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
         {
-            Notify(text + ". Делаю его основным", "Warn");
+            Notify(text + ". Делаю его основным", "Warn", logLine: null);
             _ = ConnectToAsync(backup, auto: true);
             return;
         }
-        ShowToast(text, "Warn");
-        if (_tray != null)
+        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Warn");
+        Balloon(8000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сделать его основным"), System.Windows.Forms.ToolTipIcon.Warning, () =>
         {
-            _balloonClick = () =>
-            {
-                ShowFromTray();
-                if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
-                    DnexDialog.Ask("Сделать запасной сервер основным?", text + ".\n\nCHIMERION подключится к нему и подберет новый запасной.", "Сделать основным", windowTitle: "Проверка сервисов"))
-                    _ = ConnectToAsync(backup);
-            };
-            _tray.ShowBalloonTip(8000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сделать его основным"), System.Windows.Forms.ToolTipIcon.Warning);
-        }
+            ShowFromTray();
+            if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
+                DnexDialog.Ask("Сделать запасной сервер основным?", text + ".\n\nCHIMERION подключится к нему и подберет новый запасной.", "Сделать основным", windowTitle: "Проверка сервисов"))
+                _ = ConnectToAsync(backup);
+        });
     }
 
     /// <summary>Уведомление в окне и, если окно спрятано, в Windows.</summary>
-    private void Notify(string text, string kind)
+    /// <param name="logLine">Строка в журнал: пусто — текст с приставкой «Проверка сервисов:», null — не писать (вызывающий уже записал).</param>
+    private void Notify(string text, string kind, string? logLine = "")
     {
-        Log("Проверка сервисов: " + text);
+        if (logLine != null) Log(logLine.Length > 0 ? logLine : "Проверка сервисов: " + text);
         ShowToast(text, kind);
-        if (!IsVisible && _tray != null)
-            _tray.ShowBalloonTip(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)),
-                kind == "Bad" ? System.Windows.Forms.ToolTipIcon.Warning : System.Windows.Forms.ToolTipIcon.Info);
+        // Предупреждения и ошибки при спрятанном окне ShowToast сам показывает в Windows: второе такое же не нужно
+        if (kind == "Ok" && (!IsVisible || WindowState == WindowState.Minimized) && _tray != null)
+            Balloon(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)), System.Windows.Forms.ToolTipIcon.Info);
     }
 
     /// <summary>

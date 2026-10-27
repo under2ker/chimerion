@@ -60,10 +60,9 @@ public partial class MainWindow
             OpenUpdateWindow(info);
         else if (_tray != null)
         {
-            _balloonClick = () => { ShowFromTray(); OpenUpdateWindow(info); };
-            _tray.ShowBalloonTip(10000, Loc.T($"Доступна CHIMERION {info.Version.ToString(3)}"),
+            Balloon(10000, Loc.T($"Доступна CHIMERION {info.Version.ToString(3)}"),
                 Loc.T(info.Hotfix != null ? "Срочное исправление. Нажмите, чтобы обновить" : "Нажмите, чтобы посмотреть, что нового, и обновить"),
-                System.Windows.Forms.ToolTipIcon.Info);
+                System.Windows.Forms.ToolTipIcon.Info, () => { ShowFromTray(); OpenUpdateWindow(info); });
         }
     }
 
@@ -247,7 +246,7 @@ public partial class MainWindow
     private void DiagToggle_Click(object sender, RoutedEventArgs e)
     {
         DiagToggle.IsChecked = false;
-        DiagnosticsWindow.Show(_settings, _tools, () => _log.TakeLast(40).Select(l => $"{l.TimeText} {l.Text}"), Log, DiagFixAsync);
+        DiagnosticsWindow.Show(_settings, _tools, LogForReport, Log, DiagFixAsync);
     }
 
     private void ToolsToggle_Click(object sender, RoutedEventArgs e)
