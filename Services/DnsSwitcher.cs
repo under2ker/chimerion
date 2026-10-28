@@ -330,6 +330,7 @@ public static class DnsSwitcher
         log(split != null
             ? $"Подключено, два DNS: ИИ через {s.Name} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
             : $"Подключено: {s.Name} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")})");
+        if (split != null && SplitDns.GeneralIsSmart(split, primaryAddrs)) log("Внимание: " + SplitDns.GeneralIsSmartWarning);
         if (backupAddrs.Count > 0)
             log($"Запасной сервер: {backup!.Name} ({string.Join(", ", backupAddrs)}). Если основной перестанет отвечать, Windows перейдет на него сама");
     }

@@ -43,7 +43,7 @@ public partial class MainWindow : Window
         _toastTimer.Tick += (_, _) =>
         {
             _toastTimer.Stop();
-            if (_toastQueue.TryDequeue(out var next)) { ShowToast(next.Text, next.Key); return; } // следующее из очереди
+            if (_toastQueue.TryDequeue(out var next)) { ShowToast(next.Text, next.Key, next.Feature); return; } // следующее из очереди
             Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, Motion(300)));
         };
 
@@ -59,6 +59,7 @@ public partial class MainWindow : Window
         PrivacyGuard.Changed += OnPrivacyChanged;
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
+        ApplyCountryPin();
         _pingTimer.Tick += async (_, _) => await RefreshPingsAsync();
         _pingTimer.Start();
         _servers = new ObservableCollection<DnsServer>(Storage.LoadOrCreate(ServersFile, () => new List<DnsServer>()));
@@ -341,6 +342,9 @@ public partial class MainWindow : Window
         {
             _settings = LoadSettings();
             ApplyTimerSettings();
+            ApplyCountryPin();
+            _view?.Refresh();
+            UpdateTopList();
             Log("Настройки сохранены");
             OfferUndo("Настройки сохранены", async () =>
             {

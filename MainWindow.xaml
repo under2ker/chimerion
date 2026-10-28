@@ -827,7 +827,10 @@
             </Border.Effect>
             <StackPanel Orientation="Horizontal">
                 <Ellipse x:Name="ToastDot" Width="8" Height="8" Fill="{DynamicResource Ok}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                <TextBlock x:Name="ToastText" FontSize="13" TextWrapping="Wrap" MaxWidth="420" VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="ToastFeature" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" Margin="0,0,0,2" Visibility="Collapsed"/>
+                    <TextBlock x:Name="ToastText" FontSize="13" TextWrapping="Wrap" MaxWidth="420"/>
+                </StackPanel>
             </StackPanel>
         </Border>
     </Grid>

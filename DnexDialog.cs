@@ -168,6 +168,30 @@ internal static class DnexDialog
         return result;
     }
 
+    /// <summary>
+    /// Рискованный шаг, который программа не рекомендует: кнопка действия красная и неактивна, пока человек не отметит
+    /// галочку confirm. По умолчанию (Enter, Esc, закрытие окна) выбирается отказ.
+    /// </summary>
+    public static bool AskRisk(string title, string text, string confirm, string yes, string no, string windowTitle = "Вопрос")
+    {
+        bool result = false;
+        var w = CreateWindow(windowTitle, Ui.Narrow);
+        var root = Body(title, text, DialogKind.Warn);
+        var check = new CheckBox { Content = new TextBlock { Text = confirm, TextWrapping = TextWrapping.Wrap }, Margin = new Thickness(50, 10, 0, 4) };
+        root.Children.Add(check);
+        var yesBtn = Ui.Action(yes, "Danger", () => { result = true; w.Close(); });
+        yesBtn.IsEnabled = false;
+        check.Checked += (_, _) => yesBtn.IsEnabled = true;
+        check.Unchecked += (_, _) => yesBtn.IsEnabled = false;
+        var noBtn = Ui.Action(no, "Primary", () => w.Close());
+        noBtn.IsDefault = true;
+        noBtn.IsCancel = true;
+        root.Children.Add(Ui.Footer(null, noBtn, yesBtn));
+        w.Content = root;
+        w.ShowDialog();
+        return result;
+    }
+
     private static StackPanel Body(string title, string text, DialogKind kind)
     {
         var root = Ui.Root();

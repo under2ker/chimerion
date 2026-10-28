@@ -129,9 +129,17 @@ public static class AutoStart
         if (TaskExists())
         {
             var xml = TaskXml();
-            if (xml.Contains("HighestAvailable", StringComparison.OrdinalIgnoreCase))
-                log("Автозапуск настроен по-старому, с правами администратора без запроса. Выключите и включите его в настройках: " +
-                    "программа будет стартовать без прав, а права спросит, только когда нужно вернуть DNS");
+            if (!xml.Contains("HighestAvailable", StringComparison.OrdinalIgnoreCase)) return Task.CompletedTask;
+            // Старое задание запускает программу с правами администратора: раз они уже есть, переводим автозапуск сами,
+            // без вопроса Windows. Без прав только подсказываем
+            if (DnsSwitcher.IsAdmin())
+                return Task.Run(async () =>
+                {
+                    bool ok = await SetAsync(true);
+                    log(ok ? "Автозапуск переведен на новый способ: программа будет стартовать без прав администратора"
+                           : "Автозапуск настроен по-старому. Выключите и включите его в настройках, чтобы программа стартовала без прав");
+                });
+            log("Автозапуск настроен по-старому. Выключите и включите его в настройках, чтобы программа стартовала без прав");
             return Task.CompletedTask;
         }
         if (ExePath is not { } exe || RunKeyCommand() is not { } cmd) return Task.CompletedTask;

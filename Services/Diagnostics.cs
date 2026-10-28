@@ -54,6 +54,8 @@ public static class Diagnostics
                 : active.Split ? $"Два DNS: домены ИИ через {active.Name} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
                 : $"DNS системы: {string.Join(", ", current)}" + (active.DohTemplate != null ? $", DoH {active.DohTemplate}" : ""),
                 onAdapters ? null : "reconnect", "Переподключить"));
+            if (active.Split && SplitDns.GeneralIsSmart(st.SplitDns, active.Addresses))
+                items.Add(new DiagItem(DiagLevel.Warn, "Общий DNS совпадает со Smart DNS", SplitDns.GeneralIsSmartWarning, "split", "Открыть «Два DNS»"));
             items.Add(active.BackupName != null
                 ? new DiagItem(DiagLevel.Ok, $"Запасной сервер: {active.BackupName}", $"{string.Join(", ", active.BackupAddresses)}. Если основной перестанет отвечать, Windows перейдет на него сама")
                 : new DiagItem(DiagLevel.Info, "Запасного сервера нет", st.UseBackupServer
@@ -84,6 +86,17 @@ public static class Diagnostics
                 route + where + (s.Note != null ? ". " + s.Note : ""),
                 bad && active != null ? "switch" : null, "Сменить сервер")); // без подключения кнопка одна, в строке «Не подключено»
         }
+        // Репутация адресов выхода: только адреса прокси сервера, свой IP пользователя не проверяется
+        if (active != null)
+            foreach (var exitIp in snap.Services.Where(x => x.Proxied && x.Egress != null).Select(x => x.Egress!.Ip).Distinct())
+                if (await IpReputation.CheckAsync(exitIp, st.ReferenceDoh, ct) is { } rep)
+                    items.Add(new DiagItem(rep.Bad ? DiagLevel.Warn : DiagLevel.Ok,
+                        rep.Bad ? $"Адрес выхода {exitIp} на плохом счету" : $"Адрес выхода {exitIp}: в черных списках нет",
+                        IpReputation.Describe(rep) + (rep.Bad ? ". С таких адресов входы блокируют чаще: лучше сменить сервер" : ""),
+                        rep.Bad ? "switch" : null, "Сменить сервер"));
+        if (AccountSafety.Pinned is { } pin)
+            items.Add(new DiagItem(DiagLevel.Info, $"Выбрана страна выхода: {GeoLocation.CountryName(pin)}",
+                "Программа подключает и подбирает замену только с выходом в этой стране. Меняется в настройках, во вкладке «Сторож и трей»"));
         // Защита аккаунтов: из каких стран сервисы видели вас за последние 30 дней
         if (st.AccountSafetyGuard)
         {

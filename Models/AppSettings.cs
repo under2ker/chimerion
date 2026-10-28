@@ -95,6 +95,8 @@ public class AppSettings
     /// с другой страной выхода и при выборе замены предпочитать серверы с той же страной (AccountSafety).
     /// </summary>
     public bool AccountSafetyGuard { get; set; } = true;
+    /// <summary>Страна выхода, которую выбрал пользователь (код ISO, «FR»). Null — любая, по истории входов.</summary>
+    public string? EgressCountry { get; set; }
     /// <summary>Отправлять итоги проверок в общую карту серверов (Crowd). null — еще не спрашивали.</summary>
     public bool? CrowdConsent { get; set; }
     /// <summary>Следить за сайтами, которыми пользуется человек (SiteWatch): открываются ли и почему нет.</summary>

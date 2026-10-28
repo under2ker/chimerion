@@ -41,7 +41,7 @@ public partial class MainWindow
             2 => s.Status == ServerStatus.Partial,
             3 => s.Status == ServerStatus.Fail,
             4 => s.Status == ServerStatus.Unknown,
-            5 => s.Status is ServerStatus.Ok or ServerStatus.Partial or ServerStatus.Checking,
+            5 => s.Status is ServerStatus.Ok or ServerStatus.Partial or ServerStatus.Checking && AccountSafety.Fits(s),
             6 => s.IsFavorite,
             _ => true,
         };
