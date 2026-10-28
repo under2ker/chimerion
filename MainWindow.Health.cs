@@ -78,8 +78,8 @@ public partial class MainWindow
             _ = SwitchToNextBestAsync(active);
             return;
         }
-        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Bad"); // спрятано: одно уведомление Windows, с действием
-        Balloon(10000, Loc.T("CHIMERION: сервисы перестали открываться"), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сменить сервер"),
+        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Bad", FeatureServices); // спрятано: одно уведомление Windows, с действием
+        Balloon(10000, NoticeTitle(FeatureServices), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сменить сервер"),
             System.Windows.Forms.ToolTipIcon.Warning, () =>
         {
             ShowFromTray();
@@ -96,12 +96,12 @@ public partial class MainWindow
         Log("Проверка сервисов: " + text);
         if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
         {
-            Notify(text + ". Делаю его основным", "Warn", logLine: null);
+            Notify(text + ". Делаю его основным", "Warn", logLine: null, feature: FeatureWatchdog);
             _ = ConnectToAsync(backup, auto: true);
             return;
         }
-        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Warn");
-        Balloon(8000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сделать его основным"), System.Windows.Forms.ToolTipIcon.Warning, () =>
+        if (IsVisible && WindowState != WindowState.Minimized) ShowToast(text, "Warn", FeatureWatchdog);
+        Balloon(8000, NoticeTitle(FeatureWatchdog), PrivacyGuard.Mask(Loc.T(text)) + Loc.T(". Нажмите, чтобы сделать его основным"), System.Windows.Forms.ToolTipIcon.Warning, () =>
         {
             ShowFromTray();
             if (DnsSwitcher.GetActive() is { } now && now.ServerId == active.ServerId &&
@@ -112,13 +112,18 @@ public partial class MainWindow
 
     /// <summary>Уведомление в окне и, если окно спрятано, в Windows.</summary>
     /// <param name="logLine">Строка в журнал: пусто — текст с приставкой «Проверка сервисов:», null — не писать (вызывающий уже записал).</param>
-    private void Notify(string text, string kind, string? logLine = "")
+    // Названия функций в уведомлениях: по ним видно, кто сообщает
+    private const string FeatureServices = "Мониторинг сервисов", FeatureWatchdog = "Сторож", FeatureFavorites = "Избранные серверы",
+        FeatureSites = "Проверка сайтов", FeatureSafety = "Защита аккаунтов", FeatureBypass = "Обход YouTube и Discord", FeatureUpdate = "Обновление";
+
+    /// <param name="feature">Какая функция сообщает: подпись над текстом в окне и в заголовке уведомления Windows.</param>
+    private void Notify(string text, string kind, string? logLine = "", string feature = FeatureServices)
     {
-        if (logLine != null) Log(logLine.Length > 0 ? logLine : "Проверка сервисов: " + text);
-        ShowToast(text, kind);
+        if (logLine != null) Log(logLine.Length > 0 ? logLine : $"{feature}: {text}");
+        ShowToast(text, kind, feature);
         // Предупреждения и ошибки при спрятанном окне ShowToast сам показывает в Windows: второе такое же не нужно
         if (kind == "Ok" && (!IsVisible || WindowState == WindowState.Minimized) && _tray != null)
-            Balloon(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)), System.Windows.Forms.ToolTipIcon.Info);
+            Balloon(6000, NoticeTitle(feature), PrivacyGuard.Mask(Loc.T(text)), System.Windows.Forms.ToolTipIcon.Info);
     }
 
     /// <summary>
@@ -135,7 +140,7 @@ public partial class MainWindow
         foreach (var ch in changes)
         {
             if (!byKey.TryGetValue(ch.Service, out var srv)) continue;
-            Notify(ch.Down ? $"Избранный сервер {srv.ShortName} перестал отвечать на DNS-запросы" : $"Избранный сервер {srv.ShortName} снова отвечает", ch.Down ? "Warn" : "Ok");
+            Notify(ch.Down ? $"Избранный сервер {srv.ShortName} перестал отвечать на DNS-запросы" : $"Избранный сервер {srv.ShortName} снова отвечает", ch.Down ? "Warn" : "Ok", feature: FeatureFavorites);
         }
     }
 }

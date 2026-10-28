@@ -28,7 +28,7 @@ public partial class MainWindow
     /// <summary>Лучший сервер для каждого ИИ и для всех сразу (см. ServerRanking).</summary>
     private List<ServerRanking.TopPick> PickBest()
     {
-        var picks = ServerRanking.PickBest(_servers, _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList());
+        var picks = ServerRanking.PickBest(_servers.Where(Usable), _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList());
         if (ProviderPick() is { } net) picks.Add(net); // общая карта: лучший у пользователей той же сети провайдера
         return picks;
     }
@@ -407,6 +407,7 @@ public partial class MainWindow
             Log("Автоочистка отложена: проверка сразу после запуска Windows");
         else if (!outage) AutoPurge();
         SelectBest();
+        _ = EnrichReputationAsync(); // репутация адресов выхода у лучших: плохие не попадут в лучшие и в замену
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _cts?.Cancel();

@@ -36,6 +36,16 @@ public sealed record GeneralDnsCheck(string Name, int ForeignOk, int ForeignTota
 /// </summary>
 public static class SplitDns
 {
+    /// <summary>
+    /// Общий DNS — тот же сервер, что и Smart DNS: тогда через Smart DNS идет весь интернет, «Два DNS» ничего не
+    /// разделяют, а обычные сайты ломаются, если сервер их подменяет.
+    /// </summary>
+    public static bool GeneralIsSmart(SplitDnsSettings split, IEnumerable<string> smartAddresses) =>
+        split.GeneralAddresses.Count > 0 && split.GeneralAddresses.Intersect(smartAddresses, StringComparer.OrdinalIgnoreCase).Any();
+
+    public const string GeneralIsSmartWarning =
+        "Общий DNS тот же, что и Smart DNS, поэтому через него идет весь интернет и часть сайтов может не открываться. Выберите другой общий DNS в «Два DNS»";
+
     public const string RuleComment = "DNEX";
 
     /// <summary>

@@ -37,7 +37,7 @@ public partial class MainWindow
         _zapretWarned = problem;
         UpdateToolsTray();
         if (problem == null) return;
-        Notify(problem, "Warn", logLine: problem);
+        Notify(problem, "Warn", logLine: problem, feature: FeatureBypass);
         if (_tray != null && !IsVisible) _balloonClick = () => { ShowFromTray(); ToolsToggle_Click(this, new System.Windows.RoutedEventArgs()); };
     }
 
@@ -62,6 +62,7 @@ public partial class MainWindow
             var due = force ? _sites.Sites.Values.Where(s => s.Seen >= SiteWatch.SeenToWatch && !_sites.Ignored.Contains(s.Host) && !SiteWatch.IsNotSite(s)).ToList()
                             : _sites.Due(now, SiteEvery);
             bool connected = DnsSwitcher.GetActive() != null;
+            var changes = new List<SiteWatch.Change>();
             foreach (var s in due)
             {
                 // Домены ИИ без подключения закрыты для России и должны быть закрыты: это не сбой, а отключенный Smart DNS.
@@ -69,8 +70,17 @@ public partial class MainWindow
                 bool smart = ViaSmartDns(s.Host);
                 if (smart && !connected) continue;
                 var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, CancellationToken.None);
-                if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) ReportSite(ch);
+                if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) changes.Add(ch);
             }
+            // Несколько сайтов упали в одном круге: это скорее сбой сети, чем блокировка каждого. Не тревожим, а перепроверим
+            var downs = changes.Where(c => c.Down).ToList();
+            if (downs.Count >= 3)
+            {
+                Log($"Проверка сайтов: сразу {downs.Count} перестали открываться, похоже на сбой сети. Перепроверю через 5 минут");
+                foreach (var c in downs) { c.Site.Down = false; c.Site.Fails = SiteWatch.FailsToAlert - 1; }
+                changes.RemoveAll(c => c.Down);
+            }
+            foreach (var ch in changes) ReportSite(ch);
             _sites.Save();
             SitesWindow.Refresh();
         }
@@ -84,12 +94,12 @@ public partial class MainWindow
         var text = ch.Down
             ? $"{s.Host}: {SiteWatch.Describe(s.State)}. {SiteWatch.Advice(s.State)}"
             : $"{s.Host} снова открывается";
-        Log("Сайты: " + text);
+        Log("Проверка сайтов: " + text);
         while (_siteAlerts.Count > 0 && DateTime.Now - _siteAlerts.Peek() > TimeSpan.FromHours(1)) _siteAlerts.Dequeue();
         if (_siteAlerts.Count >= 3) return;
         _siteAlerts.Enqueue(DateTime.Now);
-        if (!ch.Down) { Notify(text, "Ok", logLine: null); return; }
-        Notify(text, s.State == SiteWatch.Verdict.DownForAll ? "Warn" : "Bad", logLine: null);
+        if (!ch.Down) { Notify(text, "Ok", logLine: null, feature: FeatureSites); return; }
+        Notify(text, s.State == SiteWatch.Verdict.DownForAll ? "Warn" : "Bad", logLine: null, feature: FeatureSites);
         if (_tray != null && !IsVisible) _balloonClick = () => { ShowFromTray(); OpenSites(); };
     }
 

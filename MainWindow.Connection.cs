@@ -114,6 +114,12 @@ public partial class MainWindow
                     "Подключиться", windowTitle: "Подключение")))
                 return false;
             if (!auto && !ConfirmCountryChange(s)) return false;
+            // Без человека страна входа не меняется: сторож, запасной сервер и автоподключение берут только серверы с той же страной
+            if (auto && _settings.AccountSafetyGuard && _safety.Compare(AccountSafety.EgressOf(s)) is { Count: > 0 } mism)
+            {
+                Log($"Защита аккаунтов: «{s.DisplayName}» сменит страну входа ({AccountSafety.Describe(mism)}), сам не подключаю");
+                return false;
+            }
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
             ProgressText.Text = "Запоминаю состояние до подключения…";
@@ -123,7 +129,7 @@ public partial class MainWindow
 
             // 2. Смена DNS (UAC).
             ProgressText.Text = "Меняю DNS…";
-            var backup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers, s, SafetyFit) : null;
+            var backup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers.Where(Usable), s, SafetyFit) : null;
             await DnsSwitcher.ApplyAsync(s, _settings, Log, backup);
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
             _uacDeclined = false;
@@ -141,7 +147,7 @@ public partial class MainWindow
                     Log($"После переключения на «{s.DisplayName}» сайты не открываются. Возвращаю «{prevServer.DisplayName}»");
                     try
                     {
-                        var prevBackup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers, prevServer, SafetyFit) : null;
+                        var prevBackup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers.Where(Usable), prevServer, SafetyFit) : null;
                         await DnsSwitcher.ApplyAsync(prevServer, _settings, Log, prevBackup);
                         ShowToast($"«{s.DisplayName}» не отвечает, вернул «{prevServer.DisplayName}»", "Bad");
                         DnexDialog.Show("Сервер не отвечает", $"После переключения на «{s.DisplayName}» сайты не открывались, поэтому подключение к «{prevServer.DisplayName}» возвращено.",
@@ -165,6 +171,7 @@ public partial class MainWindow
                 ShowCompare();
                 SetTraySnapshot(_after);
                 LogSnapshot("После подключения", _after);
+                _ = CheckEgressReputationAsync(_after);
                 ShowToast($"Подключено · {s.DisplayName}\n{RestartHint}");
                 Log(RestartHint);
                 connected = true;
@@ -475,12 +482,12 @@ public partial class MainWindow
             _noSwitchNotified = DateTime.Now;
             // Смена сервера выключена в настройках: подключение не трогаем, только сообщаем
             Notify($"«{DnsServer.Clip(active.Name)}» не отвечает. Сервер сам не меняю: это выключено в настройках («Сторож и трей»). Смените сервер вручную, когда будет удобно", "Bad",
-                   logLine: $"Сторож: «{active.Name}» не отвечает, смена сервера выключена в настройках");
+                   logLine: $"Сторож: «{active.Name}» не отвечает, смена сервера выключена в настройках", feature: FeatureWatchdog);
             return;
         }
         HideUndo(); // подключение меняется без пользователя: прежняя отмена больше не про то же состояние
         // Сначала запасной сервер подключения: Windows, скорее всего, уже работает через него
-        var next = ConnectionMonitor.Replacements(_servers, active, fit: SafetyFit);
+        var next = ConnectionMonitor.Replacements(_servers.Where(Usable), active, fit: SafetyFit);
         if (active.BackupId is { } bid && _servers.FirstOrDefault(x => x.Id == bid && x.Status == ServerStatus.Ok && !x.IsJunk) is { } bk)
             next = next.Where(x => x.Id != bid).Prepend(bk).ToList();
         foreach (var s in next)
@@ -497,10 +504,13 @@ public partial class MainWindow
             }
         }
         if (_busyConn || _uacDeclined) return; // пользователь уже что-то делает сам или отказал в правах
-        Log("Сторож: замена не нашлась. Отключаюсь и возвращаю исходные DNS");
+        Log(_settings.AccountSafetyGuard ? "Сторож: замены с той же страной выхода не нашлось. Отключаюсь и возвращаю исходные DNS"
+                                         : "Сторож: замена не нашлась. Отключаюсь и возвращаю исходные DNS");
         await DisconnectAsync("сервер перестал отвечать, замена не нашлась");
         DnexDialog.Show($"«{active.Name}» перестал отвечать",
-            "Рабочей замены не нашлось. CHIMERION отключилась и вернула исходные настройки DNS.", DialogKind.Warn, "Сторож");
+            _settings.AccountSafetyGuard
+                ? "Рабочей замены с той же страной выхода не нашлось, а менять страну сама программа не будет: это грозит баном аккаунта. CHIMERION отключилась и вернула исходные настройки DNS. Сервер с другой страной можно выбрать вручную, на свой риск."
+                : "Рабочей замены не нашлось. CHIMERION отключилась и вернула исходные настройки DNS.", DialogKind.Warn, "Сторож");
     }
 
 
@@ -659,7 +669,7 @@ public partial class MainWindow
         if (_busyConn) { ShowToast("Подождите: идет подключение", "Warn"); return; }
         var active = DnsSwitcher.GetActive();
         var best = _servers
-            .Where(s => (s.Status == ServerStatus.Ok || s.Status == ServerStatus.Partial) && s.Id != active?.ServerId)
+            .Where(s => (s.Status == ServerStatus.Ok || s.Status == ServerStatus.Partial) && s.Id != active?.ServerId && Usable(s))
             .OrderBy(s => s.Rank)
             .FirstOrDefault();
         if (best == null)

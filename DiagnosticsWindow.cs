@@ -130,6 +130,9 @@ internal sealed class DiagnosticsWindow
             _state.Text = bad + warn == 0 ? "Проблем не найдено" : $"Проблем: {bad}, предупреждений: {warn}";
             foreach (var i in _report.Items) _list.Children.Add(Row(i));
             _log($"Диагностика: проблем {bad}, предупреждений {warn}");
+            // Сами проблемы тоже в журнал: по присланному журналу должно быть видно, что сломалось
+            foreach (var i in _report.Items.Where(i => i.Level is DiagLevel.Bad or DiagLevel.Warn))
+                _log($"  {(i.Level == DiagLevel.Bad ? "[x]" : "[!]")} {i.Title}{(i.Detail.Length > 0 ? ": " + i.Detail : "")}");
         }
         catch (Exception e) { _state.Text = "Диагностика не завершилась: " + e.Message; }
         _bar.Visibility = Visibility.Collapsed;
@@ -177,7 +180,7 @@ internal sealed class DiagnosticsWindow
             }
             else if (_fix != null) await _fix(a);
             // Открытие настроек ничего само не меняет; остальное проверяем заново
-            if (!a.StartsWith("open:") && a != "hosts" && a != "tools" && a != "update") await RunAsync();
+            if (!a.StartsWith("open:") && a != "hosts" && a != "tools" && a != "update") await RunAsync(); // и после «Два DNS»: отчет пересчитывается
         }
         catch (System.ComponentModel.Win32Exception) { /* отказ в окне прав Windows */ }
         catch (Exception e) { _log("Исправление не удалось: " + e.Message); DnexDialog.Show("Не получилось", e.Message, DialogKind.Error, "Диагностика"); }

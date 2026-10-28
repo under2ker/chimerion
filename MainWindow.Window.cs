@@ -22,7 +22,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _statsTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private bool _working;                  // идет долгая операция (проверка, подключение, парсинг)
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(2.8) };
-    private readonly Queue<(string Text, string Key)> _toastQueue = new();
+    private readonly Queue<(string Text, string Key, string? Feature)> _toastQueue = new();
     private string _toastKey = "Ok";
     private DateTime _toastSince;
 
@@ -133,7 +133,9 @@ public partial class MainWindow
         }
         else
         {
-            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("triangle-alert", "Рабочих серверов нет", "Проверьте список заново или найдите новые серверы");
+            (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = AccountSafety.Pinned is { } pin
+                ? ("triangle-alert", $"Рабочих серверов с выходом в стране «{GeoLocation.CountryName(pin)}» нет", "Найдите новые серверы или выберите другую страну в настройках, во вкладке «Сторож и трей»")
+                : ("triangle-alert", "Рабочих серверов нет", "Проверьте список заново или найдите новые серверы");
             Act("Показать все", "Ghost", () => AllTab.IsChecked = true);
             Act("Найти новые серверы", "Primary", () => Fetch_Click(this, new RoutedEventArgs()));
         }
@@ -396,12 +398,16 @@ public partial class MainWindow
         });
     }
 
-    private void ShowToast(string text, string colorKey = "Ok")
+    /// <summary>Заголовок уведомления Windows: «CHIMERION: Проверка сайтов», чтобы было видно, какая функция пишет.</summary>
+    private static string NoticeTitle(string? feature) => feature == null ? "CHIMERION" : $"CHIMERION: {Loc.T(feature)}";
+
+    /// <param name="feature">Какая функция сообщает («Проверка сайтов», «Мониторинг сервисов»): показывается над текстом и в заголовке уведомления Windows.</param>
+    private void ShowToast(string text, string colorKey = "Ok", string? feature = null)
     {
         // Окно в трее или свернуто: уведомление в окне никто не увидит. Важное показываем значком в трее
         if (!IsVisible || WindowState == WindowState.Minimized)
         {
-            if (colorKey is "Warn" or "Bad") Balloon(6000, "CHIMERION", PrivacyGuard.Mask(Loc.T(text)),
+            if (colorKey is "Warn" or "Bad") Balloon(6000, NoticeTitle(feature), PrivacyGuard.Mask(Loc.T(text)),
                 colorKey == "Bad" ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning);
             return;
         }
@@ -417,7 +423,7 @@ public partial class MainWindow
         // Предупреждение или ошибку не затираем сразу: следующее сообщение ждет, пока его прочтут (не дольше очереди из трех)
         if (shown && _toastKey is "Warn" or "Bad" && DateTime.Now - _toastSince < TimeSpan.FromSeconds(1.5) && colorKey == "Ok")
         {
-            if (_toastQueue.Count < 3 && !_toastQueue.Contains((text, colorKey))) _toastQueue.Enqueue((text, colorKey));
+            if (_toastQueue.Count < 3 && !_toastQueue.Contains((text, colorKey, feature))) _toastQueue.Enqueue((text, colorKey, feature));
             return;
         }
         _toastKey = colorKey;
@@ -425,6 +431,8 @@ public partial class MainWindow
         // Сколько держать: ошибки и длинные сообщения дольше
         _toastTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(2.4 + text.Length / 30.0 + (colorKey == "Bad" ? 2.5 : colorKey == "Warn" ? 1.2 : 0), 2.8, 9));
         ToastText.Text = text;
+        ToastFeature.Text = feature ?? "";
+        ToastFeature.Visibility = feature == null ? Visibility.Collapsed : Visibility.Visible;
         ToastDot.Fill = (Brush)FindResource(colorKey);
         Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
         ToastShift.BeginAnimation(TranslateTransform.YProperty, null);

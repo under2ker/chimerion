@@ -60,7 +60,7 @@ public partial class MainWindow
             OpenUpdateWindow(info);
         else if (_tray != null)
         {
-            Balloon(10000, Loc.T($"Доступна CHIMERION {info.Version.ToString(3)}"),
+            Balloon(10000, NoticeTitle(FeatureUpdate) + " " + info.Version.ToString(3),
                 Loc.T(info.Hotfix != null ? "Срочное исправление. Нажмите, чтобы обновить" : "Нажмите, чтобы посмотреть, что нового, и обновить"),
                 System.Windows.Forms.ToolTipIcon.Info, () => { ShowFromTray(); OpenUpdateWindow(info); });
         }
@@ -191,7 +191,7 @@ public partial class MainWindow
         async Task DnsOn()
         {
             if (DnsSwitcher.GetActive() != null) return;
-            var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && !s.IsJunk).OrderBy(s => s.Rank).FirstOrDefault()
+            var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && !s.IsJunk && Usable(s)).OrderBy(s => s.Rank).FirstOrDefault()
                        ?? throw new ToolException("нет рабочих серверов: сначала проверьте или найдите серверы");
             if (!await ConnectToAsync(best, auto: true)) throw new ToolException("подключиться не удалось, подробности выше");
         }
@@ -452,7 +452,7 @@ public partial class MainWindow
         switch (action)
         {
             case "connect":
-                var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial).OrderBy(s => s.Rank).FirstOrDefault();
+                var best = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && Usable(s)).OrderBy(s => s.Rank).FirstOrDefault();
                 if (best == null) { ShowToast("Рабочих серверов нет: нажмите «Найти новые серверы»", "Warn"); return; }
                 await ConnectToAsync(best);
                 break;
@@ -463,6 +463,11 @@ public partial class MainWindow
             case "switch": await SwitchToBestAsync(); break;
             case "update": CheckUpdate_Click(this, new RoutedEventArgs()); break;
             case "tools": ToolsToggle_Click(this, new RoutedEventArgs()); break;
+            case "split":
+                if (!new SplitDnsWindow(_settings, this).ShowDialog()) return;
+                try { Storage.Save("settings.json", _settings); } catch (Exception e) { Log("Не удалось сохранить настройки: " + e.Message); }
+                if (DnsSwitcher.GetActive() != null) await ApplySplitChangeAsync();
+                break;
         }
     }
 }

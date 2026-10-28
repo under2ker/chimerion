@@ -59,6 +59,11 @@ public partial class SettingsWindow : Window
         AllowSwitchBox.IsChecked = settings.AllowServerSwitch;
         AllowSwitch_Changed(this, new RoutedEventArgs());
         SafetyBox.IsChecked = settings.AccountSafetyGuard;
+        _country = settings.EgressCountry;
+        BuildCountryPicker();
+        SafetyBox.Checked += (_, _) => CountryRow.IsEnabled = true;
+        SafetyBox.Unchecked += (_, _) => CountryRow.IsEnabled = false;
+        CountryRow.IsEnabled = settings.AccountSafetyGuard;
         CrowdBox.IsChecked = settings.CrowdConsent == true;
         SiteWatchBox.IsChecked = settings.SiteWatch;
 
@@ -118,6 +123,27 @@ public partial class SettingsWindow : Window
     }
 
     public const string SiteUrl = "https://chimerion.dev";
+
+    // Страна выхода: null — любая (по истории входов). Список стран, где обычно стоят прокси Smart DNS
+    private string? _country;
+    private static readonly string[] Countries = { "NL", "DE", "FI", "FR", "GB", "SE", "PL", "LT", "LV", "EE", "CZ", "AT", "CH", "US", "CA", "KZ", "TR", "AE", "JP", "SG" };
+
+    private void BuildCountryPicker()
+    {
+        string Title(string? c) => c == null ? "Любая" : Services.GeoLocation.CountryName(c);
+        CountryHost.Content = Ui.Picker(Title(_country), b =>
+        {
+            var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = b, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            foreach (var c in Countries.Prepend(null).Append(_country is { } cur && !Countries.Contains(cur) ? cur : null).Distinct().Where((c, i) => i == 0 || c != null))
+            {
+                var mi = new System.Windows.Controls.MenuItem { Header = Title(c), IsCheckable = true, IsChecked = c == _country,
+                    ToolTip = c == null ? "Без закрепления: программа держит страну, из которой вас уже видели" : null };
+                mi.Click += (_, _) => { _country = c; BuildCountryPicker(); };
+                menu.Items.Add(mi);
+            }
+            menu.IsOpen = true;
+        });
+    }
     private void Site_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(SiteUrl);
     private void Repo_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}");
     private void License_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/LICENSE");
@@ -173,6 +199,7 @@ public partial class SettingsWindow : Window
         WatchdogBox.Text = d.WatchdogSeconds.ToString();
         PingBox.Text = d.PingRefreshMinutes.ToString();
         CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = SiteWatchBox.IsChecked = AllowSwitchBox.IsChecked = true;
+        _country = null; BuildCountryPicker();
         StartCompactBox.IsChecked = AutoSwitchBox.IsChecked = false;
         // Скрытие данных и общая карта — личный выбор: не сбрасываем (выключить стример мод посреди трансляции опасно)
         ErrorText.Foreground = (System.Windows.Media.Brush)FindResource("Muted");
@@ -219,6 +246,7 @@ public partial class SettingsWindow : Window
         _settings.UseBackupServer = BackupBox.IsChecked == true;
         _settings.AllowServerSwitch = AllowSwitchBox.IsChecked == true;
         _settings.AccountSafetyGuard = SafetyBox.IsChecked == true;
+        _settings.EgressCountry = _country;
         _settings.SiteWatch = SiteWatchBox.IsChecked == true;
         // Не спрашивали и галочку не трогали: вопрос при запуске остается. Иначе выбор в настройках и есть ответ
         if (_settings.CrowdConsent != null || CrowdBox.IsChecked == true) _settings.CrowdConsent = CrowdBox.IsChecked == true;

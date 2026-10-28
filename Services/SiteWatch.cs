@@ -69,6 +69,9 @@ public sealed class SiteWatch
     private static readonly string[] SkipSuffixes =
     {
         ".local", ".lan", ".home", ".arpa", ".internal", ".localdomain", ".corp", ".workgroup",
+        // Адреса проверки интернета (Steam, Android, Apple, Firefox, GNOME): сайтами не являются
+        "steamconnecttest.com", "connectivitycheck.gstatic.com", "connectivitycheck.android.com", "captive.apple.com",
+        "detectportal.firefox.com", "nmcheck.gnome.org", "network-test.debian.org", "clients3.google.com",
         "msftncsi.com", "msftconnecttest.com", "windowsupdate.com", "update.microsoft.com", "delivery.mp.microsoft.com",
         "events.data.microsoft.com", "telemetry.microsoft.com", "wns.windows.com", "chimerion.workers.dev",
         // Служебные сети CDN и облаков: в кэш попадают как цели CNAME, сайтом не являются и по https:// не открываются

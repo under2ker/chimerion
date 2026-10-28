@@ -303,6 +303,13 @@
                                 <TextBlock Text="Второй сервер с той же страной выхода. Если основной замолчит, Windows перейдет на него за секунды" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
                                 <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <DockPanel x:Name="CountryRow" Margin="26,14,0,0">
+                                    <ContentControl x:Name="CountryHost" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                    <StackPanel>
+                                        <TextBlock Text="Страна выхода для нейросетей" FontWeight="SemiBold"/>
+                                        <TextBlock Text="Программа подключит и подберет замену только с выходом в этой стране. Выберите ту, из которой вы обычно входите" Style="{StaticResource FieldHint}" Margin="0,4,12,0"/>
+                                    </StackPanel>
+                                </DockPanel>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="ЧТО ДЕЛАЕТ СТОРОЖ" Style="{StaticResource SectionTitle}"/>

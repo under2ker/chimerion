@@ -20,6 +20,16 @@ public sealed class AccountSafety
     /// <summary>Дни, когда сервис видел пользователя из страны: сервис → страна → дни (yyyy-MM-dd).</summary>
     public Dictionary<string, Dictionary<string, SortedSet<string>>> Days { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Страна, которую выбрал пользователь: тогда она «привычная» для всех сервисов, даже без истории, и программа
+    /// подключает только серверы с выходом в ней. Задается из настроек (AppSettings.EgressCountry).
+    /// </summary>
+    public static string? Pinned { get; set; }
+
+    /// <summary>Сервер выводит все сервисы в выбранную страну. Без выбора подходит любой.</summary>
+    public static bool Fits(Models.DnsServer s) =>
+        Pinned == null || (s.EgressBy.Count > 0 && s.EgressBy.Values.All(e => string.Equals(e.Country, Pinned, StringComparison.OrdinalIgnoreCase)));
+
     /// <summary>Тесты подменяют «сегодня».</summary>
     internal static Func<DateTime> Today = () => DateTime.Today;
 
@@ -58,9 +68,24 @@ public sealed class AccountSafety
 
     /// <summary>Привычная страна сервиса: где он видел пользователя больше всего дней (при равенстве — последней). null — истории нет.</summary>
     public string? Home(string service) =>
-        Days.TryGetValue(service, out var byCountry) && byCountry.Count > 0
+        Pinned ?? (Days.TryGetValue(service, out var byCountry) && byCountry.Count > 0
             ? byCountry.OrderByDescending(c => c.Value.Count).ThenByDescending(c => c.Value.Max).First().Key
-            : null;
+            : null);
+
+    /// <summary>Сколько дней считать «недавно»: страна уже менялась за это время — новая смена считается частой.</summary>
+    public const int RecentDays = 14;
+
+    /// <summary>Страны, из которых сервис видел пользователя за последние days дней, в порядке первого дня.</summary>
+    public List<string> Recent(string service, int days = RecentDays)
+    {
+        if (!Days.TryGetValue(service, out var byCountry)) return new();
+        var cut = Today().AddDays(-days).ToString("yyyy-MM-dd");
+        return byCountry.Select(c => (Country: c.Key, First: c.Value.Where(d => string.CompareOrdinal(d, cut) >= 0).DefaultIfEmpty("").Min()!))
+                        .Where(c => c.First.Length > 0).OrderBy(c => c.First, StringComparer.Ordinal).Select(c => c.Country).ToList();
+    }
+
+    /// <summary>Страна уже менялась недавно хотя бы у одного из сервисов: еще одна смена — частая.</summary>
+    public bool Frequent(IEnumerable<string> services, int days = RecentDays) => services.Any(s => Recent(s, days).Count >= 2);
 
     /// <summary>Сколько разных стран видел сервис за последние KeepDays дней.</summary>
     public int CountryCount(string service) => Days.TryGetValue(service, out var byCountry) ? byCountry.Count : 0;
