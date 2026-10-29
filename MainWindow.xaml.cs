@@ -105,7 +105,7 @@ public partial class MainWindow : Window
         _watchdog.Tick += Watchdog_Tick;
         WatchVpn();
         TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
-        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
+        PanelUpdateHost.Content = CreateUpdateCard();
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
@@ -389,7 +389,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
         if (_initStarted && !_restarting) Updater.ConfirmStarted(); // дошли до штатного выхода: новая версия рабочая
         // Сначала убираем значок: пользователь видит, что программа закрылась, пока выключаются инструменты
-        _dashboardUpdateTimer.Stop();
+        _updateResultTimer.Stop();
         _dashboardTimer.Stop();
         _trayTimer.Stop();
         if (_tray != null)

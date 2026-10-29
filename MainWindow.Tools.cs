@@ -66,21 +66,6 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Кнопка внизу окна показывает найденную версию.</summary>
-    private void ShowUpdateAvailable(UpdateInfo info)
-    {
-        _pendingUpdate = info;
-        CheckUpdateButton.Content = $"Обновить до {info.Version.ToString(3)}";
-        CheckUpdateButton.Style = (Style)FindResource("Primary");
-    }
-
-    private void ClearUpdateAvailable()
-    {
-        _pendingUpdate = null;
-        CheckUpdateButton.Content = "Проверить обновление";
-        CheckUpdateButton.Style = (Style)FindResource("Strong");
-    }
-
     /// <summary>Окно с новой версией. «Пропустить версию» запоминает номер для фоновой проверки.</summary>
     private void OpenUpdateWindow(UpdateInfo info)
     {
@@ -360,13 +345,12 @@ public partial class MainWindow
         Application.Current.Shutdown();
     }
 
-    /// <summary>Кнопка в полосе заголовка: проверить сейчас и показать результат.</summary>
+    /// <summary>Карточка обновления в меню: проверить сейчас и показать результат.</summary>
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
     {
         // Фон уже нашел версию: окно сразу, без повторной проверки
         if (_pendingUpdate is { } found) { OpenUpdateWindow(found); return; }
-        CheckUpdateButton.IsEnabled = false;
-        CheckUpdateButton.Content = "Проверяю…";
+        _updateChecking = true; _updateResult = null; RefreshUpdateCards();
         try
         {
             var r = await UpdateChecker.CheckDetailedAsync();
@@ -375,8 +359,8 @@ public partial class MainWindow
                 case UpdateStatus.Available:
                     Log($"Доступна версия {r.Info!.Version}");
                     _offeredVersion = r.Info!.Version.ToString();
+                    _updateChecking = false;
                     ShowUpdateAvailable(r.Info!);
-                    ShowDashboardUpdateResult($"Доступна версия {r.Info!.Version}", "Ok", null);
                     OpenUpdateWindow(r.Info!);
                     break;
                 case UpdateStatus.UpToDate:
@@ -396,41 +380,9 @@ public partial class MainWindow
         }
         finally
         {
-            CheckUpdateButton.IsEnabled = true;
-            if (_pendingUpdate == null) CheckUpdateButton.Content = "Проверить обновление";
+            _updateChecking = false;
+            RefreshUpdateCards();
         }
-    }
-
-    private readonly DispatcherTimer _updateResultTimer = new() { Interval = TimeSpan.FromSeconds(6) };
-
-    /// <summary>Итог проверки обновления на месте подписи с версией слева от кнопки; через 6 с подпись возвращается.</summary>
-    private void ShowUpdateResult(string text, string colorKey, string? reason)
-    {
-        ShowDashboardUpdateResult(text, colorKey, reason);
-        HeaderVersion.Text = text;
-        HeaderVersion.Foreground = (Brush)FindResource(colorKey);
-        UpdateResultIcon.Kind = colorKey == "Ok" ? "circle-check" : "triangle-alert";
-        UpdateResultIcon.Foreground = (Brush)FindResource(colorKey);
-        UpdateResultIcon.Visibility = Visibility.Visible;
-        UpdateResultIcon.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
-        HeaderVersion.ToolTip = reason;
-        HeaderVersion.Visibility = Visibility.Visible;
-        HeaderVersion.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(200)));
-        _updateResultTimer.Stop();
-        _updateResultTimer.Tick -= ResetUpdateResult;
-        _updateResultTimer.Tick += ResetUpdateResult;
-        _updateResultTimer.Start();
-        if (!IsVisible || WindowState == WindowState.Minimized) ShowToast(text + (reason != null ? ": " + reason : ""), colorKey);
-    }
-
-    private void ResetUpdateResult(object? sender, EventArgs e)
-    {
-        _updateResultTimer.Stop();
-        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
-        HeaderVersion.ClearValue(TextBlock.ForegroundProperty);
-        HeaderVersion.ToolTip = null;
-        UpdateResultIcon.Visibility = Visibility.Collapsed;
-        ApplyResponsive(); // на узком окне подпись снова скрывается
     }
 
     /// <summary>
