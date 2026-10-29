@@ -36,7 +36,10 @@ public partial class MainWindow
     private Image _dashboardSmartFlag = null!;
     private Border _dashboardSmartChipBox = null!;
     private Controls.Icon _dashboardHeroMark = null!;
-    private readonly Dictionary<string, (Ellipse Dot, TextBlock Status, TextBlock Note)> _dashboardServiceRows = new();
+    private readonly Dictionary<string, (Ellipse Dot, TextBlock Status, TextBlock Note, Button Action, string Url)> _dashboardServiceRows = new();
+    private Border _dashboardWarn = null!;
+    private TextBlock _dashboardWarnText = null!, _dashboardSmartHint = null!;
+    private Guid? _dashboardPickId; // выбранный в «Лучших серверах», но еще не подключенный
     private readonly List<(Controls.Switch Toggle, TextBlock Status, Ellipse Dot, Func<Tool> Tool)> _dashboardToolRows = new();
     private StackPanel _dashboardServers = null!;
     private string? _dashboardServersSignature;
@@ -102,7 +105,8 @@ public partial class MainWindow
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
-        DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, null);
+        _dashboardSmartHint = Ui.Hint("", 2).With(t => { t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+        DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, _dashboardSmartHint);
         _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
         _dashboardPlainHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, _dashboardPlainHint);
@@ -110,8 +114,17 @@ public partial class MainWindow
         _dashboardUptimeHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
 
+        // Подключено, но не все нейросети открываются: заметно и с переходом к проверке причины
+        _dashboardWarnText = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn");
+        var why = Ui.Action("Почему?", "Strong", () => OpenHelp(HelpWindow.Tab.NotOpening)).With(b => { b.Margin = new Thickness(12, 0, 0, 0); b.Padding = new Thickness(12, 4, 12, 5); b.VerticalAlignment = VerticalAlignment.Center; });
+        var warnRow = new DockPanel();
+        DockPanel.SetDock(why, Dock.Right); warnRow.Children.Add(why);
+        var warnIcon = new Controls.Icon { Kind = "triangle-alert", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Warn");
+        DockPanel.SetDock(warnIcon, Dock.Left); warnRow.Children.Add(warnIcon); warnRow.Children.Add(_dashboardWarnText);
+        _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 16, 0, 0), Visibility = Visibility.Collapsed }
+            .Ref(Border.BackgroundProperty, "ChipWarn");
         var heroContent = new StackPanel { Margin = new Thickness(22, 20, 22, 20) };
-        heroContent.Children.Add(heroTop); heroContent.Children.Add(heroFacts);
+        heroContent.Children.Add(heroTop); heroContent.Children.Add(_dashboardWarn); heroContent.Children.Add(heroFacts);
         var heroLayer = new Grid();
         heroLayer.SizeChanged += (_, e) => heroLayer.Clip = new RectangleGeometry(new Rect(e.NewSize), 11, 11);
         _dashboardHeroGlow = new Border { Opacity = 0, IsHitTestVisible = false };
@@ -134,10 +147,13 @@ public partial class MainWindow
         {
             var dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
             var status = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var note = Ui.Hint("", 1).With(t => { t.FontSize = 11; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
-            var open = Ui.Action("Открыть", "Ghost", () => AutoStart.OpenUrl(url)); open.Padding = new Thickness(12, 5, 12, 6); open.Margin = new Thickness(10, 0, 0, 0);
+            var note = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+            // Одинаково заметная кнопка в каждой строке: «Открыть», а если сервис не открывается, «Подробнее»
+            var open = Ui.Action("Открыть", "Strong", () => { }); open.Padding = new Thickness(12, 5, 12, 6); open.Margin = new Thickness(10, 0, 0, 0); open.MinWidth = 104;
+            var target = name;
+            open.Click += (_, _) => { if (open.Tag as string == "why") OpenHelp(HelpWindow.Tab.NotOpening); else AutoStart.OpenUrl(_dashboardServiceRows[target].Url); };
             ai.Children.Add(DashboardRow(DashboardLogo(logo), name, domain, dot, status, note, open));
-            _dashboardServiceRows[name] = (dot, status, note);
+            _dashboardServiceRows[name] = (dot, status, note, open, url);
         }
         var aiCard = Ui.Card(ai, bottom: 0); aiCard.Padding = new Thickness(14, 12, 14, 8); aiCard.Margin = new Thickness(0, 0, 6, 0);
         services.Children.Add(aiCard);
@@ -178,7 +194,7 @@ public partial class MainWindow
 
         // ----- Лучшие серверы: три самых надежных, щелчок подключает -----
         var serversBox = new StackPanel();
-        serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Щелчок по строке подключает сервер", 0),
+        serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Выберите строку и нажмите «Подключить». Смену страны выхода программа подтвердит отдельно", 0),
             DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); })));
         _dashboardServers = new StackPanel(); serversBox.Children.Add(_dashboardServers);
         var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 12, 14, 10); serversCard.Margin = new Thickness(0, 12, 0, 0);
@@ -187,7 +203,8 @@ public partial class MainWindow
         // ----- Журнал: последние строки как в журнале программы -----
         var logBox = new StackPanel();
         logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", OpenLog)));
-        _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2), MinHeight = 120 }; logBox.Children.Add(_dashboardEvents);
+        // При малом числе событий карточка ниже, без пустоты
+        _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2) }; logBox.Children.Add(_dashboardEvents);
         var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 12, 14, 12); logCard.Margin = new Thickness(0, 12, 0, 0);
         page.Children.Add(logCard);
 
@@ -215,10 +232,9 @@ public partial class MainWindow
         void FitLog()
         {
             double other = page.ActualHeight + page.Margin.Top + page.Margin.Bottom - _dashboardEvents.ActualHeight;
-            int lines = Math.Clamp((int)((scroll.ViewportHeight - other) / 20), 6, 40);
+            int lines = Math.Clamp((int)((scroll.ViewportHeight - other) / 22), 6, 40);
             if (lines == _dashboardLogLines) return;
             _dashboardLogLines = lines;
-            _dashboardEvents.MinHeight = lines * 20; // карточка доходит до низа окна, даже когда строк пока мало
             _dashboardEventsSignature = null;
             RefreshDashboardEvents();
         }
@@ -242,7 +258,7 @@ public partial class MainWindow
         if (action != null) { DockPanel.SetDock(action, Dock.Right); d.Children.Add(action); }
         var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         t.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold });
-        if (hint != null) { hint.FontSize = 11; t.Children.Add(hint); }
+        if (hint != null) { hint.FontSize = 12; t.Children.Add(hint); }
         d.Children.Add(t);
         return d;
     }
@@ -266,7 +282,7 @@ public partial class MainWindow
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
+        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12.5; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
         Grid.SetColumn(text, 1); g.Children.Add(text);
         var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
@@ -436,11 +452,18 @@ public partial class MainWindow
         Ui.SwapText(_dashboardDescription, switching ? (goingOn ? "Меняю DNS и проверяю, что интернет работает" : "Возвращаю DNS вашей сети")
             : !on ? "Включите, чтобы открыть ChatGPT, Claude и Gemini"
             : aiServices.Count == 0 ? "Проверяю доступ к нейросетям…"
-            : open == aiServices.Count ? "Доступ к ИИ-сервисам настроен" : $"Открываются {open} из {aiServices.Count} нейросетей", 4);
+            : open == aiServices.Count ? "Доступ к ИИ-сервисам настроен" : "Smart DNS подключен, но открываются не все нейросети", 4);
         Ui.SwapText(_dashboardHeroMode, switching ? "Это занимает несколько секунд" : !on ? "Остальной интернет работает как обычно"
             : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS", 3);
-        DashboardHeroGlow(on && settled ? 1 : switching && goingOn ? .4 : 0);
-        Ui.FadeBrush(_dashboardHero, Border.BorderBrushProperty, on && settled ? "Ok" : switching ? "Accent" : "Border", 420);
+        bool partial = on && settled && aiServices.Count > 0 && open < aiServices.Count;
+        if (partial)
+        {
+            var closed = aiServices.Where(x => !x.Access.StartsWith("✓")).Select(x => x.Name).ToList();
+            _dashboardWarnText.Text = $"Открываются {open} из {aiServices.Count} нейросетей: {string.Join(", ", closed)} {(closed.Count == 1 ? "не открывается" : "не открываются")}";
+        }
+        _dashboardWarn.Visibility = partial ? Visibility.Visible : Visibility.Collapsed;
+        DashboardHeroGlow(on && settled && !partial ? 1 : switching && goingOn || partial ? .4 : 0);
+        Ui.FadeBrush(_dashboardHero, Border.BorderBrushProperty, partial ? "Warn" : on && settled ? "Ok" : switching ? "Accent" : "Border", 420);
         Ui.FadeBrush(_dashboardHeroIcon, Border.BackgroundProperty, on && settled ? "Ok" : "Surface2", 420);
         _dashboardHeroMark.Kind = on && settled ? "circle-check" : "shield-check";
         _dashboardHeroMark.SetResourceReference(Controls.Icon.ForegroundProperty, on && settled ? "OnToggle" : switching ? "Accent" : "Muted");
@@ -459,6 +482,9 @@ public partial class MainWindow
 
         var server = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
         Ui.SwapText(_dashboardSmartName, active == null ? "Не подключен" : PrivacyGuard.Mask(server?.ShortName ?? active.Name));
+        // Страна самого DNS-сервера и страна, откуда нейросети видят запросы, могут различаться: подписываем обе
+        _dashboardSmartHint.Text = server == null ? (on ? "" : "Включите защиту") : server.LocationCell;
+        _dashboardSmartHint.ToolTip = server?.LocationTooltip;
         _dashboardSmartName.ToolTip = active == null ? null : string.Join(", ", active.Addresses);
         _dashboardSmartFlag.Source = server?.Flag;
         _dashboardSmartFlag.Visibility = server?.Flag == null ? Visibility.Collapsed : Visibility.Visible;
@@ -483,8 +509,14 @@ public partial class MainWindow
             Ui.SwapText(row.Status, probing ? "Проверяю…" : s == null ? "Не проверялся" : ok ? "Доступен" : Cap(s.Access.TrimStart('✓', '✗', ' ')), 4);
             Ui.FadeBrush(row.Status, TextBlock.ForegroundProperty, color);
             Ui.FadeBrush(row.Dot, Shape.FillProperty, color);
-            row.Note.Text = s?.Egress is { } eg ? "Выход: " + GeoLocation.CountryName(eg.Country) : s?.Note != null ? "Подробности в подсказке" : "";
+            row.Note.Text = s == null ? "" : ok ? (s.Egress is { } eg ? "ИИ видят вас из страны: " + GeoLocation.CountryName(eg.Country) : "")
+                : ShortReason(s.Note);
+            row.Note.ToolTip = s?.Note;
             row.Status.ToolTip = s?.Note;
+            bool why = s != null && !ok;
+            row.Action.Content = why ? "Подробнее" : "Открыть";
+            row.Action.Tag = why ? "why" : null;
+            row.Action.ToolTip = why ? "Проверить по шагам, почему не открывается" : row.Url;
         }
         _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Проверено в {snap.Taken:HH:mm}" + (DateTime.Now - snap.Taken > TimeSpan.FromMinutes(30) ? ", данные могли устареть" : "");
         _dashboardProbe.IsEnabled = !_dashboardChecking && !_busyConn;
@@ -504,7 +536,7 @@ public partial class MainWindow
             bool foreign = tool is TgProxyTool tg && tg.ForeignCopyRunning() || tool is ZapretTool && running && !tool.State.Enabled;
             bool pending = _dashboardToolTarget is { } tt && tt.Tool == tool;
             bool want = pending ? _dashboardToolTarget!.Value.On : running;
-            Ui.SwapText(status, pending ? (want ? "Включаю…" : "Выключаю…") : foreign ? "Запущен отдельно" : running ? "Работает" : tool.IsInstalled ? "Выключен" : "Не установлен", 4);
+            Ui.SwapText(status, pending ? (want ? "Включаю…" : "Выключаю…") : foreign ? "Запущен отдельно" : running ? (tool is ZapretTool ? "Обход включен" : "Прокси включен") : tool.IsInstalled ? "Выключен" : "Не установлен", 4);
             var color = pending ? "Accent" : running ? "Ok" : "Muted";
             Ui.FadeBrush(status, TextBlock.ForegroundProperty, color);
             Ui.FadeBrush(dot, Shape.FillProperty, color);
@@ -558,6 +590,22 @@ public partial class MainWindow
         _dashboardRipple.BeginAnimation(OpacityProperty, new DoubleAnimation(.45, 0, TimeSpan.FromMilliseconds(850)) { EasingFunction = new QuadraticEase() });
     }
 
+    /// <summary>Первая фраза пояснения проверки, а если причины нет, честно: не установлена.</summary>
+    private static string ShortReason(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note)) return "Причина не установлена";
+        var t = note.Trim();
+        var cut = t.IndexOfAny(new[] { '.', '\n', ';' });
+        if (cut > 0) t = t[..cut];
+        return t.Length > 80 ? t[..78] + "…" : t;
+    }
+
+    private static string Ago(DateTime t)
+    {
+        var d = DateTime.Now - t;
+        return d.TotalMinutes < 60 ? $"в {t:HH:mm}" : d.TotalHours < 24 ? $"в {t:HH:mm}, {(int)d.TotalHours} ч назад" : $"{t:dd.MM HH:mm}, давно";
+    }
+
     private static string Cap(string t) => t.Length == 0 ? t : char.ToUpper(t[0]) + t[1..];
 
     /// <summary>Три самых надежных рабочих сервера (тот, к которому подключены, всегда в списке). Перестраивается, только если список изменился.</summary>
@@ -565,7 +613,8 @@ public partial class MainWindow
     {
         var top = _servers.Where(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && !s.IsJunk && Usable(s)).OrderBy(s => s.Rank).Take(3).ToList();
         if (active != null && _servers.FirstOrDefault(s => s.Id == active.ServerId) is { } cur && !top.Contains(cur)) { top.Insert(0, cur); if (top.Count > 3) top.RemoveAt(3); }
-        var sig = string.Join("|", top.Select(s => $"{s.Id}:{s.LatencyMs}:{s.Stability}:{s.Id == active?.ServerId}:{s.Status}")) + _busyConn;
+        if (_dashboardPickId != null && (top.All(s => s.Id != _dashboardPickId) || _dashboardPickId == active?.ServerId)) _dashboardPickId = null;
+        var sig = string.Join("|", top.Select(s => $"{s.Id}:{s.LatencyMs}:{s.Stability}:{s.Id == active?.ServerId}:{s.Status}")) + _busyConn + _dashboardPickId;
         if (sig == _dashboardServersSignature) return;
         _dashboardServersSignature = sig;
         _dashboardServers.Children.Clear();
@@ -573,20 +622,20 @@ public partial class MainWindow
         var head = DashboardServerGrid();
         foreach (var (t, c) in new[] { ("Сервер", 1), ("Страна", 2), ("Пинг", 3), ("Стабильность", 4), ("Статус", 5) })
         {
-            var h = Ui.Hint(t, 0).With(x => x.FontSize = 11); Grid.SetColumn(h, c); head.Children.Add(h);
+            var h = Ui.Hint(t, 0).With(x => x.FontSize = 12); Grid.SetColumn(h, c); head.Children.Add(h);
         }
         head.Margin = new Thickness(6, 0, 6, 4);
         _dashboardServers.Children.Add(head);
         foreach (var s in top)
         {
-            bool used = s.Id == active?.ServerId;
+            bool used = s.Id == active?.ServerId, picked = s.Id == _dashboardPickId;
             var g = DashboardServerGrid();
-            var radio = new Ellipse { Width = 14, Height = 14, StrokeThickness = used ? 4 : 1.5, VerticalAlignment = VerticalAlignment.Center };
-            radio.SetResourceReference(Shape.StrokeProperty, used ? "Accent" : "ControlBorder");
+            var radio = new Ellipse { Width = 14, Height = 14, StrokeThickness = used || picked ? 4 : 1.5, VerticalAlignment = VerticalAlignment.Center };
+            radio.SetResourceReference(Shape.StrokeProperty, used || picked ? "Accent" : "ControlBorder");
             g.Children.Add(radio);
             var name = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             name.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(s.ShortName), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-            name.Children.Add(Ui.Hint(s.Address, 0).With(x => { x.FontSize = 11; x.TextTrimming = TextTrimming.CharacterEllipsis; }));
+            name.Children.Add(Ui.Hint(s.Address, 0).With(x => { x.FontSize = 12; x.TextTrimming = TextTrimming.CharacterEllipsis; }));
             Grid.SetColumn(name, 1); g.Children.Add(name);
             var country = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             if (s.Flag != null) country.Children.Add(new Image { Source = s.Flag, Width = 18, Height = 12, Margin = new Thickness(0, 0, 7, 0), Stretch = Stretch.Uniform });
@@ -598,16 +647,23 @@ public partial class MainWindow
             chipText.SetResourceReference(TextBlock.ForegroundProperty, used || s.Status == ServerStatus.Ok ? "Ok" : "Warn");
             var chip = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Child = chipText };
             chip.SetResourceReference(Border.BackgroundProperty, used || s.Status == ServerStatus.Ok ? "ChipOk" : "ChipWarn");
-            Grid.SetColumn(chip, 5); g.Children.Add(chip);
+            var target = s;
+            if (picked)
+            {
+                // Подключение только явной кнопкой у выбранного сервера; смену страны выхода ConnectToAsync подтверждает риск-диалогом
+                var connect = Ui.Action("Подключить", "Primary", () => { }).With(b => { b.Padding = new Thickness(12, 4, 12, 5); b.Margin = new Thickness(0); b.HorizontalAlignment = HorizontalAlignment.Left; b.IsEnabled = !_busyConn; });
+                connect.Click += async (_, _) => { _dashboardPickId = null; await ConnectToAsync(target); _dashboardServersSignature = null; RefreshDashboard(); };
+                Grid.SetColumn(connect, 5); g.Children.Add(connect);
+            }
+            else { Grid.SetColumn(chip, 5); g.Children.Add(chip); }
             var row = new Border { Child = g, Padding = new Thickness(6, 7, 6, 7), CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
-                                   Cursor = used || _busyConn ? null : System.Windows.Input.Cursors.Hand, ToolTip = used ? "Подключено" : "Подключиться к этому серверу" };
-            if (used) row.SetResourceReference(Border.BackgroundProperty, "Surface2");
+                                   Cursor = used ? null : System.Windows.Input.Cursors.Hand, ToolTip = used ? "Сейчас подключено" : picked ? null : "Выбрать этот сервер" };
+            if (used || picked) row.SetResourceReference(Border.BackgroundProperty, picked ? "AccentSoft" : "Surface2");
             else
             {
                 row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "SurfaceHover");
                 row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
-                var target = s;
-                row.MouseLeftButtonUp += async (_, _) => { if (!_busyConn) { await ConnectToAsync(target); RefreshDashboard(); } };
+                row.MouseLeftButtonUp += (_, _) => { _dashboardPickId = target.Id; RefreshDashboardServers(DnsSwitcher.GetActive()); };
             }
             _dashboardServers.Children.Add(row);
         }
@@ -633,7 +689,7 @@ public partial class MainWindow
         foreach (var entry in recent)
         {
             var (tag, color) = entry.Level switch { LogLevel.Ok => ("OK  ", "Ok"), LogLevel.Warn => ("WARN", "Warn"), LogLevel.Error => ("ERR ", "Bad"), _ => ("INFO", "Muted") };
-            var line = new TextBlock { FontFamily = mono, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 1), ToolTip = PrivacyGuard.Mask(entry.Text) };
+            var line = new TextBlock { FontFamily = mono, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 2), ToolTip = PrivacyGuard.Mask(entry.Text) };
             line.Inlines.Add(new System.Windows.Documents.Run(entry.Time.ToString("HH:mm:ss") + "  ").With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted")));
             line.Inlines.Add(new System.Windows.Documents.Run($"[{tag}]  ").With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, color)));
             line.Inlines.Add(new System.Windows.Documents.Run(PrivacyGuard.Mask(entry.Text).Trim()).With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, entry.Level is LogLevel.Info ? "Text" : color)));
@@ -643,9 +699,10 @@ public partial class MainWindow
 
     private string DashboardSiteStatus(string host)
     {
-        if (_dashboardSiteResults.TryGetValue(host, out var result)) return $"Сайт {DashboardSiteVerdict(result.Verdict)}, {result.Time:HH:mm}";
-        if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Сайт {DashboardSiteVerdict(site.State)}, {time:HH:mm}";
-        return "Сайт еще не проверялся";
+        // Состояние программы обхода показано строкой выше, здесь только проверка самого сайта и когда она была
+        if (_dashboardSiteResults.TryGetValue(host, out var result)) return $"Проверка сайта: {DashboardSiteVerdict(result.Verdict)} {Ago(result.Time)}";
+        if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Проверка сайта: {DashboardSiteVerdict(site.State)} {Ago(time)}";
+        return "Сайт не проверялся: нажмите «Проверить сайты»";
     }
     private static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
     {

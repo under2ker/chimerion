@@ -55,6 +55,7 @@
             </Setter>
         </Style>
         <Style x:Key="PanelNavButton" TargetType="Button" BasedOn="{StaticResource Ghost}">
+            <Setter Property="ToolTipService.Placement" Value="Right"/><Setter Property="ToolTipService.HorizontalOffset" Value="8"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,9"/><Setter Property="Margin" Value="0,0,0,4"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
                 <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="8">
@@ -68,6 +69,7 @@
             </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style x:Key="PanelNavToggle" TargetType="ToggleButton" BasedOn="{StaticResource LinkToggle}">
+            <Setter Property="ToolTipService.Placement" Value="Right"/><Setter Property="ToolTipService.HorizontalOffset" Value="8"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,9"/><Setter Property="Margin" Value="0,0,0,4"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
                 <Border x:Name="bg" Background="Transparent" CornerRadius="8">
@@ -235,7 +237,7 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Rectangle x:Name="HeaderSep" Width="1" Height="24" Fill="{DynamicResource Border}" Margin="12,0"/>
-                <StackPanel x:Name="ApplyActions" Orientation="Horizontal">
+                <StackPanel x:Name="ApplyActions" Orientation="Horizontal" ToolTipService.ShowOnDisabled="True">
                     <CheckBox x:Name="Watchdog" Content="Следить" IsChecked="True" Margin="0,0,14,0"
                               ToolTip="Пока подключено, сторож проверяет DNS. Если сервер не отвечает три раза подряд, переключит на другой, когда это разрешено в настройках"/>
                     <Button x:Name="SwitchButton" Content="Переключить сюда" Click="Switch_Click" Margin="0,0,8,0"
@@ -314,12 +316,13 @@
                 <Button Content="Найти новые серверы" Click="Fetch_Click" Style="{StaticResource Primary}"
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
-            <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}"
-                    Visibility="Collapsed"/>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
-                <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" VerticalAlignment="Center"
-                           MaxWidth="380" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
-                <ProgressBar x:Name="WorkBar" Width="140" Visibility="Collapsed" AutomationProperties.Name="Прогресс работы"/>
+            <!-- Ход работы отдельным блоком: «Стоп», полоса и текст с отступами, на узком окне переносится целиком -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,12,0">
+                <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}" Margin="0,0,14,0"
+                        Visibility="Collapsed" ToolTip="Остановить проверку или поиск"/>
+                <ProgressBar x:Name="WorkBar" Width="140" Visibility="Collapsed" Margin="0,0,12,0" VerticalAlignment="Center" AutomationProperties.Name="Прогресс работы"/>
+                <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" FontSize="12.5" VerticalAlignment="Center"
+                           MaxWidth="380" TextTrimming="CharacterEllipsis"/>
             </StackPanel>
         </WrapPanel>
 
@@ -440,10 +443,10 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="92" SortMemberPath="Rank">
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="124" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Grid x:Name="stRoot" ClipToBounds="True">
+                                    <Grid x:Name="stRoot" ClipToBounds="True" Margin="0,0,12,0">
                                         <!-- Точка отдельно и по центру строки, как значки обновления и избранного слева.
                                              Раньше она стояла у первой строки текста и с плашкой «подключен» уезжала вверх -->
                                         <Grid VerticalAlignment="Center">

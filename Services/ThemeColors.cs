@@ -89,7 +89,7 @@ public static class ThemeColors
     private static readonly Dictionary<string, string> DarkBase = new()
     {
         ["Bg"] = "#0F1012", ["Surface"] = "#17191C", ["Surface2"] = "#1F2125", ["SurfaceHover"] = "#272A2F", ["Border"] = "#2B2E33",
-        ["Text"] = "#F3F4F1", ["Muted"] = "#8F949B", ["Idle"] = "#5C6373", ["Ok"] = "#3DD68C", ["Warn"] = "#F5B941", ["Bad"] = "#F2626E",
+        ["Text"] = "#F3F4F1", ["Muted"] = "#A9AEB5", ["Idle"] = "#5C6373", ["Ok"] = "#3DD68C", ["Warn"] = "#F5B941", ["Bad"] = "#F2626E",
         ["OkSoft"] = "#13281E", ["WarnSoft"] = "#3A2D12", ["BadSoft"] = "#3A171C", ["Chrome"] = "#0B0C0D",
         ["ScrollThumb"] = "#3A3E44", ["ScrollThumbHover"] = "#4C5158", ["ChipOk"] = "#173A2A", ["ChipWarn"] = "#3A2F17", ["ChipBad"] = "#3A1C20",
         ["GridLine"] = "#212428", ["ControlBorder"] = "#4C5158", ["BadButton"] = "#C23B47", ["HoverOverlay"] = "#FFFFFF",
@@ -97,7 +97,7 @@ public static class ThemeColors
     private static readonly Dictionary<string, string> LightBase = new()
     {
         ["Bg"] = "#F2F3EF", ["Surface"] = "#FFFFFF", ["Surface2"] = "#F1F2EE", ["SurfaceHover"] = "#E7E9E3", ["Border"] = "#D9DCD5",
-        ["Text"] = "#16181B", ["Muted"] = "#5F646B", ["Idle"] = "#A2A6AC", ["Ok"] = "#13824A", ["Warn"] = "#9A6100", ["Bad"] = "#C92A38",
+        ["Text"] = "#16181B", ["Muted"] = "#50555C", ["Idle"] = "#A2A6AC", ["Ok"] = "#13824A", ["Warn"] = "#9A6100", ["Bad"] = "#C92A38",
         ["OkSoft"] = "#E2F3E9", ["WarnSoft"] = "#FAF0DA", ["BadSoft"] = "#FBE3E5", ["Chrome"] = "#E8EAE5",
         ["ScrollThumb"] = "#C3C7C0", ["ScrollThumbHover"] = "#A6ABA3", ["ChipOk"] = "#DCF1E4", ["ChipWarn"] = "#F8ECD2", ["ChipBad"] = "#F9DEE1",
         ["GridLine"] = "#EAEBE7", ["ControlBorder"] = "#9EA39B", ["BadButton"] = "#C23B47", ["HoverOverlay"] = "#000000",

@@ -60,12 +60,17 @@ public partial class MainWindow
     /// </summary>
     private void BuildTopRows(List<ServerRanking.TopPick> picks)
     {
+        // Один и тот же сервер лучший у каждого сервиса и для всех сразу: одна строка вместо четырех одинаковых
+        var star = picks.FirstOrDefault(p => p.Key == "*");
+        var singles = picks.Where(p => p.Key is not ("*" or "net")).ToList();
+        if (star?.Best != null && singles.Count > 1 && singles.All(p => p.Best == star.Best))
+            picks = picks.Where(p => p.Key is "*" or "net").Select(p => p.Key == "*" ? p with { Title = string.Join(", ", singles.Select(x => x.Title)) } : p).ToList();
         Brush B(string k) => (Brush)FindResource(k);
         TopRows.Children.Clear();
         TopRows.Children.Add(new TextBlock { Text = "Лучшие по стабильности", Style = (Style)FindResource("H2") });
         TopRows.Children.Add(new TextBlock
         {
-            Text = "отдельно для каждого сервиса · щелчок выбирает сервер", Foreground = B("Muted"), FontSize = 12,
+            Text = "по проверкам для каждого сервиса · щелчок выбирает сервер в таблице", Foreground = B("Muted"), FontSize = 12.5,
             Margin = new Thickness(0, 2, 0, 4),
         });
 
@@ -99,7 +104,7 @@ public partial class MainWindow
 
             // Для кого и сервер
             var mid = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            mid.Children.Add(new TextBlock { Text = p.Title, Foreground = B("Muted"), FontSize = 11 });
+            mid.Children.Add(new TextBlock { Text = p.Title, Foreground = B("Muted"), FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis });
             var server = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
             if (p.Best is { } s)
             {
@@ -126,7 +131,7 @@ public partial class MainWindow
                 right.Children.Add(new TextBlock
                 {
                     Text = p.Sub ?? (b.LatencyMs is { } ms ? $"{ms} мс · " : "") + $"{b.ServiceChecks} пров.",
-                    Foreground = B("Muted"), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right,
+                    Foreground = B("Muted"), FontSize = 12, HorizontalAlignment = HorizontalAlignment.Right,
                 });
                 Grid.SetColumn(right, 2);
                 g.Children.Add(right);

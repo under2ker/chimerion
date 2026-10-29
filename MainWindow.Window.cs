@@ -216,7 +216,7 @@ public partial class MainWindow
         ColRefresh.Visibility = v; // в компактном виде слева от названий оставалась пустая полоса
         ConnPill.Margin = new Thickness(0);
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
-        ColStatus.Width = new DataGridLength(92);
+        ColStatus.Width = new DataGridLength(124);
         ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
@@ -535,6 +535,7 @@ public partial class MainWindow
         _cts = new CancellationTokenSource();
         _working = true;
         ListActions.IsEnabled = ApplyActions.IsEnabled = false;
+        ApplyActions.ToolTip = "Дождитесь окончания проверки или нажмите «Стоп»"; // недоступная кнопка без причины выглядела сломанной
         StopButton.Visibility = Visibility.Visible;
         UpdateStats();
         UpdateStatusVisuals();
@@ -555,6 +556,7 @@ public partial class MainWindow
         if (_workDepth > 0) return; // внешняя работа еще идет
         _working = false;
         ListActions.IsEnabled = ApplyActions.IsEnabled = true;
+        ApplyActions.ToolTip = null;
         StopButton.Visibility = Visibility.Collapsed;
         UpdateStats(); // пустое состояние таблицы: «идет проверка» сменится итогом
         ProgressText.Text = "";

@@ -18,7 +18,7 @@ public partial class MainWindow
         PanelSidebar.Width = expanded ? 220 : 54;
         PanelCollapseText.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
         PanelCollapseIcon.Kind = expanded ? "shrink" : "expand";
-        PanelCollapseIcon.Margin = new Thickness(0, 0, expanded ? 10 : 0, 0);
+        PanelCollapseIcon.Margin = new Thickness(0); // в кнопке одна иконка: отступ справа сдвигал ее от центра рамки
         PanelCollapseButton.ToolTip = expanded ? "Свернуть меню" : "Развернуть меню";
         AutomationProperties.SetName(PanelCollapseButton, expanded ? "Свернуть меню" : "Развернуть меню");
         foreach (var control in PanelNavItems.Children.OfType<ContentControl>())

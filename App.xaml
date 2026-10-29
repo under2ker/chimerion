@@ -13,7 +13,7 @@
         <SolidColorBrush x:Key="SurfaceHover" Color="#272A2F"/>
         <SolidColorBrush x:Key="Border" Color="#2B2E33"/>
         <SolidColorBrush x:Key="Text" Color="#F3F4F1"/>
-        <SolidColorBrush x:Key="Muted" Color="#8F949B"/>
+        <SolidColorBrush x:Key="Muted" Color="#A9AEB5"/>
         <SolidColorBrush x:Key="Accent" Color="#C5F23A"/>
         <SolidColorBrush x:Key="AccentHover" Color="#D3F566"/>
         <SolidColorBrush x:Key="AccentSoft" Color="#2A3413"/>

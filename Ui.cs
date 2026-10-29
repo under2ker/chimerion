@@ -33,7 +33,7 @@ internal static class Ui
     /// <summary>Пояснение мелким приглушенным текстом.</summary>
     public static TextBlock Hint(string text, double top = 4, string brush = "Muted") => new TextBlock
     {
-        Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0), LineHeight = 17,
+        Text = text, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0), LineHeight = 18,
     }.Ref(TextBlock.ForegroundProperty, brush);
 
     /// <summary>

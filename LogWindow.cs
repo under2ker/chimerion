@@ -22,12 +22,46 @@ namespace Dnex;
 /// </summary>
 internal sealed class LogWindow
 {
+    /// <summary>
+    /// Строка окна: запись без служебной метки уровня ([x], [!]) и подряд идущие одинаковые записи одной строкой со
+    /// счетчиком и временем последней. В файл, отчет и копию за 3 дня идут исходные записи.
+    /// </summary>
+    internal sealed class LogRow : INotifyPropertyChanged
+    {
+        public LogRow(LogEntry e) { Last = e; Text = Clean(e.Text); Level = e.Level; }
+        public LogEntry Last { get; private set; }
+        public int Count { get; private set; } = 1;
+        public string Text { get; }
+        public LogLevel Level { get; }
+        public string DateText => Last.DateText;
+        public string CountText => Count > 1 ? $"×{Count}" : "";
+        public string CountTip => Count > 1 ? $"Повторилось {Count} раз подряд, последний раз в {Last.Time:HH:mm:ss}" : "";
+        public bool Same(LogEntry e) => e.Level == Level && Clean(e.Text) == Text;
+        public void Add(LogEntry e)
+        {
+            Last = e; Count++;
+            foreach (var p in new[] { nameof(DateText), nameof(CountText), nameof(CountTip) }) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(p));
+        }
+        /// <summary>Для копии: последняя запись и сколько раз она повторилась.</summary>
+        public LogEntry ForCopy => Count > 1 ? new LogEntry(Last.Time, Last.Text + $" (повторилось {Count} раз)") : Last;
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public static string Clean(string text)
+        {
+            var t = text.Trim();
+            foreach (var mark in new[] { "[x]", "[!]", "[ок]", "[i]" })
+                if (t.StartsWith(mark)) return t[mark.Length..].TrimStart();
+            return t;
+        }
+    }
+
     private static LogWindow? _open;
 
     private readonly Window _w;
     private readonly ObservableCollection<LogEntry> _log;
     private readonly Func<List<LogEntry>> _stored;
     private readonly Action _clear;
+    private readonly ObservableCollection<LogRow> _rows = new();
     private readonly ListCollectionView _view;
     private readonly ListBox _list = new();
     private readonly TextBox _search = new() { Tag = "Поиск по журналу", MinWidth = 220 };
@@ -68,7 +102,8 @@ internal sealed class LogWindow
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
         _w.Closed += (_, _) => { _log.CollectionChanged -= OnLogChanged; _open = null; };
 
-        _view = new ListCollectionView(_log) { Filter = Matches };
+        Rebuild();
+        _view = new ListCollectionView(_rows) { Filter = o => o is LogRow r && Matches(r.Level, r.Text) };
         _log.CollectionChanged += OnLogChanged;
 
         var root = new Grid { Margin = new Thickness(24, 20, 24, 18) };
@@ -76,7 +111,7 @@ internal sealed class LogWindow
             root.RowDefinitions.Add(new RowDefinition { Height = h });
 
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Журнал",
-            "Что делала программа за последние 3 дня. Пароли, IP-адреса и город сюда не попадают", glyph: "scroll-text"));
+            "Что делала программа за последние 3 дня. IP-адреса, город и имя пользователя Windows из записей удаляются", glyph: "scroll-text"));
 
         // Фильтр, поиск и число записей
         var bar = new DockPanel { Margin = new Thickness(0, 4, 0, 10) };
@@ -114,13 +149,13 @@ internal sealed class LogWindow
         _list.SelectionChanged += (_, _) => UpdateButtons();
         _list.MouseDoubleClick += (_, e) =>
         {
-            if (e.OriginalSource is DependencyObject d && ItemsControl.ContainerFromElement(_list, d) is ListBoxItem { DataContext: LogEntry one })
-                Copy(new[] { one }, false, "Строка скопирована");
+            if (e.OriginalSource is DependencyObject d && ItemsControl.ContainerFromElement(_list, d) is ListBoxItem { DataContext: LogRow one })
+                Copy(new[] { one.ForCopy }, false, "Запись скопирована");
         };
         // Кнопка «скопировать» у строки
         _list.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler((_, e) =>
         {
-            if (e.OriginalSource is Button { Tag: "copy", DataContext: LogEntry one }) { Copy(new[] { one }, false, "Строка скопирована"); e.Handled = true; }
+            if (e.OriginalSource is Button { Tag: "copy", DataContext: LogRow one }) { Copy(new[] { one.ForCopy }, false, "Запись скопирована"); e.Handled = true; }
         }));
         var empty = Ui.Hint("Записей нет", 0).With(t => { t.HorizontalAlignment = HorizontalAlignment.Center; t.VerticalAlignment = VerticalAlignment.Center; t.Visibility = Visibility.Collapsed; });
         var listLayer = new Grid();
@@ -139,7 +174,8 @@ internal sealed class LogWindow
         right.Children.Add(IconButton("Очистить", "x", "Ghost", () => { _clear(); Done("Журнал очищен, вернуть можно в главном окне"); }).With(b => b.Margin = new Thickness(0)));
         DockPanel.SetDock(right, Dock.Right); actions.Children.Add(right);
         var left = new StackPanel { Orientation = Orientation.Horizontal };
-        left.Children.Add(IconButton("Скопировать все за 3 дня", "copy", "Primary", CopyAll));
+        left.Children.Add(IconButton("Скопировать журнал за 3 дня", "copy", "Primary", CopyAll)
+            .With(b => b.ToolTip = "Все записи за 3 дня из всех запусков программы, с учетом фильтра и поиска. Повторы не схлопываются"));
         left.Children.Add(_copySelected);
         _done.VerticalAlignment = VerticalAlignment.Center; _done.Opacity = 0;
         left.Children.Add(_done);
@@ -175,15 +211,19 @@ internal sealed class LogWindow
     private const string ItemXaml = "<DataTemplate " + Ns + @">
   <Grid Margin='0,1,0,1'>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width='118'/><ColumnDefinition Width='60'/><ColumnDefinition Width='*'/><ColumnDefinition Width='34'/>
+      <ColumnDefinition Width='118'/><ColumnDefinition Width='60'/><ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='34'/>
     </Grid.ColumnDefinitions>
     <TextBlock Text='{Binding DateText}' FontFamily='Cascadia Mono, Consolas' FontSize='12' Foreground='{DynamicResource Muted}' Margin='0,3,0,0' VerticalAlignment='Top'/>
     <Border x:Name='chip' Grid.Column='1' CornerRadius='5' Padding='6,1,6,2' HorizontalAlignment='Left' VerticalAlignment='Top' Margin='0,2,0,0' Background='{DynamicResource Surface2}'>
       <TextBlock x:Name='tag' Text='INFO' FontFamily='Cascadia Mono, Consolas' FontSize='10.5' FontWeight='SemiBold' Foreground='{DynamicResource Muted}'/>
     </Border>
-    <TextBlock x:Name='txt' Grid.Column='2' Text='{Binding Text}' TextWrapping='Wrap' FontFamily='Cascadia Mono, Consolas' FontSize='12.5' LineHeight='18'
-               Foreground='{DynamicResource Text}' Margin='6,2,8,2'/>
-    <Button x:Name='copy' Grid.Column='3' Tag='copy' ToolTip='Скопировать строку' Visibility='Hidden' Style='{DynamicResource Ghost}'
+    <TextBlock x:Name='txt' Grid.Column='2' Text='{Binding Text}' TextWrapping='Wrap' TextTrimming='WordEllipsis' MaxHeight='40' FontFamily='Cascadia Mono, Consolas' FontSize='13' LineHeight='20'
+               Foreground='{DynamicResource Text}' Margin='6,1,8,1'/>
+    <Border Grid.Column='3' CornerRadius='6' Padding='6,1,6,2' Margin='0,2,6,0' VerticalAlignment='Top' Background='{DynamicResource Surface2}' ToolTip='{Binding CountTip}'>
+      <Border.Style><Style TargetType='Border'><Style.Triggers><DataTrigger Binding='{Binding CountText}' Value=''><Setter Property='Visibility' Value='Collapsed'/></DataTrigger></Style.Triggers></Style></Border.Style>
+      <TextBlock Text='{Binding CountText}' FontSize='11.5' FontWeight='SemiBold' Foreground='{DynamicResource Muted}'/>
+    </Border>
+    <Button x:Name='copy' Grid.Column='4' Tag='copy' ToolTip='Скопировать запись' Visibility='Hidden' Style='{DynamicResource Ghost}'
             Padding='5' MinHeight='0' MinWidth='0' Margin='0' VerticalAlignment='Top' Cursor='Hand'>
       <c:Icon Kind='copy' Size='14'/>
     </Button>
@@ -211,6 +251,7 @@ internal sealed class LogWindow
     </DataTrigger>
     <DataTrigger Binding='{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}' Value='True'>
       <Setter TargetName='copy' Property='Visibility' Value='Visible'/>
+      <Setter TargetName='txt' Property='MaxHeight' Value='100000'/>
     </DataTrigger>
   </DataTemplate.Triggers>
 </DataTemplate>";
@@ -239,18 +280,30 @@ internal sealed class LogWindow
   </Setter>
 </Style>";
 
-    private bool Matches(object o)
+    private bool Matches(LogLevel lvl, string text)
     {
-        if (o is not LogEntry e) return false;
         bool level = _filter switch
         {
-            1 => e.Level == LogLevel.Ok,
-            2 => e.Level is LogLevel.Warn,
-            3 => e.Level == LogLevel.Error,
+            1 => lvl == LogLevel.Ok,
+            2 => lvl is LogLevel.Warn,
+            3 => lvl == LogLevel.Error,
             _ => true,
         };
         var q = _search.Text.Trim();
-        return level && (q.Length == 0 || e.Text.Contains(q, StringComparison.OrdinalIgnoreCase));
+        return level && (q.Length == 0 || text.Contains(q, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Строки окна заново из записей: подряд идущие одинаковые одной строкой.</summary>
+    private void Rebuild()
+    {
+        _rows.Clear();
+        foreach (var e in _log) Append(e);
+    }
+
+    private void Append(LogEntry e)
+    {
+        if (_rows.Count > 0 && _rows[^1].Same(e)) _rows[^1].Add(e);
+        else _rows.Add(new LogRow(e));
     }
 
     private void Refresh()
@@ -273,7 +326,8 @@ internal sealed class LogWindow
             };
             tab.Content = n > 0 && f != 0 ? $"{title} {n}" : title;
         }
-        _count.Text = _view.Count == _log.Count ? $"{_log.Count} записей в этом запуске" : $"Показано {_view.Count} из {_log.Count}";
+        // Сколько строк видно сейчас и сколько записей в этом запуске: копия за 3 дня берет больше, это сказано у кнопки
+        _count.Text = _view.Count == _rows.Count ? $"{_rows.Count} строк · {_log.Count} записей в этом запуске" : $"Показано {_view.Count} из {_rows.Count} строк";
     }
 
     private void UpdateButtons()
@@ -288,6 +342,8 @@ internal sealed class LogWindow
     {
         var sv = FindScroll(_list);
         bool atEnd = sv == null || sv.VerticalOffset >= sv.ScrollableHeight - 24;
+        if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems != null) foreach (LogEntry n in e.NewItems) Append(n);
+        else Rebuild();
         UpdateCounts();
         if (atEnd && e.Action == NotifyCollectionChangedAction.Add) ScrollToEnd();
     }
@@ -318,9 +374,9 @@ internal sealed class LogWindow
     /// <summary>Выбранные строки, которые сейчас видны, в порядке журнала.</summary>
     private void CopySelected()
     {
-        var sel = _view.Cast<LogEntry>().Where(x => _list.SelectedItems.Contains(x)).ToList();
+        var sel = _view.Cast<LogRow>().Where(x => _list.SelectedItems.Contains(x)).Select(x => x.ForCopy).ToList();
         if (sel.Count == 0) { Done("Выберите строки щелчком или Ctrl+A", warn: true); return; }
-        Copy(sel, false, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
+        Copy(sel, false, sel.Count == 1 ? "Запись скопирована" : $"Скопировано записей: {sel.Count}");
     }
 
     /// <summary>Весь журнал с диска за 3 дня (все запуски программы), с учетом фильтра и поиска.</summary>
@@ -334,7 +390,7 @@ internal sealed class LogWindow
     {
         var all = _stored();
         if (all.Count == 0) all = _log.ToList();
-        return all.Where(Matches).ToList();
+        return all.Where(x => Matches(x.Level, x.Text)).ToList();
     }
 
     private void Copy(IReadOnlyCollection<LogEntry> items, bool withDate, string done)
