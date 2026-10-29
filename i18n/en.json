@@ -1983,5 +1983,16 @@
  "свой набор": "custom set",
  "сейчас включен": "on now",
  "Режим «{0}»: не получилось ({1}). Подробности в журнале": "Mode «{0}»: did not work ({1}). Details in the log",
- "подключение DNS": "DNS connection"
+ "подключение DNS": "DNS connection",
+ "API ответил, открытие сайта подтвердить не удалось.": "The API responded, but the site could not be confirmed to open.",
+ "{0}: сайт не подтвержден": "{0}: site not confirmed",
+ "Маршрут: {0}{1}.": "Route: {0}{1}.",
+ "Оценка риска: нет данных": "Risk score: no data",
+ "Оценка риска: {0} из 100": "Risk score: {0} of 100",
+ "Черные списки: нет": "Blacklists: none",
+ "Черные списки: есть ({0})": "Blacklists: listed ({0})",
+ "Адрес выхода {0}": "Exit address {0}",
+ "Подобрать сервер в той же стране": "Pick a server in the same country",
+ "включено, но не работает": "enabled but not running",
+ "{0}: обычно {1}, сейчас {2}": "{0}: usually {1}, now {2}"
 }
