@@ -41,6 +41,16 @@ public partial class MainWindow
     private StackPanel _dashboardServers = null!;
     private string? _dashboardServersSignature;
     private bool _dashboardSyncing; // обновление переключателей из кода не должно запускать действия
+    private Grid _dashboardHeroBadge = null!;
+    private Border _dashboardHeroGlow = null!;
+    private Ellipse _dashboardSpinner = null!, _dashboardRipple = null!;
+    private readonly RotateTransform _dashboardSpin = new();
+    private readonly ScaleTransform _dashboardRippleScale = new();
+    /// <summary>Что человек попросил переключателем, пока это выполняется: переключатель стоит там, куда его перевели.</summary>
+    private bool? _dashboardPowerTarget;
+    private (Tool Tool, bool On)? _dashboardToolTarget;
+    private bool? _dashboardShownOn;
+    private bool _dashboardSpinning;
 
     private void SetupDashboard()
     {
@@ -51,13 +61,30 @@ public partial class MainWindow
         var power = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
         _dashboardPower = new Controls.Switch { Width = 64, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Включить или выключить Smart DNS" };
         System.Windows.Automation.AutomationProperties.SetName(_dashboardPower, "Защита");
-        _dashboardPower.Click += (_, _) => { if (!_dashboardSyncing) _ = DashboardConnectAsync(); };
+        _dashboardPower.Click += async (_, _) =>
+        {
+            if (_dashboardSyncing) return;
+            if (_busyConn || _dashboardChecking || _dashboardPowerTarget != null) { RefreshDashboard(); return; } // занято: переключатель вернется на место
+            _dashboardPowerTarget = _dashboardPower.IsChecked == true;
+            RefreshDashboard(); // сразу «Включаю защиту…»: ответ на нажатие без ожидания прав и проверок
+            try { await DashboardConnectAsync(); }
+            finally { _dashboardPowerTarget = null; RefreshDashboard(); }
+        };
         _dashboardPowerText = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 104 };
         power.Children.Add(_dashboardPower); power.Children.Add(_dashboardPowerText);
         DockPanel.SetDock(power, Dock.Right); heroTop.Children.Add(power);
         _dashboardHeroMark = new Controls.Icon { Kind = "circle-check", Size = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        _dashboardHeroIcon = new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Margin = new Thickness(0, 0, 18, 0), Child = _dashboardHeroMark, VerticalAlignment = VerticalAlignment.Center };
-        DockPanel.SetDock(_dashboardHeroIcon, Dock.Left); heroTop.Children.Add(_dashboardHeroIcon);
+        _dashboardHeroIcon = new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Child = _dashboardHeroMark,
+                                          HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // Волна при включении и бегущее кольцо, пока защита включается или выключается
+        _dashboardRipple = new Ellipse { Width = 64, Height = 64, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5), RenderTransform = _dashboardRippleScale };
+        _dashboardRipple.SetResourceReference(Shape.FillProperty, "Ok");
+        _dashboardSpinner = new Ellipse { Width = 76, Height = 76, StrokeThickness = 3, Opacity = 0, IsHitTestVisible = false, StrokeDashCap = PenLineCap.Round,
+                                          StrokeDashArray = new DoubleCollection { 16, 64 }, RenderTransformOrigin = new Point(.5, .5), RenderTransform = _dashboardSpin };
+        _dashboardSpinner.SetResourceReference(Shape.StrokeProperty, "Accent");
+        _dashboardHeroBadge = new Grid { Width = 78, Height = 78, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        _dashboardHeroBadge.Children.Add(_dashboardRipple); _dashboardHeroBadge.Children.Add(_dashboardSpinner); _dashboardHeroBadge.Children.Add(_dashboardHeroIcon);
+        DockPanel.SetDock(_dashboardHeroBadge, Dock.Left); heroTop.Children.Add(_dashboardHeroBadge);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         _dashboardTitle = new TextBlock { FontSize = 26, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
         _dashboardDescription = new TextBlock { FontSize = 14, Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap };
@@ -86,9 +113,13 @@ public partial class MainWindow
         heroContent.Children.Add(heroTop); heroContent.Children.Add(heroFacts);
         var heroLayer = new Grid();
         heroLayer.SizeChanged += (_, e) => heroLayer.Clip = new RectangleGeometry(new Rect(e.NewSize), 11, 11);
+        _dashboardHeroGlow = new Border { Opacity = 0, IsHitTestVisible = false };
+        _dashboardHeroGlow.SetResourceReference(Border.BackgroundProperty, "OkSoft");
+        heroLayer.Children.Add(_dashboardHeroGlow);
         heroLayer.Children.Add(new DashboardAtmosphere());
         heroLayer.Children.Add(heroContent);
         _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(0); page.Children.Add(_dashboardHero);
+        _dashboardHero.SetResourceReference(Border.BackgroundProperty, "Surface");
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
@@ -126,7 +157,16 @@ public partial class MainWindow
             var toggle = new Controls.Switch { Width = 44, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = name + ": включить или выключить" };
             System.Windows.Automation.AutomationProperties.SetName(toggle, name);
             var getTool = tool;
-            toggle.Click += (_, _) => { if (!_dashboardSyncing) _ = DashboardToolAsync(getTool()); };
+            toggle.Click += async (_, _) =>
+            {
+                if (_dashboardSyncing) return;
+                if (_dashboardToolBusy || _dashboardToolTarget != null) { RefreshDashboard(); return; }
+                var t = getTool();
+                _dashboardToolTarget = (t, toggle.IsChecked == true);
+                RefreshDashboard();
+                try { await DashboardToolAsync(t); }
+                finally { _dashboardToolTarget = null; RefreshDashboard(); }
+            };
             var symbol = DashboardIcon(kind, "Surface2", "Accent", 38);
             extra.Children.Add(DashboardRow(symbol, name, sub, dot, status, site, toggle));
             _dashboardToolRows.Add((toggle, status, dot, tool));
@@ -168,7 +208,7 @@ public partial class MainWindow
             page.Margin = mode == 0 ? new Thickness(12, 14, 12, 16) : new Thickness(24, 20, 24, 24);
             DashboardReflow(heroFacts, mode == 0 ? 1 : 3);
             DashboardReflow(services, mode < 2 ? 1 : 2);
-            _dashboardHeroIcon.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
+            _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
         DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
@@ -370,37 +410,49 @@ public partial class MainWindow
         var aiServices = snap?.Services.Where(x => x.Name is "ChatGPT" or "Claude" or "Gemini").ToList() ?? new();
         int open = aiServices.Count(x => x.Access.StartsWith("✓"));
 
-        // Карточка защиты
+        // Карточка защиты. Пока защита включается или выключается, карточка уже показывает, куда идет дело
         bool on = active != null;
-        _dashboardTitle.Text = _busyConn ? "Подключение меняется" : on ? "Защита активна" : "Защита выключена";
-        _dashboardDescription.Text = !on ? "Включите, чтобы открыть ChatGPT, Claude и Gemini"
+        bool switching = _dashboardPowerTarget != null || _busyConn;
+        bool goingOn = _dashboardPowerTarget ?? !on;
+        bool settled = !switching;
+        Ui.SwapText(_dashboardTitle, switching ? (goingOn ? "Включаю защиту…" : "Выключаю защиту…") : on ? "Защита активна" : "Защита выключена");
+        Ui.SwapText(_dashboardDescription, switching ? (goingOn ? "Меняю DNS и проверяю, что интернет работает" : "Возвращаю DNS вашей сети")
+            : !on ? "Включите, чтобы открыть ChatGPT, Claude и Gemini"
             : aiServices.Count == 0 ? "Проверяю доступ к нейросетям…"
-            : open == aiServices.Count ? "Доступ к ИИ-сервисам настроен" : $"Открываются {open} из {aiServices.Count} нейросетей";
-        _dashboardHeroMode.Text = !on ? "Остальной интернет работает как обычно" : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS";
-        _dashboardHero.SetResourceReference(Border.BackgroundProperty, on ? "OkSoft" : "Surface");
-        _dashboardHero.SetResourceReference(Border.BorderBrushProperty, on ? "Ok" : "Border");
-        _dashboardHeroIcon.SetResourceReference(Border.BackgroundProperty, on ? "Ok" : "Surface2");
-        _dashboardHeroMark.Kind = on ? "circle-check" : "shield-check";
-        _dashboardHeroMark.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "OnToggle" : "Muted");
+            : open == aiServices.Count ? "Доступ к ИИ-сервисам настроен" : $"Открываются {open} из {aiServices.Count} нейросетей", 4);
+        Ui.SwapText(_dashboardHeroMode, switching ? "Это занимает несколько секунд" : !on ? "Остальной интернет работает как обычно"
+            : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS", 3);
+        DashboardHeroGlow(on && settled ? 1 : switching && goingOn ? .4 : 0);
+        Ui.FadeBrush(_dashboardHero, Border.BorderBrushProperty, on && settled ? "Ok" : switching ? "Accent" : "Border", 420);
+        Ui.FadeBrush(_dashboardHeroIcon, Border.BackgroundProperty, on && settled ? "Ok" : "Surface2", 420);
+        _dashboardHeroMark.Kind = on && settled ? "circle-check" : "shield-check";
+        _dashboardHeroMark.SetResourceReference(Controls.Icon.ForegroundProperty, on && settled ? "OnToggle" : switching ? "Accent" : "Muted");
+        DashboardSpinner(switching);
+        if (settled && _dashboardShownOn != on)
+        {
+            if (_dashboardShownOn != null) { Ui.Pop(_dashboardHeroIcon, .7); if (on) DashboardRipple(); }
+            _dashboardShownOn = on;
+        }
         _dashboardSyncing = true;
-        _dashboardPower.IsChecked = on;
-        _dashboardPower.IsEnabled = !_busyConn && !_dashboardChecking;
+        _dashboardPower.IsChecked = switching ? goingOn : on;
+        _dashboardPower.IsHitTestVisible = settled && !_dashboardChecking; // занято: нажатия не принимаются, но вид не тускнеет
         _dashboardSyncing = false;
-        _dashboardPowerText.Text = _busyConn ? "Подождите" : on ? "Включено" : "Выключено";
+        Ui.SwapText(_dashboardPowerText, switching ? (goingOn ? "Включаю…" : "Выключаю…") : on ? "Включено" : "Выключено");
+        Ui.FadeBrush(_dashboardPowerText, TextBlock.ForegroundProperty, on && settled ? "Ok" : "Text");
 
         var server = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
-        _dashboardSmartName.Text = active == null ? "Не подключен" : PrivacyGuard.Mask(server?.ShortName ?? active.Name);
+        Ui.SwapText(_dashboardSmartName, active == null ? "Не подключен" : PrivacyGuard.Mask(server?.ShortName ?? active.Name));
         _dashboardSmartName.ToolTip = active == null ? null : string.Join(", ", active.Addresses);
         _dashboardSmartFlag.Source = server?.Flag;
         _dashboardSmartFlag.Visibility = server?.Flag == null ? Visibility.Collapsed : Visibility.Visible;
         bool works = on && aiServices.Count > 0 && open > 0;
         _dashboardSmartChipBox.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         _dashboardSmartChip.Text = aiServices.Count == 0 ? "Проверка" : works ? "Работает" : "Не открывает";
-        _dashboardSmartChipBox.SetResourceReference(Border.BackgroundProperty, works ? "ChipOk" : aiServices.Count == 0 ? "Surface2" : "ChipBad");
-        _dashboardSmartChip.SetResourceReference(TextBlock.ForegroundProperty, works ? "Ok" : aiServices.Count == 0 ? "Muted" : "Bad");
+        Ui.FadeBrush(_dashboardSmartChipBox, Border.BackgroundProperty, works ? "ChipOk" : aiServices.Count == 0 ? "Surface2" : "ChipBad");
+        Ui.FadeBrush(_dashboardSmartChip, TextBlock.ForegroundProperty, works ? "Ok" : aiServices.Count == 0 ? "Muted" : "Bad");
         _dashboardPlainDns.Text = snap == null ? "Еще не проверялся" : PrivacyGuard.Mask(snap.SystemDns);
         _dashboardPlainHint.Text = active?.Split == true ? $"Общий DNS: {active.GeneralName}" : on ? "Тот же Smart DNS" : "DNS вашей сети";
-        _dashboardUptime.Text = on ? Uptime(DateTime.Now - active!.Since) : "Не подключено";
+        Ui.SwapText(_dashboardUptime, on ? Uptime(DateTime.Now - active!.Since) : "Не подключено");
         _dashboardUptimeHint.Text = on ? $"Подключено с {active!.Since:dd.MM HH:mm}" : "Нажмите переключатель";
 
         // Нейросети
@@ -409,9 +461,11 @@ public partial class MainWindow
             var s = aiServices.FirstOrDefault(x => x.Name == name);
             bool ok = s?.Access.StartsWith("✓") == true;
             var color = s == null ? "Muted" : ok ? "Ok" : "Warn";
-            row.Status.Text = s == null ? "Не проверялся" : ok ? "Доступен" : Cap(s.Access.TrimStart('✓', '✗', ' '));
-            row.Status.SetResourceReference(TextBlock.ForegroundProperty, color);
-            row.Dot.SetResourceReference(Shape.FillProperty, color);
+            bool probing = s == null && (_afterProbeRunning || _dashboardChecking);
+            if (probing) color = "Accent";
+            Ui.SwapText(row.Status, probing ? "Проверяю…" : s == null ? "Не проверялся" : ok ? "Доступен" : Cap(s.Access.TrimStart('✓', '✗', ' ')), 4);
+            Ui.FadeBrush(row.Status, TextBlock.ForegroundProperty, color);
+            Ui.FadeBrush(row.Dot, Shape.FillProperty, color);
             row.Note.Text = s?.Egress is { } eg ? "Выход: " + GeoLocation.CountryName(eg.Country) : s?.Note != null ? "Подробности в подсказке" : "";
             row.Status.ToolTip = s?.Note;
         }
@@ -431,12 +485,15 @@ public partial class MainWindow
             var tool = getTool();
             bool running = tool.IsRunning();
             bool foreign = tool is TgProxyTool tg && tg.ForeignCopyRunning() || tool is ZapretTool && running && !tool.State.Enabled;
-            status.Text = foreign ? "Запущен отдельно" : running ? "Работает" : tool.IsInstalled ? "Выключен" : "Не установлен";
-            var color = running ? "Ok" : "Muted";
-            status.SetResourceReference(TextBlock.ForegroundProperty, color);
-            dot.SetResourceReference(Shape.FillProperty, color);
-            toggle.IsChecked = running;
-            toggle.IsEnabled = !_dashboardToolBusy && !foreign;
+            bool pending = _dashboardToolTarget is { } tt && tt.Tool == tool;
+            bool want = pending ? _dashboardToolTarget!.Value.On : running;
+            Ui.SwapText(status, pending ? (want ? "Включаю…" : "Выключаю…") : foreign ? "Запущен отдельно" : running ? "Работает" : tool.IsInstalled ? "Выключен" : "Не установлен", 4);
+            var color = pending ? "Accent" : running ? "Ok" : "Muted";
+            Ui.FadeBrush(status, TextBlock.ForegroundProperty, color);
+            Ui.FadeBrush(dot, Shape.FillProperty, color);
+            toggle.IsChecked = want;
+            toggle.IsEnabled = !foreign;
+            toggle.IsHitTestVisible = !_dashboardToolBusy && _dashboardToolTarget == null;
             toggle.ToolTip = foreign ? "Запущен другой программой: управляйте им там" : null;
         }
         _dashboardSyncing = false;
@@ -446,6 +503,42 @@ public partial class MainWindow
         _dashboardMessage.Text = _dashboardMessageText ?? "";
         _dashboardMessage.Visibility = string.IsNullOrEmpty(_dashboardMessageText) ? Visibility.Collapsed : Visibility.Visible;
         _dashboardMessage.SetResourceReference(TextBlock.ForegroundProperty, _dashboardMessageError ? "Bad" : "Muted");
+    }
+
+    private void DashboardHeroGlow(double to)
+    {
+        if (Math.Abs(_dashboardHeroGlow.Opacity - to) < .01 && !_dashboardHeroGlow.HasAnimatedProperties) return;
+        if (_dashboardHeroGlow.Tag is double d && d == to) return;
+        _dashboardHeroGlow.Tag = to;
+        _dashboardHeroGlow.BeginAnimation(OpacityProperty, new DoubleAnimation(to, Ui.Motion(600)) { EasingFunction = new QuadraticEase() });
+    }
+
+    /// <summary>Кольцо вокруг значка крутится, пока защита включается или выключается, потом плавно гаснет.</summary>
+    private void DashboardSpinner(bool on)
+    {
+        if (on == _dashboardSpinning) return;
+        _dashboardSpinning = on;
+        if (on)
+        {
+            if (Ui.Animate) _dashboardSpin.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(950)) { RepeatBehavior = RepeatBehavior.Forever });
+            _dashboardSpinner.BeginAnimation(OpacityProperty, new DoubleAnimation(1, Ui.Motion(200)));
+        }
+        else
+        {
+            var fade = new DoubleAnimation(0, Ui.Motion(350));
+            fade.Completed += (_, _) => { if (!_dashboardSpinning) _dashboardSpin.BeginAnimation(RotateTransform.AngleProperty, null); };
+            _dashboardSpinner.BeginAnimation(OpacityProperty, fade);
+        }
+    }
+
+    /// <summary>Защита включилась: от значка расходится мягкая волна.</summary>
+    private void DashboardRipple()
+    {
+        if (!Ui.Animate) return;
+        var grow = new DoubleAnimation(1, 2.1, TimeSpan.FromMilliseconds(850)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        _dashboardRippleScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        _dashboardRippleScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _dashboardRipple.BeginAnimation(OpacityProperty, new DoubleAnimation(.45, 0, TimeSpan.FromMilliseconds(850)) { EasingFunction = new QuadraticEase() });
     }
 
     private static string Cap(string t) => t.Length == 0 ? t : char.ToUpper(t[0]) + t[1..];

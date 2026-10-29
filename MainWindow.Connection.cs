@@ -122,22 +122,27 @@ public partial class MainWindow
             }
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
+            // Свежая проверка без подключения уже есть (фон, трей, проверка после отключения): ее и берем, новая
+            // заняла бы несколько секунд до смены DNS
+            var fresh = prevActive != null ? null : new[] { _after, _traySnap, _before }
+                .Where(x => x != null && x.Taken > _connChangedAt && DateTime.Now - x.Taken < FreshSnapshotFor).OrderByDescending(x => x!.Taken).FirstOrDefault();
             ProgressText.Text = "Запоминаю состояние до подключения…";
             _after = null;
-            _before = await ConnectionProbe.TakeAsync(_settings);
+            _before = fresh ?? await ConnectionProbe.TakeAsync(_settings);
             ShowCompare();
 
             // 2. Смена DNS (UAC).
             ProgressText.Text = "Меняю DNS…";
             var backup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers.Where(Usable), s, SafetyFit) : null;
             await DnsSwitcher.ApplyAsync(s, _settings, Log, backup);
+            ConnectionChanged();
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
             _uacDeclined = false;
             if (!auto) _monitor.ForgetRestores();
 
             // 3. Проверка, что интернет после смены жив. Если нет — автоматический откат.
             ProgressText.Text = "Проверяю интернет…";
-            await Task.Delay(800);
+            await Task.Delay(300);
             if (!await DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)))
             {
                 // Переключение вручную с рабочего сервера: возвращаем прежний сервер, а не исходные DNS. Раньше
@@ -165,13 +170,9 @@ public partial class MainWindow
             }
             else
             {
-                // Снимок «после» — по нему видно, действительно ли трафик ИИ пошел через Smart DNS.
-                ProgressText.Text = "Проверяю результат подключения…";
-                _after = await ConnectionProbe.TakeAsync(_settings, leakTest: true);
-                ShowCompare();
-                SetTraySnapshot(_after);
-                LogSnapshot("После подключения", _after);
-                _ = CheckEgressReputationAsync(_after);
+                // Снимок «после» (пошел ли трафик ИИ через Smart DNS) идет в фоне: интернет уже работает, и ждать
+                // его, держа переключатель занятым, незачем. Главная пока показывает «Проверяю…»
+                _ = AfterChangeProbeAsync("После подключения", connected: true);
                 ShowToast($"Подключено · {s.DisplayName}\n{RestartHint}");
                 Log(RestartHint);
                 connected = true;
@@ -272,6 +273,7 @@ public partial class MainWindow
             _before = _after ?? _traySnap;
             _after = null;
             await DnsSwitcher.RestoreAsync(Log);
+            ConnectionChanged();
             restored = true;
             _disconnectFailed = false;
             Log($"Отключено ({reason})");
@@ -287,15 +289,7 @@ public partial class MainWindow
             if (probe)
             {
                 _ = DnsSwitcher.ReportStateAsync(Log); // что осталось в системе: в журнал, уведомление его не ждет
-                await Task.Delay(500);
-                try
-                {
-                    using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-                    _after = await ConnectionProbe.TakeAsync(_settings, limit.Token, leakTest: true);
-                    ShowCompare(disconnected: true);
-                    LogSnapshot("После отключения", _after);
-                }
-                catch (OperationCanceledException) { Log("Проверка после отключения не уложилась в 20 секунд"); }
+                _ = AfterChangeProbeAsync("После отключения", connected: false); // DNS уже вернулись, проверка не держит кнопку
             }
         }
         catch (Exception ex)
@@ -314,6 +308,47 @@ public partial class MainWindow
             await RefreshConnectionAsync();
         }
         return restored;
+    }
+
+    /// <summary>Сколько проверка без подключения годится как снимок «до» нового подключения.</summary>
+    internal static readonly TimeSpan FreshSnapshotFor = TimeSpan.FromMinutes(20);
+    /// <summary>Когда менялось подключение: снимки старше не описывают текущее состояние сети.</summary>
+    private DateTime _connChangedAt = DateTime.MinValue;
+    /// <summary>Номер смены подключения: фоновая проверка устаревшего состояния свой итог не записывает.</summary>
+    private int _connGeneration;
+    /// <summary>Идет фоновая проверка после подключения или отключения.</summary>
+    private int _afterProbes;
+    private bool _afterProbeRunning => _afterProbes > 0;
+
+    private void ConnectionChanged() { _connChangedAt = DateTime.Now; _connGeneration++; }
+
+    /// <summary>
+    /// Проверка после смены подключения в фоне: снимок «после», сравнение, журнал, репутация адреса выхода.
+    /// Если за это время подключение снова сменилось, итог не записывается.
+    /// </summary>
+    private async Task AfterChangeProbeAsync(string title, bool connected)
+    {
+        int generation = _connGeneration;
+        _afterProbes++;
+        RefreshDashboard();
+        try
+        {
+            if (!connected) await Task.Delay(500); // Windows успевает применить возвращенные DNS
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(connected ? 45 : 20));
+            var snap = await ConnectionProbe.TakeAsync(_settings, limit.Token, leakTest: true);
+            if (generation != _connGeneration) return;
+            _after = snap;
+            ShowCompare(disconnected: !connected);
+            if (connected) { SetTraySnapshot(snap); _ = CheckEgressReputationAsync(snap); }
+            LogSnapshot(title, snap);
+        }
+        catch (OperationCanceledException) { Log($"{title}: проверка не уложилась во время"); }
+        catch (Exception ex) { Log($"{title}: проверка не удалась: {ex.Message}"); }
+        finally
+        {
+            _afterProbes--;
+            RefreshDashboard();
+        }
     }
 
     /// <summary>Обновляет плашку и кнопки по фактическому состоянию (файл подключения + системный DNS).</summary>

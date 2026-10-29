@@ -151,6 +151,69 @@ internal static class Ui
     public static Duration Motion(int ms) => SystemParameters.ClientAreaAnimation ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
     public static bool Animate => SystemParameters.ClientAreaAnimation;
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, Dictionary<DependencyProperty, (SolidColorBrush Brush, Color Target)>> Fades = new();
+
+    /// <summary>
+    /// Цвет из палитры с плавным переходом: вместо мгновенной замены кисти цвет перетекает за ms. Вызывать можно часто
+    /// (таймер): тот же цвет не перезапускает анимацию, смена темы плавно перекрашивает.
+    /// </summary>
+    public static void FadeBrush(DependencyObject d, DependencyProperty p, string key, int ms = 320)
+    {
+        var res = (d as FrameworkElement)?.TryFindResource(key) ?? Application.Current?.TryFindResource(key);
+        if (res is not SolidColorBrush want) { if (d is FrameworkElement f) f.SetResourceReference(p, key); return; }
+        var target = want.Color;
+        if (want.Opacity < 1) target.A = (byte)(target.A * want.Opacity);
+        var map = Fades.GetOrCreateValue(d);
+        var anim = (Color to) => new System.Windows.Media.Animation.ColorAnimation(to, Motion(ms)) { EasingFunction = new System.Windows.Media.Animation.QuadraticEase() };
+        if (map.TryGetValue(p, out var e) && ReferenceEquals(d.GetValue(p), e.Brush))
+        {
+            if (e.Target == target) return;
+            e.Brush.BeginAnimation(SolidColorBrush.ColorProperty, anim(target));
+            map[p] = (e.Brush, target);
+            return;
+        }
+        var start = d.GetValue(p) is SolidColorBrush old ? old.Color : Color.FromArgb(0, target.R, target.G, target.B);
+        if (d.GetValue(p) is SolidColorBrush o2 && o2.Opacity < 1) start.A = (byte)(start.A * o2.Opacity);
+        var brush = new SolidColorBrush(start);
+        d.SetValue(p, brush);
+        if (start != target) brush.BeginAnimation(SolidColorBrush.ColorProperty, anim(target));
+        map[p] = (brush, target);
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<TextBlock, string> SwapPending = new();
+
+    /// <summary>Смена текста с переходом: старый уходит вверх и гаснет, новый приходит снизу.</summary>
+    public static void SwapText(TextBlock t, string text, double shift = 6)
+    {
+        if (SwapPending.TryGetValue(t, out _)) { SwapPending.AddOrUpdate(t, text); return; } // переход идет: подставится последний текст
+        if (t.Text == text) return;
+        if (!Animate || !t.IsLoaded || !t.IsVisible || string.IsNullOrEmpty(t.Text)) { t.Text = text; return; }
+        var move = t.RenderTransform as TranslateTransform ?? new TranslateTransform();
+        t.RenderTransform = move;
+        SwapPending.AddOrUpdate(t, text);
+        var ease = new System.Windows.Media.Animation.QuadraticEase();
+        var outFade = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(130)) { EasingFunction = ease };
+        outFade.Completed += (_, _) =>
+        {
+            if (SwapPending.TryGetValue(t, out var last)) t.Text = last;
+            SwapPending.Remove(t);
+            t.BeginAnimation(UIElement.OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+            move.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(shift, 0, TimeSpan.FromMilliseconds(260)) { EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } });
+        };
+        t.BeginAnimation(UIElement.OpacityProperty, outFade);
+        move.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(0, -shift, TimeSpan.FromMilliseconds(130)) { EasingFunction = ease });
+    }
+
+    /// <summary>Короткий «щелчок» масштабом: элемент сжимается и пружинисто возвращается (смена состояния).</summary>
+    public static void Pop(FrameworkElement e, double from = .82)
+    {
+        if (!Animate) return;
+        var scale = e.RenderTransform as ScaleTransform ?? new ScaleTransform();
+        e.RenderTransform = scale; e.RenderTransformOrigin = new Point(.5, .5);
+        var a = new System.Windows.Media.Animation.DoubleAnimation(from, 1, TimeSpan.FromMilliseconds(420)) { EasingFunction = new System.Windows.Media.Animation.BackEase { Amplitude = .45, EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut } };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, a); scale.BeginAnimation(ScaleTransform.ScaleYProperty, a);
+    }
+
     /// <summary>Тонкая линия между строками внутри карточки.</summary>
     public static Border Separator() => new() { Height = 1, Background = B("Border"), Margin = new Thickness(0, 10, 0, 10) };
 
