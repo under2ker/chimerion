@@ -283,9 +283,6 @@ public partial class MainWindow
         // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
         TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
 
-        // Версия внизу на узком окне теснит ссылки; она остается в заголовке окна
-        HeaderVersion.Visibility = full && w < 1200 ? Visibility.Collapsed : Visibility.Visible;
-
         if (!full) return; // компактный вид шапку раскладывает сам
 
         // Действия подключения идут отдельной строкой слева: статус и статистика не сжимаются кнопками.
@@ -374,7 +371,7 @@ public partial class MainWindow
         UpdateTopList();
         UpdateStats();
         if (_updateResultTimer.IsEnabled) ResetUpdateResult(null, EventArgs.Empty);
-        HeaderVersion.Text = $"версия {UpdateChecker.CurrentVersion}";
+        RefreshUpdateCards();
     }
 
     /// <summary>Сменились цвета: части, которые окно рисует кодом, перерисовываются с новыми кистями.</summary>

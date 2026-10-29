@@ -121,6 +121,8 @@
                     <TextBlock x:Name="PanelCollapseText" Text="Панель управления" FontSize="13" FontWeight="SemiBold"
                                VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
+                <!-- Карточка обновления: единственное место проверки новой версии, наполняется в коде (MainWindow.Update.cs) -->
+                <ContentControl x:Name="PanelUpdateHost" DockPanel.Dock="Bottom" Focusable="False"/>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="PanelNavItems">
                 <Button Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
@@ -710,17 +712,6 @@
 
         <!-- ================= НИЗ ================= -->
         <StackPanel x:Name="BottomPanel" Grid.Row="4" Margin="0,12,0,0">
-            <DockPanel LastChildFill="False">
-                <!-- Версия и проверка обновления: справа внизу, на виду и не теснят шапку. В компактном виде версия в заголовке окна -->
-                <StackPanel x:Name="UpdateGroup" DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Значок итога проверки обновления (галочка или предупреждение), виден вместе с итогом -->
-                    <controls:Icon x:Name="UpdateResultIcon" Kind="circle-check" Size="15" StrokeWidth="2.2" Margin="0,0,6,0" Visibility="Collapsed"/>
-                    <TextBlock x:Name="HeaderVersion" Style="{StaticResource Label}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <Button x:Name="CheckUpdateButton" Content="Проверить обновление" Click="CheckUpdate_Click" Style="{StaticResource Strong}"
-                            Padding="14,6" MinHeight="32" Margin="0" ToolTip="Проверить, есть ли новая версия CHIMERION на GitHub"/>
-                </StackPanel>
-            </DockPanel>
-
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
             <StackPanel x:Name="AddPanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed" KeyDown="AddPanel_KeyDown">
                 <TextBox x:Name="AddName" Width="170" Tag="Название"/>
@@ -864,7 +855,7 @@
             </Grid>
         </Border>
 
-        <!-- Над нижней строкой (Grid.RowSpan="4"), а не поверх нее: кнопка «Проверить обновление» и ссылки не закрываются -->
+        <!-- Над нижней строкой (Grid.RowSpan="4"), а не поверх нее: ссылки внизу не закрываются -->
         <Border x:Name="Toast" Grid.RowSpan="4" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="0,0,16,14" Padding="16,10" CornerRadius="10" Background="{DynamicResource Surface2}"
                 BorderBrush="{DynamicResource Border}" BorderThickness="1" Opacity="0" IsHitTestVisible="False">

@@ -31,6 +31,7 @@ public partial class MainWindow
                 if (item is TextBlock text) { text.Visibility = Visibility.Visible; text.Opacity = expanded ? 1 : 0; }
             }
         }
+        SetUpdateCardsExpanded(expanded);
         if (IsLoaded) ApplyResponsive();
     }
 }
