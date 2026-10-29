@@ -164,9 +164,9 @@ public partial class MainWindow
         _dashboardSiteYoutube = Ui.Hint("", 1); _dashboardSiteDiscord = Ui.Hint("", 1); _dashboardSiteTelegram = Ui.Hint("", 1);
         foreach (var (name, kind, sub, tool, site) in new (string, string, string, Func<Tool>, TextBlock)[]
                  {
-                     ("YouTube", "zap", "Обход замедления через zapret", () => _tools.OfType<ZapretTool>().First(), _dashboardSiteYoutube),
-                     ("Discord", "zap", "Обход замедления через zapret", () => _tools.OfType<ZapretTool>().First(), _dashboardSiteDiscord),
-                     ("Telegram", "send", "Ускорение через TG WS Proxy", () => _tools.OfType<TgProxyTool>().First(), _dashboardSiteTelegram),
+                     ("YouTube", "LogoYouTube", "Обход замедления через zapret", () => _tools.OfType<ZapretTool>().First(), _dashboardSiteYoutube),
+                     ("Discord", "LogoDiscord", "Обход замедления через zapret", () => _tools.OfType<ZapretTool>().First(), _dashboardSiteDiscord),
+                     ("Telegram", "LogoTelegram", "Ускорение через TG WS Proxy", () => _tools.OfType<TgProxyTool>().First(), _dashboardSiteTelegram),
                  })
         {
             var dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -184,7 +184,7 @@ public partial class MainWindow
                 try { await DashboardToolAsync(t); }
                 finally { _dashboardToolTarget = null; RefreshDashboard(); }
             };
-            var symbol = DashboardIcon(kind, "Surface2", "Accent", 38);
+            var symbol = DashboardLogo(kind); // фирменный логотип, как у нейросетей
             extra.Children.Add(DashboardRow(symbol, name, sub, dot, status, site, toggle));
             _dashboardToolRows.Add((toggle, status, dot, tool));
         }
@@ -360,7 +360,7 @@ public partial class MainWindow
     {
         var button = Ui.Action(title, "Ghost", click);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(new Controls.Icon { Kind = icon, Size = 17, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(MenuGlyph(icon, 17).With(e => e.VerticalAlignment = VerticalAlignment.Center));
         row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
         button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
@@ -422,12 +422,6 @@ public partial class MainWindow
         card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card);
     }
 
-    private static Border DashboardIcon(string kind, string background, string foreground, double size)
-    {
-        var icon = new Controls.Icon { Kind = kind, Size = size * .48, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        icon.SetResourceReference(Controls.Icon.ForegroundProperty, foreground);
-        return new Border { Width = size, Height = size, CornerRadius = new CornerRadius(10), Child = icon }.Ref(Border.BackgroundProperty, background);
-    }
 
     private static string Uptime(TimeSpan t) =>
         t.TotalDays >= 1 ? $"{(int)t.TotalDays} д {t.Hours} ч" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} ч {t.Minutes} мин" : $"{Math.Max(1, t.Minutes)} мин";
@@ -702,7 +696,7 @@ public partial class MainWindow
         // Состояние программы обхода показано строкой выше, здесь только проверка самого сайта и когда она была
         if (_dashboardSiteResults.TryGetValue(host, out var result)) return $"Проверка сайта: {DashboardSiteVerdict(result.Verdict)} {Ago(result.Time)}";
         if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Проверка сайта: {DashboardSiteVerdict(site.State)} {Ago(time)}";
-        return "Сайт не проверялся: нажмите «Проверить сайты»";
+        return "Сайт не проверялся";
     }
     private static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
     {
