@@ -15,11 +15,11 @@ public partial class MainWindow
     private readonly DispatcherTimer _dashboardTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardDns = null!, _dashboardNetwork = null!;
     private TextBlock _dashboardChecked = null!, _dashboardZapret = null!, _dashboardTelegram = null!, _dashboardMessage = null!;
-    private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardDiagnostics = null!;
+    private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardSiteTelegram = null!, _dashboardDiagnostics = null!, _dashboardEvents = null!;
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
     private readonly Dictionary<string, (TextBlock Status, Ellipse Dot)> _dashboardServices = new();
     private Button _dashboardConnect = null!, _dashboardZapretButton = null!, _dashboardTelegramButton = null!, _dashboardProbe = null!, _dashboardSiteProbe = null!;
-    private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking;
+    private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking, _dashboardUpdateChecking;
     private string? _dashboardMessageText;
     private bool _dashboardMessageError;
     private Guid? _dashboardPreviousServer;
@@ -71,7 +71,7 @@ public partial class MainWindow
         _dashboardChecked = Ui.Hint("Еще не проверялось", 3); aiTitle.Children.Add(_dashboardChecked);
         aiHeader.Children.Add(aiTitle); page.Children.Add(aiHeader);
         var serviceGrid = new Grid();
-        var names = new[] { ("ChatGPT", "openai"), ("Claude", "claude"), ("Gemini", "gemini") };
+        var names = new[] { ("ChatGPT", "openai", "https://chatgpt.com/"), ("Claude", "claude", "https://claude.ai/"), ("Gemini", "gemini", "https://gemini.google.com/") };
         for (int i = 0; i < names.Length; i++)
         {
             serviceGrid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -80,10 +80,13 @@ public partial class MainWindow
             var icon = DashboardIcon(names[i].Item2, "Surface2", "Text", 38); icon.Margin = new Thickness(0, 0, 10, 0);
             title.Children.Add(icon); title.Children.Add(new TextBlock { Text = names[i].Item1, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             cell.Children.Add(title);
-            var statusLine = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(1, 16, 0, 2) };
+            var statusLine = new DockPanel { Margin = new Thickness(1, 16, 0, 2) };
             var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Shape.FillProperty, "Muted");
             var text = new TextBlock { Text = "Еще не проверялось", FontSize = 12, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Muted");
-            statusLine.Children.Add(dot); statusLine.Children.Add(text); cell.Children.Add(statusLine);
+            DockPanel.SetDock(dot, Dock.Left); statusLine.Children.Add(dot); statusLine.Children.Add(text); cell.Children.Add(statusLine);
+            string url = names[i].Item3;
+            var open = Ui.Action("Открыть", "Ghost", () => AutoStart.OpenUrl(url));
+            open.HorizontalAlignment = HorizontalAlignment.Left; open.Margin = new Thickness(-10, 9, 0, -4); cell.Children.Add(open);
             _dashboardServices[names[i].Item1] = (text, dot);
             var card = Ui.Card(cell, bottom: 0); card.Padding = new Thickness(16); card.Margin = new Thickness(i == 0 ? 0 : 5, 0, i == 2 ? 0 : 5, 0);
             Grid.SetColumn(card, i); serviceGrid.Children.Add(card);
@@ -102,8 +105,8 @@ public partial class MainWindow
         var zapret = DashboardFeature("YouTube и Discord", "zap", _dashboardZapret, _dashboardZapretButton, _dashboardSiteYoutube, _dashboardSiteDiscord);
         zapret.Margin = new Thickness(0, 0, 5, 0); features.Children.Add(zapret);
         _dashboardTelegramButton = Ui.Action("Включить", "Strong", () => _ = DashboardToolAsync(_tools.OfType<TgProxyTool>().First()));
-        _dashboardTelegram = Ui.Hint("", 5);
-        var telegram = DashboardFeature("Telegram", "send", _dashboardTelegram, _dashboardTelegramButton, Ui.Hint("Прокси для Telegram Desktop", 8));
+        _dashboardTelegram = Ui.Hint("", 5); _dashboardSiteTelegram = Ui.Hint("", 8);
+        var telegram = DashboardFeature("Telegram", "send", _dashboardTelegram, _dashboardTelegramButton, _dashboardSiteTelegram, Ui.Hint("Проверяется сайт t.me, не соединение приложения", 3));
         telegram.Margin = new Thickness(5, 0, 0, 0); Grid.SetColumn(telegram, 1); features.Children.Add(telegram);
         page.Children.Add(features);
 
@@ -115,8 +118,19 @@ public partial class MainWindow
         diagnosticText.Children.Add(new TextBlock { Text = "Состояние соединения", FontSize = 15, FontWeight = FontWeights.SemiBold });
         _dashboardDiagnostics = Ui.Hint("", 5); diagnosticText.Children.Add(_dashboardDiagnostics); diagnostics.Children.Add(diagnosticText);
         page.Children.Add(Ui.Card(diagnostics, bottom: 0));
+        page.Children.Add(Ui.Section("Последние события"));
+        var events = new DockPanel();
+        var eventsButton = Ui.Action("Открыть журнал", "Ghost", () =>
+        {
+            ShowControlPanel();
+            LogToggle.IsChecked = true;
+        });
+        eventsButton.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(eventsButton, Dock.Right); events.Children.Add(eventsButton);
+        _dashboardEvents = Ui.Hint("Событий пока нет", 0); _dashboardEvents.LineHeight = 21; events.Children.Add(_dashboardEvents);
+        page.Children.Add(Ui.Card(events, bottom: 0));
         var footer = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
         footer.Children.Add(Ui.Action("Настройки", "Ghost", () => Settings_Click(this, new RoutedEventArgs())));
+        footer.Children.Add(Ui.Action("Проверить обновление", "Ghost", () => _ = DashboardUpdateAsync()));
         footer.Children.Add(Ui.Action("Настроить обход", "Ghost", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         page.Children.Add(footer);
         DashboardHost.Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
@@ -182,7 +196,7 @@ public partial class MainWindow
             entry.Status.SetResourceReference(TextBlock.ForegroundProperty, color); entry.Dot.SetResourceReference(Shape.FillProperty, color);
             entry.Status.ToolTip = service?.Note;
         }
-        _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Последняя проверка: {snap.Taken:dd.MM HH:mm}";
+        _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Последняя проверка: {snap.Taken:dd.MM HH:mm}" + (DateTime.Now - snap.Taken > TimeSpan.FromMinutes(30) ? " · данные могут устареть" : "");
         _dashboardProbe.IsEnabled = !_dashboardChecking && !_busyConn;
         _dashboardProbe.Content = _dashboardChecking ? "Проверяю…" : "Проверить";
         _dashboardSiteProbe.IsEnabled = !_dashboardSitesChecking;
@@ -191,7 +205,12 @@ public partial class MainWindow
         RefreshTool(z, _dashboardZapret, _dashboardZapretButton); RefreshTool(tg, _dashboardTelegram, _dashboardTelegramButton);
         _dashboardSiteYoutube.Text = DashboardSiteStatus("YouTube", "youtube.com");
         _dashboardSiteDiscord.Text = DashboardSiteStatus("Discord", "discord.com");
-        _dashboardDiagnostics.Text = _disconnectFailed ? "Не удалось восстановить DNS. Откройте диагностику." : snap == null ? "Проверьте подключение, чтобы увидеть состояние сервисов." : "Результаты доступны в подробном отчете.";
+        _dashboardSiteTelegram.Text = DashboardSiteStatus("t.me", "t.me");
+        var checkedCount = snap?.Services.Count(x => x.Name is "ChatGPT" or "Claude" or "Gemini") ?? 0;
+        var openCount = snap?.Services.Count(x => (x.Name is "ChatGPT" or "Claude" or "Gemini") && x.Access.StartsWith("✓")) ?? 0;
+        _dashboardDiagnostics.Text = _disconnectFailed ? "Не удалось восстановить DNS. Откройте диагностику." : snap == null || checkedCount == 0 ? "Проверьте подключение, чтобы увидеть состояние сервисов." : $"Доступно сервисов: {openCount} из {checkedCount}. Подробности в диагностике.";
+        var recent = _log.TakeLast(3).Reverse().ToArray();
+        _dashboardEvents.Text = recent.Length == 0 ? "Событий пока нет" : string.Join("\n", recent.Select(e => $"{e.Time:HH:mm}  ·  {PrivacyGuard.Mask(e.Text)}"));
         _dashboardMessage.Text = _dashboardMessageText ?? "";
         _dashboardMessage.Visibility = string.IsNullOrEmpty(_dashboardMessageText) ? Visibility.Collapsed : Visibility.Visible;
         _dashboardMessage.SetResourceReference(TextBlock.ForegroundProperty, _dashboardMessageError ? "Bad" : "Muted");
@@ -254,16 +273,34 @@ public partial class MainWindow
     private async Task DashboardSitesAsync()
     {
         if (_dashboardSitesChecking) return;
-        _dashboardSitesChecking = true; DashboardMessage("Проверяю YouTube и Discord…");
+        _dashboardSitesChecking = true; DashboardMessage("Проверяю YouTube, Discord и сайт Telegram…");
         try
         {
-            var hosts = new[] { "youtube.com", "discord.com" };
+            var hosts = new[] { "youtube.com", "discord.com", "t.me" };
             var results = await Task.WhenAll(hosts.Select(h => SiteWatch.CheckAsync(h, false, CancellationToken.None)));
             for (int i = 0; i < hosts.Length; i++) _dashboardSiteResults[hosts[i]] = (results[i].Item1, DateTime.Now);
             DashboardMessage("Проверка сайтов завершена.");
         }
         catch (Exception ex) { Log("Проверка сайтов: " + ex.Message); DashboardMessage("Не удалось проверить сайты: " + ex.Message, true); }
         finally { _dashboardSitesChecking = false; RefreshDashboard(); }
+    }
+    private async Task DashboardUpdateAsync()
+    {
+        if (_dashboardUpdateChecking) return;
+        if (_pendingUpdate is { } pending) { OpenUpdateWindow(pending); return; }
+        _dashboardUpdateChecking = true; DashboardMessage("Проверяю обновление…");
+        try
+        {
+            var result = await UpdateChecker.CheckDetailedAsync();
+            if (result.Status == UpdateStatus.Available && result.Info is { } info)
+            {
+                ShowUpdateAvailable(info); DashboardMessage("Найдена новая версия."); OpenUpdateWindow(info);
+            }
+            else if (result.Status == UpdateStatus.UpToDate) DashboardMessage($"У вас последняя версия {UpdateChecker.CurrentVersion}");
+            else DashboardMessage("Не удалось проверить обновление: " + result.Reason, true);
+        }
+        catch (Exception ex) { Log("Проверка обновления: " + ex.Message); DashboardMessage("Не удалось проверить обновление: " + ex.Message, true); }
+        finally { _dashboardUpdateChecking = false; RefreshDashboard(); }
     }
     private async Task DashboardToolAsync(Tool tool)
     {
