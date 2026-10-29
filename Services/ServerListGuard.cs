@@ -25,6 +25,12 @@ public static class ServerListGuard
         "controld.com", "opennic.org", "dns.sb", "dnslist.net", "dnsserverlist.org", "dnscheck.tools",
     };
 
+    /// <summary>
+    /// Разных серверов на странице больше предела. Считаются серверы, а не строки: файл hosts GeoHideDNS дает тысячи
+    /// строк «домен → адрес», но адресов в нем около двадцати, и это нормальная подборка Smart DNS.
+    /// </summary>
+    public static int Distinct(IEnumerable<DnsServer> items) => items.Select(i => i.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
     public static bool IsMassHost(string? host) =>
         !string.IsNullOrEmpty(host) && MassHosts.Any(h => host.Equals(h, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
 

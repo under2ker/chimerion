@@ -253,9 +253,10 @@ public static partial class SourceParser
 
                     // Сотни адресов на одной странице: общий каталог публичных DNS (public-dns.info дал 62 тысячи), а не подборка
                     // Smart DNS. Страницу целиком пропускаем и по ее ссылкам не идем
-                    if (items.Count > ServerListGuard.MaxPerPage || ServerListGuard.IsMassHost(job.Url.Host))
+                    int distinct = ServerListGuard.Distinct(items);
+                    if (distinct > ServerListGuard.MaxPerPage || ServerListGuard.IsMassHost(job.Url.Host))
                     {
-                        if (items.Count > 0) log($"Пропущено {items.Count} адресов: {pageUrl} похож на общий список DNS, а не на подборку Smart DNS");
+                        if (distinct > 0) log($"Пропущено {distinct} адресов: {pageUrl} похож на общий список DNS, а не на подборку Smart DNS");
                         return;
                     }
                     int added = 0;

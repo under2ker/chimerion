@@ -77,7 +77,7 @@ public class ServerChecker
     /// </summary>
     public async Task CheckAsync(DnsServer s, CancellationToken ct)
     {
-        using var operation = SupportTrace.Begin($"Проверка сервера; номер={s.Id:N}; DoH={!string.IsNullOrWhiteSpace(s.DohUrl)}; глубокая={_opt.Deep}", ct);
+        using var operation = SupportTrace.Begin($"Проверка сервера; номер={s.Id:N}; DoH={!string.IsNullOrWhiteSpace(s.DohUrl)}; глубокая={_opt.Deep}", ct, SupportTrace.Level.Brief);
         try
         {
             await CheckCoreAsync(s, ct).ConfigureAwait(false);
@@ -354,7 +354,7 @@ public class ServerChecker
 
     public virtual Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct) =>
         SupportTrace.RunAsync($"DNS через сервер; номер={s.Id:N}; DoH={!string.IsNullOrWhiteSpace(s.DohUrl)}",
-            () => ResolveViaCoreAsync(s, host, ct), ct);
+            () => ResolveViaCoreAsync(s, host, ct), ct, SupportTrace.Level.OnProblem);
 
     private async Task<(List<IPAddress> Ips, long Ms)> ResolveViaCoreAsync(DnsServer s, string host, CancellationToken ct)
     {
@@ -416,7 +416,7 @@ public class ServerChecker
     /// <summary>HTTPS-запрос к сервису через конкретный IP с правильным SNI и проверкой сертификата.</summary>
     internal virtual async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct, bool isWeb = false)
     {
-        using var operation = SupportTrace.Begin($"HTTPS через сервер; сервис={SupportTrace.Service(t.Name)}; сайт={isWeb}; IPv6={ip.AddressFamily == AddressFamily.InterNetworkV6}", ct);
+        using var operation = SupportTrace.Begin($"HTTPS через сервер; сервис={SupportTrace.Service(t.Name)}; сайт={isWeb}; IPv6={ip.AddressFamily == AddressFamily.InterNetworkV6}", ct, SupportTrace.Level.OnProblem);
         using var handler = new SocketsHttpHandler
         {
             UseProxy = false,
@@ -442,7 +442,7 @@ public class ServerChecker
         try
         {
             using var resp = await SupportTrace.GetAsync(http, $"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct,
-                "HTTPS через проверяемый сервер").ConfigureAwait(false);
+                "HTTPS через проверяемый сервер", SupportTrace.Level.OnProblem).ConfigureAwait(false);
             // Читаем не больше 64 КБ: для поиска маркера блокировки этого достаточно, а чужой прокси не забьет память.
             var buf = new byte[64 * 1024];
             int len = 0, n;

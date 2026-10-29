@@ -213,7 +213,7 @@ public partial class MainWindow
     {
         var text = string.Join(Environment.NewLine, ServerGrid.SelectedItems.Cast<DnsServer>()
             .Select(s => string.Join(" ", new[] { s.Primary, s.Secondary, s.DohUrl }.Where(x => !string.IsNullOrWhiteSpace(x)))));
-        if (text.Length > 0) { try { Clipboard.SetText(text); Log("Адрес скопирован"); } catch (Exception) { } }
+        if (text.Length > 0) { if (Ui.CopyText(text)) Log("Адрес скопирован"); else ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn"); }
     }
 
 

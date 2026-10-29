@@ -98,12 +98,8 @@ public partial class MainWindow
     {
         var text = LogWindow.Format(items, withDate);
         if (text.Length == 0) return;
-        try
-        {
-            Clipboard.SetText(text);
-            ShowToast(done);
-        }
-        catch (Exception) { ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn"); }
+        if (Ui.CopyText(text)) ShowToast(done);
+        else ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn");
     }
 
     /// <summary>Весь журнал с диска за 3 дня (все запуски).</summary>
@@ -116,10 +112,16 @@ public partial class MainWindow
     }
 
     /// <summary>Журнал для отчета диагностики: все записи за 3 дня с датой.</summary>
+    /// <summary>Сколько последних строк журнала идет в отчет: отчет копируют и открывают черновиком на GitHub.</summary>
+    internal const int ReportLogLines = 4000;
+
     private IEnumerable<string> LogForReport()
     {
         var all = StoredLog();
         if (all.Count == 0) all = _log.ToList();
-        return all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}");
+        var lines = all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}").ToList();
+        // Полный журнал за 3 дня бывает в несколько мегабайт: в отчет последние строки, весь журнал копируется в окне «Журнал»
+        if (lines.Count <= ReportLogLines) return lines;
+        return lines.Skip(lines.Count - ReportLogLines).Prepend($"(показаны последние {ReportLogLines} строк из {lines.Count}; весь журнал: окно «Журнал», «Скопировать журнал за 3 дня»)");
     }
 }

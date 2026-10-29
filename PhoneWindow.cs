@@ -103,7 +103,7 @@ internal sealed class PhoneWindow
         android.Children.Add(PlatformTitle("Android 9 и новее", "«Частный DNS» для всего телефона"));
         android.Children.Add(Qr(host));
         var hostRow = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
-        var copy = Ui.Action("Скопировать", "Strong", () => { try { Clipboard.SetText(host); } catch (Exception) { } }).With(b => b.Margin = new Thickness(8, 0, 0, 0));
+        var copy = Ui.Action("Скопировать", "Strong", () => Ui.CopyText(host)).With(b => b.Margin = new Thickness(8, 0, 0, 0));
         DockPanel.SetDock(copy, Dock.Right); hostRow.Children.Add(copy);
         hostRow.Children.Add(new TextBox { Text = host, IsReadOnly = true, FontSize = 14 });
         android.Children.Add(hostRow);
