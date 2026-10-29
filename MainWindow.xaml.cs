@@ -150,6 +150,13 @@ public partial class MainWindow : Window
         _initStarted = true;
         {
             Log($"Данные: {Storage.Dir}. Серверов в списке: {_servers.Count}");
+            // Список, раздутый общими каталогами DNS (было 100 тысяч с public-dns.info), чистится сразу: рабочие, избранные
+            // и подключенный остаются. Иначе проверка и диагностика шли минутами
+            if (ServerListGuard.Purge(_servers, DnsSwitcher.GetActive()?.ServerId) is > 0 and var purged)
+            {
+                Log($"Убрано серверов из общих каталогов DNS: {purged} (это обычные DNS, не Smart DNS). Осталось {_servers.Count}");
+                SaveServers();
+            }
             ReportRecoveredFiles();
             _ = WarnIfPowerShellRestrictedAsync();
             if (Updater.RolledBackFrom is { } failed)

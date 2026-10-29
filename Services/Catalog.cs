@@ -90,7 +90,7 @@ public static class Catalog
     public static void Merge(AppSettings st)
     {
         var blocked = st.BlockedHosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        st.BlockedHosts.AddRange(NoiseHosts.Where(h => !blocked.Contains(h)));
+        st.BlockedHosts.AddRange(NoiseHosts.Concat(ServerListGuard.MassHosts).Where(h => !blocked.Contains(h)));
         var urls = st.Sources.Select(s => s.Url.TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var s in Sources.Where(s => !urls.Contains(s.Url.TrimEnd('/'))))
             st.Sources.Add(new SourceConfig { Name = s.Name, Url = s.Url, Type = s.Type });
