@@ -185,7 +185,7 @@ public partial class MainWindow
 
         // ----- Журнал: последние строки как в журнале программы -----
         var logBox = new StackPanel();
-        logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", () => { ShowControlPanel(); LogToggle.IsChecked = true; })));
+        logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", OpenLog)));
         _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2) }; logBox.Children.Add(_dashboardEvents);
         var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 12, 14, 12); logCard.Margin = new Thickness(0, 12, 0, 0);
         page.Children.Add(logCard);

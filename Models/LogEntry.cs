@@ -24,6 +24,7 @@ public sealed class LogEntry
     public string Text { get; }
     public LogLevel Level { get; }
     public string TimeText => Time.ToString("HH:mm:ss");
+    public string DateText => Time.ToString("dd.MM HH:mm:ss");
 
     /// <summary>Цвет полоски слева.</summary>
     public Brush Bar => Level switch { LogLevel.Ok => OkB, LogLevel.Warn => WarnB, LogLevel.Error => BadB, _ => AccentB };

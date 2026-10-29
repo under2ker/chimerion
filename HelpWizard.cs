@@ -17,7 +17,8 @@ namespace Dnex;
 internal sealed class HelpWizard
 {
     private static HelpWizard? _open;
-    private readonly Window _w;
+    /// <summary>Содержимое вкладки «Не открывается» окна «Помощь».</summary>
+    public FrameworkElement View { get; }
     private readonly AppSettings _settings;
     private readonly Func<IReadOnlyList<DnsServer>> _servers;
     private readonly Func<string, Task> _fix;
@@ -27,47 +28,69 @@ internal sealed class HelpWizard
     private readonly TextBox _site = new() { Tag = "Или адрес сайта, например figma.com" };
     private bool _busy;
 
-    public static void Show(AppSettings settings, Window? owner, Func<IReadOnlyList<DnsServer>> servers, Func<string, Task> fix, Func<string, string, Task> siteAction)
-    {
-        if (_open != null) { _open._w.Activate(); return; }
-        _open = new HelpWizard(settings, owner, servers, fix, siteAction);
-        _open._w.Show();
-    }
+    /// <summary>Страница для окна «Помощь» (одна на окно).</summary>
+    public static FrameworkElement Create(AppSettings settings, Func<IReadOnlyList<DnsServer>> servers, Func<string, Task> fix, Func<string, string, Task> siteAction) =>
+        (_open = new HelpWizard(settings, servers, fix, siteAction)).View;
 
-    private HelpWizard(AppSettings settings, Window? owner, Func<IReadOnlyList<DnsServer>> servers, Func<string, Task> fix, Func<string, string, Task> siteAction)
+    /// <summary>Окно «Помощь» закрыто: страница больше не нужна.</summary>
+    public static void Forget() => _open = null;
+
+    private HelpWizard(AppSettings settings, Func<IReadOnlyList<DnsServer>> servers, Func<string, Task> fix, Func<string, string, Task> siteAction)
     {
         _settings = settings; _servers = servers; _fix = fix; _siteAction = siteAction;
-        _w = DnexDialog.CreateWindow("Не открывается", Ui.Wide);
-        if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
-        _w.Closed += (_, _) => _open = null;
+        var root = new StackPanel();
 
-        var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Что не открывается?",
-            "Выберите сервис или впишите сайт. Программа проверит по шагам все, что может мешать, и подскажет, что сделать", glyph: "circle-help"));
-        var pick = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        // Шаг 1: что не открывается. Нейросети плитками с логотипами, любой другой сайт полем ниже
+        var ask = new StackPanel();
+        ask.Children.Add(new TextBlock { Text = "Что не открывается?", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        ask.Children.Add(Ui.Hint("Выберите сервис или впишите сайт: программа проверит все по шагам и подскажет, что сделать", 2));
+        var pick = new WrapPanel { Margin = new Thickness(0, 12, 0, 4) };
         foreach (var t in settings.Targets.Where(t => t.Enabled))
         {
             var target = t;
-            pick.Children.Add(Ui.Action(t.Name, "Strong", () => _ = RunServiceAsync(target)).With(b => b.Margin = new Thickness(0, 0, 8, 8)));
+            pick.Children.Add(ServiceTile(t.Name, () => _ = RunServiceAsync(target)));
         }
-        root.Children.Add(pick);
-        var row = new DockPanel();
-        var go = Ui.Action("Проверить сайт", "Ghost", () => _ = RunSiteAsync()).With(b => b.Margin = new Thickness(8, 0, 0, 0));
+        ask.Children.Add(pick);
+        var row = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var go = Ui.Action("Проверить сайт", "Primary", () => _ = RunSiteAsync()).With(b => b.Margin = new Thickness(8, 0, 0, 0));
         DockPanel.SetDock(go, Dock.Right);
         row.Children.Add(go);
         _site.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) _ = RunSiteAsync(); };
         row.Children.Add(_site);
-        root.Children.Add(row);
+        ask.Children.Add(row);
+        root.Children.Add(Ui.Card(ask));
 
-        root.Children.Add(Ui.Section("Что нашлось"));
+        // Шаг 2: что нашлось
         var body = new StackPanel();
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        head.Children.Add(new Controls.Icon { Kind = "stethoscope", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Accent"));
+        head.Children.Add(new TextBlock { Text = "Что нашлось", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        body.Children.Add(head);
         body.Children.Add(_verdict);
         body.Children.Add(_steps);
-        root.Children.Add(Ui.Card(Ui.Scroll(body, 420), bottom: 0));
+        root.Children.Add(Ui.Card(body, bottom: 0));
         _verdict.Text = "Выберите, что не открывается";
-        var close = Ui.Action("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
-        root.Children.Add(Ui.Footer(null, close));
-        _w.Content = Ui.WindowContent(root);
+        View = root;
+    }
+
+    /// <summary>Плитка сервиса: логотип (у ChatGPT, Claude и Gemini) и название.</summary>
+    private static Button ServiceTile(string name, Action click)
+    {
+        var b = Ui.Action(name, "Strong", click);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var logo = name switch { "ChatGPT" => "LogoOpenAI", "Claude" => "LogoClaude", "Gemini" => "LogoGemini", _ => null };
+        if (logo != null)
+        {
+            var img = new System.Windows.Controls.Image { Width = 18, Height = 18, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            img.SetResourceReference(System.Windows.Controls.Image.SourceProperty, logo);
+            row.Children.Add(img);
+        }
+        else row.Children.Add(new Controls.Icon { Kind = "globe", Size = 16, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+        b.Content = row;
+        b.Padding = new Thickness(14, 8, 16, 8);
+        b.Margin = new Thickness(0, 0, 8, 8);
+        return b;
     }
 
     private enum Lvl { Ok, Warn, Bad, Info }
@@ -75,11 +98,12 @@ internal sealed class HelpWizard
     private void Step(Lvl lvl, string title, string detail = "", string? action = null, string? actionText = null)
     {
         var g = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(26) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var color = lvl switch { Lvl.Ok => "Ok", Lvl.Warn => "Warn", Lvl.Bad => "Bad", _ => "Muted" };
-        g.Children.Add(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = Ui.B(color), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0) });
+        var kind = lvl switch { Lvl.Ok => "circle-check", Lvl.Warn => "triangle-alert", Lvl.Bad => "circle-x", _ => "info" };
+        g.Children.Add(new Controls.Icon { Kind = kind, Size = 15, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) }.Ref(Controls.Icon.ForegroundProperty, color));
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(title), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (detail.Length > 0) text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(detail), Foreground = Ui.B("Muted"), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });

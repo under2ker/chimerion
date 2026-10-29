@@ -19,26 +19,16 @@ namespace Dnex;
 /// <summary>Журнал</summary>
 public partial class MainWindow
 {
-    private void LogToggle_Changed(object sender, RoutedEventArgs e) => Reveal(LogPanel, LogToggle.IsChecked == true);
+    /// <summary>Журнал открывается отдельным окном (его держат рядом, пока что-то делают в программе).</summary>
+    private void LogToggle_Click(object sender, RoutedEventArgs e) { LogToggle.IsChecked = false; OpenLog(); }
+
+    private void OpenLog() => LogWindow.Show(this, _log, StoredLog, () => ClearLog_Click(this, new RoutedEventArgs()));
 
 
     private readonly System.Collections.Concurrent.ConcurrentQueue<LogEntry> _logQueue = new();
     private readonly ObservableCollection<LogEntry> _log = new();
-    private ICollectionView? _logView;
-    private int _logFilter; // 0 — все, 1 — предупреждения и ошибки, 2 — только ошибки
     private DispatcherTimer? _logTimer;
     private const int MaxLogEntries = 500;
-
-    private bool FilterLog(object o)
-    {
-        if (o is not LogEntry e) return false;
-        return _logFilter switch
-        {
-            1 => e.Level is LogLevel.Warn or LogLevel.Error,
-            2 => e.Level == LogLevel.Error,
-            _ => true,
-        };
-    }
 
     /// <summary>Журнал копится в очереди и выводится пачкой раз в 200 мс — сотни строк от парсера не тормозят интерфейс.</summary>
     /// <summary>
@@ -84,22 +74,6 @@ public partial class MainWindow
         while (_logQueue.TryDequeue(out var entry)) { _log.Add(entry); added.Add(entry); }
         LogStore.Append(added.Select(x => (x.Time, x.Text)));
         while (_log.Count > MaxLogEntries) _log.RemoveAt(0);
-        UpdateLogCount();
-        if (_logView?.Cast<object>().LastOrDefault() is { } last) LogList.ScrollIntoView(last);
-    }
-
-    private void UpdateLogCount()
-    {
-        if (_logView == null) return;
-        var shown = _logView.Cast<object>().Count();
-        LogCount.Text = shown == _log.Count ? $"{_log.Count} записей" : $"{shown} из {_log.Count}";
-    }
-
-    private void LogFilter_Checked(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { Tag: string t } && int.TryParse(t, out var i)) _logFilter = i;
-        _logView?.Refresh();
-        UpdateLogCount();
     }
 
     private void ClearLog_Click(object sender, RoutedEventArgs e)
@@ -118,14 +92,9 @@ public partial class MainWindow
         });
     }
 
-    /// <summary>Выбранные строки, которые сейчас видны, в порядке журнала.</summary>
-    private List<LogEntry> SelectedLog() =>
-        _logView == null ? new() : _logView.Cast<LogEntry>().Where(x => LogList.SelectedItems.Contains(x)).ToList();
-
     private void CopyEntries(IEnumerable<LogEntry> items, string done, bool withDate = false)
     {
-        var text = PrivacyGuard.ForExport(string.Join(Environment.NewLine,
-            items.Select(x => $"[{(withDate ? x.Time.ToString("dd.MM HH:mm:ss") : x.TimeText)}] {x.Text}")));
+        var text = LogWindow.Format(items, withDate);
         if (text.Length == 0) return;
         try
         {
@@ -135,29 +104,11 @@ public partial class MainWindow
         catch (Exception) { ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn"); }
     }
 
-    /// <summary>Кнопка «Копировать»: выбранные строки, а если их нет, все видимые.</summary>
-    private void CloseLog_Click(object sender, RoutedEventArgs e) => LogToggle.IsChecked = false;
-
-    private void CopyLog_Click(object sender, RoutedEventArgs e)
-    {
-        if (_logView == null) return;
-        var sel = SelectedLog();
-        if (sel.Count > 0) CopyEntries(sel, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
-        else CopyStored();
-    }
-
-    /// <summary>Весь журнал с диска за 3 дня (все запуски), с учетом фильтра уровня.</summary>
+    /// <summary>Весь журнал с диска за 3 дня (все запуски).</summary>
     private List<LogEntry> StoredLog()
     {
         FlushLog();
-        return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).Where(FilterLog).ToList();
-    }
-
-    private void CopyStored()
-    {
-        var all = StoredLog();
-        if (all.Count == 0) { if (_logView != null) CopyEntries(_logView.Cast<LogEntry>(), "Журнал скопирован"); return; }
-        CopyEntries(all, $"Журнал за 3 дня скопирован: {all.Count} строк", withDate: true);
+        return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).ToList();
     }
 
     /// <summary>Журнал для отчета диагностики: все записи за 3 дня с датой.</summary>
@@ -166,33 +117,5 @@ public partial class MainWindow
         var all = StoredLog();
         if (all.Count == 0) all = _log.ToList();
         return all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}");
-    }
-
-    /// <summary>Контекстное меню и Ctrl+C: выбранные строки, а если ничего не выбрано, текущая строка.</summary>
-    private void CopyLine_Click(object sender, RoutedEventArgs e)
-    {
-        var sel = SelectedLog();
-        if (sel.Count == 0 && LogList.SelectedItem is LogEntry one) sel.Add(one);
-        if (sel.Count > 0) CopyEntries(sel, sel.Count == 1 ? "Строка скопирована" : $"Скопировано строк: {sel.Count}");
-    }
-
-    private void CopyAll_Click(object sender, RoutedEventArgs e)
-    {
-        CopyStored();
-    }
-
-    /// <summary>Двойной щелчок по строке копирует ее одну.</summary>
-    private void LogList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (LogList.SelectedItem is LogEntry one) CopyEntries(new[] { one }, "Строка скопирована");
-    }
-
-    private void LogList_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control)
-        {
-            CopyLine_Click(sender, e);
-            e.Handled = true;
-        }
     }
 }
