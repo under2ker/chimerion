@@ -75,14 +75,44 @@ public class StorageLockTests : IDisposable
     }
 
     [Fact]
-    public void Load_Waits_For_Short_Lock_And_Gets_Real_Values()
+    public async Task Load_Waits_For_Short_Lock_And_Gets_Real_Values()
     {
         Storage.Save(File1, new AppSettings { TrayCheckMinutes = 42 });
         Storage.ReadWait = TimeSpan.FromSeconds(3);
         var lk = LockFile();
         var release = Task.Run(async () => { await Task.Delay(600); lk.Dispose(); });
         var loaded = Storage.LoadOrCreate(File1, () => new AppSettings());
-        release.Wait();
+        await release;
         Assert.Equal(42, loaded.TrayCheckMinutes);
+    }
+    [Fact]
+    public async Task Old_Pending_Snapshot_Does_Not_Overwrite_Newer_Save()
+    {
+        Storage.Save(File1, new AppSettings { TrayCheckMinutes = 7 });
+        using var captured = new ManualResetEventSlim();
+        using var resume = new ManualResetEventSlim();
+        try
+        {
+            Storage.PendingSnapshot = path =>
+            {
+                if (path == PathOf) { captured.Set(); resume.Wait(TimeSpan.FromSeconds(10)); }
+            };
+            using (LockFile()) Storage.Save(File1, new AppSettings { TrayCheckMinutes = 20 });
+            Assert.True(await Task.Run(() => captured.Wait(TimeSpan.FromSeconds(8))));
+            Storage.Save(File1, new AppSettings { TrayCheckMinutes = 33 });
+        }
+        finally { resume.Set(); Storage.PendingSnapshot = null; }
+        Assert.True(await Task.Run(() => Storage.FlushPending(TimeSpan.FromSeconds(8))));
+        Assert.Equal(33, Storage.LoadOrCreate(File1, () => new AppSettings()).TrayCheckMinutes);
+    }
+
+    [Fact]
+    public void Required_Save_Fails_When_File_Is_Locked_Without_Queueing()
+    {
+        Storage.Save(File1, new AppSettings { TrayCheckMinutes = 7 });
+        using (LockFile())
+            Assert.Throws<IOException>(() => Storage.SaveRequired(File1, new AppSettings { TrayCheckMinutes = 33 }));
+        Assert.False(Storage.HasPending);
+        Assert.Equal(7, Storage.LoadOrCreate(File1, () => new AppSettings()).TrayCheckMinutes);
     }
 }

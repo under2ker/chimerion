@@ -162,8 +162,7 @@ public class RegressionTests
         Assert.DoesNotContain("192.168.1.1", r);
         Assert.Contains("IP [ваш IP] ([место скрыто]), DNS [локальный IP]", r);
         Assert.Contains("ИИ видят выход: [место скрыто] ([ваш IP])", r);
-        // Выход через Smart DNS — адрес прокси, не пользователя: он нужен для разбора и остается
-        Assert.Contains("Нидерланды, Dronten (83.217.211.149, AS41745", r);
+        Assert.DoesNotContain("83.217.211.149", r);
     }
 
     // ---------- Внешние списки и релизы инструментов ----------

@@ -291,7 +291,7 @@ public static class DnsSwitcher
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
             BackupId = backupAddrs.Count > 0 ? backup!.Id : null, BackupName = backupAddrs.Count > 0 ? backup!.Name : null, BackupAddresses = backupAddrs,
         };
-        Storage.Save(ActiveFile, active);
+        Storage.SaveRequired(ActiveFile, active);
 
         try
         {
@@ -304,7 +304,7 @@ public static class DnsSwitcher
                 else if (l.StartsWith("V6ON ")) active.Ipv6Disabled.Remove(l[5..]);
                 else log(l);
             }
-            Storage.Save(ActiveFile, active);
+            Storage.SaveRequired(ActiveFile, active);
             if (code != 0) throw new InvalidOperationException("PowerShell завершился с ошибкой, см. журнал");
         }
         catch (OperationCanceledException)
@@ -350,7 +350,7 @@ public static class DnsSwitcher
             "ConvertTo-Json -InputObject @($r) -Compress", false);
         if (code != 0) throw new InvalidOperationException("Не удалось сохранить исходные настройки DNS: " + json);
         var items = JsonSerializer.Deserialize<List<AdapterBackup>>(json, Storage.Options) ?? new();
-        Storage.Save(BackupFile, items);
+        Storage.SaveRequired(BackupFile, items);
         log("Исходные настройки DNS сохранены");
     }
 

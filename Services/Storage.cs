@@ -125,6 +125,24 @@ public static class Storage
 
     public static void Save<T>(string file, T value) => SaveJson(file, JsonSerializer.Serialize(value, Options));
 
+    /// <summary>Критические данные должны быть записаны до изменения системы, без фонового повтора.</summary>
+    public static void SaveRequired<T>(string file, T value)
+    {
+        Directory.CreateDirectory(Dir);
+        var path = PathOf(file);
+        var json = JsonSerializer.Serialize(value, Options);
+        lock (FileLocks.GetOrAdd(path, _ => new object()))
+        {
+            lock (Unread)
+                if (Unread.Contains(path)) throw new IOException($"Не удалось сохранить {file}: файл не был прочитан");
+            if (!TryWrite(path, json)) throw new IOException($"Не удалось сохранить {file}: файл занят или недоступен");
+            lock (Pending) Pending.Remove(path);
+        }
+    }
+
+    // Точка синхронизации для проверки порядка отложенной записи.
+    internal static Action<string>? PendingSnapshot;
+
     /// <summary>
     /// Записывает уже готовый JSON: без повторной сериализации и без лишней записи на диск. Сначала во временный файл
     /// со своим именем (две записи одного файла из разных потоков не мешают друг другу), с принудительным сбросом
@@ -134,20 +152,23 @@ public static class Storage
     {
         Directory.CreateDirectory(Dir);
         var path = PathOf(file);
-        // Файл не прочитан из-за блокировки: сначала пробуем прочитать. Пока не прочли, запись откладывается
-        bool unread; lock (Unread) unread = Unread.Contains(path);
-        if (unread)
+        lock (FileLocks.GetOrAdd(path, _ => new object()))
         {
-            try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
-            catch (IOException) { Defer(path, json); return; }
-            // Файл снова читается, а в памяти значения по умолчанию, полученные во время блокировки: эту запись
-            // пропускаем, чтобы не затереть настоящие данные, и просим программу перечитать файл
-            Trace?.Invoke($"Хранилище: {file} освободился. Сохранение пропущено, файл перечитан, чтобы не затереть данные");
-            Reread?.Invoke(file);
-            return;
+            // Файл не прочитан из-за блокировки: сначала пробуем прочитать. Пока не прочли, запись откладывается
+            bool unread; lock (Unread) unread = Unread.Contains(path);
+            if (unread)
+            {
+                try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+                catch (IOException) { Defer(path, json); return; }
+                // Файл снова читается, а в памяти значения по умолчанию, полученные во время блокировки: эту запись
+                // пропускаем, чтобы не затереть настоящие данные, и просим программу перечитать файл
+                Trace?.Invoke($"Хранилище: {file} освободился. Сохранение пропущено, файл перечитан, чтобы не затереть данные");
+                Reread?.Invoke(file);
+                return;
+            }
+            if (!TryWrite(path, json)) Defer(path, json);
+            else lock (Pending) Pending.Remove(path); // свежая запись прошла: отложенная старая больше не нужна
         }
-        if (!TryWrite(path, json)) Defer(path, json);
-        else lock (Pending) Pending.Remove(path); // свежая запись прошла: отложенная старая больше не нужна
     }
 
     /// <summary>Отложить запись: фоновый повтор раз в секунду, пока файл не освободится (не дольше PendingFor).</summary>
@@ -170,24 +191,33 @@ public static class Storage
         {
             await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(1000, PendingFor.TotalMilliseconds / 10))).ConfigureAwait(false);
             KeyValuePair<string, string>[] items;
-            lock (Pending) items = Pending.ToArray();
-            if (items.Length == 0) return;
+            lock (Pending)
+            {
+                items = Pending.ToArray();
+                if (items.Length == 0) { _pendingTask = null; return; }
+            }
             foreach (var (path, json) in items)
             {
-                bool unread; lock (Unread) unread = Unread.Contains(path);
-                if (unread)
+                PendingSnapshot?.Invoke(path);
+                lock (FileLocks.GetOrAdd(path, _ => new object()))
                 {
-                    try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
-                    catch (IOException) { continue; }
-                    // Отложенная запись сделана из значений по умолчанию: не пишем, а перечитываем настоящий файл
-                    lock (Pending) Pending.Remove(path);
-                    Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} освободился и перечитан");
-                    Reread?.Invoke(Path.GetFileName(path));
-                    continue;
+                    lock (Pending)
+                        if (!Pending.TryGetValue(path, out var current) || current != json) continue;
+                    bool unread; lock (Unread) unread = Unread.Contains(path);
+                    if (unread)
+                    {
+                        try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+                        catch (IOException) { continue; }
+                        // Отложенная запись сделана из значений по умолчанию: не пишем, а перечитываем настоящий файл
+                        lock (Pending) Pending.Remove(path);
+                        Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} освободился и перечитан");
+                        Reread?.Invoke(Path.GetFileName(path));
+                        continue;
+                    }
+                    if (!TryWrite(path, json)) continue;
+                    lock (Pending) { if (Pending.TryGetValue(path, out var cur) && cur == json) Pending.Remove(path); }
+                    Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} сохранен после блокировки");
                 }
-                if (!TryWrite(path, json)) continue;
-                lock (Pending) { if (Pending.TryGetValue(path, out var cur) && cur == json) Pending.Remove(path); }
-                Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} сохранен после блокировки");
             }
             if (DateTime.UtcNow > until)
             {
@@ -195,6 +225,7 @@ public static class Storage
                 {
                     foreach (var k in Pending.Keys) Trace?.Invoke($"Хранилище: не удалось сохранить {Path.GetFileName(k)}: файл занят дольше {PendingFor.TotalMinutes:0} мин");
                     Pending.Clear();
+                    _pendingTask = null;
                 }
                 return;
             }

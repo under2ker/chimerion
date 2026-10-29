@@ -49,7 +49,7 @@ public class LogStoreTests : IDisposable
         Assert.DoesNotContain("Zorkgrad", r);
         Assert.DoesNotContain("ZORKNET", r);
         Assert.DoesNotContain("192.168.1.1", r);
-        Assert.Contains("83.217.211.149", r);
+        Assert.DoesNotContain("83.217.211.149", r);
         if (Environment.UserName.Length >= 2) Assert.DoesNotContain(@"\" + Environment.UserName + @"\", r);
     }
 }
