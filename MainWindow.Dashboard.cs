@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -20,7 +21,7 @@ public partial class MainWindow
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
     private readonly Dictionary<string, (TextBlock Status, Ellipse Dot)> _dashboardServices = new();
     private Button _dashboardConnect = null!, _dashboardZapretButton = null!, _dashboardTelegramButton = null!, _dashboardProbe = null!, _dashboardSiteProbe = null!;
-    private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking, _dashboardUpdateChecking;
+    private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking;
     private string? _dashboardMessageText;
     private bool _dashboardMessageError;
     private Guid? _dashboardPreviousServer;
@@ -80,13 +81,15 @@ public partial class MainWindow
         _dashboardChecked = Ui.Hint("Еще не проверялось", 3); aiTitle.Children.Add(_dashboardChecked);
         aiHeader.Children.Add(aiTitle); page.Children.Add(aiHeader);
         var serviceGrid = new Grid();
-        var names = new[] { ("ChatGPT", "openai", "https://chatgpt.com/"), ("Claude", "claude", "https://claude.ai/"), ("Gemini", "gemini", "https://gemini.google.com/") };
+        var names = new[] { ("ChatGPT", "LogoOpenAI", "https://chatgpt.com/"), ("Claude", "LogoClaude", "https://claude.ai/"), ("Gemini", "LogoGemini", "https://gemini.google.com/") };
         for (int i = 0; i < names.Length; i++)
         {
             serviceGrid.ColumnDefinitions.Add(new ColumnDefinition());
             var cell = new StackPanel();
             var title = new StackPanel { Orientation = Orientation.Horizontal };
-            var icon = DashboardIcon(names[i].Item2, "Surface2", "Text", 38); icon.Margin = new Thickness(0, 0, 10, 0);
+            var image = new Image { Width = 25, Height = 25, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            image.SetResourceReference(Image.SourceProperty, names[i].Item2);
+            var icon = new Border { Width = 44, Height = 44, CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 12, 0), Child = image }.Ref(Border.BackgroundProperty, "Surface2");
             title.Children.Add(icon); title.Children.Add(new TextBlock { Text = names[i].Item1, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             cell.Children.Add(title);
             var statusLine = new DockPanel { Margin = new Thickness(1, 16, 0, 2) };
@@ -139,7 +142,7 @@ public partial class MainWindow
         page.Children.Add(Ui.Card(events, bottom: 0));
         var footer = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
         footer.Children.Add(Ui.Action("Настройки", "Ghost", () => Settings_Click(this, new RoutedEventArgs())));
-        footer.Children.Add(Ui.Action("Проверить обновление", "Ghost", () => _ = DashboardUpdateAsync()));
+        footer.Children.Add(Ui.Action("Проверить обновление", "Ghost", OpenDashboardUpdate));
         footer.Children.Add(Ui.Action("Настроить обход", "Ghost", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         page.Children.Add(footer);
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
@@ -147,7 +150,28 @@ public partial class MainWindow
         var sidebarColumn = new ColumnDefinition { Width = new GridLength(208) };
         layout.ColumnDefinitions.Add(sidebarColumn); layout.ColumnDefinitions.Add(new ColumnDefinition());
         var sidebar = DashboardSidebar(); Grid.SetColumn(scroll, 1); layout.Children.Add(sidebar); layout.Children.Add(scroll);
-        layout.SizeChanged += (_, e) => { bool wide = e.NewSize.Width >= 1180; sidebarColumn.Width = new GridLength(wide ? 208 : 0); sidebar.Visibility = wide ? Visibility.Visible : Visibility.Collapsed; };
+        int lastLayout = -1;
+        layout.SizeChanged += (_, e) =>
+        {
+            bool wide = e.NewSize.Width >= 1180;
+            sidebarColumn.Width = new GridLength(wide ? 208 : 0);
+            sidebar.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
+            double available = e.NewSize.Width - (wide ? 208 : 0);
+            int mode = available < 600 ? 0 : available < 900 ? 1 : 2;
+            bool compactHero = available < 680;
+            int layoutKey = mode * 2 + (compactHero ? 1 : 0);
+            if (layoutKey == lastLayout) return;
+            lastLayout = layoutKey;
+            page.Margin = mode == 0 ? new Thickness(16, 20, 16, 24) : new Thickness(32, 30, 32, 36);
+            DashboardReflow(heroFacts, mode == 0 ? 1 : mode == 1 ? 2 : 3);
+            DashboardReflow(connection, mode < 2 ? 1 : 2);
+            DashboardReflow(serviceGrid, mode == 0 ? 1 : mode == 1 ? 2 : 3);
+            DashboardReflow(features, mode < 2 ? 1 : 2);
+            _dashboardHeroIcon.Visibility = compactHero ? Visibility.Collapsed : Visibility.Visible;
+            DockPanel.SetDock(_dashboardConnect, compactHero ? Dock.Bottom : Dock.Right);
+            _dashboardConnect.HorizontalAlignment = compactHero ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+            _dashboardConnect.Margin = compactHero ? new Thickness(0, 14, 0, 0) : new Thickness(0, 0, 8, 0);
+        };
         DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
@@ -156,8 +180,13 @@ public partial class MainWindow
     private FrameworkElement DashboardSidebar()
     {
         var content = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
-        var bottom = Ui.Hint($"CHIMERION · {UpdateChecker.CurrentVersion}", 0);
-        bottom.Margin = new Thickness(12, 0, 0, 0); DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
+        var bottom = new DockPanel { Margin = new Thickness(8, 0, 0, 0), LastChildFill = true };
+        var update = Ui.Action("Обновить", "Ghost", OpenDashboardUpdate);
+        update.FontSize = 11; update.Padding = new Thickness(5, 5, 5, 5); update.Margin = new Thickness(4, 0, 0, 0);
+        DockPanel.SetDock(update, Dock.Right); bottom.Children.Add(update);
+        var version = Ui.Hint($"CHIMERION · {UpdateChecker.CurrentVersion}", 0);
+        version.FontSize = 10; version.VerticalAlignment = VerticalAlignment.Center; version.TextTrimming = TextTrimming.CharacterEllipsis;
+        bottom.Children.Add(version); DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
         var links = new StackPanel();
         var logo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 2, 0, 24) };
         logo.Children.Add(new Controls.BrandMark { Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
@@ -181,8 +210,45 @@ public partial class MainWindow
         row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
         button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
+        button.Template = DashboardNavTemplate();
         if (selected) { button.SetResourceReference(Control.BackgroundProperty, "AccentSoft"); button.SetResourceReference(Control.ForegroundProperty, "Accent"); }
         return button;
+    }
+
+    private static void DashboardReflow(Grid grid, int columns)
+    {
+        grid.ColumnDefinitions.Clear(); grid.RowDefinitions.Clear();
+        for (int i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition());
+        int rows = (grid.Children.Count + columns - 1) / columns;
+        for (int i = 0; i < rows; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (int i = 0; i < grid.Children.Count; i++)
+        {
+            var child = (FrameworkElement)grid.Children[i];
+            Grid.SetRow(child, i / columns); Grid.SetColumn(child, i % columns);
+            int span = i == grid.Children.Count - 1 ? columns - i % columns : 1;
+            Grid.SetColumnSpan(child, span);
+            child.Margin = new Thickness(i % columns == 0 ? 0 : 5, i < columns ? 0 : 10, i % columns + span == columns ? 0 : 5, 0);
+        }
+    }
+
+    private static ControlTemplate DashboardNavTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+        var border = new FrameworkElementFactory(typeof(Border), "NavBorder");
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
+        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, new TemplateBindingExtension(Control.HorizontalContentAlignmentProperty));
+        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+        border.AppendChild(presenter); template.VisualTree = border;
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("SurfaceHover"), "NavBorder"));
+        template.Triggers.Add(hover);
+        var focus = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+        focus.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1), "NavBorder"));
+        focus.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("Accent"), "NavBorder"));
+        template.Triggers.Add(focus); return template;
     }
 
     private static TextBlock DashboardSection(string title) => new TextBlock
@@ -353,23 +419,10 @@ public partial class MainWindow
         catch (Exception ex) { Log("Проверка сайтов: " + ex.Message); DashboardMessage("Не удалось проверить сайты: " + ex.Message, true); }
         finally { _dashboardSitesChecking = false; RefreshDashboard(); }
     }
-    private async Task DashboardUpdateAsync()
+    private void OpenDashboardUpdate()
     {
-        if (_dashboardUpdateChecking) return;
-        if (_pendingUpdate is { } pending) { OpenUpdateWindow(pending); return; }
-        _dashboardUpdateChecking = true; DashboardMessage("Проверяю обновление…");
-        try
-        {
-            var result = await UpdateChecker.CheckDetailedAsync();
-            if (result.Status == UpdateStatus.Available && result.Info is { } info)
-            {
-                ShowUpdateAvailable(info); DashboardMessage("Найдена новая версия."); OpenUpdateWindow(info);
-            }
-            else if (result.Status == UpdateStatus.UpToDate) DashboardMessage($"У вас последняя версия {UpdateChecker.CurrentVersion}");
-            else DashboardMessage("Не удалось проверить обновление: " + result.Reason, true);
-        }
-        catch (Exception ex) { Log("Проверка обновления: " + ex.Message); DashboardMessage("Не удалось проверить обновление: " + ex.Message, true); }
-        finally { _dashboardUpdateChecking = false; RefreshDashboard(); }
+        ShowControlPanel();
+        CheckUpdate_Click(this, new RoutedEventArgs());
     }
     private async Task DashboardToolAsync(Tool tool)
     {
