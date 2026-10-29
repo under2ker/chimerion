@@ -446,7 +446,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="124" SortMemberPath="Rank">
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="136" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid x:Name="stRoot" ClipToBounds="True" Margin="0,0,12,0">

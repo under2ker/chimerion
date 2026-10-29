@@ -461,21 +461,21 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 
   <section class="band" aria-labelledby="look">
     <div class="wrap">
-      <h2 id="look">Серверы ищет и проверяет программа</h2>
-      <p class="intro">Она собирает Smart DNS с форумов, сайтов и Telegram-каналов и проверяет каждый: открывается ли сервис, отвечает ли API, из какой страны вас видят. Надежные стоят наверху, подключение одной кнопкой.</p>
+      <h2 id="look">Включили и пользуетесь</h2>
+      <p class="intro">Программа сама собирает Smart DNS с форумов, сайтов и Telegram-каналов и проверяет каждый: открывается ли сервис, из какой страны вас видят. На главном экране только важное, а полный список серверов и тонкие настройки в панели управления.</p>
       <figure class="screen">
         <div class="frame">
-          <img src="img/main.webp" srcset="img/main-480.webp 480w, img/main-800.webp 800w, img/main-1200.webp 1200w, img/main.webp 1600w" sizes="(max-width: 1220px) calc(100vw - 56px), 1164px" width="1600" height="1000" loading="lazy" alt="Главное окно CHIMERION: подключение к серверу в Нидерландах, проверка ChatGPT, Claude и Gemini и таблица проверенных серверов">
-          <span class="pin" style="left: 1.6%; top: 4.6%" aria-hidden="true">1</span>
-          <span class="pin" style="left: 1.6%; top: 14%" aria-hidden="true">2</span>
-          <span class="pin" style="left: 69.6%; top: 14%" aria-hidden="true">3</span>
-          <span class="pin" style="left: 1.6%; top: 49%" aria-hidden="true">4</span>
+          <img src="img/main.webp" srcset="img/main-480.webp 480w, img/main-800.webp 800w, img/main-1200.webp 1200w, img/main.webp 1440w" sizes="(max-width: 1220px) calc(100vw - 56px), 1164px" width="1440" height="900" loading="lazy" alt="Главный экран CHIMERION: защита включена, ChatGPT, Claude и Gemini доступны, Telegram, YouTube и Discord работают, три лучших сервера">
+          <span class="pin" style="left: 16.2%; top: 6.8%" aria-hidden="true">1</span>
+          <span class="pin" style="left: 16.2%; top: 34.1%" aria-hidden="true">2</span>
+          <span class="pin" style="left: 57.3%; top: 34.1%" aria-hidden="true">3</span>
+          <span class="pin" style="left: 16.2%; top: 63.4%" aria-hidden="true">4</span>
         </div>
         <ol class="legend">
-          <li data-pin="1"><span><b>Подключение</b>Сервер и страна, через которую нейросети видят вас.</span></li>
-          <li data-pin="2"><span><b>Проверка сервисов</b>Что открывается сейчас и через какой адрес.</span></li>
-          <li data-pin="3"><span><b>Лучшие серверы</b>Самый стабильный для каждого сервиса, щелчок подключает.</span></li>
-          <li data-pin="4"><span><b>Все найденные</b>Пинг, скорость нейросетей и стабильность по истории проверок.</span></li>
+          <li data-pin="1"><span><b>Защита</b>Один переключатель. Видно, через какой сервер идут нейросети и сколько держится подключение.</span></li>
+          <li data-pin="2"><span><b>Нейросети</b>Открываются ли ChatGPT, Claude и Gemini прямо сейчас, а если нет, то почему.</span></li>
+          <li data-pin="3"><span><b>Telegram, YouTube, Discord</b>Ускорение и обход замедления своим переключателем.</span></li>
+          <li data-pin="4"><span><b>Лучшие серверы</b>Три самых надежных. Выберите строку и нажмите «Подключить».</span></li>
         </ol>
       </figure>
     </div>
@@ -510,7 +510,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     <div class="wrap pair">
       <div>
         <h2 id="sites-h">Скажет, почему сайт не открывается</h2>
-        <p class="intro">Программа следит за сайтами, которыми вы пользуетесь. Если какой-то перестал открываться, придет уведомление с причиной, а в окне «Сайты» будет кнопка, которая это исправит.</p>
+        <p class="intro">Программа следит за сайтами, которыми вы пользуетесь. Если какой-то перестал открываться, придет уведомление с причиной, а в «Помощи» на вкладке «Под наблюдением» будет кнопка, которая это исправит.</p>
         <ul class="ticks">
           <li><b>Блокирует провайдер:</b> одна кнопка добавит сайт в обход zapret.</li>
           <li><b>Закрыт для России:</b> сайт отправится в Smart DNS.</li>
@@ -518,7 +518,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
           <li><b>Список хранится у вас.</b> Наружу уходит только имя сайта, который не открылся.</li>
         </ul>
       </div>
-      <div class="shot"><img src="img/sites.webp" width="584" height="709" decoding="async" alt="Окно «Сайты»: LinkedIn и X блокирует провайдер, Spotify закрыт для России, у каждого кнопка решения"></div>
+      <div class="shot"><img src="img/sites.webp" width="584" height="709" decoding="async" alt="Сайты под наблюдением: LinkedIn и X блокирует провайдер, Spotify закрыт для России, у каждого кнопка решения"></div>
     </div>
   </section>
 
@@ -598,7 +598,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         </details>
         <details>
           <summary>Как проверить, что архив настоящий?</summary>
-          <p>Каждый архив собирается на GitHub Actions из открытого кода, а GitHub подтверждает происхождение. Проверить можно командой <span class="code">gh attestation verify CHIMERION-0.1.37-win-x64.zip -R under2ker/chimerion</span>. Программа сама проверяет подпись каждого обновления.</p>
+          <p>Каждый архив собирается на GitHub Actions из открытого кода, а GitHub подтверждает происхождение. Проверить можно командой <span class="code">gh attestation verify CHIMERION-0.1.64-win-x64.zip -R under2ker/chimerion</span>. Программа сама проверяет подпись каждого обновления.</p>
         </details>
         <details>
           <summary>Чем это лучше VPN?</summary>
