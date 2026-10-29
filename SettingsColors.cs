@@ -49,6 +49,8 @@ public partial class SettingsWindow
 
     private void Preview() => ThemeColors.Apply(_colors, _theme);
 
+    private bool _colorsExpanded;
+
     private void RenderColors()
     {
         ColorsHost.Children.Clear();
@@ -96,13 +98,21 @@ public partial class SettingsWindow
         }
         ColorsHost.Children.Add(presets);
 
-        // Свой цвет каждого элемента
-        foreach (var slot in ThemeColors.Slots)
-            ColorsHost.Children.Add(ColorRow(slot));
-
-        var reset = new Button { Content = "Вернуть стандартные цвета", Style = (Style)FindResource("Ghost"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-18, 8, 0, 0) };
+        // Свой цвет каждого элемента: длинный список свернут, основное здесь тема и готовые наборы.
+        // Раскрыт сам, если свои цвета уже есть или какой-то цвет плохо виден на фоне
+        bool anyCustom = ThemeColors.Slots.Any(sl => _colors.ContainsKey(K(sl.Key)));
+        bool anyWarn = ThemeColors.Slots.Any(sl => ThemeColors.Warning(sl.Key, ThemeColors.Get(_colors, sl.Key, Dark)) != null);
+        var manual = new StackPanel();
+        foreach (var slot in ThemeColors.Slots) manual.Children.Add(ColorRow(slot));
+        var reset = new Button { Content = "Вернуть стандартные цвета", Style = (Style)FindResource("Strong"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 14, 0, 0),
+                                 ToolTip = "Все цвета ниже вернутся к стандартным для текущей темы" };
         reset.Click += (_, _) => { foreach (var s2 in ThemeColors.Slots) _colors.Remove(K(s2.Key)); Preview(); RenderColors(); };
-        ColorsHost.Children.Add(reset);
+        manual.Children.Add(reset);
+        var expander = new Expander { Header = "Дополнительные цвета" + (anyCustom ? " (есть свои)" : ""), Content = manual, Margin = new Thickness(0, 12, 0, 0),
+                                      IsExpanded = _colorsExpanded || anyCustom || anyWarn };
+        expander.Expanded += (_, _) => _colorsExpanded = true;
+        expander.Collapsed += (_, _) => _colorsExpanded = false;
+        ColorsHost.Children.Add(expander);
         ColorsHost.Children.Add(new TextBlock
         {
             Text = "Цвета видно сразу, сохранятся по «Сохранить». Оттенки рамок и наведения программа подберет сама",
@@ -128,8 +138,14 @@ public partial class SettingsWindow
         left.Children.Add(new TextBlock { Text = slot.Where, Style = (Style)FindResource("FieldHint"), TextWrapping = TextWrapping.Wrap });
         var warn = ThemeColors.Warning(slot.Key, color);
         if (warn != null)
-            left.Children.Add(new TextBlock { Text = "Внимание: " + warn, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) }
-                .Ref(TextBlock.ForegroundProperty, "Warn"));
+        {
+            // Предупреждение у своего поля и заметно: значок и плашка, а не мелкая строчка
+            var wrow = new DockPanel();
+            var wicon = new Controls.Icon { Kind = "triangle-alert", Size = 14, Margin = new Thickness(0, 1, 6, 0), VerticalAlignment = VerticalAlignment.Top }.Ref(Controls.Icon.ForegroundProperty, "Warn");
+            DockPanel.SetDock(wicon, Dock.Left); wrow.Children.Add(wicon);
+            wrow.Children.Add(new TextBlock { Text = warn, FontSize = 12.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn"));
+            left.Children.Add(new Border { Child = wrow, Padding = new Thickness(8, 5, 8, 6), CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 5, 0, 0) }.Ref(Border.BackgroundProperty, "ChipWarn"));
+        }
         grid.Children.Add(left);
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -156,7 +172,7 @@ public partial class SettingsWindow
         if (_colors.ContainsKey(K(slot.Key)))
         {
             var undo = new Button { Content = new Controls.Icon { Kind = "refresh-cw", Size = 14 }, Style = (Style)FindResource("Ghost"), Padding = new Thickness(8), MinHeight = 0,
-                                    Margin = new Thickness(4, 0, 0, 0), ToolTip = "Вернуть стандартный цвет" };
+                                    Margin = new Thickness(4, 0, 0, 0), ToolTip = $"Вернуть стандартный цвет «{slot.Title}» ({std})" };
             undo.Click += (_, _) => { _colors.Remove(K(slot.Key)); Preview(); RenderColors(); };
             right.Children.Add(undo);
         }
