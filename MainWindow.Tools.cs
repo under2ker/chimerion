@@ -376,6 +376,7 @@ public partial class MainWindow
                     Log($"Доступна версия {r.Info!.Version}");
                     _offeredVersion = r.Info!.Version.ToString();
                     ShowUpdateAvailable(r.Info!);
+                    ShowDashboardUpdateResult($"Доступна версия {r.Info!.Version}", "Ok", null);
                     OpenUpdateWindow(r.Info!);
                     break;
                 case UpdateStatus.UpToDate:
@@ -387,6 +388,11 @@ public partial class MainWindow
                     ShowUpdateResult("Не удалось проверить обновление", "Warn", r.Reason);
                     break;
             }
+        }
+        catch (Exception ex)
+        {
+            Log("Проверка обновления не удалась: " + ex.Message);
+            ShowUpdateResult("Не удалось проверить обновление", "Warn", ex.Message);
         }
         finally
         {
@@ -400,6 +406,7 @@ public partial class MainWindow
     /// <summary>Итог проверки обновления на месте подписи с версией слева от кнопки; через 6 с подпись возвращается.</summary>
     private void ShowUpdateResult(string text, string colorKey, string? reason)
     {
+        ShowDashboardUpdateResult(text, colorKey, reason);
         HeaderVersion.Text = text;
         HeaderVersion.Foreground = (Brush)FindResource(colorKey);
         UpdateResultIcon.Kind = colorKey == "Ok" ? "circle-check" : "triangle-alert";

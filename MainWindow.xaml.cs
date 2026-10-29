@@ -376,6 +376,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
         if (_initStarted && !_restarting) Updater.ConfirmStarted(); // дошли до штатного выхода: новая версия рабочая
         // Сначала убираем значок: пользователь видит, что программа закрылась, пока выключаются инструменты
+        _dashboardUpdateTimer.Stop();
         _dashboardTimer.Stop();
         _trayTimer.Stop();
         if (_tray != null)
