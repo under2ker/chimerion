@@ -177,7 +177,7 @@ public partial class MainWindow
         // Подменю без пустого поля под картинки (из-за него текст стоял далеко от края) и в том же виде, что меню
         if (modes.DropDown is System.Windows.Forms.ToolStripDropDownMenu ddm) { ddm.ShowImageMargin = false; ddm.ShowCheckMargin = false; }
         modes.DropDown.Opened += (_, _) => TrayMenu.Round(modes.DropDown);
-        foreach (var (mode, title, hint) in Modes)
+        foreach (var (mode, title, hint, _, _, _, _) in Modes)
         {
             var mi = TrayItem(title, () => _ = ApplyModeAsync(mode));
             mi.ToolTipText = hint;
