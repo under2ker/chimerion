@@ -13,6 +13,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _dashboardTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardDns = null!, _dashboardNetwork = null!;
     private TextBlock _dashboardAi = null!, _dashboardZapret = null!, _dashboardTelegram = null!;
+    private readonly Dictionary<string, TextBlock> _dashboardServices = new();
     private Button _dashboardConnect = null!, _dashboardZapretButton = null!, _dashboardTelegramButton = null!;
     private bool _dashboardToolBusy;
 
@@ -21,6 +22,7 @@ public partial class MainWindow
         var page = new StackPanel { Margin = new Thickness(32, 24, 32, 28), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
         var top = new DockPanel { Margin = new Thickness(0, 0, 0, 24) };
         var panel = Ui.Action("Панель управления", "Strong", ShowControlPanel);
+        panel.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(panel, Dock.Right); top.Children.Add(panel);
         var heading = new StackPanel();
         heading.Children.Add(new TextBlock { Text = "Главная", FontSize = 28, FontWeight = FontWeights.Bold });
@@ -44,10 +46,22 @@ public partial class MainWindow
         page.Children.Add(connection);
         page.Children.Add(Ui.Section("Доступ к нейросетям"));
         var ai = new StackPanel();
-        _dashboardAi = new TextBlock { TextWrapping = TextWrapping.Wrap, LineHeight = 25, FontSize = 14 };
-        ai.Children.Add(_dashboardAi);
+        var serviceGrid = new Grid();
+        foreach (var name in new[] { "ChatGPT", "Claude", "Gemini" })
+        {
+            serviceGrid.ColumnDefinitions.Add(new ColumnDefinition());
+            var cell = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+            cell.Children.Add(new TextBlock { Text = name, FontSize = 15, FontWeight = FontWeights.SemiBold });
+            var status = Ui.Hint("еще не проверялось", 6);
+            _dashboardServices[name] = status;
+            cell.Children.Add(status);
+            Grid.SetColumn(cell, serviceGrid.Children.Count);
+            serviceGrid.Children.Add(cell);
+        }
+        ai.Children.Add(serviceGrid);
+        _dashboardAi = Ui.Hint("", 12); ai.Children.Add(_dashboardAi);
         var check = Ui.Action("Проверить подключение", "Strong", () => Probe_Click(this, new RoutedEventArgs()));
-        check.Margin = new Thickness(0, 14, 0, 0); check.HorizontalAlignment = HorizontalAlignment.Left; ai.Children.Add(check);
+        check.Margin = new Thickness(0, 12, 0, 0); check.HorizontalAlignment = HorizontalAlignment.Left; ai.Children.Add(check);
         page.Children.Add(Ui.Card(ai, bottom: 0));
         page.Children.Add(Ui.Section("Дополнительные сервисы"));
         var tools = new StackPanel();
@@ -66,6 +80,7 @@ public partial class MainWindow
         actions.Children.Add(Ui.Action("Управление обходом", "Ghost", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         page.Children.Add(Ui.Card(actions, bottom: 0));
         DashboardHost.Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = page };
+        Loaded += (_, _) => RefreshDashboard();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard();
         _dashboardTimer.Start();
         RefreshDashboard();
@@ -100,8 +115,12 @@ public partial class MainWindow
         _dashboardConnect.IsEnabled = !_busyConn;
         _dashboardDns.Text = active == null ? "Не подключен" : PrivacyGuard.Mask(active.Name + " · " + string.Join(", ", active.Addresses));
         _dashboardNetwork.Text = snap == null ? "Еще не проверялось" : PrivacyGuard.Mask("DNS системы: " + snap.SystemDns);
-        _dashboardAi.Text = snap == null ? "ChatGPT  ·  еще не проверялось\nClaude  ·  еще не проверялось\nGemini  ·  еще не проверялось" :
-            string.Join("\n", new[] { "ChatGPT", "Claude", "Gemini" }.Select(name => { var s = snap.Services.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase)); return name + "  ·  " + (s?.Access ?? "еще не проверялось"); })) + "\n" + $"Проверено: {snap.Taken:HH:mm}";
+        foreach (var (name, text) in _dashboardServices)
+        {
+            var service = snap?.Services.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            text.Text = service?.Access ?? "еще не проверялось";
+        }
+        _dashboardAi.Text = snap == null ? "" : $"Проверено: {snap.Taken:HH:mm}";
         var z = _tools.OfType<ZapretTool>().First(); var tg = _tools.OfType<TgProxyTool>().First();
         RefreshTool(z, _dashboardZapret, _dashboardZapretButton); RefreshTool(tg, _dashboardTelegram, _dashboardTelegramButton);
         _dashboardZapret.Text += "\n" + SiteStatus("YouTube", "youtube.com") + "  ·  " + SiteStatus("Discord", "discord.com");
