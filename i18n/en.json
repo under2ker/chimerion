@@ -1,4 +1,10 @@
 {
+ "Панель сети": "Network dashboard",
+ "Обход и Telegram": "Bypass and Telegram",
+ "Доступ к ИИ": "AI access",
+ "Не проверялось": "Not checked",
+ "Подключено с {0}": "Connected since {0}",
+ "Доступно: {0} из {1}": "Available: {0} of {1}",
  "Проверяю обновление…": "Checking for updates…",
  "Найдена новая версия.": "A new version is available.",
  "Не удалось проверить обновление: {0}": "Could not check for updates: {0}",
