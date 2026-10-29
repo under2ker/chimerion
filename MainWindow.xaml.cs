@@ -91,6 +91,7 @@ public partial class MainWindow : Window
         _statsTimer.Tick += (_, _) => UpdateStats();
         _servers.CollectionChanged += (_, _) => _statsTimer.Start();
 
+        SetupDashboard();
         Loaded += async (_, _) => await InitAsync();
         _watchdog.Tick += Watchdog_Tick;
         WatchVpn();
@@ -163,7 +164,7 @@ public partial class MainWindow : Window
             UpdateStats();
             ShowCompare();
             // «Открывать в компактном виде» сильнее запомненного вида: иначе открывается тот, в котором закрыли
-            try { if (_settings.StartCompact || Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) SetCompact(true, animate: false); }
+            try { if (_settings.StartCompact || Storage.LoadOrCreate("ui.json", () => new Dictionary<string, bool>()).GetValueOrDefault("compact")) { SetCompact(true, animate: false); ShowControlPanel(); } }
             catch (Exception) { }
             await RefreshConnectionAsync();
             _ = AutoStart.RefreshPathAsync(Log);
@@ -375,6 +376,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
         if (_initStarted && !_restarting) Updater.ConfirmStarted(); // дошли до штатного выхода: новая версия рабочая
         // Сначала убираем значок: пользователь видит, что программа закрылась, пока выключаются инструменты
+        _dashboardTimer.Stop();
         _trayTimer.Stop();
         if (_tray != null)
         {
