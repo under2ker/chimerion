@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Dnex.Models;
@@ -14,6 +15,8 @@ namespace Dnex;
 public partial class MainWindow
 {
     private readonly DispatcherTimer _dashboardTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    private readonly DispatcherTimer _dashboardUpdateTimer = new() { Interval = TimeSpan.FromSeconds(5) };
+    private readonly List<(Border Box, TextBlock Text)> _dashboardUpdateNotices = new();
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardDns = null!, _dashboardNetwork = null!;
     private TextBlock _dashboardChecked = null!, _dashboardZapret = null!, _dashboardTelegram = null!, _dashboardMessage = null!;
     private TextBlock _dashboardHeroMode = null!, _dashboardHeroSince = null!, _dashboardHeroServices = null!;
@@ -142,7 +145,10 @@ public partial class MainWindow
         page.Children.Add(Ui.Card(events, bottom: 0));
         var footer = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
         footer.Children.Add(Ui.Action("Настройки", "Ghost", () => Settings_Click(this, new RoutedEventArgs())));
-        footer.Children.Add(Ui.Action("Проверить обновление", "Ghost", OpenDashboardUpdate));
+        var footerUpdate = new StackPanel();
+        footerUpdate.Children.Add(DashboardUpdateNotice());
+        footerUpdate.Children.Add(DashboardUpdateButton("Проверить обновление"));
+        footer.Children.Add(footerUpdate);
         footer.Children.Add(Ui.Action("Настроить обход", "Ghost", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         page.Children.Add(footer);
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
@@ -174,6 +180,7 @@ public partial class MainWindow
         };
         DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
+        _dashboardUpdateTimer.Tick += (_, _) => HideDashboardUpdateResult();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
     }
 
@@ -181,12 +188,14 @@ public partial class MainWindow
     {
         var content = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
         var bottom = new DockPanel { Margin = new Thickness(8, 0, 0, 0), LastChildFill = true };
-        var update = Ui.Action("Обновить", "Ghost", OpenDashboardUpdate);
+        var update = DashboardUpdateButton("Обновить");
         update.FontSize = 11; update.Padding = new Thickness(5, 5, 5, 5); update.Margin = new Thickness(4, 0, 0, 0);
         DockPanel.SetDock(update, Dock.Right); bottom.Children.Add(update);
         var version = Ui.Hint($"CHIMERION · {UpdateChecker.CurrentVersion}", 0);
         version.FontSize = 10; version.VerticalAlignment = VerticalAlignment.Center; version.TextTrimming = TextTrimming.CharacterEllipsis;
-        bottom.Children.Add(version); DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
+        bottom.Children.Add(version);
+        var bottomGroup = new StackPanel(); bottomGroup.Children.Add(DashboardUpdateNotice()); bottomGroup.Children.Add(bottom);
+        DockPanel.SetDock(bottomGroup, Dock.Bottom); content.Children.Add(bottomGroup);
         var links = new StackPanel();
         var logo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 2, 0, 24) };
         logo.Children.Add(new Controls.BrandMark { Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
@@ -419,10 +428,53 @@ public partial class MainWindow
         catch (Exception ex) { Log("Проверка сайтов: " + ex.Message); DashboardMessage("Не удалось проверить сайты: " + ex.Message, true); }
         finally { _dashboardSitesChecking = false; RefreshDashboard(); }
     }
+    private Button DashboardUpdateButton(string title)
+    {
+        var button = Ui.Action(title, "Ghost", OpenDashboardUpdate);
+        button.SetBinding(IsEnabledProperty, new Binding(nameof(IsEnabled)) { Source = CheckUpdateButton });
+        return button;
+    }
+
+    private Border DashboardUpdateNotice()
+    {
+        var text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+        var box = new Border { Child = text, Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 0, 0, 8),
+            CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed, Opacity = 0 };
+        box.SetResourceReference(Border.BackgroundProperty, "Surface2");
+        box.SetResourceReference(Border.BorderBrushProperty, "Border");
+        _dashboardUpdateNotices.Add((box, text)); return box;
+    }
+
     private void OpenDashboardUpdate()
     {
-        ShowControlPanel();
+        if (!CheckUpdateButton.IsEnabled) return;
+        if (_pendingUpdate == null) ShowDashboardUpdateResult("Проверяю обновление…", "Muted", null, false);
         CheckUpdate_Click(this, new RoutedEventArgs());
+    }
+
+    private void ShowDashboardUpdateResult(string text, string color, string? reason, bool autoHide = true)
+    {
+        if (DashboardHost.Visibility != Visibility.Visible) return;
+        _dashboardUpdateTimer.Stop();
+        foreach (var (box, label) in _dashboardUpdateNotices)
+        {
+            label.Text = text; label.ToolTip = reason;
+            label.SetResourceReference(TextBlock.ForegroundProperty, color);
+            box.Visibility = Visibility.Visible;
+            box.BeginAnimation(OpacityProperty, new DoubleAnimation(box.Opacity, 1, Ui.Motion(220)));
+        }
+        if (autoHide) _dashboardUpdateTimer.Start();
+    }
+
+    private void HideDashboardUpdateResult()
+    {
+        _dashboardUpdateTimer.Stop();
+        foreach (var (box, _) in _dashboardUpdateNotices)
+        {
+            var fade = new DoubleAnimation(0, Ui.Motion(400));
+            fade.Completed += (_, _) => { if (box.Opacity <= 0) box.Visibility = Visibility.Collapsed; };
+            box.BeginAnimation(OpacityProperty, fade);
+        }
     }
     private async Task DashboardToolAsync(Tool tool)
     {
