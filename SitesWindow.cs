@@ -13,7 +13,8 @@ namespace Dnex;
 internal sealed class SitesWindow
 {
     private static SitesWindow? _open;
-    private readonly Window _w;
+    /// <summary>Содержимое вкладки «Под наблюдением» окна «Помощь».</summary>
+    public FrameworkElement View { get; }
     private readonly SiteWatch _watch;
     private readonly Func<bool, Task> _round;
     private readonly Func<string, string, Task> _action;
@@ -22,34 +23,38 @@ internal sealed class SitesWindow
     private readonly TextBlock _state = Ui.Hint("", 0);
     private readonly Button _checkAll;
 
-    public static void Show(SiteWatch watch, Window? owner, Func<bool, Task> round, Func<string, string, Task> action, Func<string, string?> handled)
+    /// <summary>Страница для окна «Помощь» (одна на окно).</summary>
+    public static FrameworkElement Create(SiteWatch watch, Func<bool, Task> round, Func<string, string, Task> action, Func<string, string?> handled)
     {
-        if (_open != null) { _open._w.Activate(); return; }
-        _open = new SitesWindow(watch, owner, round, action, handled);
-        _open._w.Show();
+        _open = new SitesWindow(watch, round, action, handled);
         _open.Render();
+        return _open.View;
     }
+
+    /// <summary>Окно «Помощь» закрыто: фоновый круг больше не перерисовывает страницу.</summary>
+    public static void Forget() => _open = null;
 
     /// <summary>После фонового круга: открытое окно перерисовывается.</summary>
     public static void Refresh() => _open?.Render();
 
-    private SitesWindow(SiteWatch watch, Window? owner, Func<bool, Task> round, Func<string, string, Task> action, Func<string, string?> handled)
+    private SitesWindow(SiteWatch watch, Func<bool, Task> round, Func<string, string, Task> action, Func<string, string?> handled)
     {
         _watch = watch; _round = round; _action = action; _handled = handled;
-        _w = DnexDialog.CreateWindow("Сайты", Ui.Wide);
-        if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
-        _w.Closed += (_, _) => _open = null;
-
-        var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Сайты", "Открываются ли сайты, которыми вы пользуетесь", glyph: "globe"));
-        root.Children.Add(_state.With(t => t.Margin = new Thickness(2, 12, 0, 8)));
-        root.Children.Add(Ui.Card(Ui.Scroll(_list, 460), bottom: 0).With(c => c.Padding = new Thickness(14, 10, 8, 10)));
-        root.Children.Add(Ui.Hint("Список хранится только у вас. Наружу уходит лишь имя сайта, который не открылся", 8).With(t => t.FontSize = 11));
-
-        _checkAll = Ui.Action("Проверить все", "Strong", () => _ = CheckAllAsync());
-        var close = Ui.Action("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
-        root.Children.Add(Ui.Footer(_checkAll, close));
-        _w.Content = Ui.WindowContent(root);
+        var root = new StackPanel();
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
+        _checkAll = Ui.Action("Проверить все", "Primary", () => _ = CheckAllAsync()).With(b => { b.Margin = new Thickness(0); b.VerticalAlignment = VerticalAlignment.Center; });
+        DockPanel.SetDock(_checkAll, Dock.Right); head.Children.Add(_checkAll);
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titles.Children.Add(new TextBlock { Text = "Открываются ли ваши сайты", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        titles.Children.Add(_state.With(t => t.Margin = new Thickness(0, 2, 0, 0)));
+        head.Children.Add(titles);
+        var body = new StackPanel();
+        body.Children.Add(head);
+        body.Children.Add(_list);
+        root.Children.Add(Ui.Card(body, bottom: 0).With(c => c.Padding = new Thickness(18, 16, 12, 12)));
+        root.Children.Add(Ui.Hint("Программа сама замечает сайты, которыми вы пользуетесь, и проверяет их в фоне. Список хранится только у вас, " +
+                                  "наружу уходит лишь имя сайта, который не открылся", 10).With(t => t.FontSize = 11));
+        View = root;
     }
 
     private async Task CheckAllAsync()

@@ -109,23 +109,20 @@ public partial class MainWindow
     private void HelpToggle_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         HelpToggle.IsChecked = false;
-        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = HelpToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
-        System.Windows.Controls.MenuItem Item(string text, Action act)
-        {
-            var mi = new System.Windows.Controls.MenuItem { Header = text };
-            mi.Click += (_, _) => act();
-            return mi;
-        }
-        menu.Items.Add(Item("Не открывается нейросеть или сайт…", OpenHelpWizard));
-        menu.Items.Add(Item("Сайты под наблюдением", OpenSites));
-        menu.Items.Add(Item("Smart DNS на телефоне", OpenPhone));
-        menu.IsOpen = true;
+        OpenHelp(HelpWindow.Tab.NotOpening);
     }
 
-    private void OpenHelpWizard() => HelpWizard.Show(_settings, this, () => _servers.ToList(), DiagFixAsync, SiteAction);
-    private void OpenPhone() => PhoneWindow.Show(_servers.ToList(), this, Log);
+    /// <summary>Окно «Помощь» на нужной вкладке. Страницы создаются при первом выборе вкладки.</summary>
+    private void OpenHelp(HelpWindow.Tab tab) => HelpWindow.Show(this, tab, new Func<System.Windows.FrameworkElement>[]
+    {
+        () => HelpWizard.Create(_settings, () => _servers.ToList(), DiagFixAsync, SiteAction),
+        () => SitesWindow.Create(_sites, async force => await SitesRoundAsync(force), SiteAction, SiteHandled),
+        () => PhoneWindow.Create(_servers.ToList(), Log),
+    });
 
-    private void OpenSites() => SitesWindow.Show(_sites, this, async force => await SitesRoundAsync(force), SiteAction, SiteHandled);
+    private void OpenHelpWizard() => OpenHelp(HelpWindow.Tab.NotOpening);
+    private void OpenPhone() => OpenHelp(HelpWindow.Tab.Phone);
+    private void OpenSites() => OpenHelp(HelpWindow.Tab.Watched);
 
     /// <summary>Что уже сделано с сайтом из окна «Сайты»: чтобы вместо кнопки показать отметку. Null — ничего.</summary>
     private string? SiteHandled(string host)

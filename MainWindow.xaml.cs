@@ -36,10 +36,6 @@ public partial class MainWindow : Window
         // Выключение или перезагрузка Windows: выходим без вопроса и без отключения, чтобы DNS остался после перезагрузки
         Application.Current.SessionEnding += (_, _) => { _sessionEnding = true; _exitRequested = true; };
         AddPanel.RenderTransform = new TranslateTransform();
-        LogPanel.RenderTransform = new TranslateTransform();
-        _logView = CollectionViewSource.GetDefaultView(_log);
-        _logView.Filter = FilterLog;
-        LogList.ItemsSource = _logView;
         _toastTimer.Tick += (_, _) =>
         {
             _toastTimer.Stop();
