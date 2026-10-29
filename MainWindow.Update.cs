@@ -77,7 +77,7 @@ public partial class MainWindow
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
         ("Сообщить о сбое", "circle-help", () => DiagToggle_Click(this, new RoutedEventArgs())),
-        ("Канал в Telegram", "send", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
+        ("Канал в Telegram", "logo:LogoTelegram", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
         ("Сайт chimerion.dev", "external-link", () => AutoStart.OpenUrl("https://chimerion.dev")),
     };
 
@@ -89,7 +89,7 @@ public partial class MainWindow
         foreach (var (title, icon, act) in SideLinks())
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(new Controls.Icon { Kind = icon, Size = 16, Margin = new Thickness(0, 0, 10, 0) });
+            row.Children.Add(MenuGlyph(icon, 16));
             var text = new TextBlock { Text = title };
             row.Children.Add(text);
             var b = new Button { Content = row, Style = style, ToolTip = title };
@@ -103,6 +103,18 @@ public partial class MainWindow
     }
 
     private readonly List<TextBlock> _panelLinkTexts = new();
+
+    /// <summary>Значок пункта меню: контурная иконка или фирменный логотип («logo:Ключ» из палитры App.xaml).</summary>
+    internal static FrameworkElement MenuGlyph(string icon, double size)
+    {
+        if (icon.StartsWith("logo:"))
+        {
+            var img = new Image { Width = size, Height = size, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+            img.SetResourceReference(Image.SourceProperty, icon[5..]);
+            return img;
+        }
+        return new Controls.Icon { Kind = icon, Size = size, Margin = new Thickness(0, 0, 10, 0) };
+    }
 
     private void UpdateCard_Click()
     {

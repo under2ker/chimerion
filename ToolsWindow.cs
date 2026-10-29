@@ -46,7 +46,6 @@ internal sealed class ToolsWindow
     {
         public Tool Tool = null!;
         public Border Badge = null!;
-        public Controls.Icon BadgeIcon = null!;
         public Controls.Switch Toggle = null!;
         public Ellipse Dot = null!;
         public TextBlock State = null!, Next = null!, Version = null!, Message = null!, Stage = null!;
@@ -179,8 +178,15 @@ internal sealed class ToolsWindow
     {
         var c = new ToolCard { Tool = t };
         bool tg = t is TgProxyTool;
-        c.BadgeIcon = new Controls.Icon { Kind = tg ? "send" : "zap", Size = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        c.Badge = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(13), Child = c.BadgeIcon, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0) };
+        // Фирменные логотипы: Telegram, а у обхода YouTube и Discord рядом. Работает: рамка значка цвета акцента
+        var logos = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var key in tg ? new[] { "LogoTelegram" } : new[] { "LogoYouTube", "LogoDiscord" })
+        {
+            var img = new Image { Width = tg ? 24 : 19, Height = tg ? 24 : 19, Stretch = Stretch.Uniform, Margin = new Thickness(tg ? 0 : 1.5, 0, tg ? 0 : 1.5, 0) };
+            img.SetResourceReference(Image.SourceProperty, key);
+            logos.Children.Add(img);
+        }
+        c.Badge = new Border { Width = tg ? 46 : 58, Height = 46, CornerRadius = new CornerRadius(13), Child = logos, BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0) };
         c.Toggle = new Controls.Switch { Width = 56, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0),
                                          ToolTip = tg ? "Включить или выключить TG WS Proxy" : "Включить или выключить обход zapret" };
         System.Windows.Automation.AutomationProperties.SetName(c.Toggle, tg ? "Telegram" : "YouTube и Discord");
@@ -263,8 +269,8 @@ internal sealed class ToolsWindow
         Ui.SwapText(c.State, state, 4);
         Ui.FadeBrush(c.State, TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color);
         Ui.FadeBrush(c.Dot, Shape.FillProperty, color);
-        Ui.FadeBrush(c.Badge, Border.BackgroundProperty, running && !busyHere ? "Accent" : busyHere ? "AccentSoft" : "Surface2", 400);
-        c.BadgeIcon.SetResourceReference(Controls.Icon.ForegroundProperty, running && !busyHere ? "OnToggle" : busyHere ? "Accent" : "Muted");
+        Ui.FadeBrush(c.Badge, Border.BackgroundProperty, busyHere ? "AccentSoft" : "Surface2", 400);
+        Ui.FadeBrush(c.Badge, Border.BorderBrushProperty, running && !busyHere ? "Accent" : busyHere ? "AccentSoft" : "Surface2", 400);
 
         _syncing = true;
         c.Toggle.IsChecked = want;
@@ -541,7 +547,16 @@ internal sealed class ToolsWindow
         int col = 0;
         foreach (var h in new[] { "Стратегия", "YouTube", "Discord" }.Concat(sites ? new[] { "Ваши сайты" } : Array.Empty<string>()).Append("Время"))
         {
-            var tb = Ui.Hint(h, 0).With(x => x.FontSize = 11); Grid.SetColumn(tb, col++); header.Children.Add(tb);
+            FrameworkElement cell = Ui.Hint(h, 0).With(x => x.FontSize = 12);
+            if (h is "YouTube" or "Discord")
+            {
+                var hp = new StackPanel { Orientation = Orientation.Horizontal };
+                var img = new Image { Width = 14, Height = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+                img.SetResourceReference(Image.SourceProperty, h == "YouTube" ? "LogoYouTube" : "LogoDiscord");
+                hp.Children.Add(img); hp.Children.Add(cell);
+                cell = hp;
+            }
+            Grid.SetColumn(cell, col++); header.Children.Add(cell);
         }
         header.Margin = new Thickness(8, 0, 8, 4);
         body.Children.Add(header);
