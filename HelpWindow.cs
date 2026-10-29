@@ -45,7 +45,9 @@ internal sealed class HelpWindow
         _w.ResizeMode = ResizeMode.CanMinimize;
         _w.SizeChanged += (_, e) => KeepCenter(e);
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
-        _w.Closed += (_, _) => { _open = null; HelpWizard.Forget(); SitesWindow.Forget(); PhoneWindow.Forget(); };
+        Action repaint = () => _w.Dispatcher.Invoke(() => { for (int k = 0; k < _tabs.Count; k++) Paint(k); }); // смена темы: плитки вкладок
+        Services.ThemeColors.Changed += repaint;
+        _w.Closed += (_, _) => { _open = null; HelpWizard.Forget(); SitesWindow.Forget(); PhoneWindow.Forget(); Services.ThemeColors.Changed -= repaint; };
         _w.PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape) _w.Close();

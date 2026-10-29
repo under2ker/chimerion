@@ -47,7 +47,7 @@ internal static class Ui
         icon.SetBinding(Controls.Icon.ForegroundProperty, new System.Windows.Data.Binding(nameof(TextBlock.Foreground)) { Source = tb });
         var box = new System.Windows.Documents.InlineUIContainer(icon) { BaselineAlignment = BaselineAlignment.Center };
         if (before) tb.Inlines.Add(box);
-        tb.Inlines.Add(new System.Windows.Documents.Run(text));
+        tb.Inlines.Add(new System.Windows.Documents.Run(Services.Loc.T(text))); // строки внутри Inlines перевод сам не находит
         if (!before) tb.Inlines.Add(box);
     }
 

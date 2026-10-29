@@ -588,7 +588,7 @@ public partial class MainWindow
     private static string ShortReason(string? note)
     {
         if (string.IsNullOrWhiteSpace(note)) return "Причина не установлена";
-        var t = note.Trim();
+        var t = Loc.T(note).Trim(); // сначала перевод целиком, потом обрезка: обрезанной строки нет в словаре
         var cut = t.IndexOfAny(new[] { '.', '\n', ';' });
         if (cut > 0) t = t[..cut];
         return t.Length > 80 ? t[..78] + "…" : t;

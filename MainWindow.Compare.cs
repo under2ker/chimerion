@@ -89,6 +89,14 @@ public partial class MainWindow
     private DateTime _hostsClosedAt;     // щелчок по той же кнопке закрывает панель, а не открывает заново
     private bool _compareDisconnected;
 
+    /// <summary>
+    /// Без строк «Внешний IP, DNS системы, ИИ видят вас из» над плитками: в компактном виде и на невысоком окне, где иначе
+    /// таблице серверов оставалось место на две строки. Эти сведения есть в подсказках плиток и в диагностике.
+    /// </summary>
+    private bool DenseCompare => _compact || (ActualHeight > 0 && ActualHeight < DenseCompareBelow);
+    internal const double DenseCompareBelow = 880;
+    private bool? _denseShown;
+
     private void ShowCompare(bool disconnected = false)
     {
         foreach (var snap in new[] { _before, _after }) if (snap != null) PrivacyGuard.RememberPersonal(snap.PublicIp, snap.Location, snap.Provider);
@@ -130,7 +138,7 @@ public partial class MainWindow
         }
 
         // Строка 1: внешний IP (при Smart DNS не меняется — так и должно быть)
-        if (!_compact) host.Children.Add(Line(
+        if (!DenseCompare) host.Children.Add(Line(
             ("Внешний IP  ", B("Muted"), false), (cur.PublicIp, B("Text"), true),
             ($"   ·   {cur.Location}   ·   {cur.Provider}", B("Muted"), false),
             (_before != null && _after != null && _before.PublicIp == _after.PublicIp ? "   ·   не меняется" : "", B("Muted"), false)));
@@ -144,18 +152,18 @@ public partial class MainWindow
             dnsRuns.Add((_after.SystemDns, B("Text"), true));
         }
         else dnsRuns.Add((cur.SystemDns, B("Text"), true));
-        if (!_compact) host.Children.Add(Line(dnsRuns.ToArray()));
+        if (!DenseCompare) host.Children.Add(Line(dnsRuns.ToArray()));
 
         // Откуда ИИ видят соединение, по каждому сервису. Если у сервисов разные страны — показываем каждую
         var perSvc = cur.Services.Where(x => x.Egress != null).ToList();
-        if (!_compact && perSvc.Select(x => x.Egress!.Country).Distinct().Count() > 1)
+        if (!DenseCompare && perSvc.Select(x => x.Egress!.Country).Distinct().Count() > 1)
         {
             host.Children.Add(Line(
                 ("ИИ видят вас из  ", B("Muted"), false),
                 (string.Join("   ·   ", perSvc.Select(x => $"{x.Name}: {GeoLocation.CountryName(x.Egress!.Country)}")), B("Text"), true)));
         }
         // Откуда ИИ видят соединение: адрес выхода в интернет. Может отличаться и от DNS-сервера, и от прокси
-        else if (!_compact && (perSvc.FirstOrDefault()?.Egress ?? cur.Egress) is { } eg)
+        else if (!DenseCompare && (perSvc.FirstOrDefault()?.Egress ?? cur.Egress) is { } eg)
         {
             var org = LeakTest.CleanOrg(cur.EgressOrg ?? "");
             org = System.Text.RegularExpressions.Regex.Replace(org, @"^AS\d+\s*", "");
@@ -167,7 +175,7 @@ public partial class MainWindow
 
         // Строка 3: резолверы, которые на самом деле дошли до тестового сервера (тест утечки). Только при подключении:
         // без него сравнивать не с чем, а провайдер и так отвечает через несколько своих серверов
-        if (!_compact && cur.Resolvers.Count > 0 && !disconnected && DnsSwitcher.GetActive() != null)
+        if (!DenseCompare && cur.Resolvers.Count > 0 && !disconnected && DnsSwitcher.GetActive() != null)
         {
             static string Country(string place) => place.Split(',').Last().Trim();
             // Один владелец — одна запись: адреса его серверов в подсказке

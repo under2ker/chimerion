@@ -283,10 +283,11 @@
         </Grid>
 
         <!-- ================= ПОИСК И ДЕЙСТВИЯ ================= -->
-        <WrapPanel x:Name="ToolbarCard" Grid.Row="2" Margin="0,0,0,12">
-            <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Width="300" Tag="Поиск: имя, IP, источник"/>
+        <!-- При узком окне строка переносится: у каждого элемента отступ снизу, чтобы вторая строка не упиралась в первую -->
+        <WrapPanel x:Name="ToolbarCard" Grid.Row="2" Margin="0,0,0,4">
+            <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Width="300" Margin="0,0,10,8" Tag="Поиск: имя, IP, источник"/>
 
-            <Border Margin="10,0,0,0" Padding="3" CornerRadius="9" Background="{DynamicResource Surface}"
+            <Border Margin="0,0,10,8" Padding="3" CornerRadius="9" Background="{DynamicResource Surface}"
                     BorderBrush="{DynamicResource Border}" BorderThickness="1">
                 <StackPanel Orientation="Horizontal">
                     <RadioButton x:Name="WorkingTab" Style="{StaticResource Tab}" GroupName="f" Tag="5" IsChecked="True" Checked="FilterTab_Checked" Content="Рабочие"/>
@@ -296,7 +297,7 @@
             </Border>
 
             <!-- Список выстроен по одному сервису (после проверки только его). Крестик возвращает порядок для всех -->
-            <Border x:Name="RankChip" Margin="10,0,0,0" Padding="12,0,4,0" CornerRadius="9" Background="{DynamicResource AccentSoft}"
+            <Border x:Name="RankChip" Margin="0,0,10,8" Padding="12,0,4,0" CornerRadius="9" Background="{DynamicResource AccentSoft}"
                     BorderBrush="{DynamicResource AccentBorder}" BorderThickness="1" VerticalAlignment="Center" MinHeight="40" Visibility="Collapsed"
                     ToolTip="Наверху серверы, где этот сервис работает, по его стабильности, при равенстве по пингу. Остальные ниже">
                 <StackPanel Orientation="Horizontal">
@@ -307,7 +308,7 @@
                 </StackPanel>
             </Border>
 
-            <StackPanel x:Name="ListActions" Orientation="Horizontal">
+            <StackPanel x:Name="ListActions" Orientation="Horizontal" Margin="0,0,0,8">
                 <!-- Перепроверить и стрелка с режимами: глубокая проверка, только один сервис -->
                 <Button Content="Перепроверить" Click="CheckAll_Click" Style="{StaticResource Strong}"
                         ToolTip="Еще раз проверить все серверы в списке"/>
@@ -527,7 +528,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервер: имя + адрес второй строкой -->
-                        <DataGridTemplateColumn Header="СЕРВЕР" Width="2*" MinWidth="250" SortMemberPath="DisplayName">
+                        <DataGridTemplateColumn x:Name="ColServer" Header="СЕРВЕР" Width="2*" MinWidth="250" SortMemberPath="DisplayName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
