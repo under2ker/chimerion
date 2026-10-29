@@ -82,7 +82,10 @@ internal sealed class ToolsWindow
         _log = log;
         _changed = changed;
         _w = DnexDialog.CreateWindow("Telegram и YouTube", 820);
-        _w.Closed += (_, _) => { _pickCts?.Cancel(); _open = null; };
+        // Цвета, которые плавно перетекают (FadeBrush), при смене темы пересчитываются только перерисовкой
+        Action repaint = () => _w.Dispatcher.Invoke(Render);
+        ThemeColors.Changed += repaint;
+        _w.Closed += (_, _) => { _pickCts?.Cancel(); _open = null; ThemeColors.Changed -= repaint; };
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Telegram и YouTube",
             "Ускорение Telegram и обход замедления YouTube и Discord одним переключателем", glyph: "zap"));

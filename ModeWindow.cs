@@ -63,7 +63,9 @@ internal sealed class ModeWindow
         _modes = modes; _state = state; _apply = apply;
         _w = DnexDialog.CreateWindow("Режим", 820);
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
-        _w.Closed += (_, _) => _open = null;
+        Action repaint = () => _w.Dispatcher.Invoke(Render); // смена темы: плашки и рамки в новых цветах
+        Services.ThemeColors.Changed += repaint;
+        _w.Closed += (_, _) => { _open = null; Services.ThemeColors.Changed -= repaint; };
         _w.PreviewKeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape && !_busy) _w.Close();

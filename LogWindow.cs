@@ -183,7 +183,7 @@ internal sealed class LogWindow
         Grid.SetRow(actions, 3); root.Children.Add(actions);
 
         // Подсказка по клавишам
-        var keys = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
+        var keys = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         foreach (var (combo, what) in new[]
                  {
                      (new[] { "Ctrl", "C" }, "скопировать выбранные"),
@@ -195,7 +195,8 @@ internal sealed class LogWindow
                      (new[] { "Двойной щелчок" }, "скопировать строку"),
                  })
             keys.Children.Add(Shortcut(combo, what));
-        var keysBox = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = keys }.Ref(Border.BorderBrushProperty, "Border");
+        // Разделитель с отступом от кнопок: раньше линия проходила прямо по их нижнему краю
+        var keysBox = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 14, 0, 0), Padding = new Thickness(0, 6, 0, 0), Child = keys }.Ref(Border.BorderBrushProperty, "Border");
         Grid.SetRow(keysBox, 4); root.Children.Add(keysBox);
 
         _w.Content = root;

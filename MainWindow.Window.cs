@@ -220,6 +220,16 @@ public partial class MainWindow
         ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
+        // Колонка «Сервер» тянется по ширине. После широкого окна она запоминала рассчитанную ширину и в компактном
+        // виде выталкивала пинг за край: растяжение ставим заново, в узком окне без нижнего предела ширины
+        ColServer.MinWidth = compact ? 120 : 250;
+        ColServer.Width = new DataGridLength(2, DataGridLengthUnitType.Star);
+        // При сужении таблица сжимала пинг до 20 px и обратно не растягивала: нижний предел ширины не дает его спрятать
+        ColPing.MinWidth = 110;
+        HookServerGridWidth();
+        // Растяжение «Сервера» таблица пересчитывает только при смене значения ширины: то же значение ничего не меняет,
+        // и колонка оставалась на минимуме с пустым местом справа. После раскладки окна сначала точная ширина, потом растяжение
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle, new Action(RestretchServerColumn));
         ServerGrid.RowStyle = compact ? (Style)FindResource("RowCompact") : null;
         ServerGrid.Tag = compact ? "compact" : null; // по нему строки прячут текст статуса (см. XAML)
         ModeButtonText.Text = compact ? "Полный вид" : "Компактно";
@@ -266,6 +276,28 @@ public partial class MainWindow
     /// Ширина окна решает, что переносится и что скрывается. Приоритет: сначала уходят второстепенные колонки таблицы,
     /// потом шапка переносит статистику и кнопки действий на вторую строку. В компактном виде раскладку задает SetCompact.
     /// </summary>
+    private void RestretchServerColumn()
+    {
+        if (_compact && ServerGrid.ActualWidth > 0)
+        {
+            // В компактном виде растяжение таблица не пересчитывала: точная ширина, все место кроме пинга и прокрутки
+            var rest = ServerGrid.ActualWidth - Math.Max(ColPing.MinWidth, ColPing.Width.DisplayValue) - SystemParameters.VerticalScrollBarWidth - 6;
+            ColServer.Width = new DataGridLength(Math.Max(ColServer.MinWidth, rest));
+            return;
+        }
+        ColServer.Width = new DataGridLength(ColServer.MinWidth);
+        ColServer.Width = new DataGridLength(2, DataGridLengthUnitType.Star);
+    }
+
+    private bool _serverGridHooked;
+    private double _restretchedAt = -1000;
+    private void HookServerGridWidth()
+    {
+        if (_serverGridHooked) return;
+        _serverGridHooked = true;
+        ServerGrid.SizeChanged += (_, e) => { if (_compact && e.WidthChanged) RestretchServerColumn(); };
+    }
+
     private void ApplyResponsive()
     {
         if (ApplyActions == null || HeaderGrid == null) return;
@@ -284,9 +316,17 @@ public partial class MainWindow
         ColAi.Visibility = ai ? Visibility.Visible : Visibility.Collapsed;
         ColStab.Visibility = ColScore.Visibility = stab ? Visibility.Visible : Visibility.Collapsed;
         ColLocation.Visibility = location ? Visibility.Visible : Visibility.Collapsed;
+        if (Math.Abs(table - _restretchedAt) > 24) { _restretchedAt = table; RestretchServerColumn(); } // заново по текущей ширине, а не по прошлой
 
         // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
         TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
+        // Высота окна перешла порог: проверка подключения перерисовывается плотнее или полнее
+        if (_denseShown != DenseCompare)
+        {
+            _denseShown = DenseCompare;
+            _compareSig = null;
+            if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
+        }
 
         if (!full) return; // компактный вид шапку раскладывает сам
 
@@ -399,6 +439,8 @@ public partial class MainWindow
         if (_tray != null) { var old = _tray.Icon; _tray.Icon = Controls.Brand.TrayIcon(); old?.Dispose(); }
         foreach (Window w in Application.Current.Windows) Services.DarkTitle.Apply(w); // заголовок окна Windows в цвет темы
         if (!IsLoaded) return; // при запуске цвета ставятся до загрузки списка: перерисовывать еще нечего
+        RefreshUpdateCards(); // карточка обновления в меню: в светлой теме оставалась темной, надпись не была видна
+        RefreshDashboard();
         if (_connBrush != null) AnimateConnectColor(DnsSwitcher.GetActive() != null ? "BadButton" : "AccentButton");
         _compareSig = null; // карточки перерисовываются, даже если данные те же: поменялись цвета
         if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);

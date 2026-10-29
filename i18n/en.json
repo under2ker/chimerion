@@ -2003,5 +2003,7 @@
  "Черновик открыт в браузере. Буфер обмена занят: полный отчет можно сохранить кнопкой «Сохранить отчет»": "The draft is open in the browser. The clipboard is busy: you can save the full report with «Save report»",
  "Буфер обмена занят другой программой: сохраните журнал в файл": "The clipboard is busy with another program: save the log to a file",
  "(показаны последние {0} строк из {1}; весь журнал: окно «Журнал», «Скопировать журнал за 3 дня»)": "(last {0} lines of {1} shown; the whole log: «Log» window, «Copy the log for 3 days»)",
- "Пропущено {0} адресов: {1} похож на общий список DNS, а не на подборку Smart DNS": "Skipped {0} addresses: {1} looks like a general DNS list, not a Smart DNS selection"
+ "Пропущено {0} адресов: {1} похож на общий список DNS, а не на подборку Smart DNS": "Skipped {0} addresses: {1} looks like a general DNS list, not a Smart DNS selection",
+ "Серверы ({0})": "Servers ({0})",
+ "Сайт не проверялся": "Site not checked"
 }
