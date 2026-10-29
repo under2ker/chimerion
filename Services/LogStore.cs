@@ -6,13 +6,14 @@ namespace Dnex.Services;
 
 /// <summary>
 /// Журнал на диске: папка logs, файл на каждый день (2026-10-27.log), строка «время TAB текст». Хранится 3 дня,
-/// старые файлы удаляются при запуске и при смене дня. Пишется уже очищенный текст (без IP, места и провайдера),
+/// старые файлы удаляются при первой записи в новый день. Текст очищается перед записью и чтением,
 /// поэтому копирование и отчет берут журнал за все 3 дня, а не только за текущий запуск.
 /// </summary>
 public static class LogStore
 {
     public static readonly TimeSpan Keep = TimeSpan.FromDays(3);
-    private const string TimeFormat = "yyyy-MM-dd HH:mm:ss";
+    private const string TimeFormat = "yyyy-MM-dd HH:mm:ss.fff";
+    private static readonly string[] TimeFormats = [TimeFormat, "yyyy-MM-dd HH:mm:ss"];
     private static readonly object Gate = new();
     private static DateTime _prunedDay;
 
@@ -35,7 +36,7 @@ public static class LogStore
                 {
                     var sb = new StringBuilder();
                     foreach (var (t, text) in day)
-                        sb.Append(t.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\t').Append(OneLine(text)).Append('\n');
+                        sb.Append(t.ToString(TimeFormat, CultureInfo.InvariantCulture)).Append('\t').Append(OneLine(PrivacyGuard.Scrub(text))).Append('\n');
                     File.AppendAllText(FileOf(day.Key), sb.ToString(), Encoding.UTF8);
                 }
             }
@@ -60,14 +61,14 @@ public static class LogStore
                     foreach (var line in File.ReadLines(file, Encoding.UTF8))
                     {
                         int tab = line.IndexOf('\t');
-                        if (tab <= 0 || !DateTime.TryParseExact(line[..tab], TimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)) continue;
-                        if (t >= from) result.Add((t, line[(tab + 1)..]));
+                        if (tab <= 0 || !DateTime.TryParseExact(line[..tab], TimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var t)) continue;
+                        if (t >= from) result.Add((t, PrivacyGuard.Scrub(line[(tab + 1)..])));
                     }
                 }
             }
             catch (Exception) { }
         }
-        return result;
+        return result.OrderBy(x => x.Item1).ToList();
     }
 
     /// <summary>Удалить файлы старше 3 дней.</summary>

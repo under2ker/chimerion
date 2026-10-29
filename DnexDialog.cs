@@ -21,7 +21,10 @@ internal static class UiExt
 internal static class DnexDialog
 {
     /// <summary>Пустое окно программы: заголовок «CHIMERION · …», значок, палитра, темная рамка.</summary>
-    public static Window CreateWindow(string title, double width)
+    public static Window CreateWindow(string title, double width,
+        [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(title))] string expression = "")
     {
         var res = Application.Current.Resources;
         var owner = Application.Current.MainWindow is { IsVisible: true } m ? m : null;
@@ -40,6 +43,7 @@ internal static class DnexDialog
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
             FontSize = 13,
         };
+        SupportTraceUi.Identify(w, member, line, expression);
         w.SetResourceReference(Window.BackgroundProperty, "Bg");
         w.SetResourceReference(Window.ForegroundProperty, "Text");
         // Текст и раскладка как у главного окна: без этого при плавной прокрутке на дробное смещение текст
@@ -124,7 +128,10 @@ internal static class DnexDialog
         return grid;
     }
 
-    public static Button MakeButton(string text, string style, Action click)
+    public static Button MakeButton(string text, string style, Action click,
+        [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(text))] string expression = "")
     {
         var b = new Button
         {
@@ -132,6 +139,7 @@ internal static class DnexDialog
             MinWidth = 110, Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(16, 9, 16, 9),
         };
         b.Click += (_, _) => click();
+        SupportTraceUi.Identify(b, member, line, expression);
         return b;
     }
 
@@ -153,8 +161,11 @@ internal static class DnexDialog
     /// кнопка красная и Enter ее не нажимает.
     /// </summary>
     public static bool Ask(string title, string text, string yes, string no = "Отмена",
-                           DialogKind kind = DialogKind.Warn, bool danger = false, string windowTitle = "Вопрос")
+                           DialogKind kind = DialogKind.Warn, bool danger = false, string windowTitle = "Вопрос",
+                           [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+                           [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
+        using var operation = Services.SupportTrace.Begin($"Вопрос {member}:{line}");
         bool result = false;
         var w = CreateWindow(windowTitle, Ui.Narrow);
         var root = Body(title, text, kind);
@@ -165,6 +176,7 @@ internal static class DnexDialog
         root.Children.Add(Ui.Footer(null, yesBtn, noBtn));
         w.Content = root;
         w.ShowDialog();
+        operation.Detail($"Подтверждено={result}");
         return result;
     }
 
@@ -172,8 +184,11 @@ internal static class DnexDialog
     /// Рискованный шаг, который программа не рекомендует: кнопка действия красная и неактивна, пока человек не отметит
     /// галочку confirm. По умолчанию (Enter, Esc, закрытие окна) выбирается отказ.
     /// </summary>
-    public static bool AskRisk(string title, string text, string confirm, string yes, string no, string windowTitle = "Вопрос")
+    public static bool AskRisk(string title, string text, string confirm, string yes, string no, string windowTitle = "Вопрос",
+        [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
+        using var operation = Services.SupportTrace.Begin($"Подтверждение риска {member}:{line}");
         bool result = false;
         var w = CreateWindow(windowTitle, Ui.Narrow);
         var root = Body(title, text, DialogKind.Warn);
@@ -189,6 +204,7 @@ internal static class DnexDialog
         root.Children.Add(Ui.Footer(null, noBtn, yesBtn));
         w.Content = root;
         w.ShowDialog();
+        operation.Detail($"Подтверждено={result}");
         return result;
     }
 

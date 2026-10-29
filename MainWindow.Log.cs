@@ -53,11 +53,13 @@ public partial class MainWindow
     {
         // Личные значения (IP, место, провайдер, имя пользователя) в журнал не попадают вовсе, ни в память, ни на диск
         _logQueue.Enqueue(new LogEntry(DateTime.Now, PrivacyGuard.Scrub(msg)));
+        SupportTrace.Write($"Событие: {msg}");
         if (Dispatcher.CheckAccess()) EnsureLogTimer(); else Dispatcher.InvokeAsync(EnsureLogTimer);
     }
 
     private void EnsureLogTimer()
     {
+        EnsureSupportTray();
         if (_logTimer == null)
         {
             _logTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
@@ -72,7 +74,7 @@ public partial class MainWindow
         if (_logQueue.IsEmpty) return;
         var added = new List<LogEntry>();
         while (_logQueue.TryDequeue(out var entry)) { _log.Add(entry); added.Add(entry); }
-        LogStore.Append(added.Select(x => (x.Time, x.Text)));
+        if (!SupportTrace.Enabled) LogStore.Append(added.Select(x => (x.Time, x.Text)));
         while (_log.Count > MaxLogEntries) _log.RemoveAt(0);
     }
 
@@ -108,6 +110,8 @@ public partial class MainWindow
     private List<LogEntry> StoredLog()
     {
         FlushLog();
+        SupportTrace.Write("Подготовка полного журнала для копирования или отчета");
+        SupportTrace.Flush();
         return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).ToList();
     }
 
