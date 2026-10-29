@@ -47,6 +47,10 @@ public static class Diagnostics
 
         // Подключение и то, что реально стоит на адаптерах
         var active = DnsSwitcher.GetActive();
+        var known = System.IO.File.Exists(Storage.PathOf("servers.json")) ? Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>()) : new List<Models.DnsServer>();
+        var activeServer = active == null ? null : known.FirstOrDefault(x => x.Id == active.ServerId);
+        // То же имя, что на главной и в журнале («Россия, Москва»), а не технический источник вроде raw.githubusercontent.com
+        var activeName = activeServer?.ShortName ?? active?.Name;
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
         if (active == null)
             items.Add(new DiagItem(DiagLevel.Info, "Не подключено", "DNS системы: " + (current.Count == 0 ? "автоматически" : string.Join(", ", current)),
@@ -55,9 +59,9 @@ public static class Diagnostics
         {
             var adapters = await DnsSwitcher.GetCurrentAdapterAddressesAsync();
             var onAdapters = !ConnectionMonitor.NeedsRestore(active, current, !active.Split || SplitDns.RulesPresent(), out _, adapters);
-            items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {active.Name} с {active.Since:dd.MM HH:mm}",
+            items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {activeName} с {active.Since:dd.MM HH:mm}",
                 !onAdapters ? $"DNS системы не совпадает с подключением ({string.Join(", ", current)}) или пропали правила для ИИ: их сбросила другая программа или Windows"
-                : active.Split ? $"Два DNS: домены ИИ через {active.Name} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
+                : active.Split ? $"Два DNS: домены ИИ через {activeName} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
                 : $"DNS системы: {string.Join(", ", current)}" + (active.DohTemplate != null ? $", DoH {active.DohTemplate}" : ""),
                 onAdapters ? null : "reconnect", "Переподключить"));
             if (active.Split && SplitDns.GeneralIsSmart(st.SplitDns, active.Addresses))
@@ -92,12 +96,17 @@ public static class Diagnostics
             var access = s.Access.TrimStart('✓', '✗', ' ');
             // Предположение («закрыт для региона или капча») не выдаем за установленную причину
             var unsure = s.Note != null && s.Note.Contains(" или ");
-            var detail = bad
-                ? $"Итог проверки: {access}. Маршрут: {route}{where}." + (s.Note != null ? $" {s.Note}." : "") + (unsure || s.Note == null ? " Точная причина не установлена" : "")
-                : route + where + (s.Note != null ? ". " + s.Note : "");
-            items.Add(new DiagItem(bad ? DiagLevel.Bad : DiagLevel.Ok, bad ? $"{s.Name}: не открывается" : $"{s.Name}: открывается", detail,
-                bad && active != null ? "switch" : null, "Подобрать другой сервер",
-                bad && active != null ? "Другой сервер поможет, если сервис закрыт для страны выхода текущего. Если новая страна выхода отличается от привычной, программа спросит подтверждение" : ""));
+            // API и сайт проверяются отдельно: «API ответил, сайт не подтвержден» не то же самое, что «закрыт»
+            bool apiOnly = bad && s.Note != null && s.Note.Contains("API отвечает", StringComparison.OrdinalIgnoreCase);
+            var title = !bad ? $"{s.Name}: открывается" : apiOnly ? $"{s.Name}: сайт не подтвержден" : $"{s.Name}: не открывается";
+            var detail = !bad ? route + where
+                : apiOnly ? "API ответил, открытие сайта подтвердить не удалось." + (unsure ? " Причина не установлена" : "")
+                : $"Итог проверки: {access}." + (unsure || s.Note == null ? " Причина не установлена" : "");
+            var more = bad
+                ? $"Маршрут: {route}{where}." + (s.Note != null ? $" Проверка: {s.Note}." : "") +
+                  (active != null ? " Другой сервер поможет, если сервис закрыт для страны выхода текущего. Если у нового сервера другая страна выхода, программа спросит подтверждение" : "")
+                : s.Note ?? "";
+            items.Add(new DiagItem(bad ? DiagLevel.Bad : DiagLevel.Ok, title, detail, bad && active != null ? "switch" : null, "Подобрать другой сервер", more));
         }
         Mark("Аккаунты и адрес выхода");
         // Репутация адресов выхода: только адреса прокси сервера, свой IP пользователя не проверяется
@@ -105,17 +114,18 @@ public static class Diagnostics
             foreach (var exitIp in snap.Services.Where(x => x.Proxied && x.Egress != null).Select(x => x.Egress!.Ip).Distinct())
                 if (await IpReputation.CheckAsync(exitIp, st.ReferenceDoh, ct) is { } rep)
                 {
-                    // Черные списки и оценка риска разные проверки: зеленое «в списках нет» не должно прятать высокий риск
-                    items.Add(new DiagItem(rep.Lists.Length > 0 ? DiagLevel.Warn : DiagLevel.Ok,
-                        rep.Lists.Length > 0 ? $"Адрес выхода {exitIp} в черном списке" : $"Адрес выхода {exitIp}: в черных списках нет",
-                        rep.Lists.Length > 0 ? $"Списки: {string.Join(", ", rep.Lists)}. С таких адресов входы блокируют чаще" : "Проверены DroneBL, UCEPROTECT и SpamCop",
-                        rep.Lists.Length > 0 ? "switch" : null, "Подобрать другой сервер"));
-                    if (rep.Risk is { } risk)
-                        items.Add(new DiagItem(risk >= 66 ? DiagLevel.Warn : DiagLevel.Info,
-                            $"Оценка риска адреса выхода: {risk} из 100" + (string.IsNullOrEmpty(rep.Type) ? "" : $", распознается как {rep.Type}"),
-                            "Оценка proxycheck.io: чем выше, тем чаще сервисы считают адрес прокси или VPN и строже проверяют вход. " +
-                            (risk >= 66 ? "Высокая: если просят капчу или подтверждение входа, попробуйте сервер с другим адресом" : "Невысокая, делать ничего не нужно"),
-                            risk >= 66 ? "switch" : null, "Подобрать другой сервер"));
+                    // Две разные проверки одного адреса под одним заголовком: черные списки и оценка риска,
+                    // чтобы зеленое «в списках нет» и высокий риск не выглядели противоречием в разных местах окна
+                    bool listed = rep.Lists.Length > 0, risky = rep.Risk is >= 66;
+                    var lists = listed ? $"Черные списки: есть ({string.Join(", ", rep.Lists)})" : "Черные списки: нет";
+                    var risk = rep.Risk is { } r ? $"Оценка риска: {r} из 100" + (string.IsNullOrEmpty(rep.Type) ? "" : $", распознается как {rep.Type}") : "Оценка риска: нет данных";
+                    items.Add(new DiagItem(listed || risky ? DiagLevel.Warn : DiagLevel.Ok, $"Адрес выхода {exitIp}", $"{lists}. {risk}",
+                        listed || risky ? "switch" : null, "Подобрать сервер в той же стране",
+                        "Черные списки DroneBL, UCEPROTECT и SpamCop: с адресов из них входы блокируют чаще. Оценка proxycheck.io: чем выше, тем чаще " +
+                        "сервисы считают адрес прокси или VPN и строже проверяют вход. " +
+                        (listed || risky ? "Если просят капчу или подтверждение входа, лучше другой адрес в той же стране выхода: смена страны повышает риск блокировки сильнее, " +
+                                           "поэтому подбор берет серверы с привычной страной, а на другую страну программа спросит согласие"
+                                         : "Делать ничего не нужно")));
                 }
         if (AccountSafety.Pinned is { } pin)
             items.Add(new DiagItem(DiagLevel.Info, $"Выбрана страна выхода: {GeoLocation.CountryName(pin)}",
@@ -133,6 +143,7 @@ public static class Diagnostics
             else if (mism.Count > 0 || many.Count > 0)
                 items.Add(new DiagItem(DiagLevel.Warn,
                     mism.Count > 0 ? $"Защита аккаунтов: {string.Join(", ", mism.Select(m => m.Service).Distinct())} видят вас не из привычной страны" : $"Защита аккаунтов: много стран у {string.Join(", ", many)}",
+                    (mism.Count > 0 ? string.Join("; ", mism.Select(m => $"{m.Service}: обычно {GeoLocation.CountryName(m.Home)}, сейчас {GeoLocation.CountryName(m.Now)}")) + ". " : "") +
                     "Частая смена страны входа повышает риск блокировки аккаунта. Лучше сервер с привычной страной выхода",
                     active != null ? "switch" : null, "Подобрать сервер с привычной страной",
                     (mism.Count > 0 ? $"Сейчас: {AccountSafety.Describe(mism)}. " : "") +
@@ -146,8 +157,7 @@ public static class Diagnostics
         // Общая карта серверов: что работает у пользователей той же сети провайдера
         if (Crowd.LoadStats() is { } crowd && crowd.Provider.Count > 0 && System.IO.File.Exists(Storage.PathOf("servers.json")))
         {
-            var servers = Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>());
-            items.Add(Crowd.BestForProvider(crowd, servers) is { } best
+            items.Add(Crowd.BestForProvider(crowd, known) is { } best
                 ? new DiagItem(DiagLevel.Info, $"По данным общей карты у вашего провайдера чаще всего работает {best.Server.ShortName}",
                     $"{best.Rate}% удачных проверок из {best.Total} за сутки у пользователей CHIMERION в той же сети. Это подсказка, а не гарантия")
                 : new DiagItem(DiagLevel.Info, "Общая карта: по вашему провайдеру пока мало данных"));
