@@ -155,7 +155,7 @@ public partial class MainWindow
     private void ModeToggle_Click(object sender, RoutedEventArgs e)
     {
         ModeToggle.IsChecked = false;
-        var menu = new ContextMenu { PlacementTarget = ModeToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+        var menu = new ContextMenu { PlacementTarget = ModeToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
         foreach (var (mode, title, hint) in Modes)
         {
             var mi = new MenuItem { Header = title, ToolTip = hint };

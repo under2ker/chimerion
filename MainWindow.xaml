@@ -54,6 +54,33 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="PanelNavButton" TargetType="Button" BasedOn="{StaticResource Ghost}">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,9"/><Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="8">
+                    <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bg" Property="Background" Value="{DynamicResource SurfaceHover}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="bg" Property="BorderThickness" Value="1"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="PanelNavToggle" TargetType="ToggleButton" BasedOn="{StaticResource LinkToggle}">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,9"/><Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+                <Border x:Name="bg" Background="Transparent" CornerRadius="8">
+                    <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bg" Property="Background" Value="{DynamicResource SurfaceHover}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="bg" Property="BorderThickness" Value="1"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
     </Window.Resources>
 
     <DockPanel>
@@ -82,6 +109,40 @@
         </Grid>
 
     <Grid>
+    <DockPanel x:Name="PanelShell" Visibility="{Binding ElementName=RootGrid, Path=Visibility}">
+        <Border x:Name="PanelSidebar" DockPanel.Dock="Left" Width="220" Background="{DynamicResource Surface}"
+                BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="8,10,8,10">
+                <Button x:Name="PanelCollapseButton" DockPanel.Dock="Top" Click="PanelCollapse_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Свернуть меню" AutomationProperties.Name="Свернуть меню">
+                    <StackPanel Orientation="Horizontal"><controls:Icon x:Name="PanelCollapseIcon" Kind="shrink" Size="16" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="PanelCollapseText" Text="Свернуть меню"/></StackPanel>
+                </Button>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="PanelNavItems">
+                <Button Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="globe" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
+                <Button x:Name="ModeButton" Click="Mode_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Компактный / полный вид"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shrink" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="ModeButtonText" Text="Компактно"/></StackPanel></Button>
+                <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Настройки программы"><StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSettingsText" Text="Настройки"/></StackPanel></Button>
+                <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="globe" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
+                <ToggleButton x:Name="AddToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"
+                              Checked="AddToggle_Changed" Unchecked="AddToggle_Changed"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал" AutomationProperties.Name="Журнал"
+                              Checked="LogToggle_Changed" Unchecked="LogToggle_Changed"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="ToolsToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
+                              Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="ModeToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
+                              Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="DiagToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
+                              Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></ToggleButton>
+                <ToggleButton x:Name="HelpToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
+                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></ToggleButton>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
     <Grid x:Name="RootGrid" Margin="20,8,20,16" Visibility="Collapsed">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- шапка -->
@@ -168,13 +229,6 @@
             </WrapPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Главная" Click="DashboardHome_Click" Style="{StaticResource Ghost}"/>
-                <Button x:Name="ModeButton" Click="Mode_Click" Style="{StaticResource Ghost}"
-                        ToolTip="Компактный / полный вид"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shrink" Size="14" Margin="0,0,7,0"/><TextBlock x:Name="ModeButtonText" Text="Компактно"/></StackPanel></Button>
-                <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource Ghost}"
-                        ToolTip="Настройки программы"><StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="14" Margin="0,0,7,0"/><TextBlock Text="Настройки"/></StackPanel></Button>
-                <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource Ghost}"
-                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="globe" Size="14" Margin="0,0,7,0"/><TextBlock Text="Данные"/></StackPanel></Button>
                 <Rectangle x:Name="HeaderSep" Width="1" Height="24" Fill="{DynamicResource Border}" Margin="12,0"/>
                 <StackPanel x:Name="ApplyActions" Orientation="Horizontal">
                     <CheckBox x:Name="Watchdog" Content="Следить" IsChecked="True" Margin="0,0,14,0"
@@ -222,7 +276,7 @@
         </Grid>
 
         <!-- ================= ПОИСК И ДЕЙСТВИЯ ================= -->
-        <DockPanel x:Name="ToolbarCard" Grid.Row="2" Margin="0,0,0,12" LastChildFill="False">
+        <WrapPanel x:Name="ToolbarCard" Grid.Row="2" Margin="0,0,0,12">
             <TextBox x:Name="SearchBox" TextChanged="Filter_Changed" Width="300" Tag="Поиск: имя, IP, источник"/>
 
             <Border Margin="10,0,0,0" Padding="3" CornerRadius="9" Background="{DynamicResource Surface}"
@@ -246,7 +300,7 @@
                 </StackPanel>
             </Border>
 
-            <StackPanel x:Name="ListActions" Orientation="Horizontal" DockPanel.Dock="Right">
+            <StackPanel x:Name="ListActions" Orientation="Horizontal">
                 <!-- Перепроверить и стрелка с режимами: глубокая проверка, только один сервис -->
                 <Button Content="Перепроверить" Click="CheckAll_Click" Style="{StaticResource Strong}"
                         ToolTip="Еще раз проверить все серверы в списке"/>
@@ -256,13 +310,13 @@
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
             <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}"
-                    DockPanel.Dock="Right" Visibility="Collapsed"/>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                    Visibility="Collapsed"/>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                 <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" VerticalAlignment="Center"
                            MaxWidth="380" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
                 <ProgressBar x:Name="WorkBar" Width="140" Visibility="Collapsed" AutomationProperties.Name="Прогресс работы"/>
             </StackPanel>
-        </DockPanel>
+        </WrapPanel>
 
         <!-- ================= ТАБЛИЦА ================= -->
         <Border x:Name="TableCard" Grid.Row="3" Style="{StaticResource Card}" Padding="0" SizeChanged="TableCard_SizeChanged">
@@ -654,20 +708,8 @@
         <!-- ================= НИЗ ================= -->
         <StackPanel x:Name="BottomPanel" Grid.Row="4" Margin="0,12,0,0">
             <DockPanel LastChildFill="False">
-                <ToggleButton x:Name="AddToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center"
-                              Checked="AddToggle_Changed" Unchecked="AddToggle_Changed"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="14" Margin="0,0,7,0"/><TextBlock Text="Добавить сервер вручную"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="LogToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
-                              Checked="LogToggle_Changed" Unchecked="LogToggle_Changed"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="14" Margin="0,0,7,0"/><TextBlock Text="Журнал"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="ToolsToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
-                              Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="14" Margin="0,0,7,0"/><TextBlock Text="Telegram и YouTube"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="ModeToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
-                              Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="14" Margin="0,0,7,0"/><TextBlock Text="Режим"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="DiagToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
-                              Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="14" Margin="0,0,7,0"/><TextBlock Text="Диагностика"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="HelpToggle" Style="{StaticResource LinkToggle}" VerticalAlignment="Center" Margin="20,0,0,0"
-                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="14" Margin="0,0,7,0"/><TextBlock Text="Помощь"/></StackPanel></ToggleButton>
                 <!-- Версия и проверка обновления: справа внизу, на виду и не теснят шапку. В компактном виде версия в заголовке окна -->
-                <StackPanel x:Name="UpdateGroup" DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel x:Name="UpdateGroup" DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Значок итога проверки обновления (галочка или предупреждение), виден вместе с итогом -->
                     <controls:Icon x:Name="UpdateResultIcon" Kind="circle-check" Size="15" StrokeWidth="2.2" Margin="0,0,6,0" Visibility="Collapsed"/>
                     <TextBlock x:Name="HeaderVersion" Style="{StaticResource Label}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -676,6 +718,7 @@
                 </StackPanel>
             </DockPanel>
 
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
             <StackPanel x:Name="AddPanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed" KeyDown="AddPanel_KeyDown">
                 <TextBox x:Name="AddName" Width="170" Tag="Название"/>
                 <TextBox x:Name="AddPrimary" Width="140" Margin="8,0,0,0" Tag="Основной IP"/>
@@ -683,6 +726,7 @@
                 <TextBox x:Name="AddDoh" Width="280" Margin="8,0,0,0" Tag="DoH: https://…/dns-query"/>
                 <Button Content="Добавить" Click="Add_Click" Style="{StaticResource Primary}" Margin="8,0,0,0"/>
             </StackPanel>
+            </ScrollViewer>
 
             <!-- Журнал: записи с цветом по уровню, фильтр, копирование и очистка -->
             <Border x:Name="LogPanel" Style="{StaticResource Card}" Padding="14,12" Margin="0,10,0,0" Visibility="Collapsed">
@@ -836,6 +880,7 @@
             </StackPanel>
         </Border>
     </Grid>
+    </DockPanel>
     <ContentControl x:Name="DashboardHost"/>
     </Grid>
     </DockPanel>

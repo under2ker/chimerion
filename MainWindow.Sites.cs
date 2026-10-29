@@ -107,7 +107,7 @@ public partial class MainWindow
     private void HelpToggle_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         HelpToggle.IsChecked = false;
-        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = HelpToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+        var menu = new System.Windows.Controls.ContextMenu { PlacementTarget = HelpToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
         System.Windows.Controls.MenuItem Item(string text, Action act)
         {
             var mi = new System.Windows.Controls.MenuItem { Header = text };
