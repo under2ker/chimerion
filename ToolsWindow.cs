@@ -1,15 +1,18 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using Dnex.Services;
 using Dnex.Services.Tools;
 
 namespace Dnex;
 
 /// <summary>
-/// Окно «Telegram и YouTube»: включение, выключение и обновление сторонних программ (TG WS Proxy и zapret).
-/// На каждую программу карточка: название и состояние, описание, настройки строками, кнопки действий,
-/// строка хода работы или ошибки. Оформление общее с остальными окнами (Ui).
+/// Окно «Telegram и YouTube»: две карточки (TG WS Proxy и zapret) с большим переключателем, состоянием, подсказкой
+/// «что дальше» и ходом работы прямо в карточке; ниже настройки обхода и итоги подбора стратегии.
+/// Элементы создаются один раз и обновляются на месте (Render), поэтому переключатели и смена текста анимируются,
+/// а не перерисовываются заново на каждом шаге скачивания.
 /// </summary>
 internal sealed class ToolsWindow
 {
@@ -20,20 +23,49 @@ internal sealed class ToolsWindow
     private readonly Action _relaunchElevated;
     private List<ZapretTool.StrategyResult>? _pick;     // итоги последнего подбора стратегии
     private CancellationTokenSource? _pickCts;          // идет подбор: можно остановить
-    private readonly StackPanel _cards = new();
     private readonly Dictionary<string, string> _status = new();   // последняя строка хода работы по инструменту
     private readonly HashSet<string> _errors = new();
     private bool _busy;
-    // Ход работы в карточке: строка этапа и полоса прогресса (одна на окно, переносится в карточку занятой программы)
-    private readonly TextBlock _stage = Ui.Status();
-    private readonly ProgressBar _bar = new() { Minimum = 0, Maximum = 100, Margin = new Thickness(0, 12, 0, 0) };
     private Tool? _busyTool;
     private string _verb = "Загрузка";
+    private bool _syncing; // переключатели ставятся из кода: действия не запускать
+
+    private readonly List<ToolCard> _cards = new();
+    private readonly StackPanel _settingsHost = new();
+    private readonly StackPanel _pickHost = new();
+    private ZapretSettings? _settings;
+    private string? _pickSignature;
 
     private static ToolsWindow? _open;
 
     /// <summary>Отправить домен в Smart DNS («Два DNS» → свои домены). Задает главное окно.</summary>
     private static Func<string, string>? _toSmartDns;
+
+    /// <summary>Карточка программы: элементы, которые обновляет Render.</summary>
+    private sealed class ToolCard
+    {
+        public Tool Tool = null!;
+        public Border Badge = null!;
+        public Controls.Icon BadgeIcon = null!;
+        public Controls.Switch Toggle = null!;
+        public Ellipse Dot = null!;
+        public TextBlock State = null!, Next = null!, Version = null!, Message = null!, Stage = null!;
+        public WrapPanel Actions = null!;
+        public StackPanel Progress = null!;
+        public ProgressBar Bar = null!;
+        /// <summary>Куда человек перевел переключатель, пока это выполняется.</summary>
+        public bool? Target;
+    }
+
+    /// <summary>Строки настроек zapret: создаются один раз, значения обновляются на месте.</summary>
+    private sealed class ZapretSettings
+    {
+        public Border Card = null!;
+        public Button Strategy = null!, Sites = null!, Source = null!;
+        public TextBlock StrategyText = null!, StrategyHint = null!, SitesText = null!, SourceText = null!;
+        public Controls.Switch Auto = null!, IpSet = null!, Games = null!;
+        public FrameworkElement SourceRow = null!;
+    }
 
     public static void Show(IReadOnlyList<Tool> tools, Action<string> log, Action changed, Action relaunchElevated, Func<string, string>? toSmartDns = null)
     {
@@ -50,14 +82,33 @@ internal sealed class ToolsWindow
         _tools = tools;
         _log = log;
         _changed = changed;
-        _w = DnexDialog.CreateWindow("Telegram и YouTube", Ui.Wide);
+        _w = DnexDialog.CreateWindow("Telegram и YouTube", 820);
         _w.Closed += (_, _) => { _pickCts?.Cancel(); _open = null; };
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Telegram и YouTube",
-            "Сторонние программы с открытым кодом. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы", glyph: "zap"));
-        root.Children.Add(_cards);
-        root.Children.Add(Ui.Footer(Ui.Hint(string.Join("\n", tools.Select(t => t.Authors)), 0).With(t => t.FontSize = 11),
-            Ui.Action("Проверить обновления", "Ghost", () => _ = CheckUpdatesAsync(quiet: false))));
+            "Ускорение Telegram и обход замедления YouTube и Discord одним переключателем", glyph: "zap"));
+
+        // Две карточки рядом: у каждой свой переключатель, состояние и следующий шаг
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        int col = 0;
+        foreach (var t in tools.OrderBy(t => t is TgProxyTool ? 0 : 1))
+        {
+            var card = BuildCard(t);
+            Grid.SetColumn(card.Badge.Tag as Border ?? throw new InvalidOperationException(), col);
+            grid.Children.Add((Border)card.Badge.Tag);
+            col += 2;
+        }
+        root.Children.Add(grid);
+        root.Children.Add(_settingsHost);
+        root.Children.Add(_pickHost);
+
+        var credits = Ui.Hint("Открытый код: TG WS Proxy (Flowseal), zapret (bol-van, Flowseal), лицензия MIT", 0)
+            .With(t => { t.FontSize = 11; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; t.VerticalAlignment = VerticalAlignment.Center; });
+        credits.ToolTip = string.Join("\n", tools.Select(t => t.Authors)) + "\nCHIMERION ставит официальные релизы с GitHub после проверки контрольной суммы";
+        root.Children.Add(Ui.Footer(credits, Ui.Action("Проверить обновления", "Ghost", () => _ = CheckUpdatesAsync(quiet: false))));
         _w.Content = Ui.WindowContent(root);
         Render();
     }
@@ -105,26 +156,10 @@ internal sealed class ToolsWindow
         {
             _busy = false;
             _busyTool = null;
+            foreach (var c in _cards) c.Target = null;
             Render();
             _changed();
         }
-    }
-
-    /// <summary>
-    /// Ход работы в карточке: полоса прогресса (с процентами, если они есть в этапе, например при скачивании,
-    /// иначе бегущая) и строка этапа под ней. Элементы общие на окно: перед вставкой отцепляются от старой карточки.
-    /// </summary>
-    private void AddProgress(StackPanel body, string stage)
-    {
-        if (_stage.Parent is Panel p1) p1.Children.Remove(_stage);
-        if (_bar.Parent is Panel p2) p2.Children.Remove(_bar);
-        var pct = System.Text.RegularExpressions.Regex.Match(stage, @"(\d{1,3})%");
-        if (pct.Success) { _bar.IsIndeterminate = false; Ui.SetProgress(_bar, int.Parse(pct.Groups[1].Value)); }
-        else _bar.IsIndeterminate = true;
-        body.Children.Add(_bar);
-        Ui.SetStatus(_stage, stage.Length > 0 ? stage : $"{_verb}…");
-        _stage.Margin = new Thickness(0, 6, 0, 0);
-        body.Children.Add(_stage);
     }
 
     /// <summary>Изменение настройки zapret: сохранить и, если обход работает, перезапустить его с новой настройкой.</summary>
@@ -138,116 +173,269 @@ internal sealed class ToolsWindow
             if (running) { p.Report("Перезапускаю обход…"); await z.StopAsync(); await z.StartAsync(); }
         }, "Настройка");
 
+    // ---------- Карточки программ ----------
+
+    private ToolCard BuildCard(Tool t)
+    {
+        var c = new ToolCard { Tool = t };
+        bool tg = t is TgProxyTool;
+        c.BadgeIcon = new Controls.Icon { Kind = tg ? "send" : "zap", Size = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        c.Badge = new Border { Width = 46, Height = 46, CornerRadius = new CornerRadius(13), Child = c.BadgeIcon, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0) };
+        c.Toggle = new Controls.Switch { Width = 56, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0),
+                                         ToolTip = tg ? "Включить или выключить TG WS Proxy" : "Включить или выключить обход zapret" };
+        System.Windows.Automation.AutomationProperties.SetName(c.Toggle, tg ? "Telegram" : "YouTube и Discord");
+        c.Toggle.Click += (_, _) => Toggle_Click(c);
+
+        var head = new DockPanel();
+        DockPanel.SetDock(c.Badge, Dock.Left); head.Children.Add(c.Badge);
+        DockPanel.SetDock(c.Toggle, Dock.Right); head.Children.Add(c.Toggle);
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titles.Children.Add(new TextBlock { Text = tg ? "Telegram" : "YouTube и Discord", FontSize = 17, FontWeight = FontWeights.SemiBold });
+        titles.Children.Add(Ui.Hint(tg ? "TG WS Proxy: ускорение Telegram Desktop" : "zapret: обход замедления", 2).With(h => h.FontSize = 12));
+        head.Children.Add(titles);
+
+        c.Dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        c.State = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var state = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 16, 0, 0) };
+        state.Children.Add(c.Dot); state.Children.Add(c.State);
+
+        var about = Ui.Hint(tg ? "Telegram грузится быстрее и не обрывается. У прокси свой значок в трее"
+                               : "Ускоряет YouTube, Discord и сайты из вашего списка. Нужны права администратора", 6);
+        c.Next = Ui.Steps("", 10);
+        c.Actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        c.Bar = new ProgressBar { Minimum = 0, Maximum = 100, Margin = new Thickness(0, 12, 0, 0) };
+        c.Stage = Ui.Hint("", 6);
+        c.Progress = new StackPanel { Visibility = Visibility.Collapsed };
+        c.Progress.Children.Add(c.Bar); c.Progress.Children.Add(c.Stage);
+        c.Message = Ui.Hint("", 10);
+        c.Version = Ui.Hint("", 0).With(h => h.FontSize = 11);
+        var footer = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 10, 0, 0), Margin = new Thickness(0, 14, 0, 0), Child = c.Version }
+            .Ref(Border.BorderBrushProperty, "Border");
+        if (!tg) footer.ToolTip = "Антивирус может ругаться на драйвер WinDivert из сборки zapret: так бывает со всеми программами обхода";
+
+        var body = new DockPanel();
+        DockPanel.SetDock(footer, Dock.Bottom); body.Children.Add(footer);
+        var top = new StackPanel();
+        foreach (var e in new UIElement[] { head, state, about, c.Next, c.Actions, c.Progress, c.Message }) top.Children.Add(e);
+        body.Children.Add(top);
+        var card = Ui.Card(body, bottom: 0);
+        card.Padding = new Thickness(18, 16, 18, 14);
+        c.Badge.Tag = card;
+        _cards.Add(c);
+        return c;
+    }
+
+    private void Toggle_Click(ToolCard c)
+    {
+        if (_syncing) return;
+        var t = c.Tool;
+        if (_busy) { Render(); return; } // занято другим действием: переключатель вернется на место
+        bool on = c.Toggle.IsChecked == true;
+        c.Target = on;
+        _ = on ? RunAsync(t, "Включено", p => t.EnableAsync(p, CancellationToken.None), "Включение")
+               : RunAsync(t, "Выключено", _ => t.DisableAsync(), "Выключение");
+    }
+
+    /// <summary>Обновляет обе карточки, настройки и итоги подбора по текущему состоянию.</summary>
     private void Render()
     {
-        _cards.Children.Clear();
-        foreach (var t in _tools) _cards.Children.Add(Card(t));
+        foreach (var c in _cards) RenderCard(c);
+        RenderSettings();
+        RenderPick();
     }
 
-    private Border Card(Tool t)
+    private void RenderCard(ToolCard c)
     {
+        var t = c.Tool;
         bool installed = t.IsInstalled, running = installed && t.IsRunning();
         // Своя копия прокси у пользователя: CHIMERION ее не выключает, но ссылку для Telegram дает (настройки общие)
-        var foreign = t is TgProxyTool tg && tg.ForeignCopyRunning();
+        bool foreign = t is TgProxyTool tg && tg.ForeignCopyRunning();
         if (foreign) running = true;
-        var body = new StackPanel();
-        body.Children.Add(Ui.CardTitle(t.Title, foreign ? "работает ваша копия" : running ? "работает" : installed ? "выключено" : "не установлено",
-            running ? "Ok" : "Muted"));
-        body.Children.Add(Ui.Hint(t is TgProxyTool
-            ? "Прокси для Telegram Desktop через WebSocket. У него свой значок в трее"
-            : "Обход замедления YouTube, Discord и сайтов из списка. Нужны права администратора, антивирус может ругаться на WinDivert"));
+        bool busyHere = _busy && _busyTool == t;
+        bool want = c.Target ?? running;
 
-        var ver = foreign ? "Запущена ваша копия, не из CHIMERION: выключается через ее значок в трее. Ссылка для Telegram берется из ее настроек"
-                : installed ? $"Версия {t.InstalledVersion}" : "Скачается при первом включении";
-        if (t.UpdateAvailable) ver += $" · доступна {t.Latest!.Version}";
-        body.Children.Add(Ui.Hint(ver, 4, t.UpdateAvailable ? "Accent" : "Muted"));
+        string state, color;
+        if (busyHere) (state, color) = (_verb switch { "Включение" => "Включаю…", "Выключение" => "Выключаю…", "Обновление" => "Обновляю…", "Подбор" => "Подбираю стратегию…", "Настройка" => "Применяю настройку…", _ => "Работаю…" }, "Accent");
+        else if (foreign) (state, color) = ("Работает ваша копия", "Ok");
+        else if (running) (state, color) = ("Работает", "Ok");
+        else if (installed) (state, color) = ("Выключено", "Muted");
+        else (state, color) = ("Не установлено", "Muted");
+        Ui.SwapText(c.State, state, 4);
+        Ui.FadeBrush(c.State, TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color);
+        Ui.FadeBrush(c.Dot, Shape.FillProperty, color);
+        Ui.FadeBrush(c.Badge, Border.BackgroundProperty, running && !busyHere ? "Accent" : busyHere ? "AccentSoft" : "Surface2", 400);
+        c.BadgeIcon.SetResourceReference(Controls.Icon.ForegroundProperty, running && !busyHere ? "OnToggle" : busyHere ? "Accent" : "Muted");
 
+        _syncing = true;
+        c.Toggle.IsChecked = want;
+        c.Toggle.IsEnabled = !foreign;
+        c.Toggle.IsHitTestVisible = !_busy;
+        _syncing = false;
+        c.Toggle.ToolTip = foreign ? "Запущена ваша копия, не из CHIMERION: выключается через ее значок в трее" : c.Toggle.ToolTip;
+
+        // Что дальше: один короткий шаг для того, кто открыл окно впервые
+        string next = busyHere || _errors.Contains(t.Id) ? ""
+            : t is TgProxyTool ? (foreign ? "Ссылка для Telegram берется из настроек вашей копии"
+                                 : running ? "Telegram не подключился сам: нажмите «Подключить Telegram»"
+                                 : "Включите, затем нажмите «Подключить Telegram»")
+            : running ? (_pick == null ? "Сайт не открывается: нажмите «Подобрать стратегию»" : "")
+            : installed ? "Включите, чтобы ускорить YouTube и Discord" : "Включите: программа скачает zapret и запустит обход";
+        c.Next.Text = next;
+        c.Next.Visibility = next.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        // Кнопки
+        c.Actions.Children.Clear();
+        if (t is TgProxyTool && running)
+            c.Actions.Children.Add(Ui.Action("Подключить Telegram", "Primary", ConnectTelegram).With(b => b.IsEnabled = !_busy));
         if (t is ZapretTool z && installed)
         {
-            body.Children.Add(Ui.Separator());
-            ZapretRows(z, body);
+            if (_pickCts != null) c.Actions.Children.Add(Ui.Action("Остановить подбор", "Strong", () => _pickCts?.Cancel()));
+            else c.Actions.Children.Add(Ui.Action("Подобрать стратегию", running ? "Primary" : "Strong", () => _ = PickAsync(z)).With(b => b.IsEnabled = !_busy));
         }
-        // Что нажать: короткий порядок действий для того, кто открыл окно впервые
-        if (!foreign && !running)
-            body.Children.Add(Ui.Steps(t is TgProxyTool
-                ? "Что нажать: «Включить», потом «Подключить Telegram» и подтвердить прокси в окне Telegram"
-                : "Что нажать: «Включить». Программа скачает zapret и запустит обход"));
-        else if (t is ZapretTool && running && _pick == null)
-            body.Children.Add(Ui.Steps("Если какой-то сайт не открывается: добавьте его в «Сайты для обхода», затем нажмите «Подобрать стратегию» и выберите лучшую"));
-        else if (t is TgProxyTool && running)
-            body.Children.Add(Ui.Steps("Telegram не подключился сам: нажмите «Подключить Telegram» и подтвердите прокси в окне Telegram"));
-
-        var actions = new List<Button>();
-        if (!foreign)
-            actions.Add(running
-                ? Ui.Action("Выключить", "Strong", () => _ = RunAsync(t, "Выключено", _ => t.DisableAsync(), "Выключение"))
-                : Ui.Action("Включить", "Primary", () => _ = RunAsync(t, "Включено", p => t.EnableAsync(p, CancellationToken.None), "Включение")));
         if (t.UpdateAvailable)
-            actions.Add(Ui.Action($"Обновить до {t.Latest!.Version}", "Strong",
-                () => _ = RunAsync(t, $"Обновлено до {t.Latest!.Version}", p => t.InstallAsync(p, CancellationToken.None), "Обновление")));
-        if (t is TgProxyTool && running)
-            actions.Add(Ui.Action("Подключить Telegram", "Strong", ConnectTelegram));
-        if (t is ZapretTool && installed && _pickCts == null)
-            actions.Add(Ui.Action("Подобрать стратегию", "Ghost", () => _ = PickAsync((ZapretTool)t)));
-        foreach (var b in actions) b.IsEnabled = !_busy;
-        if (t is ZapretTool && _pickCts != null)
-            actions.Add(Ui.Action("Остановить подбор", "Ghost", () => _pickCts?.Cancel()));
-        if (actions.Count > 0) body.Children.Add(Ui.Actions(actions.ToArray()));
+        {
+            var v = t.Latest!.Version;
+            var up = Ui.Action($"Обновить до {v}", "Ghost", () => _ = RunAsync(t, $"Обновлено до {v}", p => t.InstallAsync(p, CancellationToken.None), "Обновление"));
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new Controls.Icon { Kind = "download", Size = 14, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = $"Обновить до {v}", VerticalAlignment = VerticalAlignment.Center });
+            up.Content = row; up.IsEnabled = !_busy;
+            c.Actions.Children.Add(up);
+        }
+        c.Actions.Visibility = c.Actions.Children.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
 
-        if (t is ZapretTool zr && _pick != null) { body.Children.Add(Ui.Separator()); body.Children.Add(PickResults(zr)); }
-        if (_busy && _busyTool == t) AddProgress(body, _status.GetValueOrDefault(t.Id, ""));
-        else if (_status.TryGetValue(t.Id, out var st))
-            body.Children.Add(Ui.Status().With(s => Ui.SetStatus(s, st, _errors.Contains(t.Id))));
-        return Ui.Card(body);
+        // Ход работы или итог последнего действия
+        var st = _status.GetValueOrDefault(t.Id, "");
+        if (busyHere)
+        {
+            c.Progress.Visibility = Visibility.Visible;
+            var pct = System.Text.RegularExpressions.Regex.Match(st, @"(\d{1,3})%");
+            if (pct.Success) { c.Bar.IsIndeterminate = false; Ui.SetProgress(c.Bar, int.Parse(pct.Groups[1].Value)); }
+            else c.Bar.IsIndeterminate = true;
+            c.Stage.Text = st.Length > 0 ? st : $"{_verb}…";
+            c.Message.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            c.Progress.Visibility = Visibility.Collapsed;
+            c.Bar.IsIndeterminate = false;
+            c.Message.Text = st;
+            c.Message.SetResourceReference(TextBlock.ForegroundProperty, _errors.Contains(t.Id) ? "Bad" : "Muted");
+            c.Message.Visibility = st.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        var ver = foreign ? "Запущена ваша копия, не из CHIMERION" : installed ? (t.InstalledVersion is { } iv ? $"Версия {iv}" : "Установлено") : "Скачается с GitHub при первом включении";
+        if (t.UpdateAvailable) ver += $" · доступна {t.Latest!.Version}";
+        c.Version.Text = ver;
+        c.Version.SetResourceReference(TextBlock.ForegroundProperty, t.UpdateAvailable ? "Accent" : "Muted");
     }
 
-    /// <summary>
-    /// Настройки zapret строками: стратегия, сайты для обхода, обход по адресам и его источник, обход для игр.
-    /// Любое изменение сохраняется сразу и перезапускает работающий обход.
-    /// </summary>
-    private void ZapretRows(ZapretTool z, StackPanel body)
+    // ---------- Настройки обхода ----------
+
+    private void RenderSettings()
     {
+        var z = _tools.OfType<ZapretTool>().FirstOrDefault();
+        if (z == null || !z.IsInstalled) { _settingsHost.Children.Clear(); _settings = null; return; }
+        if (_settings == null) { _settings = BuildSettings(z); _settingsHost.Children.Add(_settings.Card); }
+        var s = _settings;
         var current = z.State.Strategy ?? ZapretTool.DefaultStrategy;
-        var strategy = Ui.Picker(ZapretTool.StrategyTitle(current), b => Menu(b, z.Strategies().Select(s =>
-            (ZapretTool.StrategyTitle(s), (string?)null, s == current, (Action)(() => ChangeZapret(z, $"Стратегия {ZapretTool.StrategyTitle(s)}", () => z.State.Strategy = s))))));
+        s.StrategyText.Text = ZapretTool.StrategyTitle(current);
         var best = _pick?.FirstOrDefault(r => r.File != null && r.Score > 0);
-        body.Children.Add(Ui.Row("Стратегия", best != null
-            ? $"Рекомендуем {best.Title}: по подбору она открыла больше всего ({best.Score} из {best.MaxScore})"
-            : "Рекомендуем подобрать: «Подобрать стратегию» проверит каждую на YouTube, Discord и ваших сайтах", strategy));
-        var auto = Ui.Toggle(z.State.AutoApplyBest);
-        auto.Click += (_, _) => { z.State.AutoApplyBest = auto.IsChecked == true; z.SaveState(); };
-        body.Children.Add(Ui.Row("Сразу включать лучшую после подбора", "Иначе подбор только покажет итоги, а стратегию выберете вы", auto)
-                            .With(g => g.Margin = new Thickness(0, 8, 0, 0)));
+        s.StrategyHint.Text = best == null ? "Лучшую найдет «Подобрать стратегию»"
+            : best.File == current ? $"Включена лучшая по подбору ({best.Score} из {best.MaxScore})" : $"Лучшая по подбору: {best.Title}";
+        s.SitesText.Text = $"{z.SitesCount(BypassCatalog.LoadCached())} доменов";
+        s.SourceText.Text = z.State.IpSetSource is { } id && RemoteLists.Get(id) is { } rl ? rl.Title : "Сборка zapret";
+        _syncing = true;
+        s.Auto.IsChecked = z.State.AutoApplyBest;
+        s.IpSet.IsChecked = z.State.IpSet;
+        s.Games.IsChecked = z.State.Games;
+        _syncing = false;
+        s.SourceRow.Visibility = z.State.IpSet ? Visibility.Visible : Visibility.Collapsed;
+        // Во время другого действия изменение молча не применилось бы
+        foreach (var e in new UIElement[] { s.Strategy, s.Sites, s.Source, s.IpSet, s.Games }) e.IsHitTestVisible = !_busy;
+        foreach (var b in new[] { s.Strategy, s.Sites, s.Source }) b.Opacity = _busy ? .6 : 1;
+    }
 
-        body.Children.Add(Ui.Separator());
-        var sites = new Button { Content = $"{z.SitesCount(BypassCatalog.LoadCached())} доменов…", Padding = new Thickness(12, 6, 12, 6), MinHeight = 32, Margin = new Thickness(0) };
-        sites.Click += (_, _) => _ = EditSitesAsync(z);
-        body.Children.Add(Ui.Row("Сайты для обхода", "Готовые наборы (Meta, X, Discord, Telegram...), большие списки и свои сайты", sites));
+    private ZapretSettings BuildSettings(ZapretTool z)
+    {
+        var s = new ZapretSettings();
+        var body = new StackPanel();
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        head.Children.Add(new Controls.Icon { Kind = "sliders-horizontal", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "Accent"));
+        head.Children.Add(new TextBlock { Text = "Настройки обхода", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        body.Children.Add(head);
 
-        body.Children.Add(Ui.Separator());
-        var ipset = Ui.Toggle(z.State.IpSet);
-        ipset.Click += (_, _) => ChangeZapret(z, ipset.IsChecked == true ? "Обход по адресам включен" : "Обход по адресам выключен",
-            () => z.State.IpSet = ipset.IsChecked == true,
-            async p => { if (z.State.IpSet && z.State.IpSetSource is { } id && RemoteLists.Get(id) is { } rl) { p.Report("Скачиваю список адресов…"); await RemoteLists.EnsureAsync(rl); } });
-        body.Children.Add(Ui.Row("Обход по адресам (IPSet)", "Рекомендуем выключено. Включайте, если сайты на Cloudflare или хостингах не догружаются (обрываются на 15–30 КБ)", ipset));
-        if (z.State.IpSet)
-        {
-            string SourceTitle(string? id) => id is { } x && RemoteLists.Get(x) is { } rl ? rl.Title : "Сборка zapret";
-            IEnumerable<(string? Id, string Title, string Note)> sources = new (string? Id, string Title, string Note)[] { (null, "Сборка zapret", "Около 33 тысяч адресов, обновляется вместе со сборкой") }
-                .Concat(RemoteLists.All.Where(l => l.IsIp).Select(l => ((string?)l.Id, l.Title, l.Note)));
-            var src = Ui.Picker(SourceTitle(z.State.IpSetSource), b => Menu(b, sources.Select(s => (s.Title, (string?)s.Note, z.State.IpSetSource == s.Id,
-                (Action)(() => ChangeZapret(z, $"Адреса для обхода: {s.Title}", () => z.State.IpSetSource = s.Id,
-                    async p => { if (s.Id != null && RemoteLists.Get(s.Id) is { } rl) { p.Report("Скачиваю список адресов…"); await RemoteLists.EnsureAsync(rl); } }))))));
-            src.IsEnabled = !_busy; // во время другого действия выбор молча не применился бы
-            body.Children.Add(Ui.Row("Источник адресов", "Рекомендуем «CDN и хостинги»: он уже других и меньше задевает лишнее", src).With(g => g.Margin = new Thickness(0, 8, 0, 0)));
-        }
+        (s.Strategy, s.StrategyText) = PickerButton(b => Menu(b, z.Strategies().Select(f =>
+            (ZapretTool.StrategyTitle(f), (string?)null, f == (z.State.Strategy ?? ZapretTool.DefaultStrategy),
+             (Action)(() => ChangeZapret(z, $"Стратегия {ZapretTool.StrategyTitle(f)}", () => z.State.Strategy = f))))));
+        s.StrategyHint = Ui.Hint("", 2).With(h => h.FontSize = 11);
+        body.Children.Add(SettingRow("settings", "Стратегия", s.StrategyHint, s.Strategy, first: true));
 
-        body.Children.Add(Ui.Separator());
-        var games = Ui.Toggle(z.State.Games);
-        games.Click += (_, _) => ChangeZapret(z, games.IsChecked == true ? "Обход для игр включен" : "Обход для игр выключен", () => z.State.Games = games.IsChecked == true);
-        body.Children.Add(Ui.Row("Обход и для игр", "Рекомендуем выключено. Включайте, только если тормозят игры (порты выше 1023)", games));
+        (s.Sites, s.SitesText) = PickerButton(b => _ = EditSitesAsync(z));
+        body.Children.Add(SettingRow("globe", "Сайты для обхода", Ui.Hint("Готовые наборы, большие списки и свои сайты", 2).With(h => h.FontSize = 11), s.Sites));
 
-        foreach (var c in new UIElement[] { strategy, sites, ipset, games }) c.IsEnabled = !_busy;
+        s.Auto = SettingSwitch(on => { z.State.AutoApplyBest = on; z.SaveState(); });
+        body.Children.Add(SettingRow("star", "Сразу включать лучшую после подбора", Ui.Hint("Иначе подбор покажет итоги, а выберете вы", 2).With(h => h.FontSize = 11), s.Auto));
+
+        s.IpSet = SettingSwitch(on => ChangeZapret(z, on ? "Обход по адресам включен" : "Обход по адресам выключен", () => z.State.IpSet = on,
+            async p => { if (z.State.IpSet && z.State.IpSetSource is { } id && RemoteLists.Get(id) is { } rl) { p.Report("Скачиваю список адресов…"); await RemoteLists.EnsureAsync(rl); } }));
+        body.Children.Add(SettingRow("link", "Обход по адресам (IPSet)", Ui.Hint("Включайте, если сайты на Cloudflare не догружаются", 2).With(h => h.FontSize = 11), s.IpSet));
+
+        IEnumerable<(string? Id, string Title, string Note)> sources = new (string? Id, string Title, string Note)[] { (null, "Сборка zapret", "Около 33 тысяч адресов, обновляется вместе со сборкой") }
+            .Concat(RemoteLists.All.Where(l => l.IsIp).Select(l => ((string?)l.Id, l.Title, l.Note)));
+        (s.Source, s.SourceText) = PickerButton(b => Menu(b, sources.Select(x => (x.Title, (string?)x.Note, z.State.IpSetSource == x.Id,
+            (Action)(() => ChangeZapret(z, $"Адреса для обхода: {x.Title}", () => z.State.IpSetSource = x.Id,
+                async p => { if (x.Id != null && RemoteLists.Get(x.Id) is { } rl) { p.Report("Скачиваю список адресов…"); await RemoteLists.EnsureAsync(rl); } }))))));
+        s.SourceRow = SettingRow("download", "Источник адресов", Ui.Hint("Рекомендуем «CDN и хостинги»: он меньше задевает лишнее", 2).With(h => h.FontSize = 11), s.Source);
+        body.Children.Add(s.SourceRow);
+
+        s.Games = SettingSwitch(on => ChangeZapret(z, on ? "Обход для игр включен" : "Обход для игр выключен", () => z.State.Games = on));
+        body.Children.Add(SettingRow("activity", "Обход и для игр", Ui.Hint("Только если тормозят игры (порты выше 1023)", 2).With(h => h.FontSize = 11), s.Games));
+
+        s.Card = Ui.Card(body, bottom: 0);
+        s.Card.Padding = new Thickness(18, 16, 18, 8);
+        s.Card.Margin = new Thickness(0, 12, 0, 0);
+        return s;
+    }
+
+    private Controls.Switch SettingSwitch(Action<bool> changed)
+    {
+        var sw = new Controls.Switch { Width = 44 };
+        sw.Click += (_, _) => { if (_syncing) return; if (_busy) { Render(); return; } changed(sw.IsChecked == true); };
+        return sw;
+    }
+
+    /// <summary>Кнопка выбора значения: текст обновляется на месте, справа стрелка.</summary>
+    private static (Button Button, TextBlock Text) PickerButton(Action<Button> open, string icon = "chevron-down")
+    {
+        var text = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220, VerticalAlignment = VerticalAlignment.Center };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(text);
+        row.Children.Add(new Controls.Icon { Kind = icon, Size = 14, Margin = new Thickness(8, 1, 0, 0), Opacity = 0.8 });
+        var b = new Button { Content = row, Padding = new Thickness(12, 6, 12, 6), MinHeight = 32, Margin = new Thickness(0), MaxWidth = 280 };
+        b.Click += (_, _) => open(b);
+        return (b, text);
+    }
+
+    /// <summary>Строка настройки: иконка, название и короткое пояснение слева, элемент справа, линия сверху.</summary>
+    private static FrameworkElement SettingRow(string icon, string title, TextBlock hint, FrameworkElement control, bool first = false)
+    {
+        var g = new Grid { MinHeight = 54 };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var badge = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+                                 Child = new Controls.Icon { Kind = icon, Size = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Muted") }
+            .Ref(Border.BackgroundProperty, "Surface2");
+        g.Children.Add(badge);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+        text.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(hint);
+        Grid.SetColumn(text, 1); g.Children.Add(text);
+        control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(control, 2); g.Children.Add(control);
+        return new Border { Child = g, Padding = new Thickness(0, 8, 0, 8), BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0) }.Ref(Border.BorderBrushProperty, "Border");
     }
 
     /// <summary>Меню вариантов под кнопкой выбора (темный стиль меню как у «Перепроверить»).</summary>
@@ -262,6 +450,8 @@ internal sealed class ToolsWindow
         }
         menu.IsOpen = true;
     }
+
+    // ---------- Подбор стратегии ----------
 
     /// <summary>
     /// Подбор стратегии: каждая запускается на пару секунд и проверяется на YouTube и Discord. Без прав администратора
@@ -301,9 +491,9 @@ internal sealed class ToolsWindow
                 await z.EnableAsync(new Progress<string>(s => SetStatus(z, s, false)), CancellationToken.None);
             }
             var text = best == null ? "Ни одна стратегия не открыла ни YouTube, ни Discord, ни ваши сайты"
-                : apply ? $"Включена лучшая: {best.Title}, открылось {best.Score} из {best.MaxScore}. Другую можно выбрать в списке ниже"
+                : apply ? $"Включена лучшая: {best.Title}, открылось {best.Score} из {best.MaxScore}"
                 : best.File == current ? $"Лучшая: {best.Title}, открылось {best.Score} из {best.MaxScore}. Она уже включена"
-                : $"Лучшая: {best.Title}, открылось {best.Score} из {best.MaxScore}. Включите ее кнопкой ниже";
+                : $"Лучшая: {best.Title}, открылось {best.Score} из {best.MaxScore}. Включите ее в итогах ниже";
             SetStatus(z, text, best == null);
             _log("zapret: подбор завершен. " + text);
         }
@@ -319,59 +509,97 @@ internal sealed class ToolsWindow
         }
     }
 
-    /// <summary>Итоги подбора: стратегии с открытыми сервисами первыми, у каждой кнопка «Выбрать».</summary>
-    private FrameworkElement PickResults(ZapretTool z)
+    /// <summary>Итоги подбора таблицей: стратегия, YouTube, Discord, ваши сайты, время и кнопка «Выбрать».</summary>
+    private void RenderPick()
     {
-        var panel = new StackPanel();
-        panel.Children.Add(Ui.Section("Итоги подбора", first: true));
-        if (_pick!.FirstOrDefault(r => r.File != null && r.Score > 0) is { } top && top.File != (z.State.Strategy ?? ZapretTool.DefaultStrategy))
-            panel.Children.Add(Ui.Action($"Включить лучшую: {top.Title}", "Primary", () => _ = RunAsync(z, $"Стратегия {top.Title}", async p =>
-            {
-                z.State.Strategy = top.File;
-                z.SaveState();
-                if (z.IsRunning()) await z.StopAsync();
-                await z.EnableAsync(p, CancellationToken.None);
-            })).With(b => { b.IsEnabled = !_busy; b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 0, 0, 10); }));
+        var z = _tools.OfType<ZapretTool>().FirstOrDefault();
+        var current = z?.State.Strategy ?? ZapretTool.DefaultStrategy;
+        var sig = _pick == null || z == null ? null : $"{_pick.GetHashCode()}|{current}|{_busy}";
+        if (sig == _pickSignature) return;
+        _pickSignature = sig;
+        _pickHost.Children.Clear();
+        if (sig == null) return;
+
+        var body = new StackPanel();
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var top = _pick!.FirstOrDefault(r => r.File != null && r.Score > 0);
+        if (top != null && top.File != current)
+        {
+            var apply = Ui.Action($"Включить лучшую: {top.Title}", "Primary", () => _ = Choose(z!, top)).With(b => { b.IsEnabled = !_busy; b.Margin = new Thickness(0); });
+            DockPanel.SetDock(apply, Dock.Right); head.Children.Add(apply);
+        }
+        var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        titles.Children.Add(new TextBlock { Text = "Итоги подбора", FontSize = 16, FontWeight = FontWeights.SemiBold });
+        titles.Children.Add(Ui.Hint(top == null ? "Ни одна стратегия не помогла" : $"Лучшая открыла {top.Score} из {top.MaxScore}", 2).With(h => h.FontSize = 11));
+        head.Children.Add(titles);
+        body.Children.Add(head);
         if (_pick!.FirstOrDefault(r => r.File == null) is { } none && none.Score == none.MaxScore)
-            panel.Children.Add(Ui.Hint("YouTube, Discord и ваши сайты открываются и без обхода: похоже, zapret вам сейчас не нужен", 0, "Ok"));
+            body.Children.Add(Ui.Hint("YouTube, Discord и ваши сайты открываются и без обхода: zapret сейчас не нужен", 0, "Ok").With(h => h.Margin = new Thickness(0, 0, 0, 8)));
+
+        bool sites = _pick!.Any(r => r.SitesTotal > 0);
+        var header = PickGrid(sites);
+        int col = 0;
+        foreach (var h in new[] { "Стратегия", "YouTube", "Discord" }.Concat(sites ? new[] { "Ваши сайты" } : Array.Empty<string>()).Append("Время"))
+        {
+            var tb = Ui.Hint(h, 0).With(x => x.FontSize = 11); Grid.SetColumn(tb, col++); header.Children.Add(tb);
+        }
+        header.Margin = new Thickness(8, 0, 8, 4);
+        body.Children.Add(header);
         foreach (var r in _pick!.Where(r => r.File != null).Take(8))
         {
-            string Mark(bool ok) => ok ? "да" : "нет";
-            var sites = r.SitesTotal > 0 ? $" · ваши сайты: {r.SitesOk!.Count} из {r.SitesTotal}" : "";
-            var failed = r.SitesFailed is { Count: > 0 } f && r.SitesTotal > 0 ? $" (не догрузились: {string.Join(", ", f.Take(3))}{(f.Count > 3 ? "…" : "")})" : "";
-            var info = Ui.Hint($"YouTube: {Mark(r.YouTube)} · Discord: {Mark(r.Discord)}{sites}{failed}" + (r.Score > 0 ? $" · {r.Ms} мс" : ""), 2,
-                r.Score == r.MaxScore ? "Ok" : r.Score > 0 ? "Warn" : "Muted");
-            UIElement control;
+            bool chosen = r.File == current, isTop = ReferenceEquals(r, top);
+            var g = PickGrid(sites);
+            var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            name.Children.Add(new TextBlock { Text = r.Title, FontWeight = chosen ? FontWeights.SemiBold : FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            if (isTop) name.Children.Add(Ui.Badge());
+            g.Children.Add(name);
+            int c = 1;
+            foreach (var ok in new[] { r.YouTube, r.Discord })
+            {
+                var mark = new Controls.Icon { Kind = ok ? "circle-check" : "circle-x", Size = 16, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center }
+                    .Ref(Controls.Icon.ForegroundProperty, ok ? "Ok" : "Bad");
+                Grid.SetColumn(mark, c++); g.Children.Add(mark);
+            }
+            if (sites)
+            {
+                var failed = r.SitesFailed is { Count: > 0 } f ? "Не догрузились: " + string.Join(", ", f) : null;
+                var st = new TextBlock { Text = r.SitesTotal > 0 ? $"{r.SitesOk!.Count} из {r.SitesTotal}" : "-", VerticalAlignment = VerticalAlignment.Center, ToolTip = failed }
+                    .Ref(TextBlock.ForegroundProperty, r.SitesTotal > 0 && r.SitesOk!.Count == r.SitesTotal ? "Ok" : r.SitesOk?.Count > 0 ? "Warn" : "Muted");
+                Grid.SetColumn(st, c++); g.Children.Add(st);
+            }
+            var ms = new TextBlock { Text = r.Score > 0 ? $"{r.Ms} мс" : "-", VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted");
+            Grid.SetColumn(ms, c++); g.Children.Add(ms);
             if (r.Score > 0)
             {
-                var file = r.File!;
-                var chosen = file == (z.State.Strategy ?? ZapretTool.DefaultStrategy);
-                control = Ui.Action(chosen ? "Выбрана" : "Выбрать", chosen ? "Ghost" : "Strong", () => _ = RunAsync(z, $"Стратегия {r.Title}", async p =>
-                {
-                    z.State.Strategy = file;
-                    z.SaveState();
-                    if (z.IsRunning()) await z.StopAsync();
-                    await z.EnableAsync(p, CancellationToken.None);
-                })).With(b => { b.IsEnabled = !_busy && !chosen; b.Margin = new Thickness(0); });
+                var pick = Ui.Action(chosen ? "Выбрана" : "Выбрать", chosen ? "Ghost" : "Strong", () => _ = Choose(z!, r))
+                    .With(b => { b.IsEnabled = !_busy && !chosen; b.Margin = new Thickness(0); b.Padding = new Thickness(12, 4, 12, 5); b.MinHeight = 28; });
+                Grid.SetColumn(pick, c); g.Children.Add(pick);
             }
-            else control = new TextBlock();
-            var row = Ui.Row(r.Title, null, control);
-            if (ReferenceEquals(r, _pick!.FirstOrDefault(x => x.File != null && x.Score > 0)))
-            {
-                // Лучшая по подбору: метка «рекомендуем» рядом с названием
-                var head = new StackPanel { Orientation = Orientation.Horizontal };
-                var name = (TextBlock)((StackPanel)row.Children[0]).Children[0];
-                ((StackPanel)row.Children[0]).Children.Remove(name);
-                head.Children.Add(name);
-                head.Children.Add(Ui.Badge());
-                ((StackPanel)row.Children[0]).Children.Insert(0, head);
-            }
-            ((StackPanel)row.Children[0]).Children.Add(info);
-            row.Margin = new Thickness(0, 6, 0, 0);
-            panel.Children.Add(row);
+            var row = new Border { Child = g, Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(8) };
+            if (chosen) row.SetResourceReference(Border.BackgroundProperty, "Surface2");
+            body.Children.Add(row);
         }
-        return panel;
+        var card = Ui.Card(body, bottom: 0);
+        card.Padding = new Thickness(18, 16, 18, 12);
+        card.Margin = new Thickness(0, 12, 0, 0);
+        _pickHost.Children.Add(card);
     }
+
+    private static Grid PickGrid(bool sites)
+    {
+        var g = new Grid();
+        foreach (var w in new[] { -1.0, 80, 80 }.Concat(sites ? new[] { 100.0 } : Array.Empty<double>()).Concat(new[] { 80.0, 110 }))
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? new GridLength(1, GridUnitType.Star) : new GridLength(w) });
+        return g;
+    }
+
+    private Task Choose(ZapretTool z, ZapretTool.StrategyResult r) => RunAsync(z, $"Стратегия {r.Title}", async p =>
+    {
+        z.State.Strategy = r.File;
+        z.SaveState();
+        if (z.IsRunning()) await z.StopAsync();
+        await z.EnableAsync(p, CancellationToken.None);
+    }, "Настройка");
 
     /// <summary>
     /// Окно «Сайты для обхода»: готовые наборы и большие списки галочками (с числом доменов), свои сайты строками.

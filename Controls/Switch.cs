@@ -58,7 +58,8 @@ public sealed class Switch : ToggleButton
         Unloaded += (_, _) => Stop();
         Checked += (_, _) => Changed();
         Unchecked += (_, _) => Changed();
-        IsKeyboardFocusedChanged += (_, _) => focus.Visibility = IsKeyboardFocused ? Visibility.Visible : Visibility.Collapsed;
+        // Рамка фокуса только при работе с клавиатуры (Tab): при открытии окна или щелчке мышью она не нужна
+        IsKeyboardFocusedChanged += (_, _) => focus.Visibility = IsKeyboardFocused && InputManager.Current.MostRecentInputDevice is KeyboardDevice ? Visibility.Visible : Visibility.Collapsed;
         IsEnabledChanged += (_, _) => { Opacity = IsEnabled ? 1 : 0.5; Cursor = IsEnabled ? Cursors.Hand : Cursors.No; };
         MouseEnter += (_, _) => { _swellTo = IsEnabled ? HoverScale : 1; Start(); };
         MouseLeave += (_, _) => { _swellTo = 1; Start(); };
