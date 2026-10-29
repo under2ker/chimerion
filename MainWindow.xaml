@@ -81,7 +81,8 @@
                     WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Закрыть"><controls:Icon Kind="x" Size="14" StrokeWidth="1.6"/></Button>
         </Grid>
 
-    <Grid x:Name="RootGrid" Margin="20,8,20,16">
+    <Grid>
+    <Grid x:Name="RootGrid" Margin="20,8,20,16" Visibility="Collapsed">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- шапка -->
             <RowDefinition Height="Auto"/>  <!-- проверка подключения -->
@@ -167,6 +168,7 @@
             </WrapPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Главная" Click="DashboardHome_Click" Style="{StaticResource Ghost}"/>
                 <Button x:Name="ModeButton" Click="Mode_Click" Style="{StaticResource Ghost}"
                         ToolTip="Компактный / полный вид"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shrink" Size="14" Margin="0,0,7,0"/><TextBlock x:Name="ModeButtonText" Text="Компактно"/></StackPanel></Button>
                 <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource Ghost}"
@@ -833,6 +835,8 @@
                 </StackPanel>
             </StackPanel>
         </Border>
+    </Grid>
+    <ContentControl x:Name="DashboardHost"/>
     </Grid>
     </DockPanel>
 </Window>
