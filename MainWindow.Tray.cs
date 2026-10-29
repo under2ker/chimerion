@@ -312,6 +312,7 @@ public partial class MainWindow
 
     private void ExitFromTray()
     {
+        if (_exitPromptPending) return;
         _exitRequested = true;
         Close();
     }

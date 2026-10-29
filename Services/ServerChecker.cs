@@ -77,12 +77,18 @@ public class ServerChecker
     /// </summary>
     public async Task CheckAsync(DnsServer s, CancellationToken ct)
     {
-        try { await CheckCoreAsync(s, ct).ConfigureAwait(false); }
+        using var operation = SupportTrace.Begin($"Проверка сервера; номер={s.Id:N}; DoH={!string.IsNullOrWhiteSpace(s.DohUrl)}; глубокая={_opt.Deep}", ct);
+        try
+        {
+            await CheckCoreAsync(s, ct).ConfigureAwait(false);
+            operation.Detail($"Состояние={s.Status}; задержка={s.LatencyMs} мс; разброс={s.JitterMs} мс");
+        }
         catch (OperationCanceledException)
         {
             await OnUi(() => { if (s.Status == ServerStatus.Checking) s.Status = ServerStatus.Unknown; });
             throw;
         }
+        catch (Exception e) { operation.Fail(e); throw; }
     }
 
     private async Task CheckCoreAsync(DnsServer s, CancellationToken ct)
@@ -346,7 +352,11 @@ public class ServerChecker
         return (samples[samples.Count / 2], samples.Count > 1 ? samples[^1] - samples[0] : null);
     }
 
-    public virtual async Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct)
+    public virtual Task<(List<IPAddress> Ips, long Ms)> ResolveViaAsync(DnsServer s, string host, CancellationToken ct) =>
+        SupportTrace.RunAsync($"DNS через сервер; номер={s.Id:N}; DoH={!string.IsNullOrWhiteSpace(s.DohUrl)}",
+            () => ResolveViaCoreAsync(s, host, ct), ct);
+
+    private async Task<(List<IPAddress> Ips, long Ms)> ResolveViaCoreAsync(DnsServer s, string host, CancellationToken ct)
     {
         if (!string.IsNullOrWhiteSpace(s.DohUrl))
             return await DnsWire.ResolveDohAsync(s.DohUrl, host, _timeout, ct);
@@ -360,15 +370,18 @@ public class ServerChecker
         }
         catch (TimeoutException) when (!ct.IsCancellationRequested)
         {
+            SupportTrace.Write("DNS: истекло время ожидания UDP, повтор с половиной таймаута");
             // UDP-пакет мог потеряться: один быстрый повтор.
             try { return await DnsWire.ResolveUdpAsync(primary, host, _timeout / 2, ct).ConfigureAwait(false); }
             catch when (IPAddress.TryParse(s.Secondary, out _) && !ct.IsCancellationRequested)
             {
+                SupportTrace.Write("DNS: повтор не удался, пробую второй адрес");
                 return await DnsWire.ResolveUdpAsync(IPAddress.Parse(s.Secondary!), host, _timeout, ct).ConfigureAwait(false);
             }
         }
         catch when (IPAddress.TryParse(s.Secondary, out _) && !ct.IsCancellationRequested)
         {
+            SupportTrace.Write("DNS: основной адрес не ответил, пробую второй адрес");
             return await DnsWire.ResolveUdpAsync(IPAddress.Parse(s.Secondary!), host, _timeout, ct);
         }
     }
@@ -403,6 +416,7 @@ public class ServerChecker
     /// <summary>HTTPS-запрос к сервису через конкретный IP с правильным SNI и проверкой сертификата.</summary>
     internal virtual async Task<(Probe, string)> ProbeHttpsAsync(IPAddress ip, CheckTarget t, CancellationToken ct, bool isWeb = false)
     {
+        using var operation = SupportTrace.Begin($"HTTPS через сервер; сервис={SupportTrace.Service(t.Name)}; сайт={isWeb}; IPv6={ip.AddressFamily == AddressFamily.InterNetworkV6}", ct);
         using var handler = new SocketsHttpHandler
         {
             UseProxy = false,
@@ -427,7 +441,8 @@ public class ServerChecker
 
         try
         {
-            using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            using var resp = await SupportTrace.GetAsync(http, $"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct,
+                "HTTPS через проверяемый сервер").ConfigureAwait(false);
             // Читаем не больше 64 КБ: для поиска маркера блокировки этого достаточно, а чужой прокси не забьет память.
             var buf = new byte[64 * 1024];
             int len = 0, n;
@@ -437,6 +452,7 @@ public class ServerChecker
             int code = (int)resp.StatusCode;
             var verdict = isWeb ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())
                                 : ServiceAccess.Classify(t, code, body);
+            operation.Detail($"HTTP {code}; прочитано={len} байт; результат={verdict}");
             return verdict switch
             {
                 ServiceAccess.Result.Open => (Probe.Ok, $"HTTP {code}"),
@@ -448,6 +464,7 @@ public class ServerChecker
         }
         catch (Exception e) when (!ct.IsCancellationRequested)
         {
+            operation.Fail(e);
             return (Probe.Error, e.GetBaseException().Message);
         }
     }

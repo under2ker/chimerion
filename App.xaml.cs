@@ -38,6 +38,16 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        Dnex.Services.SupportTrace.Start();
+        SupportTraceUi.Install();
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception error)
+                Dnex.Services.SupportTrace.Write("Аварийное завершение: " + Dnex.Services.SupportTrace.Error(error));
+            Dnex.Services.SupportTrace.Flush();
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+            Dnex.Services.SupportTrace.Write("Ошибка фоновой задачи: " + Dnex.Services.SupportTrace.Error(args.Exception));
         base.OnStartup(e);
         // Завершение только явное (App.ExitNow после закрытия главного окна), а не «закрылось последнее окно»:
         // забытое скрытое окно больше не держит процесс
@@ -67,6 +77,8 @@ public partial class App : Application
     /// </summary>
     public static void ExitNow()
     {
+        Dnex.Services.SupportTrace.Write("Запрошено завершение программы");
+        Dnex.Services.SupportTrace.Flush();
         var guard = new Thread(() =>
         {
             Thread.Sleep(TimeSpan.FromSeconds(8));
@@ -79,9 +91,18 @@ public partial class App : Application
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
+        Dnex.Services.SupportTrace.Write("Ошибка интерфейса: " + Dnex.Services.SupportTrace.Error(e.Exception));
+        Dnex.Services.SupportTrace.Flush();
         try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {PrivacyGuard.Scrub(e.Exception.ToString())}\n"); } catch (Exception) { }
         DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
             DialogKind.Error, "Ошибка");
         e.Handled = true;
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        Dnex.Services.SupportTrace.Write($"Конец сеанса; код выхода={e.ApplicationExitCode}");
+        Dnex.Services.SupportTrace.Flush();
+        base.OnExit(e);
     }
 }

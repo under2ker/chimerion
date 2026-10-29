@@ -62,13 +62,18 @@ public static class UpdateChecker
     /// 3) перенаправление releases/latest на страницу последнего тега — только номер версии.
     /// Неудачей считается, только если не сработал ни один путь; Reason объясняет почему.
     /// </summary>
-    public static async Task<UpdateCheck> CheckDetailedAsync(CancellationToken ct = default)
+    public static Task<UpdateCheck> CheckDetailedAsync(CancellationToken ct = default) =>
+        SupportTrace.RunAsync("Проверка обновления", () => CheckDetailedCoreAsync(ct), ct);
+
+    private static async Task<UpdateCheck> CheckDetailedCoreAsync(CancellationToken ct)
     {
         // GitHub (большие релизы) и R2 (быстрые исправления) спрашиваются одновременно, побеждает более новая версия
         var hotTask = HotfixChannel.CheckAsync(ct);
         var gh = await CheckGitHubAsync(ct);
         var hot = await hotTask;
-        return Combine(gh, hot, CurrentVersion);
+        var result = Combine(gh, hot, CurrentVersion);
+        SupportTrace.Write($"Обновление: итог={result.Status}; GitHub={gh.Status}; быстрый канал ответил={hot != null}");
+        return result;
     }
 
     /// <summary>
@@ -95,7 +100,7 @@ public static class UpdateChecker
         string reason;
         try
         {
-            using var resp = await Http.GetAsync($"https://api.github.com/repos/{Repo}/releases/latest", ct);
+            using var resp = await SupportTrace.GetAsync(Http, $"https://api.github.com/repos/{Repo}/releases/latest", HttpCompletionOption.ResponseContentRead, ct, "Обновление: GitHub API");
             if (resp.IsSuccessStatusCode)
             {
                 var json = await resp.Content.ReadAsStringAsync(ct);
@@ -107,18 +112,23 @@ public static class UpdateChecker
                 && resp.Headers.TryGetValues("X-RateLimit-Remaining", out var left) && left.FirstOrDefault() == "0";
             reason = limit ? "GitHub временно ограничил запросы с вашего адреса" : $"GitHub ответил кодом {(int)resp.StatusCode}";
         }
-        catch (Exception e) when (!ct.IsCancellationRequested) { reason = Friendly(e); }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            SupportTrace.Write("Обновление: GitHub API: " + SupportTrace.Error(e));
+            reason = Friendly(e);
+        }
 
         try
         {
-            var atom = await Web.GetStringAsync($"https://github.com/{Repo}/releases.atom", ct);
+            var atom = await SupportTrace.GetStringAsync(Web, $"https://github.com/{Repo}/releases.atom", ct, "Обновление: лента GitHub");
             if (ParseAtom(atom, CurrentVersion) is { } r) return r;
         }
-        catch (Exception) when (!ct.IsCancellationRequested) { /* пробуем последний путь */ }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        { SupportTrace.Write("Обновление: лента GitHub: " + SupportTrace.Error(e)); }
 
         try
         {
-            using var resp = await Web.GetAsync($"https://github.com/{Repo}/releases/latest", ct);
+            using var resp = await SupportTrace.GetAsync(Web, $"https://github.com/{Repo}/releases/latest", HttpCompletionOption.ResponseContentRead, ct, "Обновление: страница GitHub");
             var tag = resp.Headers.Location?.ToString().TrimEnd('/').Split('/').LastOrDefault() ?? "";
             if (Version.TryParse(tag.TrimStart('v', 'V'), out var latest))
             {
@@ -128,13 +138,17 @@ public static class UpdateChecker
                     : new UpdateCheck(UpdateStatus.UpToDate, null, latest);
             }
         }
-        catch (Exception e) when (!ct.IsCancellationRequested) { reason += "; сайт GitHub: " + Friendly(e); }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            SupportTrace.Write("Обновление: страница GitHub: " + SupportTrace.Error(e));
+            reason += "; сайт GitHub: " + Friendly(e);
+        }
 
         // 4) GitHub недоступен целиком: номер последней версии из jsDelivr (он раздает теги репозитория). Только номер:
         //    сама установка все равно проверяет подпись автора, а скачать архив поможет зеркало (GitHubMirrors)
         try
         {
-            var json = await Cdn.GetStringAsync($"https://data.jsdelivr.com/v1/packages/gh/{Repo}", ct);
+            var json = await SupportTrace.GetStringAsync(Cdn, $"https://data.jsdelivr.com/v1/packages/gh/{Repo}", ct, "Обновление: зеркало номеров версий");
             if (CdnLatest(json) is { } latest)
             {
                 var page = $"https://github.com/{Repo}/releases/tag/v{latest.ToString(3)}";
@@ -143,7 +157,8 @@ public static class UpdateChecker
                     : new UpdateCheck(UpdateStatus.UpToDate, null, latest);
             }
         }
-        catch (Exception) when (!ct.IsCancellationRequested) { /* и jsDelivr недоступен */ }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        { SupportTrace.Write("Обновление: зеркало номеров версий: " + SupportTrace.Error(e)); }
 
         return new UpdateCheck(UpdateStatus.Failed, null, null, reason);
     }

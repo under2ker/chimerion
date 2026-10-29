@@ -59,7 +59,11 @@ public static class ConnectionProbe
     /// claude.ai, accounts.google.com) и без определения страны выхода. Фоновая проверка идет с того же адреса, с
     /// которого человек сидит в аккаунте, и лишние автоматические запросы к сайтам сервисов там ни к чему.
     /// </param>
-    public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false, bool light = false)
+    public static Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false, bool light = false) =>
+        SupportTrace.RunAsync($"Проверка подключения; облегченная={light}; утечка={leakTest}; сервисов={st.Targets.Count(t => t.Enabled)}",
+            () => TakeCoreAsync(st, ct, leakTest, light), ct);
+
+    private static async Task<NetSnapshot> TakeCoreAsync(AppSettings st, CancellationToken ct, bool leakTest, bool light)
     {
         var snap = new NetSnapshot();
         using var http = NewHttp();
@@ -134,6 +138,7 @@ public static class ConnectionProbe
 
     private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false, bool light = false)
     {
+        using var operation = SupportTrace.Begin($"Сервис {SupportTrace.Service(t.Name)}; сайт={web}; облегченная={light}", ct);
         string resolved = "—";
         bool proxied = false, compared = false;
         try
@@ -149,9 +154,13 @@ public static class ConnectionProbe
                 if (proxied && await GeoLocation.IsOwnedByAsync(resolved, t.OwnerOrgs, ct)) proxied = false;
                 compared = true;
             }
-            catch (Exception) { }
+            catch (Exception e) { operation.Detail("Сравнение с эталонным DNS: " + SupportTrace.Error(e)); }
         }
-        catch (Exception) when (!ct.IsCancellationRequested) { resolved = "не резолвится"; }
+        catch (Exception e) when (!ct.IsCancellationRequested)
+        {
+            operation.Detail("Системный DNS: " + SupportTrace.Error(e));
+            resolved = "не резолвится";
+        }
 
         string access;
         string? note = null;
@@ -189,7 +198,7 @@ public static class ConnectionProbe
                 }
             }
         }
-        catch (Exception e) when (!ct.IsCancellationRequested) { access = "✗ " + Friendly(e); }
+        catch (Exception e) when (!ct.IsCancellationRequested) { operation.Fail(e); access = "✗ " + Friendly(e); }
 
         // Откуда сервис видит соединение (только основной адрес сервиса, через DNS системы, как браузер)
         Egress? egress = null;
@@ -207,13 +216,15 @@ public static class ConnectionProbe
             }
             catch (Exception) when (!ct.IsCancellationRequested) { }
         }
+        operation.Detail($"Доступ={access}; через Smart DNS={proxied}; сравнение DNS выполнено={compared}; страна выхода определена={egress != null}");
         return new ServiceState(t.Name, t.Host, resolved, proxied, access, note, egress);
     }
 
     /// <summary>Один запрос к API или сайту и вердикт по ответу. Для сайта учитывается адрес редиректа.</summary>
     private static async Task<ServiceAccess.Result> ProbeAsync(HttpClient http, CheckTarget t, bool web, CancellationToken ct)
     {
-        using var resp = await http.GetAsync($"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct);
+        using var resp = await SupportTrace.GetAsync(http, $"https://{t.Host}{t.Path}", HttpCompletionOption.ResponseHeadersRead, ct,
+            web ? "Проверка сайта сервиса" : "Проверка API сервиса");
         var body = await ReadLimitedAsync(resp, ct);
         int code = (int)resp.StatusCode;
         return web ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())

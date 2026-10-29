@@ -234,26 +234,39 @@ internal static class Ui
     }
 
     /// <summary>Переключатель для строки настройки (галочка без текста: текст в самой строке).</summary>
-    public static CheckBox Toggle(bool on) => new() { IsChecked = on, Margin = new Thickness(0) };
+    public static CheckBox Toggle(bool on, [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
+    {
+        var check = new CheckBox { IsChecked = on, Margin = new Thickness(0) };
+        SupportTraceUi.Identify(check, member, line);
+        return check;
+    }
 
     /// <summary>Кнопка выбора значения: текущее значение и «▾», по щелчку меню вариантов.</summary>
-    public static Button Picker(string value, Action<Button> open)
+    public static Button Picker(string value, Action<Button> open,
+        [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(new TextBlock { Text = value, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 220, VerticalAlignment = VerticalAlignment.Center });
         row.Children.Add(new Controls.Icon { Kind = "chevron-down", Size = 14, Margin = new Thickness(8, 1, 0, 0), Opacity = 0.8 });
         var b = new Button { Content = row, Padding = new Thickness(12, 6, 12, 6), MinHeight = 32, Margin = new Thickness(0), MaxWidth = 260 };
         b.Click += (_, _) => open(b);
+        SupportTraceUi.Identify(b, member, line);
         return b;
     }
 
     /// <summary>Кнопка действия. style: Primary, Strong, Ghost, Danger (красная заливка).</summary>
-    public static Button Action(string text, string style, Action click)
+    public static Button Action(string text, string style, Action click,
+        [System.Runtime.CompilerServices.CallerMemberName] string member = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int line = 0,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(text))] string expression = "")
     {
         var b = DnexDialog.MakeButton(text, style == "Danger" ? "Primary" : style, click);
         if (style == "Danger") { b.Background = B("BadButton"); b.BorderBrush = b.Background; }
         b.MinWidth = 0;
         b.Margin = new Thickness(0, 0, 8, 0);
+        SupportTraceUi.Identify(b, member, line, expression);
         return b;
     }
 
