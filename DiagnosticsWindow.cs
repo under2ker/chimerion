@@ -106,7 +106,7 @@ internal sealed class DiagnosticsWindow
         _state = Ui.Hint("", 0).With(t => t.Margin = new Thickness(2, 0, 0, 8));
         root.Children.Add(_bar);
         root.Children.Add(_state);
-        root.Children.Add(Ui.Card(Ui.Scroll(_list, 400), bottom: 0));
+        root.Children.Add(Ui.Card(Ui.Scroll(_list, Math.Max(320, SystemParameters.WorkArea.Height - 440)), bottom: 0)); // на большом экране весь список без прокрутки
 
         Button Add(string text, string style, Action click) { var b = Ui.Action(text, style, click); _buttons.Add(b); return b; }
         var left = new StackPanel { Orientation = Orientation.Horizontal };
