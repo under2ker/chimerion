@@ -31,6 +31,24 @@ public partial class SettingsWindow : Window
         ShowSplitStatus();
     }
 
+    /// <summary>
+    /// Высота окна по открытой странице: короткая без пустоты снизу, длинная («Сторож и трей», «О программе») целиком,
+    /// пока помещается на экран. Окно меняет высоту вокруг своего центра.
+    /// </summary>
+    private void FitPage()
+    {
+        if (!IsLoaded || Pages.Children.OfType<FrameworkElement>().FirstOrDefault(p => p.Visibility == Visibility.Visible) is not { } page) return;
+        double width = BodyScroll.ViewportWidth > 0 ? BodyScroll.ViewportWidth : BodyScroll.ActualWidth;
+        if (width <= 0) return;
+        page.Measure(new Size(width, double.PositiveInfinity));
+        var area = SystemParameters.WorkArea;
+        double height = Math.Clamp(ActualHeight + page.DesiredSize.Height - BodyScroll.ViewportHeight, MinHeight, area.Height - 40);
+        if (Math.Abs(height - ActualHeight) < 2) return;
+        double top = Top - (height - ActualHeight) / 2;
+        Height = height;
+        Top = Math.Clamp(top, area.Top + 20, Math.Max(area.Top + 20, area.Bottom - 20 - height));
+    }
+
     public SettingsWindow(AppSettings settings)
     {
         InitializeComponent();
@@ -40,6 +58,7 @@ public partial class SettingsWindow : Window
         // Широкое окно с вкладками; на маленьком экране оно не больше рабочей области, вкладка прокручивается
         Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
         Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
+        Loaded += (_, _) => Dispatcher.BeginInvoke(FitPage, System.Windows.Threading.DispatcherPriority.Loaded);
         _settings = settings;
         ShowSplitStatus();
         RefDoh.Text = settings.ReferenceDoh;
@@ -94,6 +113,7 @@ public partial class SettingsWindow : Window
             PageTitle.Text = parts[0];
             PageHint.Text = parts.Length > 1 ? parts[1] : "";
             BodyScroll.ScrollToTop();
+            Dispatcher.BeginInvoke(FitPage, System.Windows.Threading.DispatcherPriority.Loaded);
             if (Ui.Animate)
             {
                 var t = new System.Windows.Media.TranslateTransform(0, 10);

@@ -647,7 +647,7 @@ internal sealed class ToolsWindow
             groupsBody.Children.Add(Ui.Steps("Не знаете, что выбрать: нажмите «Рекомендуемые», затем «Сохранить». Это сайты, которые режут провайдеры. " +
                                              "У каждого раздела есть «выбрать все»", 0).With(t => t.Margin = new Thickness(0, 0, 0, 8)));
             groupsBody.Children.Add(Ui.ChoiceBar(checks.Select(c => c.Box).ToList(), c => recIds.Contains((string)c.Tag)));
-            groupsBody.Children.Add(Ui.Scroll(grid, 320));
+            groupsBody.Children.Add(Ui.Scroll(grid, Math.Clamp(SystemParameters.WorkArea.Height - 920, 260, 560))); // больше наборов видно сразу на большом экране
             groupsBody.Children.Add(Ui.Hint($"Наборы от {catalog.Updated}, источник: {catalog.Source}", 8).With(t => t.FontSize = 11));
             root.Children.Add(Ui.Card(groupsBody));
         }

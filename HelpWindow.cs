@@ -39,10 +39,11 @@ internal sealed class HelpWindow
     {
         _factories = factories;
         _w = DnexDialog.CreateWindow("Помощь", 860);
-        _w.SizeToContent = SizeToContent.Manual;
-        _w.Height = Math.Min(780, SystemParameters.WorkArea.Height - 60);
-        _w.ResizeMode = ResizeMode.CanResize;
-        _w.MinWidth = 760; _w.MinHeight = 520;
+        // Высота по вкладке: короткая вкладка без пустоты снизу, длинная целиком, пока помещается на экран
+        _w.SizeToContent = SizeToContent.Height;
+        _w.MaxHeight = Math.Min(980, SystemParameters.WorkArea.Height - 40); // длинный список сайтов прокручивается, а не растягивает окно на весь экран
+        _w.ResizeMode = ResizeMode.CanMinimize;
+        _w.SizeChanged += (_, e) => KeepCenter(e);
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
         _w.Closed += (_, _) => { _open = null; HelpWizard.Forget(); SitesWindow.Forget(); PhoneWindow.Forget(); };
         _w.PreviewKeyDown += (_, e) =>
@@ -90,6 +91,18 @@ internal sealed class HelpWindow
         footer.Margin = new Thickness(0, 12, 0, 0);
         Grid.SetRow(footer, 3); root.Children.Add(footer);
         _w.Content = root;
+    }
+
+    /// <summary>
+    /// Высота сменилась вместе с вкладкой: окно растет и сжимается вокруг своего центра, а не только вниз (общий
+    /// обработчик окон потом удерживает его в пределах экрана).
+    /// </summary>
+    private void KeepCenter(SizeChangedEventArgs e)
+    {
+        if (!_w.IsLoaded || !e.HeightChanged || e.PreviousSize.Height <= 0) return;
+        var area = SystemParameters.WorkArea;
+        var top = _w.Top - (e.NewSize.Height - e.PreviousSize.Height) / 2;
+        _w.Top = Math.Clamp(top, area.Top + 10, Math.Max(area.Top + 10, area.Bottom - 10 - e.NewSize.Height));
     }
 
     private static (Border, Controls.Icon, TextBlock, TextBlock) TabTile(string iconKind, string title, string sub)
