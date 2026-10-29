@@ -146,13 +146,20 @@ public static partial class SourceParser
         return h;
     }
 
+    /// <param name="seeds">
+    /// Страницы, где в прошлые разы нашлись рабочие серверы: их обходим с самого начала, как источники. Там же
+    /// обычно появляются новые адреса, а пустые страницы со временем выпадают сами.
+    /// </param>
     public static async Task<List<DnsServer>> FetchAllAsync(
         AppSettings st, Action<string> log, IProgress<CrawlProgress>? progress,
-        Action<DnsServer>? onFound, CancellationToken ct)
+        Action<DnsServer>? onFound, CancellationToken ct, IEnumerable<string>? seeds = null)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         Cookies = st.HostCookies.ToDictionary(kv => kv.Key, kv => Storage.Unprotect(kv.Value), StringComparer.OrdinalIgnoreCase);
         HostGates.Clear(); // словарь по хостам не растет между запусками
+        Array.Clear(_engineHits);
+        _ddgCaptcha = false;
+        _braveLimited = false;
         var found = new ConcurrentDictionary<string, DnsServer>();
         var visited = new ConcurrentDictionary<string, byte>();
         var hostPages = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -162,7 +169,15 @@ public static partial class SourceParser
         var level = new List<Job>();
         foreach (var s in st.Sources.Where(s => s.Enabled))
             if (TryUri(s.Url, out var u)) level.Add(new Job(Normalize(u), 0, s.Name, s.Type));
-        log($"Источников: {level.Count}, глубина {st.CrawlDepth}, лимит {st.CrawlMaxPages} стр. Поиск новых источников идет параллельно");
+        int fromSeeds = 0;
+        foreach (var s in seeds ?? Enumerable.Empty<string>())
+            if (TryUri(s, out var u) && !IsBlocked(st, u) && level.All(j => j.Url.AbsoluteUri != Normalize(u).AbsoluteUri))
+            {
+                level.Add(new Job(Normalize(u), 0, "Удачная страница: " + u.Host, "text"));
+                fromSeeds++;
+            }
+        log($"Источников: {level.Count}" + (fromSeeds > 0 ? $" (из них {fromSeeds} страниц, где раньше нашлись рабочие серверы)" : "") +
+            $", глубина {st.CrawlDepth}, лимит {st.CrawlMaxPages} стр. Поиск новых источников идет параллельно");
 
         int queued = 0;
         void Report(string current) => progress?.Report(new CrawlProgress(
@@ -341,6 +356,11 @@ public static partial class SourceParser
     /// <summary>Новые источники из поисковиков и GitHub. onUrl получает каждую ссылку сразу, как только ответил ее запрос.</summary>
     private static async Task<List<Uri>> DiscoverAsync(AppSettings st, Action<string> log, CancellationToken ct, Action<Uri>? onUrl = null)
     {
+        // Сначала страницы из ночного поиска сервера общей карты: они не зависят от того, пускают ли поисковики вас
+        var serverPages = (await Crowd.PagesAsync(ct)).Where(p => TryUri(p, out _)).Select(p => Normalize(new Uri(p))).Where(u => !IsBlocked(st, u) && !IsAdult(u)).ToList();
+        foreach (var u in serverPages) onUrl?.Invoke(u);
+        if (serverPages.Count > 0) log($"Общая карта: {serverPages.Count} страниц из поиска на сервере");
+
         // Запросы к поисковикам независимы: идут параллельно, но не больше трех сразу, чтобы не получить блокировку
         var queries = st.DiscoveryQueries.Where(q => !string.IsNullOrWhiteSpace(q)).ToList();
         using var gate = new SemaphoreSlim(3);
@@ -349,10 +369,13 @@ public static partial class SourceParser
             await gate.WaitAsync(ct);
             try
             {
-                // Оба поисковика сразу: выдачи у них разные, вместе находится больше сайтов
+                // Все поисковики сразу: выдачи у них разные, а какой-то может не ответить или попросить капчу
+                var brave = SearchBraveAsync(q, queries.IndexOf(q), ct);
                 var ddg = SearchDuckDuckGoAsync(q, ct);
                 var bing = SearchBingAsync(q, ct);
-                var urls = (await ddg).Concat(await bing).DistinctBy(u => u.AbsoluteUri).ToList();
+                var (b, d, g) = (await brave, await ddg, await bing);
+                Interlocked.Add(ref _engineHits[0], b.Count); Interlocked.Add(ref _engineHits[1], d.Count); Interlocked.Add(ref _engineHits[2], g.Count);
+                var urls = b.Concat(d).Concat(g).DistinctBy(u => u.AbsoluteUri).ToList();
                 // Посадочные страницы сервисов (в домене есть dns) — первыми.
                 var take = urls.Where(u => !IsBlocked(st, u))
                                .OrderByDescending(u => u.Host.Contains("dns", StringComparison.OrdinalIgnoreCase))
@@ -363,19 +386,79 @@ public static partial class SourceParser
             }
             finally { gate.Release(); }
         }));
-        // Репозитории GitHub со списками DNS для ИИ-сервисов: обновляются чаще статей
+        log($"Поисковики: Brave {_engineHits[0]}{(_braveLimited ? " (попросил реже, остаток пропущен)" : "")}, DuckDuckGo {_engineHits[1]}{(_ddgCaptcha ? " (просит капчу, пропущен)" : "")}, Bing {_engineHits[2]} ссылок");
+        // Репозитории GitHub со списками DNS для ИИ-сервисов: обновляются чаще статей. README берем сразу файлом:
+        // HTML-страница репозитория тяжелая, а список почти всегда лежит в README
         var repos = new List<Uri>();
         foreach (var q in GitHubQueries)
         {
             var found = await SearchGitHubAsync(q, ct);
-            repos.AddRange(found);
-            foreach (var u in found) onUrl?.Invoke(u);
+            foreach (var u in found.Where(u => repos.All(r => r.AbsoluteUri != u.AbsoluteUri)))
+            {
+                repos.Add(u);
+                onUrl?.Invoke(u);
+                if (ReadmeOf(u) is { } readme) onUrl?.Invoke(readme);
+            }
             if (found.Count > 0) log($"GitHub «{q}»: {found.Count} репозиториев");
         }
         return perQuery.SelectMany(x => x).Concat(repos).DistinctBy(u => u.AbsoluteUri).ToList();
     }
 
-    private static readonly string[] GitHubQueries = { "dns chatgpt", "smart dns ai", "dns gemini claude", "ai dns russia" };
+    // Без входа GitHub дает 10 запросов поиска в минуту: держим шесть
+    private static readonly string[] GitHubQueries = { "dns chatgpt", "smart dns ai", "dns gemini claude", "ai dns russia", "smartdns russia", "doh chatgpt" };
+
+    // Сколько ссылок дал каждый поисковик за этот поиск: Brave, DuckDuckGo, Bing
+    private static readonly int[] _engineHits = new int[3];
+    private static volatile bool _ddgCaptcha;
+
+    /// <summary>github.com/user/repo → raw-файл README из ветки по умолчанию.</summary>
+    public static Uri? ReadmeOf(Uri repo)
+    {
+        if (repo.Host != "github.com") return null;
+        var seg = repo.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return seg.Length == 2 ? new Uri($"https://raw.githubusercontent.com/{seg[0]}/{seg[1]}/HEAD/README.md") : null;
+    }
+
+    /// <summary>Сколько запросов за поиск отправлять в Brave: чаще он отвечает «слишком много запросов» (429).</summary>
+    private const int BraveQueries = 8;
+    private static readonly SemaphoreSlim BraveGate = new(1);
+    private static volatile bool _braveLimited;
+
+    /// <summary>
+    /// Brave Search: обычная HTML-выдача, ссылки на сайты стоят прямо в href. Запросы строго по одному с паузой и не
+    /// больше BraveQueries за поиск; после первого 429 до конца поиска Brave не спрашиваем.
+    /// </summary>
+    private static async Task<List<Uri>> SearchBraveAsync(string q, int index, CancellationToken ct)
+    {
+        if (index >= BraveQueries || _braveLimited) return new();
+        await BraveGate.WaitAsync(ct);
+        try
+        {
+            if (_braveLimited) return new();
+            using var resp = await Http.GetAsync("https://search.brave.com/search?source=web&q=" + Uri.EscapeDataString(q), ct);
+            if ((int)resp.StatusCode == 429) { _braveLimited = true; return new(); }
+            if (!resp.IsSuccessStatusCode) return new();
+            var list = ParseBrave(await resp.Content.ReadAsStringAsync(ct));
+            await Task.Delay(1500, ct); // пауза перед следующим запросом
+            return list;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return new(); }
+        finally { BraveGate.Release(); }
+    }
+
+    /// <summary>Ссылки на сайты из выдачи Brave, без ссылок самого Brave и его картинок.</summary>
+    public static List<Uri> ParseBrave(string html)
+    {
+        var list = new List<Uri>();
+        foreach (Match m in Regex.Matches(html, @"href=""(https?://[^""]+)""", RegexOptions.None, TimeSpan.FromSeconds(2)))
+        {
+            if (!TryUri(WebUtility.HtmlDecode(m.Groups[1].Value), out var u)) continue;
+            var h = u.Host.ToLowerInvariant();
+            if (h.EndsWith("brave.com") || h.EndsWith("bravesoftware.com") || h.StartsWith("imgs.") || h.StartsWith("tiles.")) continue;
+            list.Add(Normalize(u));
+        }
+        return list.DistinctBy(u => u.AbsoluteUri).ToList();
+    }
 
     /// <summary>Поиск репозиториев через API GitHub (без входа: 10 запросов в минуту, хватает на четыре запроса).</summary>
     private static async Task<List<Uri>> SearchGitHubAsync(string q, CancellationToken ct)
@@ -399,7 +482,9 @@ public static partial class SourceParser
     {
         try
         {
+            if (_ddgCaptcha) return new(); // уже попросил капчу в этом поиске: дальше не спрашиваем
             var html = await Http.GetStringAsync("https://html.duckduckgo.com/html/?q=" + Uri.EscapeDataString(q), ct);
+            if (html.Contains("anomaly", StringComparison.OrdinalIgnoreCase) && !html.Contains("result__a")) { _ddgCaptcha = true; return new(); }
             var list = new List<Uri>();
             foreach (Match m in Regex.Matches(html, @"class=""result__a""[^>]*href=""([^""]+)""|href=""([^""]+)""[^>]*class=""result__a""", RegexOptions.None, TimeSpan.FromSeconds(2)))
             {
@@ -451,8 +536,38 @@ public static partial class SourceParser
 
     // ---------- Загрузка и ссылки ----------
 
+    /// <summary>
+    /// Лента канала t.me/s/… через сервер общей карты: из России t.me часто не открывается напрямую. Null — не лента
+    /// канала или сервер не ответил (тогда пробуем напрямую).
+    /// </summary>
+    internal static Func<Uri, CancellationToken, Task<string?>> TelegramRelay = TelegramRelayAsync;
+
+    private static async Task<string?> TelegramRelayAsync(Uri url, CancellationToken ct)
+    {
+        if (RelayUrl(url) is not { } relay) return null;
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            using var resp = await Http.GetAsync(relay, cts.Token);
+            return resp.IsSuccessStatusCode ? await resp.Content.ReadAsStringAsync(cts.Token) : null;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return null; }
+    }
+
+    /// <summary>t.me/s/канал?before=N → адрес той же ленты на сервере общей карты.</summary>
+    public static Uri? RelayUrl(Uri url)
+    {
+        if (url.Host != "t.me") return null;
+        var seg = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (seg.Length != 2 || seg[0] != "s" || !Regex.IsMatch(seg[1], "^[A-Za-z][A-Za-z0-9_]{4,31}$")) return null;
+        var before = HttpUtility.ParseQueryString(url.Query)["before"];
+        return new Uri($"{Crowd.Endpoint}/v1/tg?ch={seg[1]}" + (before != null && Regex.IsMatch(before, @"^\d{1,10}$") ? $"&before={before}" : ""));
+    }
+
     private static async Task<(string Body, bool IsHtml)> DownloadAsync(Uri url, CancellationToken ct)
     {
+        if (await TelegramRelay(url, ct) is { } feed) return (feed, true);
         HttpResponseMessage? resp = null;
         for (int hop = 0; ; hop++)
         {
@@ -549,8 +664,24 @@ public static partial class SourceParser
             // 4PDA и похожие форумы оборачивают внешние ссылки: /stat/go?url=…
             if (u.AbsolutePath.Contains("/stat/go") && TryUri(HttpUtility.ParseQueryString(u.Query)["url"], out var real)) u = real;
             var text = WebUtility.HtmlDecode(TagRx().Replace(m.Groups[2].Value, " ")).Trim();
-            yield return (Normalize(GithubToRaw(u)), text);
+            yield return (Normalize(TelegramToFeed(GithubToRaw(u))), text);
         }
+    }
+
+    /// <summary>
+    /// t.me/канал → t.me/s/канал: открытая лента канала, ее можно читать без входа. Боты, приглашения, стикеры и
+    /// ссылки на отдельные сообщения чужих чатов остаются как есть (их отсекает IsTelegramNonChannel).
+    /// </summary>
+    public static Uri TelegramToFeed(Uri u)
+    {
+        if (u.Host is not ("t.me" or "telegram.me" or "www.t.me")) return u;
+        var seg = u.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (seg.Length is < 1 or > 2 || seg[0] == "s") return u;
+        var name = seg[0];
+        if (!Regex.IsMatch(name, "^[A-Za-z][A-Za-z0-9_]{4,31}$") || name.EndsWith("bot", StringComparison.OrdinalIgnoreCase)
+            || name is "joinchat" or "addstickers" or "addemoji" or "share" or "proxy" or "socks" or "iv" or "setlanguage" or "contact") return u;
+        // t.me/канал/123 — сообщение: лента с ним начинается рядом
+        return new Uri(seg.Length == 2 && int.TryParse(seg[1], out var id) ? $"https://t.me/s/{name}?before={id + 1}" : $"https://t.me/s/{name}");
     }
 
     /// <summary>Ссылки Telegram, которые не ведут на превью канала: боты, «поделиться», приглашения. В них нет списков серверов.</summary>
@@ -593,6 +724,12 @@ public static partial class SourceParser
 
         // Сайт по IP-адресу (https://1.0.0.1/…) — страница обычного резолвера, а не список Smart DNS
         if (IPAddress.TryParse(link.Host, out _)) return false;
+        // Лента Telegram-канала: открываем, если в имени канала или тексте ссылки есть слова про DNS, ИИ или обход
+        if (link.Host == "t.me" && link.AbsolutePath.StartsWith("/s/"))
+        {
+            var tg = (link.AbsolutePath + " " + text).ToLowerInvariant();
+            return tg.Contains("dns") || tg.Contains("днс") || StrongWords.Any(tg.Contains);
+        }
         // Домены с «dns» в имени (magicdns.ru, dns-ai.ru, xbox-dns.ru…) — почти всегда сами сервисы: открываем всегда.
         if (link.Host.Contains("dns", StringComparison.OrdinalIgnoreCase) && link.Host != from.Host) return true;
         var hay = (Uri.UnescapeDataString(link.AbsoluteUri) + " " + text).ToLowerInvariant();

@@ -109,7 +109,9 @@ public sealed class Icon : Viewbox
         DependencyObject? d = this;
         for (int i = 0; i < 8 && d != null; i++)
         {
-            d = VisualTreeHelper.GetParent(d) ?? LogicalTreeHelper.GetParent(d);
+            // Иконка внутри строки текста (InlineUIContainer) лежит в элементе без визуального дерева: у него
+            // VisualTreeHelper бросает исключение, поэтому для таких берем логического родителя
+            d = (d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : null) ?? LogicalTreeHelper.GetParent(d);
             if (d is System.Windows.Controls.Primitives.ButtonBase or MenuItem or ListBoxItem) return (UIElement)d;
         }
         return this;

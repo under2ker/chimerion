@@ -9,4 +9,4 @@ database_name = "chimerion-crowd"
 database_id = "c8c7ba38-5447-4208-9f69-8eb045316922"
 
 [triggers]
-crons = ["17 3 * * *"]
+crons = ["17 * * * *"]  # каждый час: поиск источников; чистка базы раз в сутки (worker.js, scheduled)

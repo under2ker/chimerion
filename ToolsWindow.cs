@@ -54,7 +54,7 @@ internal sealed class ToolsWindow
         _w.Closed += (_, _) => { _pickCts?.Cancel(); _open = null; };
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Telegram и YouTube",
-            "Сторонние программы с открытым кодом. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы", glyph: "⚡"));
+            "Сторонние программы с открытым кодом. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы", glyph: "zap"));
         root.Children.Add(_cards);
         root.Children.Add(Ui.Footer(Ui.Hint(string.Join("\n", tools.Select(t => t.Authors)), 0).With(t => t.FontSize = 11),
             Ui.Action("Проверить обновления", "Ghost", () => _ = CheckUpdatesAsync(quiet: false))));

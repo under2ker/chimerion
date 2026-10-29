@@ -67,11 +67,30 @@ public static class Catalog
         "DNS разблокировка ИИ сервисов сайт",
         "свой DNS ChatGPT Spotify без VPN",
         "github smart dns chatgpt claude russia",
+        // Telegram-каналы со списками: в выдаче находятся их открытые ленты
+        "t.me dns chatgpt claude канал",
+        "telegram канал рабочие DNS для нейросетей",
+        "новый smart dns 2026 chatgpt",
+    };
+
+    /// <summary>
+    /// Документация, обычные публичные резолверы и DNS-клиенты: адреса там приводятся для примера, это не Smart DNS
+    /// (по журналу обхода отсюда шло больше всего мусора, который потом зря проверялся).
+    /// </summary>
+    public static readonly string[] NoiseHosts =
+    {
+        "code.claude.com", "docs.anthropic.com", "docs.claude.com", "developers.openai.com", "platform.openai.com", "help.openai.com",
+        "ai.google.dev", "developers.google.com", "blog.google", "microsoft.ai", "yogadns.com", "powerdns.com", "adguard-dns.io",
+        "adguard-dns.com", "adguard.com", "nextdns.io", "quad9.net", "opendns.com", "nip.io", "sslip.io", "afraid.org",
+        "infranest.io", "intodns.ai", "dnschecker.org", "whatsmydns.net", "mxtoolbox.com", "dnsleaktest.com", "stackoverflow.com",
+        "serverfault.com", "superuser.com", "learn.microsoft.com", "docs.docker.com", "kubernetes.io", "man7.org", "die.net",
     };
 
     /// <summary>Добавляет встроенные источники и запросы к настройкам пользователя (без дублей).</summary>
     public static void Merge(AppSettings st)
     {
+        var blocked = st.BlockedHosts.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        st.BlockedHosts.AddRange(NoiseHosts.Where(h => !blocked.Contains(h)));
         var urls = st.Sources.Select(s => s.Url.TrimEnd('/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var s in Sources.Where(s => !urls.Contains(s.Url.TrimEnd('/'))))
             st.Sources.Add(new SourceConfig { Name = s.Name, Url = s.Url, Type = s.Type });

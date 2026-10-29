@@ -107,7 +107,7 @@ public partial class MainWindow
                     server.Children.Add(new Image { Source = s.Flag, Width = 18, Height = 12, Margin = new Thickness(0, 0, 6, 0), Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Center });
                 server.Children.Add(new TextBlock { Text = s.ShortName, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 270, VerticalAlignment = VerticalAlignment.Center });
                 if (s.IsConnected) // точка, а не слово: в узкой рамке подпись обрезалась
-                    server.Children.Add(new TextBlock { Text = "  ●", Foreground = B("Lime"), FontSize = 11, VerticalAlignment = VerticalAlignment.Center, ToolTip = "Сейчас подключен" });
+                    server.Children.Add(new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Fill = B("Lime"), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Сейчас подключен" });
             }
             else server.Children.Add(new TextBlock { Text = "нет рабочего сервера", Foreground = B("Muted") });
             mid.Children.Add(server);
@@ -227,7 +227,10 @@ public partial class MainWindow
                 checks.Add(CheckFoundAsync(s));
             });
 
-            var found = await SourceParser.FetchAllAsync(_settings, Log, progress, OnFound, ct);
+            // Страницы, откуда пришли рабочие серверы: обходим первыми, там же появляются новые адреса
+            var seeds = _servers.Where(x => x.Status is ServerStatus.Ok or ServerStatus.Partial && !string.IsNullOrEmpty(x.SourceUrl))
+                                .GroupBy(x => x.SourceUrl!).OrderByDescending(g => g.Count()).Select(g => g.Key).Take(40).ToList();
+            var found = await SourceParser.FetchAllAsync(_settings, Log, progress, OnFound, ct, seeds);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background); // дождаться добавления
             Log($"Готово: найдено {found.Count}, новых {added.Count}");
             SaveServers();

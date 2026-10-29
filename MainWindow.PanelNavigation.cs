@@ -26,8 +26,9 @@ public partial class MainWindow
             if (control.Content is not StackPanel row) continue;
             foreach (var item in row.Children)
             {
-                if (item is TextBlock text) text.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-                else if (item is Dnex.Controls.Icon icon) icon.Margin = new Thickness(0, 0, expanded ? 10 : 0, 0);
+                // Подпись не скрывается (Visibility): показанная заново внутри скрытого пункта, она не перерисовывалась.
+                // В узком меню ее обрезает край панели и делает прозрачной
+                if (item is TextBlock text) { text.Visibility = Visibility.Visible; text.Opacity = expanded ? 1 : 0; }
             }
         }
         if (IsLoaded) ApplyResponsive();

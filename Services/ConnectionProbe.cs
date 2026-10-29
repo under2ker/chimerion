@@ -54,7 +54,12 @@ public static class ConnectionProbe
 
     /// <summary>Снимок состояния. leakTest — еще и тест утечки DNS: при подключении, отключении и по кнопке,
     /// но не в проверке по таймеру, чтобы не нагружать чужой тестовый сервис.</summary>
-    public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false)
+    /// <param name="light">
+    /// Облегченная проверка для фона: только по одному запросу к API каждого сервиса, без страниц сайтов (chatgpt.com,
+    /// claude.ai, accounts.google.com) и без определения страны выхода. Фоновая проверка идет с того же адреса, с
+    /// которого человек сидит в аккаунте, и лишние автоматические запросы к сайтам сервисов там ни к чему.
+    /// </param>
+    public static async Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false, bool light = false)
     {
         var snap = new NetSnapshot();
         using var http = NewHttp();
@@ -62,14 +67,14 @@ public static class ConnectionProbe
         var dnsTask = DnsSwitcher.GetCurrentAsync().ContinueWith(t => snap.SystemDns = t.IsCompletedSuccessfully ? t.Result : "—", ct);
 
         var targets = st.Targets.Where(t => t.Enabled).ToList();
-        var svcTasks = targets.Select(t => ProbeServiceAsync(st, t, http, ct)).ToList();
+        var svcTasks = targets.Select(t => ProbeServiceAsync(st, t, http, ct, light: light)).ToList();
         // Дополнительные хосты: тот же ответ API-признаков, но имя с хостом, чтобы строка в журнале было понятно
-        var hostTasks = targets.SelectMany(t => t.ExtraHosts.Select(h => ProbeServiceAsync(st, new CheckTarget
+        var hostTasks = targets.Where(_ => !light).SelectMany(t => t.ExtraHosts.Select(h => ProbeServiceAsync(st, new CheckTarget
         {
             Name = $"{t.Name}: {h}", Host = h, Path = "/", BlockedMarkers = t.BlockedMarkers, OwnerOrgs = t.OwnerOrgs,
         }, http, ct, web: true))).ToList();
         var leakTask = leakTest ? LeakTest.RunAsync() : Task.FromResult(new List<ResolverInfo>());
-        var egressTask = Task.Run(async () =>
+        var egressTask = light ? Task.CompletedTask : Task.Run(async () =>
         {
             snap.Egress = await EgressTrace.TraceAsync(null, TimeSpan.FromSeconds(6), ct);
             if (snap.Egress != null)
@@ -127,7 +132,7 @@ public static class ConnectionProbe
         _ => "ошибка соединения",
     };
 
-    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false)
+    private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false, bool light = false)
     {
         string resolved = "—";
         bool proxied = false, compared = false;
@@ -170,7 +175,7 @@ public static class ConnectionProbe
                     note = "Без подмены адреса доступ не подтвердить: без ключа API сервис отвечает одинаково из любого региона";
                 }
                 // Сайт сервиса: если он закрыт (регион, капча Google), в браузере сервисом не пользоваться
-                else if (ServerChecker.SplitWebCheck(t) is { } site)
+                else if (!light && ServerChecker.SplitWebCheck(t) is { } site)
                 {
                     try
                     {
@@ -188,7 +193,7 @@ public static class ConnectionProbe
 
         // Откуда сервис видит соединение (только основной адрес сервиса, через DNS системы, как браузер)
         Egress? egress = null;
-        if (!web)
+        if (!web && !light)
         {
             try
             {

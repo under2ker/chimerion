@@ -84,7 +84,7 @@ internal sealed class DiagnosticsWindow
 
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Диагностика",
-            "Подключение, доступ к сервисам, помехи в системе, Telegram и zapret, обновления", glyph: "✚"));
+            "Подключение, доступ к сервисам, помехи в системе, Telegram и zapret, обновления", glyph: "stethoscope"));
 
         // Проверка конкретного сайта: DNS, соединение, обрыв загрузки (замедление Cloudflare) и что делать
         root.Children.Add(Ui.Section("Проверить сайт", first: true));

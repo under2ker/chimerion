@@ -75,6 +75,21 @@ public partial class MainWindow
                    : ServerStatus.Fail;
     }
 
+    private DateTime _trayFullAt = DateTime.MinValue;
+    private NetSnapshot? _trayFull;
+
+    /// <summary>Облегченная проверка страну не узнает: подставляем ту, что узнали последней полной, чтобы защита аккаунтов и колонка «Где» не мигали.</summary>
+    private void KeepEgress(NetSnapshot snap)
+    {
+        if ((_trayFull ?? _after) is not { } last) return;
+        snap.Egress ??= last.Egress;
+        snap.EgressCity ??= last.EgressCity;
+        snap.EgressOrg ??= last.EgressOrg;
+        for (int i = 0; i < snap.Services.Count; i++)
+            if (snap.Services[i].Egress == null && last.Services.FirstOrDefault(x => x.Name == snap.Services[i].Name)?.Egress is { } e)
+                snap.Services[i] = snap.Services[i] with { Egress = e };
+    }
+
     /// <summary>Проверяет сервисы в фоне для трея. Повторный вызов во время проверки пропускается.</summary>
     private async Task RefreshTrayServicesAsync()
     {
@@ -82,7 +97,12 @@ public partial class MainWindow
         _trayBusy = true;
         try
         {
-            SetTraySnapshot(await ConnectionProbe.TakeAsync(_settings));
+            // Полная проверка (сайты сервисов и страна выхода) раз в час, в остальное время облегченная: по запросу к API
+            bool full = DateTime.Now - _trayFullAt >= TimeSpan.FromHours(1);
+            var snap = await ConnectionProbe.TakeAsync(_settings, light: !full);
+            if (full) { _trayFullAt = DateTime.Now; _trayFull = snap; }
+            else KeepEgress(snap);
+            SetTraySnapshot(snap);
         }
         catch (Exception ex)
         {

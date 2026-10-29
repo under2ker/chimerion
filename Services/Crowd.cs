@@ -16,6 +16,22 @@ public static class Crowd
 {
     /// <summary>Адрес сервера общей карты (Cloudflare Worker).</summary>
     public const string Endpoint = "https://chimerion-crowd.chimerion.workers.dev";
+
+    /// <summary>
+    /// Страницы, которые сервер общей карты нашел в поисковиках за неделю (ночная задача). Поисковики часто не пускают
+    /// программу (капча, «слишком много запросов»), а сервер спрашивает их раз в сутки. Пустой список — не ответил.
+    /// </summary>
+    public static async Task<List<string>> PagesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await Http.GetAsync(BaseUrl() + "/v1/pages", ct).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return new();
+            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+            return doc.RootElement.GetProperty("pages").EnumerateArray().Select(e => e.GetString()).OfType<string>().ToList();
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return new(); }
+    }
     public const string QueueFile = "crowd-queue.json", StatsFile = "crowd.json";
     public static readonly TimeSpan SendEvery = TimeSpan.FromHours(1), FetchEvery = TimeSpan.FromHours(1);
     /// <summary>Меньше стольких проверок в сети провайдера за сутки — данных мало, рекомендацию не даем.</summary>

@@ -275,7 +275,7 @@
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Проверка сервисов в трее, мин" Style="{StaticResource FieldLabel}"/>
                                     <TextBox x:Name="TrayMinutesBox" Style="{StaticResource FieldBox}"/>
-                                    <TextBlock Text="от 1 до 60. Рекомендуем 5. Также при запуске и подключении" Style="{StaticResource FieldHint}"/>
+                                    <TextBlock Text="от 1 до 60. Рекомендуем 15: чаще значит лишние запросы к сервисам с вашего адреса" Style="{StaticResource FieldHint}"/>
                                 </StackPanel>
                             </Grid>
                         </Border>

@@ -68,6 +68,8 @@ public partial class MainWindow
                 // Домены ИИ без подключения закрыты для России и должны быть закрыты: это не сбой, а отключенный Smart DNS.
                 // Пока подключение есть, за ними следит проверка сервисов, а здесь отказ по региону значит, что сервер их не подменяет
                 bool smart = ViaSmartDns(s.Host);
+                // Домены нейросетей проверяет мониторинг сервисов; второй поток запросов к ним с вашего адреса не нужен
+                if (SplitDns.SuffixDomains.Any(d => s.Host.Equals(d, StringComparison.OrdinalIgnoreCase))) continue;
                 if (smart && !connected) continue;
                 var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, CancellationToken.None);
                 if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) changes.Add(ch);

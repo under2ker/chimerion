@@ -142,9 +142,9 @@ internal sealed class SitesWindow
         if (done != null)
             buttons.Children.Add(new TextBlock
             {
-                Text = "✓ " + done, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
+                FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
                 Foreground = Ui.B(done.Contains("включите") ? "Warn" : "Ok"),
-            });
+            }.With(t => Ui.SetTextWithIcon(t, done, "check", before: true, size: 13)));
         else if (s.State == SiteWatch.Verdict.Blocked) buttons.Children.Add(Small("В zapret", "Strong", () => _action(s.Host, "zapret")));
         else if (s.State == SiteWatch.Verdict.Refused) buttons.Children.Add(Small("В Smart DNS", "Strong", () => _action(s.Host, "smartdns")));
         // У прозрачной кнопки текст отстоит от края на поле кнопки: первую такую сдвигаем, чтобы текст встал под совет

@@ -63,7 +63,7 @@ public partial class MainWindow
             Log($"  ИИ видят выход: {GeoLocation.CountryName(eg.Country)}{(string.IsNullOrWhiteSpace(n.EgressOrg) ? "" : " (" + n.EgressOrg + ")")}");
         // В режиме «Два DNS» тестовый домен идет через общий DNS: разные резолверы там не утечка
         if (DnsSwitcher.GetActive() is { Split: false } && LeakTest.LooksLikeLeak(n.Resolvers))
-            Log("  ⚠ Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
+            Log("  Утечка DNS: запросы уходят к разным резолверам, часть идет мимо сервера");
     }
 
     /// <summary>
@@ -183,8 +183,15 @@ public partial class MainWindow
             if (DnsSwitcher.GetActive() is { Split: true })
                 runs.Add(("   · это общий DNS, домены ИИ идут через сервер отдельно", B("Muted"), true));
             else
-                runs.Add((leak ? "   ⚠ часть запросов идет мимо сервера" : "   ✓ все запросы через сервер", leak ? B("Warn") : B("Ok"), true));
+                runs.Add((leak ? "   часть запросов идет мимо сервера" : "   все запросы через сервер", leak ? B("Warn") : B("Ok"), true));
             var line = Line(runs.ToArray());
+            // Знак у итога утечки: анимированная иконка перед последней фразой, а не символ шрифта
+            if (DnsSwitcher.GetActive() is not { Split: true } && line.Inlines.LastInline is System.Windows.Documents.Run lastRun)
+            {
+                var mark = new Controls.Icon { Kind = leak ? "triangle-alert" : "circle-check", Size = 13, Foreground = leak ? B("Warn") : B("Ok"), Margin = new Thickness(6, 0, 4, -2) };
+                line.Inlines.InsertBefore(lastRun, new System.Windows.Documents.InlineUIContainer(mark) { BaselineAlignment = BaselineAlignment.Center });
+                lastRun.Text = lastRun.Text.TrimStart();
+            }
             line.TextTrimming = TextTrimming.CharacterEllipsis;
             line.TextWrapping = TextWrapping.NoWrap;
             line.ToolTip = string.Join("\n", cur.Resolvers.Select(r => $"{r.Ip} · {r.Org} · {r.Place}"));
@@ -252,10 +259,10 @@ public partial class MainWindow
                 int hostCount = 1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal));
                 var toggle = new TextBlock
                 {
-                    Text = $"Серверы ({hostCount}) ▾",
                     Foreground = B("Accent"), FontSize = 12, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand,
                     Tag = svc, ToolTip = "Адреса сервиса и их статус",
                 };
+                Ui.SetTextWithIcon(toggle, $"Серверы ({hostCount})", "chevron-down", size: 12);
                 toggle.MouseLeftButtonUp += ToggleHosts_Click;
                 sp.Children.Add(toggle);
             }
@@ -371,13 +378,13 @@ public partial class MainWindow
         popup.Closed += (_, _) =>
         {
             // Текст задаем заново, а не заменой в показанном: на английском показан перевод
-            toggle.Text = $"Серверы ({1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal))}) ▾";
+            Ui.SetTextWithIcon(toggle, $"Серверы ({1 + cur.Hosts.Count(h => h.Name.StartsWith(svc.Name + ": ", StringComparison.Ordinal))})", "chevron-down", size: 12);
             _hostsClosedAt = DateTime.Now;
         };
         popup.KeyDown += (_, k) => { if (k.Key == Key.Escape) popup.IsOpen = false; };
         _hostsPopup = popup;
         _hostsPopupFor = svc.Name;
-        toggle.Text = "Скрыть серверы ▴";
+        Ui.SetTextWithIcon(toggle, "Скрыть серверы", "minus", size: 12);
         popup.IsOpen = true;
     }
 
@@ -409,7 +416,9 @@ public partial class MainWindow
                 ? $"{s.Name} видит вас из: {name} ({s.Egress.Ip})\nПрокси Smart DNS: {proxyName} ({s.ResolvedIp})"
                 : warn ? proxyName + "\nБазы определяют страну по-разному" : proxyName + "\nВыход не определен: показана страна прокси";
             if (_compact) continue; // компактная плитка: только флаг, название страны в подсказке
-            row.Children.Add(new TextBlock { Text = warn ? name + " ⚠" : name, Foreground = muted, FontWeight = FontWeights.SemiBold });
+            var nameText = new TextBlock { Text = name, Foreground = muted, FontWeight = FontWeights.SemiBold };
+            if (warn) Ui.SetTextWithIcon(nameText, name, "triangle-alert", size: 12);
+            row.Children.Add(nameText);
         }
     }
 
