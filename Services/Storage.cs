@@ -72,10 +72,14 @@ public static class Storage
         try { text = ReadWithRetry(path); }
         catch (IOException)
         {
-            // Файл занят (антивирус, резервное копирование) дольше секунды: это не порча. Копию .broken не делаем,
-            // и вызывающий получит значения по умолчанию только на этот раз, файл на диске остается целым
+            // Файл занят (антивирус, резервное копирование) дольше 10 секунд: это не порча. Копию .broken не делаем,
+            // вызывающий получит значения по умолчанию, а запись этого файла будет запрещена, пока его не прочтут:
+            // иначе первое же сохранение затерло бы настоящие настройки значениями по умолчанию
+            lock (Unread) Unread.Add(path);
+            Trace?.Invoke($"Хранилище: {file} занят другой программой, прочитать не удалось. Запись в него отложена");
             return createDefault();
         }
+        lock (Unread) Unread.Remove(path);
         try
         {
             return JsonSerializer.Deserialize<T>(text, Options) ?? createDefault();
@@ -89,13 +93,33 @@ public static class Storage
         }
     }
 
-    /// <summary>Чтение с повтором: файл бывает ненадолго занят антивирусом или второй записью.</summary>
+    /// <summary>Файлы, которые не удалось прочитать из-за блокировки: перезаписывать их нельзя (там настоящие данные).</summary>
+    private static readonly HashSet<string> Unread = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Записи, которые не прошли из-за блокировки: путь → последний JSON. Фоновый повтор до PendingFor.</summary>
+    private static readonly Dictionary<string, string> Pending = new(StringComparer.OrdinalIgnoreCase);
+    private static Task? _pendingTask;
+
+    /// <summary>Сколько ждать занятый файл при чтении и сколько повторять отложенную запись. Тесты уменьшают.</summary>
+    internal static TimeSpan ReadWait = TimeSpan.FromSeconds(10), PendingFor = TimeSpan.FromMinutes(2);
+
+    /// <summary>Сообщения о блокировках и отложенных записях для журнала (MainWindow подписывается).</summary>
+    public static Action<string>? Trace;
+
+    /// <summary>Файл, который при запуске не прочитали из-за блокировки, снова доступен: его стоит перечитать.</summary>
+    public static Action<string>? Reread;
+
+    /// <summary>Есть ли записи, которые еще ждут, пока файл освободится.</summary>
+    public static bool HasPending { get { lock (Pending) return Pending.Count > 0; } }
+
+    /// <summary>Чтение с повтором: файл бывает занят антивирусом, резервным копированием или второй записью.</summary>
     private static string ReadWithRetry(string path)
     {
-        for (int i = 0; ; i++)
+        var until = DateTime.UtcNow + ReadWait;
+        while (true)
         {
             try { return File.ReadAllText(path); }
-            catch (IOException) when (i < 5 && File.Exists(path)) { Thread.Sleep(200); }
+            catch (IOException) when (DateTime.UtcNow < until && File.Exists(path)) { Thread.Sleep(200); }
         }
     }
 
@@ -110,6 +134,84 @@ public static class Storage
     {
         Directory.CreateDirectory(Dir);
         var path = PathOf(file);
+        // Файл не прочитан из-за блокировки: сначала пробуем прочитать. Пока не прочли, запись откладывается
+        bool unread; lock (Unread) unread = Unread.Contains(path);
+        if (unread)
+        {
+            try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+            catch (IOException) { Defer(path, json); return; }
+            // Файл снова читается, а в памяти значения по умолчанию, полученные во время блокировки: эту запись
+            // пропускаем, чтобы не затереть настоящие данные, и просим программу перечитать файл
+            Trace?.Invoke($"Хранилище: {file} освободился. Сохранение пропущено, файл перечитан, чтобы не затереть данные");
+            Reread?.Invoke(file);
+            return;
+        }
+        if (!TryWrite(path, json)) Defer(path, json);
+        else lock (Pending) Pending.Remove(path); // свежая запись прошла: отложенная старая больше не нужна
+    }
+
+    /// <summary>Отложить запись: фоновый повтор раз в секунду, пока файл не освободится (не дольше PendingFor).</summary>
+    private static void Defer(string path, string json)
+    {
+        lock (Pending)
+        {
+            bool first = !Pending.ContainsKey(path);
+            Pending[path] = json; // остается последняя версия
+            if (first) Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} занят другой программой, сохраню, когда освободится");
+            if (_pendingTask is { IsCompleted: false }) return;
+            _pendingTask = Task.Run(FlushPendingAsync);
+        }
+    }
+
+    private static async Task FlushPendingAsync()
+    {
+        var until = DateTime.UtcNow + PendingFor;
+        while (true)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(1000, PendingFor.TotalMilliseconds / 10))).ConfigureAwait(false);
+            KeyValuePair<string, string>[] items;
+            lock (Pending) items = Pending.ToArray();
+            if (items.Length == 0) return;
+            foreach (var (path, json) in items)
+            {
+                bool unread; lock (Unread) unread = Unread.Contains(path);
+                if (unread)
+                {
+                    try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+                    catch (IOException) { continue; }
+                    // Отложенная запись сделана из значений по умолчанию: не пишем, а перечитываем настоящий файл
+                    lock (Pending) Pending.Remove(path);
+                    Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} освободился и перечитан");
+                    Reread?.Invoke(Path.GetFileName(path));
+                    continue;
+                }
+                if (!TryWrite(path, json)) continue;
+                lock (Pending) { if (Pending.TryGetValue(path, out var cur) && cur == json) Pending.Remove(path); }
+                Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} сохранен после блокировки");
+            }
+            if (DateTime.UtcNow > until)
+            {
+                lock (Pending)
+                {
+                    foreach (var k in Pending.Keys) Trace?.Invoke($"Хранилище: не удалось сохранить {Path.GetFileName(k)}: файл занят дольше {PendingFor.TotalMinutes:0} мин");
+                    Pending.Clear();
+                }
+                return;
+            }
+        }
+    }
+
+    /// <summary>Дождаться отложенных записей (выход из программы, тесты). true — все записано.</summary>
+    public static bool FlushPending(TimeSpan timeout)
+    {
+        Task? t; lock (Pending) t = _pendingTask;
+        if (t != null) t.Wait(timeout);
+        return !HasPending;
+    }
+
+    /// <summary>Одна попытка записи с короткими повторами (до секунды). false — файл занят.</summary>
+    private static bool TryWrite(string path, string json)
+    {
         var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
         // Записи одного файла внутри программы идут по очереди: замена файла, пока его заменяет соседний поток,
         // иногда не проходит и с повторами. Между процессами остаются повторы ниже
@@ -124,11 +226,14 @@ public static class Storage
             }
             for (int i = 0; ; i++)
             {
-                try { File.Move(tmp, path, overwrite: true); break; }
-                catch (IOException) when (i < 5) { Thread.Sleep(100); } // файл ненадолго открыт на чтение
-                catch (UnauthorizedAccessException) when (i < 5) { Thread.Sleep(100); }
+                try { File.Move(tmp, path, overwrite: true); return true; }
+                catch (IOException) when (i < 10) { Thread.Sleep(100); } // файл ненадолго открыт на чтение
+                catch (UnauthorizedAccessException) when (i < 10) { Thread.Sleep(100); }
+                catch (IOException) { return false; }
+                catch (UnauthorizedAccessException) { return false; }
             }
         }
+        catch (IOException) { return false; } // не удалось даже создать временный файл (диск, права)
         finally { try { if (File.Exists(tmp)) File.Delete(tmp); } catch (IOException) { } }
     }
 }

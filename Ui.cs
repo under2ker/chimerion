@@ -36,6 +36,21 @@ internal static class Ui
         Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, 0), LineHeight = 17,
     }.Ref(TextBlock.ForegroundProperty, brush);
 
+    /// <summary>
+    /// Текст с иконкой в той же строке (иконки только из Controls.Icon, без символов шрифта вроде ▾ или ⚠).
+    /// before: иконка перед текстом, иначе после. Цвет иконки берется у текста.
+    /// </summary>
+    public static void SetTextWithIcon(TextBlock tb, string text, string kind, bool before = false, double size = 13)
+    {
+        tb.Inlines.Clear();
+        var icon = new Controls.Icon { Kind = kind, Size = size, Margin = before ? new Thickness(0, 0, 5, -2) : new Thickness(5, 0, 0, -2) };
+        icon.SetBinding(Controls.Icon.ForegroundProperty, new System.Windows.Data.Binding(nameof(TextBlock.Foreground)) { Source = tb });
+        var box = new System.Windows.Documents.InlineUIContainer(icon) { BaselineAlignment = BaselineAlignment.Center };
+        if (before) tb.Inlines.Add(box);
+        tb.Inlines.Add(new System.Windows.Documents.Run(text));
+        if (!before) tb.Inlines.Add(box);
+    }
+
     /// <summary>Строка состояния: ход работы или ошибка.</summary>
     public static TextBlock Status() => new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = B("Muted"), Margin = new Thickness(0, 10, 0, 0) };
 

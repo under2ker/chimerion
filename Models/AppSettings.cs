@@ -65,7 +65,9 @@ public class AppSettings
     public string Language { get; set; } = "ru";
 
     /// <summary>Как часто трей сам проверяет ИИ-сервисы (минуты, 1–60).</summary>
-    public int TrayCheckMinutes { get; set; } = 5;
+    public int TrayCheckMinutes { get; set; } = 15;
+    /// <summary>Интервал трея уже переведен с прежних 5 минут на 15 (один раз, чтобы не трогать выбор пользователя потом).</summary>
+    public bool TrayIntervalMigrated { get; set; }
     /// <summary>Проверять наличие новой версии на GitHub через несколько секунд после запуска. Файлы не загружаются.</summary>
     public bool CheckUpdates { get; set; } = true;
     /// <summary>Версия, о которой пользователь выбрал «Пропустить версию».</summary>
@@ -193,12 +195,12 @@ public class AppSettings
     public Dictionary<string, string> HostCookies { get; set; } = new();
 
     /// <summary>Домены, которые парсер никогда не открывает.</summary>
-    public List<string> BlockedHosts { get; set; } = new()
+    public List<string> BlockedHosts { get; set; } = new List<string>
     {
         "youtube.com", "www.youtube.com", "vk.com", "facebook.com", "twitter.com", "x.com", "instagram.com",
         "apps.apple.com", "play.google.com", "duckduckgo.com",
         // Энциклопедии, справки и новости: статьи про DNS вообще, списков Smart DNS там нет (видно по журналу обхода)
         "wikipedia.org", "wikimedia.org", "wiktionary.org", "microsoft.com", "techcrunch.com", "forbes.ru", "vedomosti.ru",
         "straitstimes.com", "bbc.com", "reuters.com", "theverge.com", "wired.com", "cloudflare.com", "one.one.one.one",
-    };
+    }.Concat(Services.Catalog.NoiseHosts).ToList();
 }

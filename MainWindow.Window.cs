@@ -175,14 +175,19 @@ public partial class MainWindow
     {
         bool wasCompact = _compact;
         _compact = compact;
+        var v = compact ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var command in PanelNavItems.Children.OfType<System.Windows.Controls.Primitives.ToggleButton>()) command.Visibility = v;
+        // Подписи меню меняем после того, как пункты снова видны: подпись, показанная внутри скрытого пункта,
+        // не перерисовывалась, и после компактного вида у части пунктов оставались одни иконки
         if (compact != wasCompact)
         {
             if (compact) { _panelNavBeforeCompact = _panelNavExpanded; SetPanelNavigation(false); }
             else SetPanelNavigation(_panelNavBeforeCompact);
         }
-        var v = compact ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var command in PanelNavItems.Children.OfType<System.Windows.Controls.Primitives.ToggleButton>()) command.Visibility = v;
         ToolbarCard.Visibility = v;
+        // В компактном виде узкое меню: только «Главная» и «Полный вид». Кнопка сворачивания меню там не нужна,
+        // а ее иконка совпадала с иконкой «Полного вида»
+        PanelCollapseButton.Visibility = v;
         BottomPanel.Visibility = v;
         StatsText.Visibility = v;
         SettingsButton.Visibility = v;
@@ -231,6 +236,10 @@ public partial class MainWindow
         else
         {
             MinWidth = 1000; MinHeight = 760; // ниже проверка подключения забирала все место у таблицы
+            // Колонки, которые компактный вид сжимал или прятал, возвращаются к ширинам из XAML: иначе таблица
+            // сохраняла сжатые ширины, и иконки обновления и звездочки обрезались
+            ColRefresh.Width = new DataGridLength(52);
+            ColFav.Width = new DataGridLength(40);
             Grid.SetRow(HeaderStats, 0); Grid.SetColumn(HeaderStats, 1); Grid.SetColumnSpan(HeaderStats, 1);
             HeaderStats.Margin = new Thickness(18, 0, 0, 0);
             HeaderStats.HorizontalAlignment = HorizontalAlignment.Left;
@@ -242,6 +251,7 @@ public partial class MainWindow
         }
         ApplyResponsive();
         ShowCompare();
+        UpdateHeaderStats(); // блок «В обходе» зависит от вида окна
         if (compact) _ = RefreshTrayServicesAsync(); // компактный вид сразу проверяет сервисы
         try { Storage.Save("ui.json", new Dictionary<string, bool> { ["compact"] = compact }); } catch (Exception) { }
     }
@@ -257,14 +267,18 @@ public partial class MainWindow
         var w = Math.Max(0, ActualWidth - PanelSidebar.Width);
         bool full = !_compact;
 
-        // Таблица: по мере сужения окна уходят источник, стабильность и оценка
-        ColLocation.Visibility = full && w >= 1150 ? Visibility.Visible : Visibility.Collapsed;
-        ColServices.Visibility = full && w >= 1050 ? Visibility.Visible : Visibility.Collapsed;
-        // Ширины колонок (см. XAML): без источника и без стабильности и оценки таблица нужна от ~1100 px,
-        // с ними от ~1360 px, со всеми колонками от ~1540 px окна.
-        ColSource.Visibility = full && w >= 900 ? Visibility.Visible : Visibility.Collapsed;
-        ColStab.Visibility = ColScore.Visibility = full && w >= 1360 ? Visibility.Visible : Visibility.Collapsed;
-        ColAi.Visibility = full && w >= 1200 ? Visibility.Visible : Visibility.Collapsed;
+        // Таблица: колонки добавляются, пока хватает ширины самой таблицы (окно минус левое меню и поля), по их
+        // ширинам из XAML. Раньше пороги считались по окну без левого меню, и колонки наезжали друг на друга.
+        // Всегда видны: обновить 52, звезда 40, статус 128, сервер от 250, пинг 140 (610) и запас на прокрутку 30
+        double table = Math.Max(0, ActualWidth - PanelSidebar.Width - 40);
+        double used = 640;
+        bool Fits(double width) { if (used + width > table) return false; used += width; return true; }
+        bool services = full && Fits(260), source = full && Fits(56), ai = full && Fits(84), stab = full && Fits(255), location = full && Fits(200);
+        ColServices.Visibility = services ? Visibility.Visible : Visibility.Collapsed;
+        ColSource.Visibility = source ? Visibility.Visible : Visibility.Collapsed;
+        ColAi.Visibility = ai ? Visibility.Visible : Visibility.Collapsed;
+        ColStab.Visibility = ColScore.Visibility = stab ? Visibility.Visible : Visibility.Collapsed;
+        ColLocation.Visibility = location ? Visibility.Visible : Visibility.Collapsed;
 
         // Рамка «Лучшие по стабильности» справа от проверки подключения: только в полном виде и в широком окне
         TopCard.Visibility = full && w >= 1300 ? Visibility.Visible : Visibility.Collapsed;
@@ -281,11 +295,15 @@ public partial class MainWindow
             _navPanel.Children.Remove(ApplyActions);
             HeaderGrid.Children.Add(ApplyActions);
         }
-        Grid.SetRow(ApplyActions, 1);
-        Grid.SetColumn(ApplyActions, 0);
-        Grid.SetColumnSpan(ApplyActions, 3);
-        ApplyActions.HorizontalAlignment = HorizontalAlignment.Left;
-        ApplyActions.Margin = new Thickness(0, 10, 0, 0);
+        // Широкое окно: кнопки в той же строке справа, без пустой полосы под карточкой подключения.
+        // Узкое: отдельной строкой под карточкой, чтобы не сжимать статус и статистику
+        bool inline = table >= 1200;
+        Grid.SetRow(ApplyActions, inline ? 0 : 1);
+        Grid.SetColumn(ApplyActions, inline ? 2 : 0);
+        Grid.SetColumnSpan(ApplyActions, inline ? 1 : 3);
+        ApplyActions.HorizontalAlignment = inline ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        ApplyActions.VerticalAlignment = VerticalAlignment.Center;
+        ApplyActions.Margin = inline ? new Thickness(18, 0, 0, 0) : new Thickness(0, 10, 0, 0);
         Grid.SetRow(HeaderStats, 0);
         Grid.SetColumn(HeaderStats, 1);
         Grid.SetColumnSpan(HeaderStats, 1);
@@ -304,6 +322,8 @@ public partial class MainWindow
         // Без подключения в шапке только обход: пинг и ИИ относятся к серверу
         var conn = active == null ? Visibility.Collapsed : Visibility.Visible;
         StatPingBlock.Visibility = StatSep1.Visibility = StatStabBlock.Visibility = StatSep2.Visibility = StatServicesBlock.Visibility = ActiveRefresh.Visibility = conn;
+        // В компактном окне блок «В обходе» не помещается в строку со статистикой подключения и переносился вниз
+        if (_compact) { StatBypassBlock.Visibility = Visibility.Collapsed; bypass = false; }
         StatSep3.Visibility = active != null && bypass ? Visibility.Visible : Visibility.Collapsed;
         if (active == null) return;
         var srv = _servers.FirstOrDefault(x => x.Id == active.ServerId);

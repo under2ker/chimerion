@@ -20,9 +20,11 @@ public partial class MainWindow
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardDns = null!, _dashboardNetwork = null!;
     private TextBlock _dashboardChecked = null!, _dashboardZapret = null!, _dashboardTelegram = null!, _dashboardMessage = null!;
     private TextBlock _dashboardHeroMode = null!, _dashboardHeroSince = null!, _dashboardHeroServices = null!;
-    private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardSiteTelegram = null!, _dashboardDiagnostics = null!, _dashboardEvents = null!;
+    private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardSiteTelegram = null!, _dashboardDiagnostics = null!;
+    private StackPanel _dashboardEvents = null!;
+    private string? _dashboardEventsSignature;
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
-    private readonly Dictionary<string, (TextBlock Status, Ellipse Dot)> _dashboardServices = new();
+    private readonly Dictionary<string, (TextBlock Status, Controls.Icon Icon)> _dashboardServices = new();
     private Button _dashboardConnect = null!, _dashboardZapretButton = null!, _dashboardTelegramButton = null!, _dashboardProbe = null!, _dashboardSiteProbe = null!;
     private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking;
     private string? _dashboardMessageText;
@@ -63,13 +65,15 @@ public partial class MainWindow
         var heroFacts = new Grid { Margin = new Thickness(0, 22, 0, 0) };
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardHeroMode = DashboardFact(heroFacts, 0, "Режим", "arrow-left-right");
-        _dashboardHeroSince = DashboardFact(heroFacts, 1, "Подключение", "activity");
-        _dashboardHeroServices = DashboardFact(heroFacts, 2, "Доступ к ИИ", "activity");
+        _dashboardHeroSince = DashboardFact(heroFacts, 1, "Подключение", "link");
+        _dashboardHeroServices = DashboardFact(heroFacts, 2, "Доступ к ИИ", "circle-check");
         heroContent.Children.Add(heroFacts);
-        var heroLayer = new Grid { ClipToBounds = true };
+        var heroLayer = new Grid();
+        heroLayer.SizeChanged += (_, e) => heroLayer.Clip = new RectangleGeometry(new Rect(e.NewSize), 11, 11);
         heroLayer.Children.Add(new DashboardAtmosphere());
+        heroContent.Margin = new Thickness(24, 22, 24, 22);
         heroLayer.Children.Add(heroContent);
-        _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(24, 22, 24, 22); page.Children.Add(_dashboardHero);
+        _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(0); page.Children.Add(_dashboardHero);
         _dashboardMessage = Ui.Hint("", 10); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
 
         page.Children.Add(DashboardSection("Подключение"));
@@ -99,13 +103,14 @@ public partial class MainWindow
             title.Children.Add(icon); title.Children.Add(new TextBlock { Text = names[i].Item1, FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             cell.Children.Add(title);
             var statusLine = new DockPanel { Margin = new Thickness(1, 16, 0, 2) };
-            var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Shape.FillProperty, "Muted");
+            var statusIcon = new Controls.Icon { Kind = "info", Size = 15, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+            statusIcon.SetResourceReference(Controls.Icon.ForegroundProperty, "Muted");
             var text = new TextBlock { Text = "Еще не проверялось", FontSize = 12, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Muted");
-            DockPanel.SetDock(dot, Dock.Left); statusLine.Children.Add(dot); statusLine.Children.Add(text); cell.Children.Add(statusLine);
+            DockPanel.SetDock(statusIcon, Dock.Left); statusLine.Children.Add(statusIcon); statusLine.Children.Add(text); cell.Children.Add(statusLine);
             string url = names[i].Item3;
             var open = Ui.Action("Открыть", "Ghost", () => AutoStart.OpenUrl(url));
             open.HorizontalAlignment = HorizontalAlignment.Left; open.Margin = new Thickness(-10, 9, 0, -4); cell.Children.Add(open);
-            _dashboardServices[names[i].Item1] = (text, dot);
+            _dashboardServices[names[i].Item1] = (text, statusIcon);
             var card = Ui.Card(cell, bottom: 0); card.Padding = new Thickness(16); card.Margin = new Thickness(i == 0 ? 0 : 5, 0, i == 2 ? 0 : 5, 0);
             Grid.SetColumn(card, i); serviceGrid.Children.Add(card);
         }
@@ -144,7 +149,7 @@ public partial class MainWindow
             LogToggle.IsChecked = true;
         });
         eventsButton.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(eventsButton, Dock.Right); events.Children.Add(eventsButton);
-        _dashboardEvents = Ui.Hint("Событий пока нет", 0); _dashboardEvents.LineHeight = 21; events.Children.Add(_dashboardEvents);
+        _dashboardEvents = new StackPanel { Margin = new Thickness(0, 0, 12, 0) }; events.Children.Add(_dashboardEvents);
         page.Children.Add(Ui.Card(events, bottom: 0));
         var footer = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
         footer.Children.Add(Ui.Action("Настройки", "Ghost", () => Settings_Click(this, new RoutedEventArgs())));
@@ -218,30 +223,13 @@ public partial class MainWindow
                     new(Color.FromArgb(0, accent.R, accent.G, accent.B), 1),
                 },
             };
-            var edgeFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-            edgeFade.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
-            edgeFade.GradientStops.Add(new GradientStop(Colors.White, .18));
-            edgeFade.GradientStops.Add(new GradientStop(Colors.White, .8));
-            edgeFade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-            var sideFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            sideFade.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
-            sideFade.GradientStops.Add(new GradientStop(Colors.White, .12));
-            sideFade.GradientStops.Add(new GradientStop(Colors.White, .9));
-            sideFade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
-            dc.PushOpacityMask(edgeFade);
-            dc.PushOpacityMask(sideFade);
             dc.DrawRectangle(glow, null, new Rect(0, 0, ActualWidth, ActualHeight));
-            if (line == null) { dc.Pop(); dc.Pop(); return; }
-            var mask = new RadialGradientBrush(Colors.White, Colors.Transparent)
-            {
-                Center = new Point(.82, .28), GradientOrigin = new Point(.82, .28), RadiusX = .65, RadiusY = 1.2,
-            };
-            dc.PushOpacity(.06);
-            dc.PushOpacityMask(mask);
+            if (line == null) return;
+            dc.PushOpacity(.045);
             var pen = new Pen(line, 1);
             for (double x = -ActualHeight; x < ActualWidth + ActualHeight; x += 28)
                 dc.DrawLine(pen, new Point(x, ActualHeight), new Point(x + ActualHeight * .84, 0));
-            dc.Pop(); dc.Pop(); dc.Pop(); dc.Pop();
+            dc.Pop();
         }
     }
 
@@ -263,10 +251,11 @@ public partial class MainWindow
         var brandText = new StackPanel();
         brandText.Children.Add(new TextBlock { Text = "CHIMERION", FontSize = 13, FontWeight = FontWeights.Bold });
         brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
-        links.Children.Add(DashboardNav("Главная", "globe", () => { }, true));
-        links.Children.Add(DashboardNav("Панель управления", "settings", ShowControlPanel));
-        links.Children.Add(DashboardNav("Диагностика", "activity", () => DiagToggle_Click(this, new RoutedEventArgs())));
+        // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
+        links.Children.Add(DashboardNav("Главная", "shield-check", () => { }, true));
+        links.Children.Add(DashboardNav("Панель управления", "activity", ShowControlPanel));
         links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         content.Children.Add(links);
         return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
@@ -380,7 +369,7 @@ public partial class MainWindow
         var snap = new[] { _traySnap, _after, _before }.Where(x => x != null).OrderByDescending(x => x!.Taken).FirstOrDefault();
         if (snap != null && (snap.Taken < _dashboardConnectionChanged || (active != null && snap.Taken < active.Since))) snap = null;
         _dashboardTitle.Text = _busyConn ? "Подключение меняется" : active == null ? "Smart DNS отключен" : "Smart DNS подключен";
-        _dashboardDescription.Text = active == null ? "Подключите рабочий сервер для доступа к сервисам." : active.Split ? "Нейросети используют Smart DNS, остальная сеть — системный DNS." : "DNS настроен на сетевых адаптерах.";
+        _dashboardDescription.Text = active == null ? "Подключите рабочий сервер для доступа к сервисам." : active.Split ? "Нейросети идут через Smart DNS, остальная сеть через системный DNS." : "DNS настроен на сетевых адаптерах.";
         _dashboardHero.SetResourceReference(Border.BackgroundProperty, active == null ? "Surface" : "OkSoft");
         _dashboardHero.SetResourceReference(Border.BorderBrushProperty, active == null ? "Border" : "Ok");
         _dashboardHeroIcon.SetResourceReference(Border.BackgroundProperty, active == null ? "Surface2" : "Surface");
@@ -396,9 +385,12 @@ public partial class MainWindow
         foreach (var (name, entry) in _dashboardServices)
         {
             var service = snap?.Services.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-            entry.Status.Text = service?.Access ?? "Еще не проверялось";
-            var color = service == null ? "Muted" : service.Access.StartsWith("✓") ? "Ok" : "Warn";
-            entry.Status.SetResourceReference(TextBlock.ForegroundProperty, color); entry.Dot.SetResourceReference(Shape.FillProperty, color);
+            bool ok = service?.Access.StartsWith("✓") == true;
+            entry.Status.Text = service == null ? "Еще не проверялось" : service.Access.TrimStart('✓', '✗', ' ');
+            var color = service == null ? "Muted" : ok ? "Ok" : "Warn";
+            entry.Icon.Kind = service == null ? "info" : ok ? "circle-check" : "circle-x";
+            entry.Status.SetResourceReference(TextBlock.ForegroundProperty, color);
+            entry.Icon.SetResourceReference(Controls.Icon.ForegroundProperty, color);
             entry.Status.ToolTip = service?.Note;
         }
         _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Последняя проверка: {snap.Taken:dd.MM HH:mm}" + (DateTime.Now - snap.Taken > TimeSpan.FromMinutes(30) ? " · данные могут устареть" : "");
@@ -414,11 +406,46 @@ public partial class MainWindow
         var checkedCount = snap?.Services.Count(x => x.Name is "ChatGPT" or "Claude" or "Gemini") ?? 0;
         var openCount = snap?.Services.Count(x => (x.Name is "ChatGPT" or "Claude" or "Gemini") && x.Access.StartsWith("✓")) ?? 0;
         _dashboardDiagnostics.Text = _disconnectFailed ? "Не удалось восстановить DNS. Откройте диагностику." : snap == null || checkedCount == 0 ? "Проверьте подключение, чтобы увидеть состояние сервисов." : $"Доступно сервисов: {openCount} из {checkedCount}. Подробности в диагностике.";
-        var recent = _log.TakeLast(3).Reverse().ToArray();
-        _dashboardEvents.Text = recent.Length == 0 ? "Событий пока нет" : string.Join("\n", recent.Select(e => $"{e.Time:HH:mm}  ·  {PrivacyGuard.Mask(e.Text)}"));
+        RefreshDashboardEvents();
         _dashboardMessage.Text = _dashboardMessageText ?? "";
         _dashboardMessage.Visibility = string.IsNullOrEmpty(_dashboardMessageText) ? Visibility.Collapsed : Visibility.Visible;
         _dashboardMessage.SetResourceReference(TextBlock.ForegroundProperty, _dashboardMessageError ? "Bad" : "Muted");
+    }
+
+    private void RefreshDashboardEvents()
+    {
+        var recent = _log.TakeLast(4).Reverse().ToArray();
+        var signature = string.Join("|", recent.Select(e => $"{e.Time.Ticks}:{PrivacyGuard.Mask(e.Text)}"));
+        if (signature == _dashboardEventsSignature) return;
+        _dashboardEventsSignature = signature;
+        _dashboardEvents.Children.Clear();
+        if (recent.Length == 0) { _dashboardEvents.Children.Add(Ui.Hint("Событий пока нет", 0)); return; }
+        for (int i = 0; i < recent.Length; i++)
+        {
+            var entry = recent[i];
+            var color = entry.Level switch { LogLevel.Ok => "Ok", LogLevel.Warn => "Warn", LogLevel.Error => "Bad", _ => "Muted" };
+            var kind = entry.Level switch { LogLevel.Ok => "circle-check", LogLevel.Warn => "triangle-alert", LogLevel.Error => "circle-x", _ => "info" };
+            var soft = entry.Level switch { LogLevel.Ok => "OkSoft", LogLevel.Warn => "WarnSoft", LogLevel.Error => "BadSoft", _ => "InfoSoft" };
+            var row = new Grid { Margin = new Thickness(0, i == 0 ? 0 : 8, 0, 0) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icon = new Controls.Icon { Kind = kind, Size = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            icon.SetResourceReference(Controls.Icon.ForegroundProperty, color);
+            var badge = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top, Child = icon };
+            badge.SetResourceReference(Border.BackgroundProperty, soft); row.Children.Add(badge);
+            // «Проверка сайтов: x.com блокирует провайдер» → заголовок «Проверка сайтов» и подробности ниже
+            var text = PrivacyGuard.Mask(entry.Text).Trim();
+            var cut = text.IndexOf(": ", StringComparison.Ordinal);
+            string title = cut is > 0 and < 40 ? text[..cut] : text, detail = cut is > 0 and < 40 ? text[(cut + 2)..] : "";
+            var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(content, 1);
+            content.Children.Add(new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            if (detail.Length > 0) content.Children.Add(Ui.Hint(detail, 2).With(t => { t.FontSize = 12; t.MaxHeight = 36; t.TextTrimming = TextTrimming.CharacterEllipsis; }));
+            row.Children.Add(content);
+            var time = Ui.Hint(entry.Time.ToString("HH:mm"), 0).With(t => { t.FontSize = 11; t.Margin = new Thickness(12, 2, 0, 0); t.VerticalAlignment = VerticalAlignment.Top; });
+            Grid.SetColumn(time, 2); row.Children.Add(time);
+            _dashboardEvents.Children.Add(row);
+        }
     }
 
     private string DashboardSiteStatus(string name, string host)

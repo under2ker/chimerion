@@ -72,7 +72,7 @@ internal sealed class SplitDnsWindow
         var root = Ui.Root();
         root.Margin = new Thickness(24, 22, 24, 4);
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Два DNS",
-            "ChatGPT, Claude и Gemini идут через Smart DNS, а все остальные сайты через общий DNS. Друг другу они не мешают", glyph: "⇄"));
+            "ChatGPT, Claude и Gemini идут через Smart DNS, а все остальные сайты через общий DNS. Друг другу они не мешают", glyph: "arrow-left-right"));
 
         _enabled.Content = null;
         _enabled.Margin = new Thickness(0);

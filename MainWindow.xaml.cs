@@ -48,6 +48,15 @@ public partial class MainWindow : Window
         };
 
         _settings = LoadSettings();
+        // Хранилище: блокировки файлов в журнал, а настройки, не прочитанные из-за блокировки, перечитываются
+        Storage.Trace = msg => Log(msg);
+        Storage.Reread = file => Dispatcher.InvokeAsync(() =>
+        {
+            if (!file.Equals(SettingsFile, StringComparison.OrdinalIgnoreCase)) return;
+            _settings = LoadSettings();
+            ApplyTimerSettings();
+            Log("Настройки перечитаны после блокировки файла");
+        });
         SiteCheck.ZapretRunning = () => _tools.OfType<ZapretTool>().FirstOrDefault()?.IsRunning() == true;
         Loc.SetLanguage(_settings.Language);
         Loc.Changed += OnLanguageChanged;
@@ -180,9 +189,10 @@ public partial class MainWindow : Window
 
             _ = ResolveLocationsAsync();
 
-            // Автопроверка при запуске: все, что не проверялось или проверялось давно.
+            // Автопроверка при запуске: все, что не проверялось или проверялось больше 3 часов назад. Раньше порог был
+            // 30 минут, и каждый перезапуск давал сотни запросов к сервисам; стабильность от этого точнее не становилась
             await MergeRemoteCatalogAsync();
-            var stale = _servers.Where(x => x.LastChecked == null || DateTime.Now - x.LastChecked > TimeSpan.FromMinutes(30)).ToList();
+            var stale = _servers.Where(x => x.LastChecked == null || DateTime.Now - x.LastChecked > TimeSpan.FromHours(3)).ToList();
             if (stale.Count > 0) await RunChecksAsync(stale);
         }
     }
@@ -277,6 +287,9 @@ public partial class MainWindow : Window
         st.TimeoutSeconds = Math.Clamp(st.TimeoutSeconds, 2, 30);
         st.Parallelism = Math.Clamp(st.Parallelism, 1, 64);
         st.PingRefreshMinutes = Math.Clamp(st.PingRefreshMinutes, 1, 60);
+        // До 0.1.41 трей проверял сервисы каждые 5 минут: это лишние автоматические запросы с адреса, где вы в аккаунте
+        if (st.TrayCheckMinutes == 5 && !st.TrayIntervalMigrated) st.TrayCheckMinutes = 15;
+        st.TrayIntervalMigrated = true;
         // settings.json до 0.1.22 хранил прежние лимиты поиска: поднимаем до новых, если они были ниже
         var defs = new AppSettings();
         if (st.CrawlDepth < defs.CrawlDepth) st.CrawlDepth = defs.CrawlDepth;

@@ -254,6 +254,129 @@ async function probe(req, env) {
   return resp;
 }
 
+/**
+ * Открытая лента Telegram-канала (t.me/s/канал) для поиска серверов: из России t.me часто не открывается.
+ * Только ленты каналов, ничего другого; кэш 30 минут и не больше 200 запросов в час с одного адреса,
+ * чтобы адрес нельзя было использовать как открытый прокси.
+ */
+async function tgFeed(req, env) {
+  const u = new URL(req.url);
+  const ch = (u.searchParams.get("ch") || "").trim();
+  const before = (u.searchParams.get("before") || "").trim();
+  if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(ch) || (before && !/^\d{1,10}$/.test(before))) return json({ error: "bad channel" }, 400);
+  const cache = caches.default;
+  const key = new Request(`https://tg.cache/${ch.toLowerCase()}/${before}`);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  if (!(await allow(env, req, "tg", 200))) return json({ error: "too many" }, 429);
+  let r;
+  try {
+    r = await fetch(`https://t.me/s/${ch}${before ? `?before=${before}` : ""}`, { redirect: "manual", signal: AbortSignal.timeout(10000), headers: { "user-agent": "Mozilla/5.0 CHIMERION" } });
+  } catch {
+    return json({ error: "telegram unavailable" }, 502);
+  }
+  if (r.status !== 200) return json({ error: `telegram ${r.status}` }, 502);
+  const html = (await r.text()).slice(0, 2000000);
+  const resp = new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=1800" } });
+  await cache.put(key, resp.clone());
+  return resp;
+}
+
+// ---------- Поиск источников на сервере ----------
+
+const SEARCH_QUERIES = [
+  "DNS для ChatGPT в России", "smart DNS для нейросетей бесплатно", "DNS для Claude из России", "DNS для Gemini без VPN",
+  "\"предпочтительный DNS\" ChatGPT Claude без VPN", "\"dns-query\" ChatGPT Claude Gemini", "частный DNS для ChatGPT Android",
+  "список DNS для обхода блокировки ИИ", "t.me dns chatgpt claude канал", "новый smart dns chatgpt",
+];
+// Сайты, где списков Smart DNS не бывает: соцсети, видеохостинги, магазины приложений, энциклопедии
+const SEARCH_SKIP = /(^|\.)(youtube\.com|youtu\.be|vk\.com|facebook\.com|instagram\.com|x\.com|twitter\.com|wikipedia\.org|apps\.apple\.com|play\.google\.com|bing\.com|microsoft\.com|brave\.com|duckduckgo\.com|reddit\.com|dns-shop\.ru|smartdnsproxy\.com)$/i;
+
+// Описание результата про то, что нужно: DNS (или DoH) рядом с нейросетями, обходом или «без VPN»
+const RELEVANT = /(dns|днс|doh|dns-query)[\s\S]*(chatgpt|openai|claude|gemini|нейросет|ии-сервис|без vpn|обход|разблок)|(chatgpt|openai|claude|gemini|нейросет|без vpn)[\s\S]*(dns|днс|doh)/i;
+
+/** Ссылка выдачи Bing бывает переходной (bing.com/ck/a?...&u=a1<base64>): достаем настоящий адрес. */
+function unwrapBing(href) {
+  try {
+    const u = new URL(href);
+    if (!u.hostname.endsWith("bing.com")) return href;
+    const code = u.searchParams.get("u") || "";
+    if (!code.startsWith("a1")) return null;
+    let b64 = code.slice(2).replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    return atob(b64);
+  } catch { return null; }
+}
+
+async function searchEngine(engine, q) {
+  // Российский рынок явно: иначе Bing отвечает серверу в датацентре как американцу и путает русские запросы
+  const url = engine === "bing" ? `https://www.bing.com/search?setlang=ru&setmkt=ru-RU&cc=RU&q=${encodeURIComponent(q)}` : `https://search.brave.com/search?source=web&country=ru&q=${encodeURIComponent(q)}`;
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(12000), headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36", "accept-language": "ru-RU,ru;q=0.9" } });
+    if (!r.ok) return { status: r.status, urls: [] };
+    const html = await r.text();
+    const urls = new Set();
+    let raw = 0;
+    const rejected = [];
+    const add = (href) => { try { const u = new URL(href); if (!SEARCH_SKIP.test(u.hostname) && !u.hostname.startsWith("imgs.")) urls.add(u.href); } catch {} };
+    if (engine === "bing") {
+      // Результат берем, только если в его заголовке и описании речь о DNS для нейросетей или обхода, а не о магазине DNS
+      for (const block of html.split('<li class="b_algo"').slice(1)) {
+        raw++;
+        const m = block.match(/<a[^>]*href="(https?:\/\/[^"]+)"/);
+        if (!m) continue;
+        const text = block.replace(/<[^>]+>/g, " ").toLowerCase();
+        if (RELEVANT.test(text)) add(unwrapBing(m[1].replace(/&amp;/g, "&")) || "");
+        else if (rejected.length < 3) rejected.push(text.replace(/\s+/g, " ").trim().slice(0, 160));
+      }
+    } else {
+      for (const m of html.matchAll(/href="(https?:\/\/[^"]+)"/g)) add(m[1].replace(/&amp;/g, "&"));
+    }
+    return { status: 200, urls: [...urls].slice(0, 15), raw, rejected };
+  } catch (e) { return { status: 0, urls: [] }; }
+}
+
+/** Ночной поиск: запросы по одному с паузой, найденные страницы хранятся неделю. */
+export async function runSearch(env, reset = false) {
+  const h = nowHour();
+  if (reset) await env.DB.prepare("DELETE FROM found_pages").run();
+  const report = { bing: 0, brave: 0, bingRaw: 0, bingRejected: [], errors: [] };
+  for (const engine of ["brave"]) {
+    for (const q of SEARCH_QUERIES) {
+      const { status, urls, raw, rejected } = await searchEngine(engine, q);
+      if (status !== 200) { report.errors.push(`${engine} ${status}`); if (status === 429) break; continue; }
+      report[engine] += urls.length;
+      if (engine === "bing") { report.bingRaw += raw || 0; if (report.bingRejected.length < 3) report.bingRejected.push(...(rejected || []).slice(0, 3 - report.bingRejected.length)); }
+      if (urls.length) await env.DB.batch(urls.map((u) => env.DB.prepare(
+        "INSERT INTO found_pages (url, engine, seen) VALUES (?, ?, ?) ON CONFLICT (url) DO UPDATE SET seen = excluded.seen").bind(u, engine, h)));
+      // Brave отвечает «слишком часто» уже на втором запросе подряд: между запросами к нему 20 секунд
+      await new Promise((ok) => setTimeout(ok, engine === "brave" ? 20000 : 1500));
+    }
+  }
+  await env.DB.prepare("DELETE FROM found_pages WHERE seen < ?").bind(h - 24 * 7).run();
+  return report;
+}
+
+/** Почасовой поиск: один запрос к каждому поисковику, фраза по кругу. Лимиты поисковиков так не срабатывают. */
+export async function searchHour(env) {
+  const h = nowHour();
+  const q = SEARCH_QUERIES[h % SEARCH_QUERIES.length];
+  // Bing с серверов Cloudflare отвечает не по запросу (выдача про адреса и магазины), поэтому только Brave
+  for (const engine of ["brave"]) {
+    const { status, urls } = await searchEngine(engine, q);
+    if (status === 200 && urls.length)
+      await env.DB.batch(urls.map((u) => env.DB.prepare(
+        "INSERT INTO found_pages (url, engine, seen) VALUES (?, ?, ?) ON CONFLICT (url) DO UPDATE SET seen = excluded.seen").bind(u, engine, h)));
+  }
+  await env.DB.prepare("DELETE FROM found_pages WHERE seen < ?").bind(h - 24 * 7).run();
+}
+
+/** Страницы из ночного поиска за неделю: программа обходит их как источники. */
+async function pages(env) {
+  const res = await env.DB.prepare("SELECT url FROM found_pages WHERE seen >= ? ORDER BY seen DESC LIMIT 300").bind(nowHour() - 24 * 7).all();
+  return json({ v: 1, pages: (res.results || []).map((r) => r.url) }, 200, { "cache-control": "public, max-age=3600" });
+}
+
 const STATUS_PAGES = {
   ChatGPT: "https://status.openai.com/api/v2/status.json",
   Claude: "https://status.claude.com/api/v2/status.json",
@@ -388,9 +511,14 @@ export default {
       if (req.method === "GET" && url.pathname === "/v1/probe") return await probe(req, env);
       if (req.method === "GET" && url.pathname === "/v1/services") return await services(env, ctx);
       if (req.method === "GET" && url.pathname === "/v1/ios") return ios(req);
+      if (req.method === "GET" && url.pathname === "/v1/tg") return await tgFeed(req, env);
+      if (req.method === "GET" && url.pathname === "/v1/pages") return await pages(env);
+      // Ручной запуск ночного поиска (проверка): только с ключом администратора
+      if (req.method === "POST" && url.pathname === "/v1/search-run" && env.ADMIN_KEY && req.headers.get("x-admin-key") === env.ADMIN_KEY) return json(await runSearch(env, url.searchParams.get("reset") === "1"));
       if (req.method === "GET" && url.pathname === "/") return await statusPage(env, ctx);
       return new Response("not found", { status: 404 });
     } catch (e) {
+      console.log("error", new URL(req.url).pathname, String(e?.stack || e)); // причина в журнале сервера (wrangler tail), не в ответе
       return json({ error: "internal" }, 500);
     }
   },
@@ -398,6 +526,9 @@ export default {
   // Раз в сутки: старые счетчики и хэши для защиты от накрутки
   async scheduled(_evt, env) {
     const h = nowHour();
+    // Каждый час: один поисковый запрос. Раз в сутки (в 3 часа UTC): чистка старых счетчиков
+    try { await searchHour(env); } catch (e) { console.log("search", String(e)); }
+    if (h % 24 !== 3) return;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM stats WHERE hour < ?").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM seen WHERE hour < ?").bind(h - 48),
