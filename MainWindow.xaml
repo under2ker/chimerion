@@ -316,14 +316,6 @@
                 <Button Content="Найти новые серверы" Click="Fetch_Click" Style="{StaticResource Primary}"
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
-            <!-- Ход работы отдельным блоком: «Стоп», полоса и текст с отступами, на узком окне переносится целиком -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,12,0">
-                <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}" Margin="0,0,14,0"
-                        Visibility="Collapsed" ToolTip="Остановить проверку или поиск"/>
-                <ProgressBar x:Name="WorkBar" Width="140" Visibility="Collapsed" Margin="0,0,12,0" VerticalAlignment="Center" AutomationProperties.Name="Прогресс работы"/>
-                <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" FontSize="12.5" VerticalAlignment="Center"
-                           MaxWidth="380" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
         </WrapPanel>
 
         <!-- ================= ТАБЛИЦА ================= -->
@@ -334,6 +326,16 @@
                         BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1">
                     <DockPanel>
                         <TextBlock x:Name="StatsText" DockPanel.Dock="Right" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                        <!-- Ход проверки и поиска в шапке таблицы: в строке инструментов блок не помещался при развернутом меню
+                             и переносился отдельной строкой. Здесь длинный текст просто обрезается -->
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,18,0">
+                            <TextBlock x:Name="ProgressText" Style="{StaticResource Label}" FontSize="12.5" VerticalAlignment="Center"
+                                       MaxWidth="320" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"
+                                       ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
+                            <ProgressBar x:Name="WorkBar" Width="120" Visibility="Collapsed" Margin="0,0,12,0" VerticalAlignment="Center" AutomationProperties.Name="Прогресс работы"/>
+                            <Button x:Name="StopButton" Content="Стоп" Click="Stop_Click" Style="{StaticResource Danger}" Padding="14,5" MinHeight="30"
+                                    Visibility="Collapsed" ToolTip="Остановить проверку или поиск"/>
+                        </StackPanel>
                         <Ellipse x:Name="SelectionIcon" Width="10" Height="10" Fill="{DynamicResource Idle}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                         <StackPanel VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
