@@ -194,6 +194,7 @@ public partial class MainWindow : Window
     }
 
 
+    private bool _exitPromptPending;
     private bool _closeConfirmed;
     /// <summary>При выходе выбрано «оставить все работать»: zapret и прокси не выключаются.</summary>
     private bool _keepToolsOnExit;
@@ -218,32 +219,32 @@ public partial class MainWindow : Window
                             .Select(t => t is ZapretTool ? "обход zapret" : "ускорение Telegram").ToList();
         if (_sessionEnding || _closeConfirmed || (a == null && running.Count == 0)) { _cts?.Cancel(); return; }
 
-        var r = ClosePrompt.Ask(a == null ? null : Loc.T(a.Name), running); // название вида «Нидерланды, Амстердам» на языке интерфейса
-        if (r == MessageBoxResult.Cancel)
-        {
-            // Передумал: программа работает дальше, текущая проверка или поиск не прерываются
-            e.Cancel = true;
-            _exitRequested = false;
-            return;
-        }
-        _cts?.Cancel();
-        // «Оставить все работать»: DNS как есть, zapret и прокси не выключаются (как и при выходе из Windows)
-        if (r == MessageBoxResult.No) { _keepToolsOnExit = true; return; }
-        if (a == null) { _closeConfirmed = true; return; } // выключить нечего, кроме инструментов: их выключит OnClosed
+        // Диалог открывается только после отмены текущего закрытия: WPF не разрешает владельцу
+        // менять состояние окна, пока выполняется Closing.
         e.Cancel = true;
-        // Выход с отключением: только возврат DNS, без проверок подключения
-        if (!await DisconnectAsync("выход из программы", probe: false))
+        if (_exitPromptPending) return;
+        _exitPromptPending = true;
+        _ = Dispatcher.BeginInvoke(new Action(async () =>
         {
-            _exitRequested = false;
-            DnexDialog.Show("Отключиться не удалось",
-                "Программа не закрыта, иначе DNS остался бы измененным. Подробности в журнале. Попробуйте еще раз или выберите выход с сохранением DNS.",
-                DialogKind.Warn, "Выход");
-            return;
-        }
-        _closeConfirmed = true;
-        // Закрываем после выхода из обработчика: если отключение завершилось сразу, окно еще в процессе закрытия,
-        // и повторный Close() бросал InvalidOperationException (сбой из error.log от 23.10)
-        _ = Dispatcher.BeginInvoke(new Action(Close));
+            try
+            {
+                var r = ClosePrompt.Ask(a == null ? null : Loc.T(a.Name), running);
+                if (r == MessageBoxResult.Cancel) { _exitRequested = false; return; }
+                _cts?.Cancel();
+                if (r == MessageBoxResult.No) _keepToolsOnExit = true;
+                else if (a != null && !await DisconnectAsync("выход из программы", probe: false))
+                {
+                    _exitRequested = false;
+                    DnexDialog.Show("Отключиться не удалось",
+                        "Программа не закрыта, иначе DNS остался бы измененным. Подробности в журнале. Попробуйте еще раз или выберите выход с сохранением DNS.",
+                        DialogKind.Warn, "Выход");
+                    return;
+                }
+                _closeConfirmed = true;
+                Close();
+            }
+            finally { _exitPromptPending = false; }
+        }));
     }
 
     private static readonly (Mode Mode, string Title, string Hint)[] Modes =
