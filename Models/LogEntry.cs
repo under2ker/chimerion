@@ -35,6 +35,14 @@ public sealed class LogEntry
     public static LogLevel Classify(string text)
     {
         var t = text.ToLowerInvariant();
+        // Строки отчета диагностики несут уровень в метке: по ней, иначе ошибка «[x] … доступ закрыт» шла как INFO
+        var head = t.TrimStart();
+        if (head.StartsWith("[x]")) return LogLevel.Error;
+        if (head.StartsWith("[!]")) return LogLevel.Warn;
+        if (head.StartsWith("[ок]")) return LogLevel.Ok;
+        if (head.StartsWith("[i]")) return LogLevel.Info;
+        if (t.Contains("доступ закрыт")) return LogLevel.Error;
+        if (t.Contains("страна входа") || t.Contains("страну входа") || t.Contains("смена страны") || t.Contains("сменилась страна")) return LogLevel.Warn;
         if (t.Contains("не удалось") || t.Contains("ошибка") || t.Contains("exception") || t.Contains("error")) return LogLevel.Error;
         if (t.Contains("does not indicate success") || t.Contains("нет ответа") || t.Contains("connection could not") ||
             t.Contains("внимание") || t.Contains("медленная") || t.Contains("остановлен") || t.Contains("сторож") ||

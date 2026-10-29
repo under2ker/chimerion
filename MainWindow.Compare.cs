@@ -200,7 +200,7 @@ public partial class MainWindow
 
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
         // Карточки в колонках, по верху: раскрытая карточка растет сама, соседние не вытягиваются
-        var tiles = new Grid { Margin = new Thickness(-4, _compact ? 0 : 8, -4, 0) }; // тянется до высоты строки (FillStackPanel)
+        var tiles = new Grid { Margin = new Thickness(-4, _compact ? 0 : 8, -4, 0), VerticalAlignment = VerticalAlignment.Top }; // по содержимому: высота уходит таблице
         foreach (var _ in cur.Services) tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foreach (var svc in cur.Services)
         {
@@ -243,6 +243,14 @@ public partial class MainWindow
                 DockPanel.SetDock(state, Dock.Right);
                 head.Children.Insert(0, state);
                 sp.Children.Add(head);
+                if (!ok)
+                {
+                    // Причину не придумываем: первая фраза проверки, а если ее нет, прямо «не установлена», и переход к разбору по шагам
+                    var why = new TextBlock { Text = ShortReason(svc.Note) + " · подробнее", FontSize = 12, Foreground = B("Warn"), Margin = new Thickness(0, 4, 0, 0),
+                                              TextTrimming = TextTrimming.CharacterEllipsis, Cursor = System.Windows.Input.Cursors.Hand, ToolTip = svc.Note ?? "Проверить по шагам, почему не открывается" };
+                    why.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenHelp(HelpWindow.Tab.NotOpening); };
+                    sp.Children.Add(why);
+                }
                 geo.Margin = new Thickness(0, 8, 0, 0);
                 sp.Children.Add(geo);
                 sp.Children.Add(Line(
@@ -285,7 +293,7 @@ public partial class MainWindow
             disconnected ? (proxied == 0 ? "отключено, сервисы идут напрямую" : "отключено, но адреса еще подменены: перезапустите браузер", proxied == 0 ? "Ok" : "Warn")
             : DnsSwitcher.GetActive() == null ? ($"не подключено · открываются {open} из {total}", "Muted")
             : proxied > 0 && open == total ? ($"работает · все {total} сервиса доступны", "Ok")
-            : proxied > 0 ? ($"частично · доступно {open} из {total}", "Warn")
+            : proxied > 0 ? ($"открываются {open} из {total} сервисов", "Warn")
             : ("DNS сменился, но адреса ИИ не подменяются", "Bad");
         VerdictText.Text = v.text;
         VerdictText.Foreground = B(v.color);
