@@ -355,6 +355,7 @@ public partial class MainWindow
     private async Task RefreshConnectionAsync()
     {
         await RefreshCurrentDnsAsync();
+        ModeWindow.Refresh();
         var active = DnsSwitcher.GetActive();
         bool on = active != null;
         // Стиль кнопки не меняем: цвет плавно переходит от синего к красному (см. AnimateConnectColor).

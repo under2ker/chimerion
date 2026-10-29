@@ -137,17 +137,29 @@ public partial class MainWindow
 
     private enum Mode { AiOnly, All, Games, Off }
 
+    /// <summary>«Режим» открывает отдельное окно: что работает сейчас и что изменит каждый режим.</summary>
     private void ModeToggle_Click(object sender, RoutedEventArgs e)
     {
         ModeToggle.IsChecked = false;
-        var menu = new ContextMenu { PlacementTarget = ModeToggle, Placement = System.Windows.Controls.Primitives.PlacementMode.Right };
-        foreach (var (mode, title, hint) in Modes)
-        {
-            var mi = new MenuItem { Header = title, ToolTip = hint };
-            mi.Click += async (_, _) => await ApplyModeAsync(mode);
-            menu.Items.Add(mi);
-        }
-        menu.IsOpen = true;
+        OpenModeWindow();
+    }
+
+    private void OpenModeWindow() => ModeWindow.Show(this,
+        Modes.Select((m, i) => new ModeWindow.ModeInfo(i, m.Title, m.Hint, m.Icon, m.Mode == Mode.AiOnly, m.Dns, m.Telegram, m.Zapret)).ToList(),
+        ModeState,
+        async (id, step) => await ApplyModeAsync(Modes[id].Mode, step));
+
+    /// <summary>Состояние для окна «Режим»: подключение, Telegram-прокси, zapret.</summary>
+    private ModeWindow.State ModeState()
+    {
+        var tg = _tools.OfType<TgProxyTool>().First();
+        var z = _tools.OfType<ZapretTool>().First();
+        var active = DnsSwitcher.GetActive();
+        var srv = active == null ? null : _servers.FirstOrDefault(s => s.Id == active.ServerId);
+        bool foreign = tg.ForeignCopyRunning();
+        bool zOn = z.IsInstalled && z.IsRunning();
+        return new ModeWindow.State(active != null, srv?.ShortName ?? active?.Name, !foreign && tg.IsInstalled && tg.IsRunning(), foreign,
+            zOn, zOn && z.State.Games, _servers.Any(s => s.Status is ServerStatus.Ok or ServerStatus.Partial && !s.IsJunk && Usable(s)));
     }
 
     private bool _modeBusy;
@@ -156,9 +168,9 @@ public partial class MainWindow
     /// Режим: набор состояний DNS, Telegram-прокси и zapret. Шаги идут по очереди; неудачный шаг пишется в журнал,
     /// остальные все равно выполняются. Свою копию TG WS Proxy пользователя режим не выключает.
     /// </summary>
-    private async Task ApplyModeAsync(Mode mode)
+    private async Task<List<string>> ApplyModeAsync(Mode mode, Action<string>? progress = null)
     {
-        if (_modeBusy || _busyConn) { ShowToast("Подождите: предыдущее действие еще идет", "Warn"); return; }
+        if (_modeBusy || _busyConn) { ShowToast("Подождите: предыдущее действие еще идет", "Warn"); return new List<string> { "занято другим действием" }; }
         _modeBusy = true;
         var title = Modes.First(m => m.Mode == mode).Title;
         Log($"Режим «{title}»");
@@ -169,6 +181,7 @@ public partial class MainWindow
 
         async Task Step(string name, Func<Task> action)
         {
+            progress?.Invoke(name switch { "DNS" => "подключение DNS", "Telegram" => "ускорение Telegram", _ => "обход zapret" });
             try { await action(); }
             catch (ToolException ex) { failed.Add(name); Log($"Режим «{title}»: {name}: {ex.Message}"); }
             catch (Exception ex) { failed.Add(name); Log($"Режим «{title}»: {name}: ошибка {ex.Message}"); }
@@ -226,6 +239,8 @@ public partial class MainWindow
         }
         if (failed.Count == 0) ShowToast($"Режим «{title}» включен");
         else ShowToast($"Режим «{title}»: не получилось ({string.Join(", ", failed)}), подробности в журнале", "Warn");
+        ModeWindow.Refresh();
+        return failed;
     }
 
     private void DiagToggle_Click(object sender, RoutedEventArgs e)
@@ -291,6 +306,7 @@ public partial class MainWindow
     /// <summary>Пункты трея «Telegram» и «YouTube и Discord»: текст по текущему состоянию.</summary>
     private void UpdateToolsTray()
     {
+        ModeWindow.Refresh(); // окно «Режим» показывает то же состояние программ
         void Set(System.Windows.Forms.ToolStripMenuItem? item, Tool t, string name)
         {
             if (item == null) return;

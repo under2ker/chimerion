@@ -254,12 +254,12 @@ public partial class MainWindow : Window
         }));
     }
 
-    private static readonly (Mode Mode, string Title, string Hint)[] Modes =
+    private static readonly (Mode Mode, string Title, string Hint, string Icon, ModeWindow.Target Dns, ModeWindow.Target Telegram, ModeWindow.Target Zapret)[] Modes =
     {
-        (Mode.AiOnly, "Только ИИ", "Рекомендуем для начала. Smart DNS для ChatGPT, Claude и Gemini. Telegram-прокси и zapret выключены"),
-        (Mode.All, "Все сразу", "Smart DNS, ускорение Telegram и обход для YouTube и Discord"),
-        (Mode.Games, "Игры", "zapret с обходом для игр (порты выше 1023). DNS и Telegram не меняются"),
-        (Mode.Off, "Все выключить", "Отключить DNS, выключить Telegram-прокси и zapret"),
+        (Mode.AiOnly, "Только ИИ", "Для начала: нейросети через Smart DNS, остальное как было", "shield-check", ModeWindow.Target.On, ModeWindow.Target.Off, ModeWindow.Target.Off),
+        (Mode.All, "Все сразу", "Нейросети, быстрый Telegram и обход для YouTube и Discord", "zap", ModeWindow.Target.On, ModeWindow.Target.On, ModeWindow.Target.On),
+        (Mode.Games, "Игры", "Обход zapret и для игр (порты выше 1023). DNS и Telegram не трогаются", "activity", ModeWindow.Target.Keep, ModeWindow.Target.Keep, ModeWindow.Target.Games),
+        (Mode.Off, "Все выключить", "Вернуть DNS вашей сети, выключить ускорение Telegram и обход", "x", ModeWindow.Target.Off, ModeWindow.Target.Off, ModeWindow.Target.Off),
     };
 
     private static readonly string[] ProbeHosts = { "ya.ru", "vk.com", "google.com", "cloudflare.com" };
