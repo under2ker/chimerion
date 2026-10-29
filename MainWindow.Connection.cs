@@ -79,8 +79,13 @@ public partial class MainWindow
 
     /// <summary>Подключение к серверу. auto — вызывает сторож: без вопросов и окон, только журнал и уведомления.
     /// Возвращает true, если после смены DNS сайты открываются.</summary>
+    /// <summary>Копия данных для тестов и снимков (DNEX_NO_AUTORESTORE=1): программа сама DNS этого компьютера не меняет.</summary>
+    private static bool NoAutoDns => Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1";
+
     private async Task<bool> ConnectToAsync(DnsServer s, bool auto = false)
     {
+        // Сторож, замена сервера и автоподключение в копии данных не трогают настоящий DNS
+        if (auto && NoAutoDns) return false;
         if (_busyConn)
         {
             // Нажатие во время подключения (свое или сторожа) раньше молча пропадало
@@ -444,6 +449,7 @@ public partial class MainWindow
     /// </summary>
     private async void Watchdog_Tick(object? sender, EventArgs e)
     {
+        if (NoAutoDns) return; // копия данных: подключение в ней чужое
         if (Watchdog.IsChecked != true || _busyConn) return;
         if (_disconnectFailed) return; // пользователь пытался отключиться: подключение не возвращаем
         if (_uacDeclined) return;      // в правах отказали: без действия пользователя запрос не повторяем
