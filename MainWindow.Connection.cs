@@ -410,7 +410,8 @@ public partial class MainWindow
         }
 
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
-        if (!ConnectionMonitor.NeedsRestore(active, current, SplitDns.RulesPresent(), out bool rulesLost))
+        var adapters = await DnsSwitcher.GetCurrentAdapterAddressesAsync();
+        if (!ConnectionMonitor.NeedsRestore(active, current, SplitDns.RulesPresent(), out bool rulesLost, adapters))
         {
             Log($"DNS «{active.Name}» на месте");
             return;
@@ -450,10 +451,11 @@ public partial class MainWindow
 
         bool up = await SystemCheck.NetworkUpAsync();
         var current = up ? await DnsSwitcher.GetCurrentAddressesAsync() : new List<IPAddress>();
+        var adapters = up ? await DnsSwitcher.GetCurrentAdapterAddressesAsync() : new();
         bool rulesPresent = !active.Split || SplitDns.RulesPresent();
         var vpns = up ? SystemCheck.ActiveVpns() : new List<string>();
         var verdict = await _monitor.TickAsync(active, up, current, rulesPresent,
-            () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)), vpns.Count > 0);
+            () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)), vpns.Count > 0, adapters);
         // Проверки шли несколько секунд: за это время пользователь мог начать подключение или отключиться.
         // Тогда решение сторожа устарело: чинить чужое действие нельзя, иначе он сообщил бы о ложном сбое
         if (WatchdogStale(active)) return;
@@ -705,7 +707,8 @@ public partial class MainWindow
         var active = DnsSwitcher.GetActive();
         var best = _servers
             .Where(s => (s.Status == ServerStatus.Ok || s.Status == ServerStatus.Partial) && s.Id != active?.ServerId && Usable(s))
-            .OrderBy(s => s.Rank)
+            .OrderByDescending(s => SafetyFit?.Invoke(s) ?? 0) // сначала с привычной страной выхода; иначе ConnectToAsync спросит подтверждение
+            .ThenBy(s => s.Rank)
             .FirstOrDefault();
         if (best == null)
         {

@@ -66,11 +66,12 @@ public sealed class ConnectionMonitor
     /// Адреса подключения пропали с адаптеров или пропали правила NRPT режима «Два DNS». Подключение,
     /// которое адаптеры не меняло (в «Двух DNS» общий DNS не задан), проверяется только по правилам.
     /// </summary>
-    public static bool NeedsRestore(DnsSwitcher.ActiveConnection active, IEnumerable<IPAddress> current, bool rulesPresent, out bool rulesLost)
+    public static bool NeedsRestore(DnsSwitcher.ActiveConnection active, IEnumerable<IPAddress> current, bool rulesPresent, out bool rulesLost, IReadOnlyCollection<IReadOnlyCollection<IPAddress>>? adapters = null)
     {
         var mine = Mine(active);
         rulesLost = active.Split && !rulesPresent;
-        return rulesLost || (mine.Count > 0 && !mine.Any(current.Contains));
+        return rulesLost || (mine.Count > 0 && (adapters is { Count: > 0 }
+            ? adapters.Any(adapter => !mine.Any(adapter.Contains)) : !mine.Any(current.Contains)));
     }
 
     /// <summary>Адреса, которые подключение ставило на адаптеры.</summary>
@@ -81,7 +82,7 @@ public sealed class ConnectionMonitor
     /// Один такт сторожа. dnsWorks вызывается, только если сеть есть и DNS на месте: это сетевой запрос.
     /// </summary>
     public async Task<Verdict> TickAsync(DnsSwitcher.ActiveConnection active, bool networkUp, IReadOnlyCollection<IPAddress> current,
-                                         bool rulesPresent, Func<Task<bool>> dnsWorks, bool vpnActive = false)
+                                         bool rulesPresent, Func<Task<bool>> dnsWorks, bool vpnActive = false, IReadOnlyCollection<IReadOnlyCollection<IPAddress>>? adapters = null)
     {
         if (!networkUp)
         {
@@ -92,7 +93,7 @@ public sealed class ConnectionMonitor
         }
         NoNetworkReported = false;
         FirstNoNetwork = false;
-        bool restore = NeedsRestore(active, current, rulesPresent, out _);
+        bool restore = NeedsRestore(active, current, rulesPresent, out _, adapters);
         bool works = restore || await dnsWorks();
         // VPN включен и DNS «сброшен» или не отвечает: это делает VPN, а не сбой сервера. Ждем, пока его выключат
         if (vpnActive && (restore || !works))

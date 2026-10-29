@@ -135,6 +135,27 @@ public static class DnsSwitcher
             .Distinct()
             .ToList());
 
+    /// <summary>DNS работающих адаптеров, для которых сохранена исходная конфигурация.</summary>
+    public static Task<List<IReadOnlyCollection<IPAddress>>> GetCurrentAdapterAddressesAsync() => Task.Run(() =>
+    {
+        try
+        {
+            var path = Storage.PathOf(BackupFile);
+            if (!File.Exists(path)) return new List<IReadOnlyCollection<IPAddress>>();
+            var backup = JsonSerializer.Deserialize<List<AdapterBackup>>(File.ReadAllText(path), Storage.Options) ?? new();
+            var ids = backup.Select(a => a.Guid?.Trim('{', '}')).Where(g => !string.IsNullOrEmpty(g)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up && ids.Contains(n.Id.Trim('{', '}')))
+                .Select(n => (IReadOnlyCollection<IPAddress>)n.GetIPProperties().DnsAddresses.Where(a => !a.IsIPv6SiteLocal).Distinct().ToList())
+                .ToList();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or System.Net.NetworkInformation.NetworkInformationException)
+        {
+            Storage.Trace?.Invoke("Не удалось проверить DNS по адаптерам: " + e.GetType().Name);
+            return new List<IReadOnlyCollection<IPAddress>>();
+        }
+    });
+
     /// <param name="backup">Запасной сервер (ConnectionMonitor.Backup): его IPv4-адрес встает после адресов основного,
     /// на адаптеры и в правила NRPT, без DoH. null — без запасного.</param>
     public static async Task ApplyAsync(DnsServer s, AppSettings settings, Action<string> log, DnsServer? backup = null)
@@ -271,8 +292,8 @@ public static class DnsSwitcher
                     $v6dns = @((Get-DnsClientServerAddress -InterfaceIndex $i.ifIndex -AddressFamily IPv6 -ErrorAction SilentlyContinue).ServerAddresses | Where-Object { $_ -and $_ -notlike 'fec0:*' })
                     $b = Get-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
                     if ($v6dns.Count -gt 0 -and $b -and $b.Enabled) {
-                      Disable-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
                       Add-Content -Path $v6file -Value ([string]$i.InterfaceGuid).ToUpper() -Encoding ASCII
+                      Disable-NetAdapterBinding -Name $i.Name -ComponentID ms_tcpip6 -Confirm:$false -ErrorAction Stop
                       Write-Output ('V6OFF ' + ([string]$i.InterfaceGuid).ToUpper())
                       Write-Output ('IPv6 на время подключения выключен: ' + $i.Name + ' (DNS роутера по IPv6 вел запросы мимо сервера)')
                     }

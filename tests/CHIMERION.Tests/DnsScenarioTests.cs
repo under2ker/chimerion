@@ -254,6 +254,31 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Emergency_reset_restores_original_static_ipv4_and_ipv6()
+    {
+        using var sim = new NetSim(OneEthernet(a =>
+        {
+            a.static4 = "198.51.100.9"; a.dns4 = new() { a.static4 };
+            a.static6 = "2001:db8::53"; a.dns6 = new() { a.static6 };
+        }));
+        await DnsSwitcher.ApplyAsync(Server, new AppSettings(), _ => { });
+        sim.Edit(state => { state.adapters[0].dns6 = new() { "2001:db8::10" }; state.adapters[0].static6 = "2001:db8::10"; });
+        var appData = Path.Combine(Path.GetTempPath(), $"chimerion-reset-{Guid.NewGuid():N}");
+        var dnex = Directory.CreateDirectory(Path.Combine(appData, "DNEX")).FullName;
+        foreach (var f in new[] { "active.json", "dns-backup.json", "ipv6-disabled.txt" })
+            if (File.Exists(Path.Combine(TestSetup.DataDir, f))) File.Copy(Path.Combine(TestSetup.DataDir, f), Path.Combine(dnex, f));
+        try
+        {
+            var (code, output) = await sim.RunReal($"$env:APPDATA = '{appData.Replace("'", "''")}'\n" + File.ReadAllText(RepoFile("reset-dns.ps1")));
+            Assert.True(code == 0, $"код {code}: {output}");
+            Assert.Equal("198.51.100.9", sim["Sim-Ethernet"].static4);
+            Assert.Equal("2001:db8::53", sim["Sim-Ethernet"].static6);
+            Assert.Equal(new[] { "2001:db8::53" }, sim["Sim-Ethernet"].dns6);
+        }
+        finally { Directory.Delete(appData, true); }
+    }
+
+    [Fact]
     public async Task Emergency_reset_works_without_doh_commands()
     {
         using var sim = new NetSim(OneEthernet()) { NoDoh = true };
@@ -280,6 +305,23 @@ public class DnsScenarioTests
         await DnsSwitcher.RestoreAsync(write);
         Assert.Equal(new[] { "77.88.8.8" }, sim["Sim-Ethernet"].dns4);
         Assert.Equal("77.88.8.8", sim["Sim-Ethernet"].static4);
+    }
+
+    [Fact]
+    public async Task Watchdog_detects_reset_on_only_one_simulated_adapter()
+    {
+        using var sim = new NetSim(new NetSim.State
+        {
+            adapters = { new NetSim.Adapter(), new NetSim.Adapter { name = "Sim-WiFi", index = 15, guid = "{22222222-2222-2222-2222-222222222222}" } },
+        });
+        await DnsSwitcher.ApplyAsync(Server, new AppSettings(), _ => { });
+        sim.Edit(state => state.adapters[1].dns4 = new() { "192.0.2.53" });
+        var groups = sim.Load().adapters.Select(a => (IReadOnlyCollection<IPAddress>)a.dns4.Concat(a.dns6).Select(IPAddress.Parse).ToList()).ToList();
+        var result = await new ConnectionMonitor().TickAsync(DnsSwitcher.GetActive()!, true, sim.CurrentDns(), true,
+            () => Task.FromResult(true), adapters: groups);
+        Assert.Equal(ConnectionMonitor.Verdict.Restore, result);
+        await DnsSwitcher.RestoreAsync(_ => { });
+        Assert.All(sim.Load().adapters, adapter => Assert.Equal(new[] { "192.168.1.1" }, adapter.dns4));
     }
 
     [Fact]

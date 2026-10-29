@@ -175,13 +175,31 @@ public class HistoryTests
 public class RemoteCatalogTests
 {
     [Fact]
+    public void Signed_catalog_expiry_and_legacy_date_are_enforced()
+    {
+        using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var pub = Convert.ToBase64String(key.ExportSubjectPublicKeyInfo());
+        string Sign(string json) => Convert.ToBase64String(key.SignData(System.Text.Encoding.UTF8.GetBytes(json), System.Security.Cryptography.HashAlgorithmName.SHA256));
+        string Day(int offset) => DateTime.UtcNow.AddDays(offset).ToString("yyyy-MM-dd");
+        string Json(int updated, int? expires = null) => System.Text.Json.JsonSerializer.Serialize(new { updated = Day(updated), expires = expires is int n ? Day(n) : null });
+        var fresh = Json(-1, 1);
+        var expired = Json(-10, -1);
+        var old = Json(-181);
+        var future = Json(10);
+        Assert.NotNull(Dnex.Services.RemoteCatalog.Parse(fresh, Sign(fresh), pub));
+        Assert.Null(Dnex.Services.RemoteCatalog.Parse(expired, Sign(expired), pub));
+        Assert.Null(Dnex.Services.RemoteCatalog.Parse(old, Sign(old), pub));
+        Assert.Null(Dnex.Services.RemoteCatalog.Parse(future, Sign(future), pub));
+    }
+
+    [Fact]
     public void Catalog_is_accepted_only_with_valid_signature()
     {
         using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
         var pub = Convert.ToBase64String(key.ExportSubjectPublicKeyInfo());
         var json = Dnex.Services.RemoteCatalog.Serialize(new Dnex.Services.RemoteCatalog.Catalog
         {
-            Updated = "2026-10-25",
+            Updated = DateTime.UtcNow.ToString("yyyy-MM-dd"),
             Servers = { new() { Name = "Пример", Primary = "203.0.113.5", Doh = "https://dns.example/dns-query", Site = "https://example.org/" } },
         });
         var sig = Convert.ToBase64String(key.SignData(System.Text.Encoding.UTF8.GetBytes(json), System.Security.Cryptography.HashAlgorithmName.SHA256));

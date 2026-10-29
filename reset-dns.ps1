@@ -55,7 +55,7 @@ foreach ($g in $v6) {
 foreach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {
     $guid = ([string]$a.InterfaceGuid).Trim('{}').ToUpper()
     $entry = $backup | Where-Object { ([string]$_.Guid).Trim('{}').ToUpper() -eq $guid } | Select-Object -First 1
-    $cur = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses)
+    $cur = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
     $hasOurs = @($cur | Where-Object { $ours -contains $_ }).Count -gt 0
     if (-not $entry -and -not $hasOurs) { continue }
 
@@ -63,16 +63,20 @@ foreach ($a in @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue)) {
     if ($entry -and $entry.Static) {
         $want = @(([string]$entry.Static) -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($ours -contains $_) })
     }
+    $want6 = @()
+    if ($entry -and $entry.Static6) {
+        $want6 = @(([string]$entry.Static6) -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($ours -contains $_) })
+    }
     try {
-        if ($want.Count -gt 0) {
-            Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $want
-        } else {
-            Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses
+        Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop
+        $all = @($want + $want6 | Select-Object -Unique)
+        if ($all.Count -gt 0) {
+            Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $all -ErrorAction Stop
         }
         foreach ($ip in $ours) {
             Remove-Item "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$($a.InterfaceGuid)\DohInterfaceSettings\Doh\$ip" -Recurse -ErrorAction SilentlyContinue
         }
-        $mode = if ($want.Count -gt 0) { 'исходные адреса' } else { 'автоматически (DHCP)' }
+        $mode = if ($all.Count -gt 0) { 'исходные адреса' } else { 'автоматически (DHCP)' }
         Write-Host "Адаптер $($a.Name): DNS $mode"
     } catch {
         $ok = $false
@@ -89,7 +93,7 @@ ipconfig /flushdns | Out-Null
 
 # Проверка: адресов CHIMERION не должно остаться ни на одном физическом адаптере
 $left = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | ForEach-Object {
-    Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue
+    Get-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ErrorAction SilentlyContinue
 } | ForEach-Object { $_.ServerAddresses } | Where-Object { $ours -contains $_ })
 if ($left.Count -gt 0) { $ok = $false }
 

@@ -29,6 +29,7 @@ public static class RemoteCatalog
     public sealed class Catalog
     {
         public string Updated { get; set; } = "";
+        public string? Expires { get; set; }
         public List<Entry> Servers { get; set; } = new();
     }
 
@@ -51,8 +52,29 @@ public static class RemoteCatalog
     public static Catalog? Parse(string json, string sig, string publicKey = Updater.PublicKey)
     {
         if (!Updater.VerifySignature(System.Text.Encoding.UTF8.GetBytes(json), sig, publicKey)) return null;
-        try { return JsonSerializer.Deserialize<Catalog>(json, Json); }
+        try
+        {
+            var catalog = JsonSerializer.Deserialize<Catalog>(json, Json);
+            return catalog != null && IsCurrent(catalog, DateTime.UtcNow) ? catalog : null;
+        }
         catch (JsonException) { return null; }
+    }
+
+    // Для существующих подписанных каталогов без срока действует ограничение от подписанной даты обновления.
+    internal static bool IsCurrent(Catalog catalog, DateTime now)
+    {
+        if (!DateOnly.TryParseExact(catalog.Updated, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var updated)) return false;
+        var today = DateOnly.FromDateTime(now.ToUniversalTime());
+        if (updated > today.AddDays(1)) return false;
+        var limit = updated.AddDays(180);
+        if (catalog.Expires != null)
+        {
+            if (!DateOnly.TryParseExact(catalog.Expires, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var expires) || expires < updated) return false;
+            if (expires < limit) limit = expires;
+        }
+        return today <= limit;
     }
 
     /// <summary>

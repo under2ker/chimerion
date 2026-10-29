@@ -47,8 +47,8 @@ public static class Diagnostics
                 "connect", "Подключить лучший"));
         else
         {
-            var mine = active.OnAdapters.Select(a => IPAddress.TryParse(a, out var ip) ? ip : null).OfType<IPAddress>().ToList();
-            var onAdapters = (mine.Count == 0 || mine.Any(current.Contains)) && (!active.Split || SplitDns.RulesPresent());
+            var adapters = await DnsSwitcher.GetCurrentAdapterAddressesAsync();
+            var onAdapters = !ConnectionMonitor.NeedsRestore(active, current, !active.Split || SplitDns.RulesPresent(), out _, adapters);
             items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {active.Name} с {active.Since:dd.MM HH:mm}",
                 !onAdapters ? $"DNS системы не совпадает с подключением ({string.Join(", ", current)}) или пропали правила для ИИ: их сбросила другая программа или Windows"
                 : active.Split ? $"Два DNS: домены ИИ через {active.Name} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
