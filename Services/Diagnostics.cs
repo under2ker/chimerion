@@ -13,7 +13,9 @@ public enum DiagLevel { Ok, Info, Warn, Bad }
 /// Пункт диагностики. Action — что CHIMERION может исправить сама по кнопке (ActionText): «connect», «reconnect», «switch»,
 /// «update», «tools», «tool:id» (запустить инструмент), «hosts», «open:адрес» (открыть настройки Windows).
 /// </summary>
-public sealed record DiagItem(DiagLevel Level, string Title, string Detail = "", string? Action = null, string? ActionText = null);
+/// <param name="More">Подробности, которые окно показывает по «Подробнее», а отчет целиком.</param>
+/// <param name="Group">Раздел окна: «Подключение», «Нейросети», «Аккаунты и адрес выхода», «Система», «Программы», «Обновления».</param>
+public sealed record DiagItem(DiagLevel Level, string Title, string Detail = "", string? Action = null, string? ActionText = null, string More = "", string Group = "");
 
 public sealed record DiagReport(IReadOnlyList<DiagItem> Items, string? PublicIp, DateTime Taken);
 
@@ -29,6 +31,10 @@ public static class Diagnostics
     public static async Task<DiagReport> RunAsync(AppSettings st, IReadOnlyList<Tool> tools, CancellationToken ct = default)
     {
         var items = new List<DiagItem>();
+        // Раздел каждой строки для окна: метка ставится перед группой, в конце строки получают свой раздел
+        var marks = new List<(int At, string Group)>();
+        void Mark(string group) => marks.Add((items.Count, group));
+        Mark("Подключение");
         var admin = DnsSwitcher.IsAdmin();
         items.Add(new DiagItem(DiagLevel.Info, $"CHIMERION {UpdateChecker.CurrentVersion}",
             $"Windows {Environment.OSVersion.Version}, права администратора: {(admin ? "да" : "нет")}, автозапуск: {(AutoStart.IsEnabled() ? "включен" : "выключен")}"));
@@ -74,6 +80,7 @@ public static class Diagnostics
                     "Сервер перестал работать или просит привязать IP на своем сайте. Подключите рабочий сервер кнопкой ниже", "connect", "Подключить лучший")
                 : new DiagItem(DiagLevel.Info, $"В Windows вручную стоит {manual}",
                     "CHIMERION им не управляет: сторож и запасной сервер не работают. Лучше подключиться через программу", "connect", "Подключить лучший"));
+        Mark("Нейросети");
         foreach (var s in snap.Services)
         {
             var ok = s.Access.StartsWith('✓');
@@ -82,18 +89,34 @@ public static class Diagnostics
             var route = s.ResolvedIp is "не резолвится" or "—" or "" ? "DNS не дал адрес"
                       : s.Proxied ? $"через Smart DNS {s.ResolvedIp}" : $"напрямую {s.ResolvedIp}";
             var bad = !(ok && !closedEgress);
-            items.Add(new DiagItem(bad ? DiagLevel.Bad : DiagLevel.Ok, $"{s.Name}: {s.Access.TrimStart('✓', '✗', ' ')}",
-                route + where + (s.Note != null ? ". " + s.Note : ""),
-                bad && active != null ? "switch" : null, "Сменить сервер")); // без подключения кнопка одна, в строке «Не подключено»
+            var access = s.Access.TrimStart('✓', '✗', ' ');
+            // Предположение («закрыт для региона или капча») не выдаем за установленную причину
+            var unsure = s.Note != null && s.Note.Contains(" или ");
+            var detail = bad
+                ? $"Итог проверки: {access}. Маршрут: {route}{where}." + (s.Note != null ? $" {s.Note}." : "") + (unsure || s.Note == null ? " Точная причина не установлена" : "")
+                : route + where + (s.Note != null ? ". " + s.Note : "");
+            items.Add(new DiagItem(bad ? DiagLevel.Bad : DiagLevel.Ok, bad ? $"{s.Name}: не открывается" : $"{s.Name}: открывается", detail,
+                bad && active != null ? "switch" : null, "Подобрать другой сервер",
+                bad && active != null ? "Другой сервер поможет, если сервис закрыт для страны выхода текущего. Если новая страна выхода отличается от привычной, программа спросит подтверждение" : ""));
         }
+        Mark("Аккаунты и адрес выхода");
         // Репутация адресов выхода: только адреса прокси сервера, свой IP пользователя не проверяется
         if (active != null)
             foreach (var exitIp in snap.Services.Where(x => x.Proxied && x.Egress != null).Select(x => x.Egress!.Ip).Distinct())
                 if (await IpReputation.CheckAsync(exitIp, st.ReferenceDoh, ct) is { } rep)
-                    items.Add(new DiagItem(rep.Bad ? DiagLevel.Warn : DiagLevel.Ok,
-                        rep.Bad ? $"Адрес выхода {exitIp} на плохом счету" : $"Адрес выхода {exitIp}: в черных списках нет",
-                        IpReputation.Describe(rep) + (rep.Bad ? ". С таких адресов входы блокируют чаще: лучше сменить сервер" : ""),
-                        rep.Bad ? "switch" : null, "Сменить сервер"));
+                {
+                    // Черные списки и оценка риска разные проверки: зеленое «в списках нет» не должно прятать высокий риск
+                    items.Add(new DiagItem(rep.Lists.Length > 0 ? DiagLevel.Warn : DiagLevel.Ok,
+                        rep.Lists.Length > 0 ? $"Адрес выхода {exitIp} в черном списке" : $"Адрес выхода {exitIp}: в черных списках нет",
+                        rep.Lists.Length > 0 ? $"Списки: {string.Join(", ", rep.Lists)}. С таких адресов входы блокируют чаще" : "Проверены DroneBL, UCEPROTECT и SpamCop",
+                        rep.Lists.Length > 0 ? "switch" : null, "Подобрать другой сервер"));
+                    if (rep.Risk is { } risk)
+                        items.Add(new DiagItem(risk >= 66 ? DiagLevel.Warn : DiagLevel.Info,
+                            $"Оценка риска адреса выхода: {risk} из 100" + (string.IsNullOrEmpty(rep.Type) ? "" : $", распознается как {rep.Type}"),
+                            "Оценка proxycheck.io: чем выше, тем чаще сервисы считают адрес прокси или VPN и строже проверяют вход. " +
+                            (risk >= 66 ? "Высокая: если просят капчу или подтверждение входа, попробуйте сервер с другим адресом" : "Невысокая, делать ничего не нужно"),
+                            risk >= 66 ? "switch" : null, "Подобрать другой сервер"));
+                }
         if (AccountSafety.Pinned is { } pin)
             items.Add(new DiagItem(DiagLevel.Info, $"Выбрана страна выхода: {GeoLocation.CountryName(pin)}",
                 "Программа подключает и подбирает замену только с выходом в этой стране. Меняется в настройках, во вкладке «Сторож и трей»"));
@@ -108,22 +131,25 @@ public static class Diagnostics
             if (homes.Count == 0)
                 items.Add(new DiagItem(DiagLevel.Info, "Защита аккаунтов: истории пока нет", "Программа запоминает, из какой страны сервисы видят вас, и предупредит, если страна начнет меняться"));
             else if (mism.Count > 0 || many.Count > 0)
-                items.Add(new DiagItem(DiagLevel.Warn, "Защита аккаунтов: страна входа меняется",
-                    (mism.Count > 0 ? $"Сейчас не из привычной страны: {AccountSafety.Describe(mism)}. " : "") +
-                    (many.Count > 0 ? $"Много разных стран за 30 дней: {string.Join(", ", many)}. " : "") +
-                    "Частая смена страны повышает риск блокировки аккаунта: выбирайте серверы с той же страной выхода. Обычно: " + string.Join("; ", homes),
-                    active != null ? "switch" : null, "Сменить сервер"));
+                items.Add(new DiagItem(DiagLevel.Warn,
+                    mism.Count > 0 ? $"Защита аккаунтов: {string.Join(", ", mism.Select(m => m.Service).Distinct())} видят вас не из привычной страны" : $"Защита аккаунтов: много стран у {string.Join(", ", many)}",
+                    "Частая смена страны входа повышает риск блокировки аккаунта. Лучше сервер с привычной страной выхода",
+                    active != null ? "switch" : null, "Подобрать сервер с привычной страной",
+                    (mism.Count > 0 ? $"Сейчас: {AccountSafety.Describe(mism)}. " : "") +
+                    (many.Count > 0 ? $"Больше {AccountSafety.ManyCountries} стран за 30 дней: {string.Join(", ", many)}. " : "") +
+                    "Обычно: " + string.Join("; ", homes)));
             else
                 items.Add(new DiagItem(DiagLevel.Ok, "Защита аккаунтов: страна входа постоянная", string.Join("; ", homes)));
         }
 
+        Mark("Система");
         // Общая карта серверов: что работает у пользователей той же сети провайдера
         if (Crowd.LoadStats() is { } crowd && crowd.Provider.Count > 0 && System.IO.File.Exists(Storage.PathOf("servers.json")))
         {
             var servers = Storage.LoadOrCreate("servers.json", () => new List<Models.DnsServer>());
             items.Add(Crowd.BestForProvider(crowd, servers) is { } best
-                ? new DiagItem(DiagLevel.Info, $"У вашего провайдера лучше всего работает {best.Server.DisplayName}",
-                    $"{best.Rate}% удачных проверок из {best.Total} за сутки по данным общей карты серверов")
+                ? new DiagItem(DiagLevel.Info, $"По данным общей карты у вашего провайдера чаще всего работает {best.Server.ShortName}",
+                    $"{best.Rate}% удачных проверок из {best.Total} за сутки у пользователей CHIMERION в той же сети. Это подсказка, а не гарантия")
                 : new DiagItem(DiagLevel.Info, "Общая карта: по вашему провайдеру пока мало данных"));
         }
 
@@ -139,8 +165,9 @@ public static class Diagnostics
         }
 
         if (snap.Resolvers.Count > 0)
-            items.Add(new DiagItem(DiagLevel.Info, "Резолверы, дошедшие до тестового сервера",
-                string.Join("; ", snap.Resolvers.Select(r => $"{r.Org} ({r.Place.Split(',')[^1].Trim()})").Distinct())));
+            items.Add(new DiagItem(DiagLevel.Info, "Проверка утечки DNS: через какие серверы на самом деле идут запросы",
+                "Тестовый сервер видит, какие DNS к нему обратились. Если нейросети открываются, делать ничего не нужно",
+                More: "Обратились: " + string.Join("; ", snap.Resolvers.Select(r => $"{r.Org} ({r.Place.Split(',')[^1].Trim()})").Distinct())));
 
         // Помехи в системе: VPN, безопасный DNS в браузере, прокси, hosts, IPv6
         var issues = SystemCheck.Run(active?.OnAdapters ?? new List<string>());
@@ -150,6 +177,7 @@ public static class Diagnostics
         foreach (var i in issues) items.Add(new DiagItem(DiagLevel.Warn, "Помеха: " + i.Title, i.Fix, i.Action, i.ActionText));
 
         // Сторонние программы
+        Mark("Программы");
         foreach (var t in tools)
         {
             if (!t.IsInstalled) { items.Add(new DiagItem(DiagLevel.Info, $"{t.Title}: не установлено")); continue; }
@@ -165,6 +193,7 @@ public static class Diagnostics
                 $"версия {t.InstalledVersion}{upd}{strategy}", act, actText));
         }
 
+        Mark("Обновления");
         // Обновление CHIMERION
         var u = await UpdateChecker.CheckDetailedAsync(ct);
         items.Add(u.Status switch
@@ -174,6 +203,8 @@ public static class Diagnostics
             _ => new DiagItem(DiagLevel.Info, "Новую версию проверить не удалось", u.Reason ?? ""),
         });
 
+        for (int k = 0; k < items.Count; k++)
+            if (marks.LastOrDefault(m => m.At <= k) is { Group: { } g }) items[k] = items[k] with { Group = g };
         return new DiagReport(items, snap.PublicIp is { Length: > 0 } ip && ip != "—" ? ip : null, DateTime.Now);
     }
 
@@ -188,6 +219,7 @@ public static class Diagnostics
             var mark = i.Level switch { DiagLevel.Ok => "[ок]", DiagLevel.Warn => "[!]", DiagLevel.Bad => "[x]", _ => "[i]" };
             sb.AppendLine($"{mark} {i.Title}");
             if (i.Detail.Length > 0) sb.AppendLine("    " + i.Detail);
+            if (i.More.Length > 0) sb.AppendLine("    " + i.More);
         }
         var tail = logTail.ToList();
         if (tail.Count > 0)

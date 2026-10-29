@@ -15,11 +15,12 @@
             <Setter Property="Margin" Value="2,22,0,8"/>
         </Style>
         <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource Label}">
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
         <Style x:Key="FieldHint" TargetType="TextBlock" BasedOn="{StaticResource Label}">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="LineHeight" Value="18"/>
             <Setter Property="Margin" Value="0,5,0,0"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
@@ -156,7 +157,7 @@
                     <DockPanel LastChildFill="False">
                         <Button Content="Сохранить" DockPanel.Dock="Right" Style="{StaticResource Primary}" IsDefault="True" Click="Save_Click" MinWidth="130"/>
                         <Button Content="Отмена" DockPanel.Dock="Right" Style="{StaticResource Ghost}" IsCancel="True" Click="Cancel_Click"/>
-                        <Button Content="Рекомендуемые значения" DockPanel.Dock="Left" Style="{StaticResource Ghost}" Click="Defaults_Click" Margin="-16,0,0,0"
+                        <Button x:Name="DefaultsButton" Content="Рекомендуемые значения" DockPanel.Dock="Left" Style="{StaticResource Ghost}" Click="Defaults_Click" Margin="-16,0,0,0"
                                 ToolTip="Поставить во все поля рекомендуемые значения. Сохранятся только после «Сохранить»"/>
                     </DockPanel>
                 </StackPanel>
@@ -207,10 +208,16 @@
                         <TextBlock Text="ЧТО СКРЫВАЕТСЯ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0" Text="• Окна, меню и подсказки: их не видят OBS, Discord, Zoom, Teams, «Ножницы» и Print Screen"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Миниатюры на панели задач и в Alt+Tab: вместо окна значок"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Ваш IP, город и провайдер в журнале, проверке и диагностике. Адреса DNS и страны остаются"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Скопированный журнал и отчеты: без IP, имени пользователя и почты"/>
+                                <TextBlock Text="В обоих режимах" FontWeight="SemiBold"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Ваш внешний IP, город и провайдер на экране: в журнале, проверке и диагностике. Адреса DNS-серверов и страны остаются"/>
+                                <TextBlock Text="Только «Скрывать данные от записи экрана»" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                                <TextBlock x:Name="StreamerState" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/>
+                                <StackPanel x:Name="StreamerOnly">
+                                    <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Окна, меню и подсказки не видны в OBS, Discord, Zoom, Teams, «Ножницах» и на Print Screen"/>
+                                    <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Миниатюры на панели задач и в Alt+Tab: вместо окна значок"/>
+                                </StackPanel>
+                                <TextBlock Text="Всегда, даже без скрытия" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• В скопированном журнале и отчетах внешний IP, адреса локальной сети, имя пользователя Windows и почта заменяются метками. Произвольный текст, который вы сами вписали в поля, программа не правит"/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,12,0,0" Text="Не скроет то, что уже записано, и не защитит от камеры или программ с правами администратора. На Windows 10 до версии 2004 окно на записи будет черным"/>
                             </StackPanel>
                         </Border>
@@ -218,20 +225,23 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="CrowdBox" Content="Помогать общей карте серверов"/>
-                                <TextBlock Text="Раз в час уходят итоги проверок: адрес сервера и открываются ли через него нейросети. Ваш IP и сайты не уходят. Рейтинг по вашему провайдеру виден и без галочки"
+                                <TextBlock Text="Раз в час уходят итоги проверок: адрес DNS-сервера, его название или адрес DoH, какой сервис проверялся, открылся ли он, и версия программы. Сайты, которые вы открываете, не уходят"
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Сервер общей карты, как любой сайт, видит ваш IP во время запроса: он нужен только для лимита отчетов в час и не сохраняется. Сохраняется номер сети провайдера (AS), чтобы рейтинг был по вашему провайдеру. Рейтинг виден и без галочки"
+                                           Style="{StaticResource FieldHint}" Margin="26,6,0,0"/>
+                                <TextBlock Margin="26,6,0,0" FontSize="12.5"><Hyperlink Click="CrowdCode_Click" Foreground="{DynamicResource Accent}">Код сервера общей карты на GitHub</Hyperlink></TextBlock>
                             </StackPanel>
                         </Border>
                     </StackPanel>
 
                     <!-- Проверка серверов -->
                     <StackPanel x:Name="PageCheck" Visibility="Collapsed" Tag="Проверка серверов|Как CHIMERION проверяет, работает ли сервер с ИИ-сервисами">
-                        <TextBlock Text="ЭТАЛОН" Style="{StaticResource SectionTitle}"/>
+                        <TextBlock Text="ПРОВЕРОЧНЫЙ DNS" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Text="Эталонный DoH" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Text="Честный DNS для сравнения (DoH)" Style="{StaticResource FieldLabel}"/>
                                 <TextBox x:Name="RefDoh" Style="{StaticResource FieldBox}"/>
-                                <TextBlock Text="Сравнение с ним показывает, подменяет ли сервер адреса ИИ. Адрес начинается с https://" Style="{StaticResource FieldHint}"/>
+                                <TextBlock Text="Программа спрашивает адрес ChatGPT у него и у проверяемого сервера. Если ответы разные, сервер ведет нейросети через себя, то есть работает как Smart DNS. Менять стоит, только если этот адрес у вас не открывается. Начинается с https://" Style="{StaticResource FieldHint}"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="СКОРОСТЬ И НАГРУЗКА" Style="{StaticResource SectionTitle}"/>
@@ -248,7 +258,7 @@
                                 <StackPanel Grid.Column="2">
                                     <TextBlock Text="Проверок одновременно" Style="{StaticResource FieldLabel}"/>
                                     <TextBox x:Name="ParallelBox" Style="{StaticResource FieldBox}"/>
-                                    <TextBlock Text="от 1 до 64. Рекомендуем 24: больше быстрее, но выше нагрузка на сеть" Style="{StaticResource FieldHint}"/>
+                                    <TextBlock Text="от 1 до 64. Рекомендуем 24, так стоит по умолчанию. Меньше, если сеть слабая или проверка мешает другим программам" Style="{StaticResource FieldHint}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="4">
                                     <TextBlock Text="Обновлять пинг, мин" Style="{StaticResource FieldLabel}"/>
@@ -283,8 +293,8 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, программа следит за ChatGPT, Claude, Gemini и самим сервером. Если что-то упало, придет уведомление с причиной"/>
-                                <CheckBox x:Name="AutoSwitchBox" Content="Сразу переключаться на лучший рабочий сервер" Margin="0,14,0,0"/>
-                                <TextBlock Text="Иначе только уведомление: сменить сервер можно щелчком по нему. Избранные серверы тоже под присмотром" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="AutoSwitchBox" Content="Переключаться, когда нейросеть перестала открываться" Margin="0,14,0,0"/>
+                                <TextBlock Text="Если ChatGPT, Claude или Gemini перестали открываться через текущий сервер, программа сама перейдет на лучший рабочий. Иначе только уведомление. Работает, если ниже разрешено «Программа может сама переходить на другой сервер»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
                         <TextBlock Text="НАБЛЮДЕНИЕ ЗА САЙТАМИ" Style="{StaticResource SectionTitle}"/>
@@ -298,16 +308,16 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
-                                <TextBlock Text="Выключите, чтобы сервер меняли только вы. Тогда страна, из которой вас видят нейросети, не поменяется сама" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <TextBlock Text="Главный переключатель: без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется. От него зависят переключение выше и запасной сервер ниже" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="26,14,0,0"/>
-                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной замолчит, Windows перейдет на него за секунды" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
+                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Доступен, когда включено «Программа может сама переходить»" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
                                 <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <DockPanel x:Name="CountryRow" Margin="26,14,0,0">
                                     <ContentControl x:Name="CountryHost" DockPanel.Dock="Right" VerticalAlignment="Center"/>
                                     <StackPanel>
                                         <TextBlock Text="Страна выхода для нейросетей" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Программа подключит и подберет замену только с выходом в этой стране. Выберите ту, из которой вы обычно входите" Style="{StaticResource FieldHint}" Margin="0,4,12,0"/>
+                                        <TextBlock Text="Программа подключит и подберет замену только с выходом в этой стране. «Любая»: без закрепления, но защита аккаунтов все равно держит страну, из которой вас уже видели, и спросит перед ее сменой" Style="{StaticResource FieldHint}" Margin="0,4,12,0"/>
                                     </StackPanel>
                                 </DockPanel>
                             </StackPanel>
@@ -327,9 +337,35 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <TextBlock x:Name="SplitStatus" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                                <TextBlock Text="Нейросети через Smart DNS, остальной интернет через обычный DNS. Банки и российские сайты работают как обычно"
+                                <TextBlock Text="Только запросы нейросетей идут через Smart DNS, остальные сайты через обычный DNS. Так меньше сайтов зависят от Smart DNS: если с ним что-то случится, остальной интернет не заденет"
                                            Style="{StaticResource FieldHint}" Margin="0,6,0,0"/>
                                 <Button Content="Настроить два DNS" Click="SplitDns_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="КУДА ИДУТ ЗАПРОСЫ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource Surface2}" CornerRadius="10" Padding="14,10">
+                                        <StackPanel><TextBlock Text="ChatGPT, Claude, Gemini" FontWeight="SemiBold"/><TextBlock Text="и ваши домены из «Два DNS»" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                    </Border>
+                                    <controls:Icon Grid.Column="1" Kind="arrow-left-right" Size="18" Margin="14,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+                                    <Border Grid.Column="2" Background="{DynamicResource AccentSoft}" CornerRadius="10" Padding="14,10">
+                                        <StackPanel><TextBlock Text="Smart DNS" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/><TextBlock Text="открывает нейросети из России" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                    </Border>
+                                </Grid>
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Background="{DynamicResource Surface2}" CornerRadius="10" Padding="14,10">
+                                        <StackPanel><TextBlock Text="Все остальные сайты" FontWeight="SemiBold"/><TextBlock Text="банки, госуслуги, магазины" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                    </Border>
+                                    <controls:Icon Grid.Column="1" Kind="arrow-left-right" Size="18" Margin="14,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                                    <Border Grid.Column="2" Background="{DynamicResource Surface2}" CornerRadius="10" Padding="14,10">
+                                        <StackPanel><TextBlock Text="Обычный DNS" FontWeight="SemiBold"/><TextBlock Text="вашей сети или выбранный в «Два DNS»" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Text="Без «Двух DNS» через Smart DNS идут все запросы. Это тоже работает, просто сильнее зависит от одного сервера" Style="{StaticResource FieldHint}" Margin="0,12,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -350,10 +386,30 @@
                                 <Border Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,9" BorderBrush="{DynamicResource Border}" BorderThickness="1">
                                     <TextBlock x:Name="DataPathText" TextWrapping="Wrap" FontSize="12" FontFamily="Cascadia Mono, Consolas"/>
                                 </Border>
-                                <TextBlock Text="Настройки, серверы, журнал ошибок и резервная копия DNS. Не передавайте settings.json: в нем могут быть ваши Cookie."
+                                <TextBlock Text="Не передавайте settings.json: в нем могут быть ваши Cookie. Для поддержки используйте «Скопировать отчет» в диагностике"
                                            Style="{StaticResource FieldHint}" Margin="0,8,0,0"/>
-                                <Button Content="Открыть папку данных" Click="OpenData_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,12,0,0"/>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Открыть папку данных" Click="OpenData_Click" Style="{StaticResource Strong}" Margin="0,0,8,0"/>
+                                    <Button Content="Открыть журналы" Click="OpenLogs_Click" Style="{StaticResource Strong}"/>
+                                </WrapPanel>
                             </StackPanel>
+                        </Border>
+                        <TextBlock Text="ЧТО ВНУТРИ" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+                                <TextBlock Text="settings.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Column="1" Text="настройки программы" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="1" Text="servers.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="список серверов и итоги их проверок" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="2" Text="logs" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="журнал за 3 дня, старое удаляется само" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="3" Text="dns-backup.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="исходные DNS до первого подключения: по ним программа и reset-dns.cmd все возвращают" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
+                                <TextBlock Grid.Row="4" Text="tools.json" FontFamily="Cascadia Mono, Consolas"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="состояние zapret и TG WS Proxy" Style="{StaticResource FieldHint}"/>
+                            </Grid>
                         </Border>
                     </StackPanel>
 
@@ -375,7 +431,7 @@
                                 <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
                                            Text="Сама находит и проверяет серверы, подключается в один клик и все возвращает, если что-то пошло не так. Права администратора нужны только для смены DNS."/>
                                 <TextBlock Margin="0,14,0,0">
-                                    <Hyperlink Click="Site_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">chimerion.dev</Hyperlink>
+                                    <Hyperlink Click="Site_Click" Foreground="{DynamicResource Accent}">chimerion.dev</Hyperlink>
                                     <Run Text=" · сайт программы" Foreground="{DynamicResource Muted}"/>
                                 </TextBlock>
                             </StackPanel>
@@ -389,19 +445,19 @@
                                     <Grid.RowDefinitions><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
                                     <TextBlock Text="Канал" Style="{StaticResource Label}" Margin="0,0,0,10"/>
                                     <TextBlock Grid.Column="1" Margin="0,0,0,10">
-                                        <Hyperlink Click="TgChannel_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
+                                        <Hyperlink Click="TgChannel_Click" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
                                         <Run Text=" · новости о версиях" Foreground="{DynamicResource Muted}"/>
                                     </TextBlock>
                                     <TextBlock Grid.Row="1" Text="Чат" Style="{StaticResource Label}"/>
                                     <TextBlock Grid.Row="1" Grid.Column="1">
-                                        <Hyperlink Click="TgChat_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
+                                        <Hyperlink Click="TgChat_Click" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
                                         <Run Text=" · помощь, рабочие DNS, идеи" Foreground="{DynamicResource Muted}"/>
                                     </TextBlock>
                                 </Grid>
-                                <WrapPanel Margin="-16,10,0,0">
-                                    <Button Content="Баг-репорты" Click="TgTopic_Click" Tag="bugs" Style="{StaticResource Ghost}"/>
-                                    <Button Content="Идеи" Click="TgTopic_Click" Tag="ideas" Style="{StaticResource Ghost}"/>
-                                    <Button Content="Ошибки" Click="TgTopic_Click" Tag="help" Style="{StaticResource Ghost}"/>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Баг-репорты" Click="TgTopic_Click" Tag="bugs" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Тема чата в Telegram"/>
+                                    <Button Content="Идеи" Click="TgTopic_Click" Tag="ideas" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Тема чата в Telegram"/>
+                                    <Button Content="Ошибки" Click="TgTopic_Click" Tag="help" Style="{StaticResource Strong}" ToolTip="Тема чата в Telegram"/>
                                 </WrapPanel>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,6,0,0"
                                            Text="Кнопки открывают темы чата в Telegram. Если вы еще не в чате, сначала вступите по ссылке выше."/>
@@ -420,27 +476,28 @@
                                     <TextBlock Grid.Row="1" Grid.Column="1" Text="PolyForm Noncommercial 1.0.0" FontWeight="SemiBold" Margin="0,0,0,10"/>
                                     <TextBlock Grid.Row="2" Text="Исходный код" Style="{StaticResource Label}"/>
                                     <TextBlock Grid.Row="2" Grid.Column="1">
-                                        <Hyperlink Click="Repo_Click" TextDecorations="{x:Null}" Foreground="{DynamicResource Accent}">github.com/under2ker/chimerion</Hyperlink>
+                                        <Hyperlink Click="Repo_Click" Foreground="{DynamicResource Accent}">github.com/under2ker/chimerion</Hyperlink>
                                     </TextBlock>
                                 </Grid>
                                 <TextBlock Style="{StaticResource FieldHint}" Margin="0,14,0,0" FontSize="12"
                                            Text="Программу можно использовать, копировать и менять в некоммерческих целях. Продавать ее или брать деньги за сборки нельзя."/>
-                                <WrapPanel Margin="-16,10,0,0">
-                                    <Button Content="Текст лицензии" Click="License_Click" Style="{StaticResource Ghost}"/>
-                                    <Button Content="История изменений" Click="Changelog_Click" Style="{StaticResource Ghost}"/>
-                                    <Button Content="Сообщить о проблеме" Click="Issues_Click" Style="{StaticResource Ghost}"/>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="История изменений" Click="Changelog_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Откроется на GitHub"/>
+                                    <Button Content="Сообщить о проблеме" Click="Issues_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Откроется на GitHub"/>
+                                    <Button Content="Текст лицензии" Click="License_Click" Style="{StaticResource Ghost}" ToolTip="Откроется на GitHub"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
 
-                        <TextBlock Text="СТОРОННИЕ КОМПОНЕНТЫ" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
+                        <Expander Header="Сторонние компоненты и их лицензии" Margin="0,18,0,0" Foreground="{DynamicResource Muted}">
+                        <Border Style="{StaticResource Card}" Padding="18" Margin="0,8,0,0">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="TG WS Proxy и zapret-discord-youtube (Flowseal, bol-van; WinDivert, basil00): лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы."/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Списки сайтов и адресов: v2fly/domain-list-community, Re:filter, eduard256/russia-blocked-ips, RussiaFancyLists (MIT)."/>
                                 <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Анимированные иконки useanimations.com (MIT), остальные Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
                             </StackPanel>
                         </Border>
+                        </Expander>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

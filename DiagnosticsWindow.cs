@@ -79,42 +79,54 @@ internal sealed class DiagnosticsWindow
         _tools = tools;
         _logTail = logTail;
         _log = log;
-        _w = DnexDialog.CreateWindow("Диагностика", Ui.Wide);
+        _w = DnexDialog.CreateWindow("Диагностика", 680);
         _w.Closed += (_, _) => _open = null;
+        // Кнопки внизу закреплены, прокручивается только список: на маленьком экране они не уезжают
+        _w.MaxHeight = SystemParameters.WorkArea.Height - 40;
 
-        var root = Ui.Root();
+        var root = new Grid { Margin = new Thickness(24, 22, 24, 20) };
+        foreach (var h in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
+            root.RowDefinitions.Add(new RowDefinition { Height = h });
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Диагностика",
             "Подключение, доступ к сервисам, помехи в системе, Telegram и zapret, обновления", glyph: "stethoscope"));
 
         // Проверка конкретного сайта: DNS, соединение, обрыв загрузки (замедление Cloudflare) и что делать
-        root.Children.Add(Ui.Section("Проверить сайт", first: true));
         var siteBody = new StackPanel();
         var siteRow = new DockPanel();
         var siteBtn = Ui.Action("Проверить", "Strong", () => _ = CheckSiteAsync()).With(b => b.Margin = new Thickness(8, 0, 0, 0));
         DockPanel.SetDock(siteBtn, Dock.Right);
         _buttons.Add(siteBtn);
         siteRow.Children.Add(siteBtn);
-        _site.Tag = "Адрес сайта, который не открывается, например uiverse.io";
+        _site.Tag = "Адрес сайта";
         _site.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) _ = CheckSiteAsync(); };
         siteRow.Children.Add(_site);
         siteBody.Children.Add(siteRow);
+        siteBody.Children.Add(Ui.Hint("Не открывается сайт: впишите его, например uiverse.io. Программа проверит DNS, соединение и загрузку", 6));
         _siteResult.Margin = new Thickness(0, 10, 0, 0);
         siteBody.Children.Add(_siteResult);
-        root.Children.Add(Ui.Card(siteBody, bottom: 0));
+        var siteBlock = new StackPanel();
+        siteBlock.Children.Add(Ui.Section("Проверить сайт", first: true));
+        siteBlock.Children.Add(Ui.Card(siteBody, bottom: 0));
+        Grid.SetRow(siteBlock, 1); root.Children.Add(siteBlock);
 
-        root.Children.Add(Ui.Section("Состояние"));
-        _state = Ui.Hint("", 0).With(t => t.Margin = new Thickness(2, 0, 0, 8));
-        root.Children.Add(_bar);
-        root.Children.Add(_state);
-        root.Children.Add(Ui.Card(Ui.Scroll(_list, Math.Max(320, SystemParameters.WorkArea.Height - 440)), bottom: 0)); // на большом экране весь список без прокрутки
+        var stateBlock = new StackPanel();
+        stateBlock.Children.Add(Ui.Section("Состояние"));
+        _state = Ui.Hint("", 0).With(t => { t.Margin = new Thickness(2, 0, 0, 8); t.FontSize = 13; });
+        stateBlock.Children.Add(_bar);
+        stateBlock.Children.Add(_state);
+        Grid.SetRow(stateBlock, 2); root.Children.Add(stateBlock);
+        var listScroll = new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(0, 0, 8, 0) };
+        var listCard = Ui.Card(listScroll, bottom: 0);
+        Grid.SetRow(listCard, 3); root.Children.Add(listCard);
 
         Button Add(string text, string style, Action click) { var b = Ui.Action(text, style, click); _buttons.Add(b); return b; }
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Add("Скопировать отчет", "Strong", Copy).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
-        root.Children.Add(Ui.Footer(left, Add("Сообщить о проблеме", "Primary", Report), close));
-        _w.Content = Ui.WindowContent(root);
+        var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", Report), close);
+        Grid.SetRow(footer, 4); root.Children.Add(footer);
+        _w.Content = root;
     }
 
     private async Task RunAsync()
@@ -127,8 +139,8 @@ internal sealed class DiagnosticsWindow
         {
             _report = await Diagnostics.RunAsync(_settings, _tools);
             int bad = _report.Items.Count(i => i.Level == DiagLevel.Bad), warn = _report.Items.Count(i => i.Level == DiagLevel.Warn);
-            _state.Text = bad + warn == 0 ? "Проблем не найдено" : $"Проблем: {bad}, предупреждений: {warn}";
-            foreach (var i in _report.Items) _list.Children.Add(Row(i));
+            _state.Text = bad + warn == 0 ? "Проблем не найдено" : $"Проблем: {bad}, предупреждений: {warn}. Они собраны сверху";
+            Render(_report);
             _log($"Диагностика: проблем {bad}, предупреждений {warn}");
             // Сами проблемы тоже в журнал: по присланному журналу должно быть видно, что сломалось
             foreach (var i in _report.Items.Where(i => i.Level is DiagLevel.Bad or DiagLevel.Warn))
@@ -187,20 +199,67 @@ internal sealed class DiagnosticsWindow
         b.IsEnabled = true;
     }
 
-    private FrameworkElement Row(DiagItem i)
+    /// <summary>
+    /// Сначала «Требует внимания» (проблемы и предупреждения), потом остальные строки по разделам: подключение,
+    /// нейросети, аккаунты, система, программы, обновления. Иначе важное терялось в одном длинном списке.
+    /// </summary>
+    private void Render(DiagReport report)
+    {
+        _list.Children.Clear();
+        var problems = report.Items.Where(i => i.Level is DiagLevel.Bad or DiagLevel.Warn).OrderBy(i => i.Level == DiagLevel.Bad ? 0 : 1).ToList();
+        bool first = true;
+        if (problems.Count > 0)
+        {
+            _list.Children.Add(GroupTitle("Требует внимания", problems.Count, true, "Warn"));
+            foreach (var i in problems) _list.Children.Add(Row(i, showGroup: true));
+            first = false;
+        }
+        foreach (var g in report.Items.Where(i => i.Level is not (DiagLevel.Bad or DiagLevel.Warn)).GroupBy(i => i.Group.Length > 0 ? i.Group : "Другое"))
+        {
+            _list.Children.Add(GroupTitle(g.Key, g.Count(), first, "Muted"));
+            foreach (var i in g) _list.Children.Add(Row(i));
+            first = false;
+        }
+    }
+
+    private static TextBlock GroupTitle(string text, int count, bool first, string color) =>
+        Ui.Section($"{text} · {count}", first).With(t => { t.Margin = new Thickness(2, first ? 2 : 16, 0, 8); t.SetResourceReference(TextBlock.ForegroundProperty, color); });
+
+    private FrameworkElement Row(DiagItem i, bool showGroup = false)
     {
         var color = i.Level switch { DiagLevel.Ok => "Ok", DiagLevel.Warn => "Warn", DiagLevel.Bad => "Bad", _ => "Muted" };
-        var g = new Grid { Margin = new Thickness(0, 0, 0, 10) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.Children.Add(new System.Windows.Shapes.Ellipse
+        var (kind, word) = i.Level switch
         {
-            Width = 8, Height = 8, Fill = (Brush)Res[color], VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 6, 0, 0),
-        });
+            DiagLevel.Ok => ("circle-check", "В порядке"), DiagLevel.Warn => ("triangle-alert", "Предупреждение"),
+            DiagLevel.Bad => ("circle-x", "Проблема"), _ => ("info", "Сведения"),
+        };
+        var g = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // Значок, а не только цвет точки: состояние понятно и без различения цветов, слово в подсказке
+        g.Children.Add(new Controls.Icon { Kind = kind, Size = 16, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0), ToolTip = word }
+            .Ref(Controls.Icon.ForegroundProperty, color));
         var text = new StackPanel();
+        if (showGroup && i.Group.Length > 0) text.Children.Add(Ui.Hint(i.Group, 0).With(t => t.FontSize = 11.5));
         text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Title), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (i.Detail.Length > 0)
             text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Detail), Foreground = (Brush)Res["Text"], Opacity = 0.72, FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) }); // ярче и крупнее серого: подробности на темном фоне читались с трудом
+        if (i.More.Length > 0)
+        {
+            // Подробности (история стран, технические данные) по запросу: главная мысль строкой выше
+            var more = new TextBlock { Text = PrivacyGuard.Mask(i.More), FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Opacity = .72, Margin = new Thickness(0, 4, 0, 0), Visibility = Visibility.Collapsed }
+                .Ref(TextBlock.ForegroundProperty, "Text");
+            var toggle = new TextBlock { Text = "Подробнее", FontSize = 12.5, Margin = new Thickness(0, 4, 0, 0), Cursor = System.Windows.Input.Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Left }
+                .Ref(TextBlock.ForegroundProperty, "Accent");
+            toggle.MouseLeftButtonUp += (_, _) =>
+            {
+                bool open = more.Visibility != Visibility.Visible;
+                more.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                toggle.Text = open ? "Скрыть подробности" : "Подробнее";
+            };
+            text.Children.Add(toggle);
+            text.Children.Add(more);
+        }
         Grid.SetColumn(text, 1);
         g.Children.Add(text);
         if (i.Action != null && i.ActionText != null)
@@ -208,7 +267,8 @@ internal sealed class DiagnosticsWindow
             // Кнопка исправления справа: CHIMERION делает это сама, но только по нажатию
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             Button? fix = null;
-            fix = Ui.Action(i.ActionText, i.Level == DiagLevel.Bad ? "Strong" : "Ghost", () => _ = FixAsync(i, fix!))
+            // Все действия одной заметной кнопкой: тусклая «Сменить сервер» не была похожа на кнопку
+            fix = Ui.Action(i.ActionText, "Strong", () => _ = FixAsync(i, fix!))
                     .With(b => { b.Margin = new Thickness(12, 0, 0, 0); b.VerticalAlignment = VerticalAlignment.Top; b.Padding = new Thickness(12, 4, 12, 4); b.MinHeight = 28; });
             Grid.SetColumn(fix, 2);
             g.Children.Add(fix);

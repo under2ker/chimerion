@@ -72,6 +72,7 @@ public partial class SettingsWindow : Window
         PingBox.Text = settings.PingRefreshMinutes.ToString();
         PrivacyBox.IsChecked = settings.PrivacyMode && settings.PrivacyHideWindows;
         MaskOnlyBox.IsChecked = settings.PrivacyMode && !settings.PrivacyHideWindows;
+        ShowStreamerState();
         StartCompactBox.IsChecked = settings.StartCompact;
         AutoSwitchBox.IsChecked = settings.AutoSwitchOnServiceDown;
         BackupBox.IsChecked = settings.UseBackupServer;
@@ -89,7 +90,8 @@ public partial class SettingsWindow : Window
         var v = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"Версия {v?.Major}.{v?.Minor}.{v?.Build} · Windows 10 и 11 · .NET 8";
         SideVersion.Text = $"CHIMERION {v?.Major}.{v?.Minor}.{v?.Build}";
-        DataPathText.Text = Storage.Dir;
+        // В режиме скрытия данных путь без имени пользователя Windows
+        DataPathText.Text = PrivacyGuard.Enabled ? Storage.Dir.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%", StringComparison.OrdinalIgnoreCase) : Storage.Dir;
         BuildColors();
         (_settings.Language == "en" ? LangEn : LangRu).IsChecked = true;
         // Открывается вкладка, на которой окно закрыли в прошлый раз
@@ -111,6 +113,8 @@ public partial class SettingsWindow : Window
             if (!show) continue;
             var parts = (page.Tag as string ?? "").Split('|');
             PageTitle.Text = parts[0];
+            // Рекомендуемые значения есть только у страниц с полями; на «Два DNS», «Данных» и «О программе» кнопка ничего бы не сделала
+            DefaultsButton.Visibility = name is "General" or "Privacy" or "Check" or "Watch" ? Visibility.Visible : Visibility.Collapsed;
             PageHint.Text = parts.Length > 1 ? parts[1] : "";
             BodyScroll.ScrollToTop();
             Dispatcher.BeginInvoke(FitPage, System.Windows.Threading.DispatcherPriority.Loaded);
@@ -193,6 +197,23 @@ public partial class SettingsWindow : Window
     {
         if (sender == PrivacyBox) MaskOnlyBox.IsChecked = false;
         else PrivacyBox.IsChecked = false;
+        ShowStreamerState();
+    }
+
+    /// <summary>Пояснение «что скрывается» по выбранному режиму: окна от записи прячет только стример-режим.</summary>
+    private void ShowStreamerState()
+    {
+        if (StreamerState == null) return;
+        bool on = PrivacyBox.IsChecked == true;
+        StreamerState.Text = on ? "Сейчас включено" : "Сейчас выключено: окна на записи видны как обычно";
+        StreamerOnly.Opacity = on ? 1 : .45;
+    }
+
+    private void CrowdCode_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/backend/crowd/worker.js");
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        try { System.IO.Directory.CreateDirectory(LogStore.Dir); Process.Start(new ProcessStartInfo("explorer.exe", $"\"{LogStore.Dir}\"") { UseShellExecute = true }); }
+        catch (Exception ex) { ErrorText.Text = "Не удалось открыть папку: " + ex.Message; }
     }
 
     /// <summary>
@@ -291,14 +312,18 @@ public partial class SettingsWindow : Window
         if (Services.Updater.PreviousVersion() is not { } prev) return;
         RollbackPanel.Visibility = Visibility.Visible;
         RollbackButton.Content = $"Вернуть версию {prev.ToString(3)}";
-        RollbackHint.Text = $"Если после обновления что-то стало хуже, можно вернуть прежнюю версию {prev.ToString(3)}. " +
-                            "Программа перезапустится, подключение DNS сохранится. Вперед можно вернуться той же кнопкой";
+        RollbackHint.Text = $"Сейчас {UpdateChecker.CurrentVersion.ToString(3)}. Если после обновления что-то стало хуже, можно вернуть {prev.ToString(3)}: " +
+                            "исправления новых версий пропадут, настройки, серверы и подключение сохранятся";
     }
 
     private void Rollback_Click(object sender, RoutedEventArgs e)
     {
-        if (!DnexDialog.Ask($"Вернуть версию {Services.Updater.PreviousVersion()?.ToString(3)}?",
-                "Программа перезапустится с прежней версией. Подключение DNS и настройки сохранятся.", "Вернуть", windowTitle: "Возврат версии"))
+        var prev = Services.Updater.PreviousVersion()?.ToString(3);
+        var cur = UpdateChecker.CurrentVersion.ToString(3);
+        if (!DnexDialog.AskRisk($"Вернуть {prev} вместо {cur}?",
+                $"Сейчас установлена {cur}, вернется {prev}.\n\nСохранятся: настройки, список серверов, журнал и подключение DNS.\n" +
+                $"Пропадут: все исправления и новое, что появилось после {prev}.\n\nПрограмма перезапустится. Вернуться на {cur} можно той же кнопкой или обновлением.",
+                "Понимаю, что исправления новых версий пропадут", "Вернуть " + prev, "Отмена", windowTitle: "Возврат версии"))
             return;
         RollbackRequested = true;
         Close();
