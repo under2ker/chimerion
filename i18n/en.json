@@ -1827,5 +1827,22 @@
  "Откройте в браузере: программа тут ни при чем": "Open it in the browser: the app is not the cause",
  "Найти набор или сайт, например instagram": "Find a set or site, for example instagram",
  "выбрано {0} из {1}": "{0} of {1} selected",
- "В обходе {0} {1}, плюс YouTube и Discord": "{0} {1} in the bypass, plus YouTube and Discord"
+ "В обходе {0} {1}, плюс YouTube и Discord": "{0} {1} in the bypass, plus YouTube and Discord",
+ "DNS вернется к исходным настройкам": "DNS returns to the original settings",
+ "Все продолжит работать. При следующем запуске CHIMERION снова будет за этим следить": "Everything keeps working. On the next start CHIMERION watches it again",
+ "Выйти и оставить работать": "Exit and keep running",
+ "Канал в Telegram": "Telegram channel",
+ "Нейросети продолжат открываться. При следующем запуске CHIMERION продолжит с этим подключением и снова будет за ним следить": "AI keeps opening. On the next start CHIMERION continues with this connection and watches it again",
+ "Сервер: {0} · ИИ видят: {1}": "Server: {0} · AI sees: {1}",
+ "Сервер: {0} · без подмены": "Server: {0} · no substitution",
+ "Сообщить о сбое": "Report a problem",
+ "Сайт chimerion.dev": "Site chimerion.dev",
+ "Что сделать при выходе?": "What to do on exit?",
+ "разные страны": "different countries",
+ "Enter: оставить работать · Esc: отмена": "Enter: keep running · Esc: cancel",
+ "Вернуть исходные DNS без программы можно файлом reset-dns.cmd рядом с CHIMERION": "You can restore the original DNS without the app with reset-dns.cmd next to CHIMERION",
+ "{0} остановится": "{0} stops",
+ "{0} остановятся": "{0} stop",
+ "Лучший пинг": "Best ping",
+ "Рабочих серверов": "Working servers"
 }

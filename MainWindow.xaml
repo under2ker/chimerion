@@ -171,9 +171,9 @@
                 <RowDefinition Height="Auto"/> <!-- статистика в компактном виде -->
             </Grid.RowDefinitions>
 
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="ConnHost" VerticalAlignment="Center">
                 <!-- Состояние подключения. Логотип и название уже есть в полосе заголовка окна, в шапке их не повторяем -->
-                <Border x:Name="ConnPill" Margin="0" Padding="14,8" CornerRadius="10"
+                <Border x:Name="ConnPill" Margin="0" Padding="14,8" CornerRadius="10" HorizontalAlignment="Left"
                         Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="1">
                     <StackPanel Orientation="Horizontal">
                         <Ellipse x:Name="ConnDot" Width="9" Height="9" Fill="{DynamicResource Idle}" VerticalAlignment="Center"/>
@@ -198,29 +198,29 @@
 
             <!-- Статистика активного подключения: справа от карточки, видна пока подключено.
                  Колонка растягивается, поэтому на узком окне блоки переносятся, а кнопки не уезжают. -->
-            <WrapPanel x:Name="HeaderStats" Grid.Column="1" Margin="18,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <WrapPanel x:Name="HeaderStats" Grid.Column="1" Margin="28,0,0,0" VerticalAlignment="Center" Visibility="Collapsed">
                 <StackPanel x:Name="StatPingBlock" Margin="0,0,14,6">
-                    <TextBlock Text="Пинг" Style="{StaticResource Label}" FontSize="11"/>
+                    <TextBlock x:Name="StatPingLabel" Text="Пинг" Style="{StaticResource Label}" FontSize="12"/>
                     <StackPanel Orientation="Horizontal">
                         <controls:PingBars x:Name="StatPingBars" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="StatPing" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="StatPing" Text="—" FontSize="16" FontWeight="SemiBold"/>
                     </StackPanel>
                 </StackPanel>
                 <Rectangle x:Name="StatSep1" Width="1" Height="30" Fill="{DynamicResource Border}" Margin="0,2,14,8"/>
                 <StackPanel x:Name="StatStabBlock" Margin="0,0,14,6">
-                    <TextBlock Text="Стабильность" Style="{StaticResource Label}" FontSize="11"/>
-                    <TextBlock x:Name="StatStab" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="StatStabLabel" Text="Стабильность" Style="{StaticResource Label}" FontSize="12"/>
+                    <TextBlock x:Name="StatStab" Text="—" FontSize="16" FontWeight="SemiBold"/>
                 </StackPanel>
                 <Rectangle x:Name="StatSep2" Width="1" Height="30" Fill="{DynamicResource Border}" Margin="0,2,14,8"/>
                 <StackPanel x:Name="StatServicesBlock" Margin="0,0,0,6">
-                    <TextBlock Text="ИИ доступно" Style="{StaticResource Label}" FontSize="11"/>
-                    <TextBlock x:Name="StatServices" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="ИИ доступно" Style="{StaticResource Label}" FontSize="12"/>
+                    <TextBlock x:Name="StatServices" Text="—" FontSize="16" FontWeight="SemiBold"/>
                 </StackPanel>
                 <!-- Обход zapret: сколько сайтов и сетей он покрывает. Виден, пока обход работает -->
                 <Rectangle x:Name="StatSep3" Width="1" Height="30" Fill="{DynamicResource Border}" Margin="14,2,14,8"/>
                 <StackPanel x:Name="StatBypassBlock" Margin="0,0,0,6">
-                    <TextBlock Text="В обходе" Style="{StaticResource Label}" FontSize="11"/>
-                    <TextBlock x:Name="StatBypass" Text="—" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="В обходе" Style="{StaticResource Label}" FontSize="12"/>
+                    <TextBlock x:Name="StatBypass" Text="—" FontSize="16" FontWeight="SemiBold"/>
                 </StackPanel>
                 <!-- Обновить подключенный сервер: та же проверка, что и кнопка в строке таблицы -->
                 <Button x:Name="ActiveRefresh" Style="{StaticResource RowRefresh}" Click="ActiveRefresh_Click"
@@ -260,7 +260,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Border x:Name="VerdictCard" Grid.Column="0" Style="{StaticResource Card}" Padding="16,12">
-                <StackPanel>
+                <controls:FillStackPanel>
                     <DockPanel x:Name="VerdictHeader" LastChildFill="False">
                         <TextBlock Text="Проверка подключения" Style="{StaticResource H2}" VerticalAlignment="Center"/>
                         <Border x:Name="VerdictBadge" Margin="12,0,0,0" Padding="10,3" CornerRadius="6"
@@ -272,8 +272,8 @@
                         <Button x:Name="ProbeButton" Content="Проверить сейчас" Click="Probe_Click" DockPanel.Dock="Right" Style="{StaticResource Strong}"
                                 ToolTip="Внешний IP, DNS, адреса и доступность ИИ-сервисов прямо сейчас"/>
                     </DockPanel>
-                    <StackPanel x:Name="CompareGrid" Margin="0,12,0,0"/>
-                </StackPanel>
+                    <controls:FillStackPanel x:Name="CompareGrid" Margin="0,12,0,0"/>
+                </controls:FillStackPanel>
             </Border>
             <Border x:Name="TopCard" Grid.Column="1" Width="480" Style="{StaticResource Card}" Padding="16,12" Margin="12,0,0,0">
                 <StackPanel x:Name="TopRows"/>
@@ -440,7 +440,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="128" SortMemberPath="Rank">
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="92" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid x:Name="stRoot" ClipToBounds="True">
@@ -485,8 +485,10 @@
                                             <Setter TargetName="connBadge" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Ok">
+                                            <!-- «Работает» в каждой строке только шумело: у рабочих точка, слово в подсказке -->
                                             <Setter TargetName="dot" Property="Fill" Value="{DynamicResource Ok}"/>
-                                            <Setter TargetName="st" Property="Foreground" Value="{DynamicResource Text}"/>
+                                            <Setter TargetName="dot" Property="ToolTip" Value="Работает"/>
+                                            <Setter TargetName="st" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Partial">
                                             <Setter TargetName="dot" Property="Fill" Value="{DynamicResource Warn}"/>
@@ -525,22 +527,21 @@
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
                                         <!-- Бейджи справа: в узкой колонке обрезается текст, а не бейдж -->
-                                        <DockPanel>
-                                            <Border x:Name="newBadge" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipOk}"
+                                        <!-- Метки сразу за названием, а не у края колонки: так видно, к чему они относятся -->
+                                        <DockPanel LastChildFill="False">
+                                            <TextBlock DockPanel.Dock="Left" Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                            <Border x:Name="newBadge" DockPanel.Dock="Left" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipOk}"
                                                     VerticalAlignment="Center" Visibility="Collapsed">
-                                                <TextBlock Text="новый" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource Ok}"/>
+                                                <TextBlock Text="новый" FontSize="11" FontWeight="Normal" Foreground="{DynamicResource Ok}"/>
                                             </Border>
-                                            <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis"/>
-                                        </DockPanel>
-                                        <DockPanel Margin="0,2,0,0">
                                             <!-- Лучший по стабильности: для всех сразу или для отдельного ИИ (см. рамку над таблицей) -->
-                                            <Border x:Name="bestBadge" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipLime}"
+                                            <Border x:Name="bestBadge" DockPanel.Dock="Left" Margin="6,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipLime}"
                                                     VerticalAlignment="Center" Visibility="Collapsed" ToolTip="Самая высокая стабильность по данным проверок">
-                                                <TextBlock Text="{Binding BestFor}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Lime}"/>
+                                                <TextBlock Text="{Binding BestFor}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Lime}"/>
                                             </Border>
-                                            <TextBlock Text="{Binding Address}" Style="{StaticResource Label}" FontWeight="Normal" ToolTip="{Binding Address}"
-                                                       FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis"/>
                                         </DockPanel>
+                                        <TextBlock Margin="0,2,0,0" Text="{Binding Address}" FontSize="12.5" Foreground="{DynamicResource Text}" Opacity="0.68" FontWeight="Normal" ToolTip="{Binding Address}"
+                                                   FontFamily="Cascadia Mono, Consolas" TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsNew}" Value="True">
@@ -569,7 +570,7 @@
                                         <Image DockPanel.Dock="Left" Source="{Binding Flag}" Width="20" Height="14" Margin="0,0,8,0" Stretch="Uniform" VerticalAlignment="Center"/>
                                         <controls:Icon DockPanel.Dock="Right" Kind="triangle-alert" Size="14" Foreground="{DynamicResource Warn}" Margin="6,0,0,0"
                                                    Visibility="{Binding HasLocationWarning, Converter={StaticResource BoolToVis}}"/>
-                                        <TextBlock Text="{Binding LocationCell}" Foreground="{DynamicResource Muted}" FontWeight="Normal"
+                                        <TextBlock Text="{Binding LocationCell}" Foreground="{DynamicResource Text}" Opacity="0.78" FontWeight="Normal"
                                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                     </DockPanel>
                                 </DataTemplate>

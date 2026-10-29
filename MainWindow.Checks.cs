@@ -66,7 +66,7 @@ public partial class MainWindow
         TopRows.Children.Add(new TextBlock
         {
             Text = "отдельно для каждого сервиса · щелчок выбирает сервер", Foreground = B("Muted"), FontSize = 12,
-            Margin = new Thickness(0, 2, 0, 8),
+            Margin = new Thickness(0, 2, 0, 4),
         });
 
         if (picks.All(p => p.Best == null))
@@ -134,7 +134,7 @@ public partial class MainWindow
 
             var row = new Border
             {
-                Child = g, Padding = new Thickness(8, 4, 8, 4), CornerRadius = new CornerRadius(8),
+                Child = g, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(8),
                 Background = Brushes.Transparent, Tag = p.Best, Cursor = p.Best != null ? Cursors.Hand : null,
                 ToolTip = p.Best == null ? null
                     : p.Key == "net" ? $"{p.Best.DisplayName}\n{p.Best.Address}\nУ пользователей CHIMERION в вашей сети провайдера работает в {p.Stability}% проверок за сутки ({p.Sub})\nЩелчок выбирает сервер в списке"

@@ -200,7 +200,7 @@ internal sealed class DiagnosticsWindow
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Title), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (i.Detail.Length > 0)
-            text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Detail), Foreground = (Brush)Res["Muted"], FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) });
+            text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Detail), Foreground = (Brush)Res["Text"], Opacity = 0.72, FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) }); // ярче и крупнее серого: подробности на темном фоне читались с трудом
         Grid.SetColumn(text, 1);
         g.Children.Add(text);
         if (i.Action != null && i.ActionText != null)
