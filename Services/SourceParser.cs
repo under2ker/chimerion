@@ -18,6 +18,7 @@ namespace Dnex.Services;
 /// </summary>
 public static partial class SourceParser
 {
+    private static int _capLogged;
     [GeneratedRegex(@"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b", RegexOptions.None, 2000)]
     private static partial Regex Ipv4Rx();
 
@@ -161,6 +162,7 @@ public static partial class SourceParser
         _ddgCaptcha = false;
         _braveLimited = false;
         var found = new ConcurrentDictionary<string, DnsServer>();
+        Interlocked.Exchange(ref _capLogged, 0);
         var visited = new ConcurrentDictionary<string, byte>();
         var hostPages = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var exclude = st.ExcludeIps.ToHashSet();
@@ -249,9 +251,21 @@ public static partial class SourceParser
                         return; // слишком тяжелая/вредоносная страница
                     }
 
+                    // Сотни адресов на одной странице: общий каталог публичных DNS (public-dns.info дал 62 тысячи), а не подборка
+                    // Smart DNS. Страницу целиком пропускаем и по ее ссылкам не идем
+                    if (items.Count > ServerListGuard.MaxPerPage || ServerListGuard.IsMassHost(job.Url.Host))
+                    {
+                        if (items.Count > 0) log($"Пропущено {items.Count} адресов: {pageUrl} похож на общий список DNS, а не на подборку Smart DNS");
+                        return;
+                    }
                     int added = 0;
                     foreach (var it in items)
                     {
+                        if (found.Count >= ServerListGuard.MaxNewPerSearch)
+                        {
+                            if (Interlocked.Exchange(ref _capLogged, 1) == 0) log($"Найдено уже {ServerListGuard.MaxNewPerSearch} серверов: остальные страницы этого поиска не добавляются");
+                            break;
+                        }
                         // Обычные публичные DNS и в виде DoH по IP (https://1.1.1.1/dns-query) — не Smart DNS
                         var dohHost = Uri.TryCreate(it.DohUrl, UriKind.Absolute, out var du0) ? du0.Host : null;
                         if (exclude.Contains(it.Primary) || (dohHost != null && (exclude.Contains(dohHost) || IsJunkHost(dohHost))) || IsNoise(it)) continue;

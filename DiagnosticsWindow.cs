@@ -264,14 +264,12 @@ internal sealed class DiagnosticsWindow
         g.Children.Add(text);
         if (i.Action != null && i.ActionText != null)
         {
-            // Кнопка исправления справа: CHIMERION делает это сама, но только по нажатию
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            // Кнопка исправления под пояснением, а не справа: справа она сжимала текст в узкую колонку.
+            // CHIMERION делает это сама, но только по нажатию. Все действия одной заметной кнопкой
             Button? fix = null;
-            // Все действия одной заметной кнопкой: тусклая «Сменить сервер» не была похожа на кнопку
             fix = Ui.Action(i.ActionText, "Strong", () => _ = FixAsync(i, fix!))
-                    .With(b => { b.Margin = new Thickness(12, 0, 0, 0); b.VerticalAlignment = VerticalAlignment.Top; b.Padding = new Thickness(12, 4, 12, 4); b.MinHeight = 28; });
-            Grid.SetColumn(fix, 2);
-            g.Children.Add(fix);
+                    .With(b => { b.Margin = new Thickness(0, 8, 0, 0); b.HorizontalAlignment = HorizontalAlignment.Left; b.Padding = new Thickness(12, 4, 12, 4); b.MinHeight = 28; });
+            text.Children.Add(fix);
         }
         return g;
     }
