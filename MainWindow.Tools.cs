@@ -353,7 +353,9 @@ public partial class MainWindow
         _updateChecking = true; _updateResult = null; RefreshUpdateCards();
         try
         {
+            var started = DateTime.Now;
             var r = await UpdateChecker.CheckDetailedAsync();
+            if (UpdateCheckMinShow - (DateTime.Now - started) is { Ticks: > 0 } rest) await Task.Delay(rest); // вращение успевает быть видно
             switch (r.Status)
             {
                 case UpdateStatus.Available:

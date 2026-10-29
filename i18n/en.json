@@ -1677,5 +1677,15 @@
  "Доступна {0}": "{0} available",
  "Щелчок по строке подключает сервер": "Click a row to connect the server",
  "без результата": "no result",
- "не открывается": "does not open"
+ "не открывается": "does not open",
+ "Включаю защиту…": "Turning protection on…",
+ "Включаю…": "Turning on…",
+ "Возвращаю DNS вашей сети": "Restoring your network's DNS",
+ "Выключаю защиту…": "Turning protection off…",
+ "Выключаю…": "Turning off…",
+ "Меняю DNS и проверяю, что интернет работает": "Changing DNS and checking that the internet works",
+ "Связь с сервером обновлений": "Contacting the update server",
+ "Это занимает несколько секунд": "This takes a few seconds",
+ "{0}: проверка не уложилась во время": "{0}: the check ran out of time",
+ "{0}: проверка не удалась: {1}": "{0}: the check failed: {1}"
 }
