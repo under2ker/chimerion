@@ -122,6 +122,7 @@ internal sealed class DiagnosticsWindow
         Button Add(string text, string style, Action click) { var b = Ui.Action(text, style, click); _buttons.Add(b); return b; }
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Add("Скопировать отчет", "Strong", Copy).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
+        left.Children.Add(Add("Сохранить отчет", "Strong", Save).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Сохранить отчет текстовым файлом, например на рабочий стол"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
         var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", Report), close);
@@ -279,8 +280,28 @@ internal sealed class DiagnosticsWindow
     private void Copy()
     {
         if (ReportText() is not { } text) return;
-        try { Clipboard.SetText(text); _state.Text = "Отчет скопирован. Ваш IP, локальные адреса, имя пользователя и почта из него убраны"; }
-        catch (Exception) { _state.Text = "Не удалось скопировать: буфер обмена занят другой программой"; }
+        _state.Text = Ui.CopyText(text)
+            ? "Отчет скопирован. Ваш IP, локальные адреса, имя пользователя и почта из него убраны"
+            : "Буфер обмена занят другой программой. Сохраните отчет в файл кнопкой «Сохранить отчет»";
+    }
+
+    /// <summary>Отчет файлом: когда буфер обмена занят или отчет нужно приложить к сообщению.</summary>
+    private void Save()
+    {
+        if (ReportText() is not { } text) return;
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}.txt", Filter = "Текст (*.txt)|*.txt", DefaultExt = ".txt",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+        };
+        if (dlg.ShowDialog(_w) != true) return;
+        try
+        {
+            System.IO.File.WriteAllText(dlg.FileName, text, new System.Text.UTF8Encoding(false));
+            _state.Text = $"Отчет сохранен: {System.IO.Path.GetFileName(dlg.FileName)}. Ваш IP, локальные адреса, имя пользователя и почта из него убраны";
+            _log("Отчет диагностики сохранен в файл");
+        }
+        catch (Exception e) { _state.Text = "Не удалось сохранить отчет: " + e.Message; }
     }
 
     private void Report()
@@ -291,12 +312,13 @@ internal sealed class DiagnosticsWindow
                 "адреса DNS-серверов остаются. Перед отправкой отчет можно поправить. Нужен аккаунт GitHub.",
                 "Открыть", kind: DialogKind.Info, windowTitle: "Сообщить о проблеме"))
             return;
-        try { Clipboard.SetText(text); } catch (Exception) { }
+        bool copied = Ui.CopyText(text);
         var problems = _report!.Items.Where(i => i.Level == DiagLevel.Bad).Select(i => i.Title).FirstOrDefault();
         var title = $"CHIMERION {UpdateChecker.CurrentVersion}: " + (problems ?? "проблема");
         var body = "Что случилось (опишите своими словами):\n\n\n" + "```\n" + text + "```";
         AutoStart.OpenUrl(Diagnostics.IssueUrl(title, body));
-        _state.Text = "Черновик открыт в браузере, полный отчет также в буфере обмена";
+        _state.Text = copied ? "Черновик открыт в браузере, полный отчет также в буфере обмена"
+                             : "Черновик открыт в браузере. Буфер обмена занят: полный отчет можно сохранить кнопкой «Сохранить отчет»";
         _log("Открыт черновик сообщения о проблеме на GitHub");
     }
 }

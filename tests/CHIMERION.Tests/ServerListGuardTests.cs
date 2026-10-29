@@ -54,6 +54,15 @@ public class ServerListGuardTests
     }
 
     [Fact]
+    public void HostsFileWithManyLinesButFewServersIsNotMassList()
+    {
+        // Как файл hosts GeoHideDNS: тысячи строк с одними и теми же двадцатью адресами
+        var lines = Enumerable.Range(0, 4128).Select(i => Srv($"203.0.113.{i % 19 + 1}", "https://raw.githubusercontent.com/x/hosts")).ToList();
+        Assert.Equal(19, ServerListGuard.Distinct(lines));
+        Assert.True(ServerListGuard.Distinct(lines) <= ServerListGuard.MaxPerPage);
+    }
+
+    [Fact]
     public void LimitsAreSane()
     {
         Assert.InRange(ServerListGuard.MaxPerPage, 50, 300);

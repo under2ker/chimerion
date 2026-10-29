@@ -397,8 +397,8 @@ internal sealed class LogWindow
     {
         var text = Format(items, withDate);
         if (text.Length == 0) { Done("Копировать нечего", warn: true); return; }
-        try { Clipboard.SetText(text); Done(done); }
-        catch (Exception) { Done("Буфер обмена занят другой программой, попробуйте еще раз", warn: true); }
+        if (Ui.CopyText(text)) Done(done);
+        else Done("Буфер обмена занят другой программой: сохраните журнал в файл", warn: true);
     }
 
     private void SaveToFile()

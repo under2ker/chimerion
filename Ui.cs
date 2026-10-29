@@ -151,6 +151,27 @@ internal static class Ui
     public static Duration Motion(int ms) => SystemParameters.ClientAreaAnimation ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
     public static bool Animate => SystemParameters.ClientAreaAnimation;
 
+    /// <summary>
+    /// Текст в буфер обмена. Буфер часто на миг держат другие программы (ShareX, менеджеры буфера, удаленный рабочий
+    /// стол), и обычный Clipboard.SetText падал «буфер занят». Сначала копирование с повторами, затем без сброса
+    /// буфера (OleFlushClipboard): именно сброс обычно и не проходит. false: скопировать не удалось.
+    /// </summary>
+    public static bool CopyText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        for (int i = 0; i < 6; i++)
+        {
+            try { Clipboard.SetDataObject(text, true); return true; }
+            catch (Exception) { System.Threading.Thread.Sleep(100); }
+        }
+        for (int i = 0; i < 6; i++)
+        {
+            try { Clipboard.SetDataObject(text, false); return true; }
+            catch (Exception) { System.Threading.Thread.Sleep(150); }
+        }
+        return false;
+    }
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, Dictionary<DependencyProperty, (SolidColorBrush Brush, Color Target)>> Fades = new();
 
     /// <summary>
