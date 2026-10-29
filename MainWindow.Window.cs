@@ -173,8 +173,15 @@ public partial class MainWindow
 
     private void SetCompact(bool compact, bool animate = true)
     {
+        bool wasCompact = _compact;
         _compact = compact;
+        if (compact != wasCompact)
+        {
+            if (compact) { _panelNavBeforeCompact = _panelNavExpanded; SetPanelNavigation(false); }
+            else SetPanelNavigation(_panelNavBeforeCompact);
+        }
         var v = compact ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var command in PanelNavItems.Children.OfType<System.Windows.Controls.Primitives.ToggleButton>()) command.Visibility = v;
         ToolbarCard.Visibility = v;
         BottomPanel.Visibility = v;
         StatsText.Visibility = v;
@@ -247,14 +254,15 @@ public partial class MainWindow
     private void ApplyResponsive()
     {
         if (ApplyActions == null || HeaderGrid == null) return;
-        var w = ActualWidth;
+        var w = Math.Max(0, ActualWidth - PanelSidebar.Width);
         bool full = !_compact;
 
         // Таблица: по мере сужения окна уходят источник, стабильность и оценка
-        ColLocation.Visibility = ColServices.Visibility = full ? Visibility.Visible : Visibility.Collapsed;
+        ColLocation.Visibility = full && w >= 1150 ? Visibility.Visible : Visibility.Collapsed;
+        ColServices.Visibility = full && w >= 1050 ? Visibility.Visible : Visibility.Collapsed;
         // Ширины колонок (см. XAML): без источника и без стабильности и оценки таблица нужна от ~1100 px,
         // с ними от ~1360 px, со всеми колонками от ~1540 px окна.
-        ColSource.Visibility = full ? Visibility.Visible : Visibility.Collapsed; // узкая колонка с одной кнопкой: место есть всегда
+        ColSource.Visibility = full && w >= 900 ? Visibility.Visible : Visibility.Collapsed;
         ColStab.Visibility = ColScore.Visibility = full && w >= 1360 ? Visibility.Visible : Visibility.Collapsed;
         ColAi.Visibility = full && w >= 1200 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -266,31 +274,23 @@ public partial class MainWindow
 
         if (!full) return; // компактный вид шапку раскладывает сам
 
-        // Шапка: ниже 1480 кнопки действий и статистика уходят на вторую строку.
-        // На 1350 статистика в одной строке сжималась в столбик и ломала сетку, поэтому порог выше.
-        bool narrow = w < 1480;
+        // Действия подключения идут отдельной строкой слева: статус и статистика не сжимаются кнопками.
         _navPanel ??= ApplyActions.Parent as StackPanel;
-        if (narrow && ApplyActions.Parent == _navPanel)
+        if (ApplyActions.Parent == _navPanel && _navPanel != null)
         {
-            _navPanel?.Children.Remove(ApplyActions);
+            _navPanel.Children.Remove(ApplyActions);
             HeaderGrid.Children.Add(ApplyActions);
-            Grid.SetRow(ApplyActions, 1);
-            Grid.SetColumn(ApplyActions, 2);
-            ApplyActions.HorizontalAlignment = HorizontalAlignment.Right;
-            ApplyActions.Margin = new Thickness(0, 10, 0, 0);
         }
-        else if (!narrow && ApplyActions.Parent != _navPanel && _navPanel != null)
-        {
-            (ApplyActions.Parent as Panel)?.Children.Remove(ApplyActions);
-            _navPanel.Children.Add(ApplyActions);
-            ApplyActions.HorizontalAlignment = HorizontalAlignment.Stretch;
-            ApplyActions.Margin = new Thickness(0);
-        }
-
-        Grid.SetRow(HeaderStats, narrow ? 1 : 0);
-        Grid.SetColumn(HeaderStats, narrow ? 0 : 1);
-        HeaderStats.Margin = narrow ? new Thickness(0, 10, 0, 0) : new Thickness(18, 0, 0, 0);
-        HeaderSep.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+        Grid.SetRow(ApplyActions, 1);
+        Grid.SetColumn(ApplyActions, 0);
+        Grid.SetColumnSpan(ApplyActions, 3);
+        ApplyActions.HorizontalAlignment = HorizontalAlignment.Left;
+        ApplyActions.Margin = new Thickness(0, 10, 0, 0);
+        Grid.SetRow(HeaderStats, 0);
+        Grid.SetColumn(HeaderStats, 1);
+        Grid.SetColumnSpan(HeaderStats, 1);
+        HeaderStats.Margin = new Thickness(18, 0, 0, 0);
+        HeaderSep.Visibility = Visibility.Collapsed;
     }
 
     private StackPanel? _navPanel; // исходный контейнер кнопок действий в шапке

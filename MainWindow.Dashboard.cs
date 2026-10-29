@@ -66,7 +66,10 @@ public partial class MainWindow
         _dashboardHeroSince = DashboardFact(heroFacts, 1, "Подключение", "activity");
         _dashboardHeroServices = DashboardFact(heroFacts, 2, "Доступ к ИИ", "activity");
         heroContent.Children.Add(heroFacts);
-        _dashboardHero = Ui.Card(heroContent, bottom: 0); _dashboardHero.Padding = new Thickness(24, 22, 24, 22); page.Children.Add(_dashboardHero);
+        var heroLayer = new Grid { ClipToBounds = true };
+        heroLayer.Children.Add(new DashboardAtmosphere());
+        heroLayer.Children.Add(heroContent);
+        _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(24, 22, 24, 22); page.Children.Add(_dashboardHero);
         _dashboardMessage = Ui.Hint("", 10); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
 
         page.Children.Add(DashboardSection("Подключение"));
@@ -182,6 +185,64 @@ public partial class MainWindow
         Loaded += (_, _) => RefreshDashboard();
         _dashboardUpdateTimer.Tick += (_, _) => HideDashboardUpdateResult();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
+    }
+
+    /// <summary>Фирменный узор сайта: мягкое свечение и тонкие диагональные полосы, без влияния на ввод.</summary>
+    private sealed class DashboardAtmosphere : FrameworkElement
+    {
+        private static readonly DependencyProperty AccentBrushProperty = DependencyProperty.Register(
+            "AccentBrush", typeof(Brush), typeof(DashboardAtmosphere), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+        private static readonly DependencyProperty LineBrushProperty = DependencyProperty.Register(
+            "LineBrush", typeof(Brush), typeof(DashboardAtmosphere), new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+        public DashboardAtmosphere()
+        {
+            IsHitTestVisible = false;
+            SetResourceReference(AccentBrushProperty, "Accent");
+            SetResourceReference(LineBrushProperty, "Text");
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            base.OnRender(dc);
+            if (ActualWidth <= 0 || ActualHeight <= 0) return;
+            var accent = (GetValue(AccentBrushProperty) as SolidColorBrush)?.Color ?? Colors.Transparent;
+            var line = GetValue(LineBrushProperty) as Brush;
+            var glow = new RadialGradientBrush
+            {
+                Center = new Point(.82, .3), GradientOrigin = new Point(.82, .3), RadiusX = .55, RadiusY = 1.1,
+                GradientStops = new GradientStopCollection
+                {
+                    new(Color.FromArgb(24, accent.R, accent.G, accent.B), 0),
+                    new(Color.FromArgb(8, accent.R, accent.G, accent.B), .45),
+                    new(Color.FromArgb(0, accent.R, accent.G, accent.B), 1),
+                },
+            };
+            var edgeFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+            edgeFade.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
+            edgeFade.GradientStops.Add(new GradientStop(Colors.White, .18));
+            edgeFade.GradientStops.Add(new GradientStop(Colors.White, .8));
+            edgeFade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+            var sideFade = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            sideFade.GradientStops.Add(new GradientStop(Colors.Transparent, 0));
+            sideFade.GradientStops.Add(new GradientStop(Colors.White, .12));
+            sideFade.GradientStops.Add(new GradientStop(Colors.White, .9));
+            sideFade.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+            dc.PushOpacityMask(edgeFade);
+            dc.PushOpacityMask(sideFade);
+            dc.DrawRectangle(glow, null, new Rect(0, 0, ActualWidth, ActualHeight));
+            if (line == null) { dc.Pop(); dc.Pop(); return; }
+            var mask = new RadialGradientBrush(Colors.White, Colors.Transparent)
+            {
+                Center = new Point(.82, .28), GradientOrigin = new Point(.82, .28), RadiusX = .65, RadiusY = 1.2,
+            };
+            dc.PushOpacity(.06);
+            dc.PushOpacityMask(mask);
+            var pen = new Pen(line, 1);
+            for (double x = -ActualHeight; x < ActualWidth + ActualHeight; x += 28)
+                dc.DrawLine(pen, new Point(x, ActualHeight), new Point(x + ActualHeight * .84, 0));
+            dc.Pop(); dc.Pop(); dc.Pop(); dc.Pop();
+        }
     }
 
     private FrameworkElement DashboardSidebar()
