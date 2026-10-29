@@ -602,153 +602,18 @@ internal sealed class ToolsWindow
     }, "Настройка");
 
     /// <summary>
-    /// Окно «Сайты для обхода»: готовые наборы и большие списки галочками (с числом доменов), свои сайты строками.
-    /// Сохранение пересобирает список zapret и сразу применяет его.
+    /// Окно «Сайты для обхода» (BypassSitesWindow): наборы, большие списки и свои сайты. Сохранение пересобирает список
+    /// zapret и сразу применяет его.
     /// </summary>
     private async Task EditSitesAsync(ZapretTool z)
     {
         var catalog = await BypassCatalog.LoadAsync();
-        var w = DnexDialog.CreateWindow("Сайты для обхода", Ui.Wide);
-        w.Owner = _w;
-        w.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        w.ShowInTaskbar = false;
-        var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Сайты для обхода",
-            "Обход действует на эти сайты и на YouTube с Discord. Сайтам, закрытым для России, нужен Smart DNS, а не обход"));
-
-        // Готовые наборы: две колонки галочек, пояснение в подсказке
-        root.Children.Add(Ui.Section("Готовые наборы", first: true));
-        var checks = new List<(CheckBox Box, string Id)>();
-        var grid = new StackPanel();
-        if (catalog == null)
-            root.Children.Add(Ui.Card(Ui.Hint("Наборы не загрузились: нет сети и нет встроенной копии. Свои сайты можно задать ниже", 0, "Warn")));
-        else
+        if (BypassSitesWindow.Ask(_w, z, catalog, () => _busy, _toSmartDns) is not { } r) return;
+        await RunAsync(z, $"Сайты для обхода сохранены: наборов {r.Groups.Count}, больших списков {r.Big.Count}, своих {r.Own.Count}", async p =>
         {
-            var chosen = BypassCatalog.Normalize(z.State.Groups);
-            var groupsPanel = new StackPanel();
-            foreach (var cat in catalog.Groups.GroupBy(g => g.Category.Length > 0 ? g.Category : "Другое"))
-            {
-                var wrap = new WrapPanel { ItemWidth = 245 }; // две колонки, у каждой строки своя высота
-                var inCat = new List<CheckBox>();
-                foreach (var g in cat)
-                {
-                    var cb = Ui.SetCheck(g.Title, g.Domains.Count, g.Note, g.Recommend == "zapret", chosen.Contains(g.Id));
-                    cb.Tag = g.Id;
-                    checks.Add((cb, g.Id));
-                    inCat.Add(cb);
-                    wrap.Children.Add(cb);
-                }
-                groupsPanel.Children.Add(Ui.CategoryHeader(cat.Key, inCat, groupsPanel.Children.Count == 0));
-                groupsPanel.Children.Add(wrap);
-            }
-            grid.Children.Add(groupsPanel);
-            var groupsBody = new StackPanel();
-            var recIds = catalog.Groups.Where(g => g.Recommend == "zapret").Select(g => g.Id).ToHashSet();
-            groupsBody.Children.Add(Ui.Steps("Не знаете, что выбрать: нажмите «Рекомендуемые», затем «Сохранить». Это сайты, которые режут провайдеры. " +
-                                             "У каждого раздела есть «выбрать все»", 0).With(t => t.Margin = new Thickness(0, 0, 0, 8)));
-            groupsBody.Children.Add(Ui.ChoiceBar(checks.Select(c => c.Box).ToList(), c => recIds.Contains((string)c.Tag)));
-            groupsBody.Children.Add(Ui.Scroll(grid, Math.Clamp(SystemParameters.WorkArea.Height - 920, 260, 560))); // больше наборов видно сразу на большом экране
-            groupsBody.Children.Add(Ui.Hint($"Наборы от {catalog.Updated}, источник: {catalog.Source}", 8).With(t => t.FontSize = 11));
-            root.Children.Add(Ui.Card(groupsBody));
-        }
-
-        // Большие списки от сторонних проектов: качаются у авторов при сохранении и перед каждым запуском обхода
-        root.Children.Add(Ui.Section("Большие списки"));
-        var bigChecks = new List<(CheckBox Box, string Id)>();
-        var bigBody = new StackPanel();
-        foreach (var l in RemoteLists.All.Where(l => !l.IsIp))
-        {
-            var n = RemoteLists.Cached(l).Count;
-            var cb = Ui.Toggle(z.State.BigLists.Contains(l.Id)).With(c => c.ToolTip = l.Url);
-            bigChecks.Add((cb, l.Id));
-            bigBody.Children.Add(Ui.Row(l.Title + (n > 0 ? $" ({n})" : ""), l.Note, cb));
-        }
-        root.Children.Add(Ui.Card(bigBody));
-
-        root.Children.Add(Ui.Section("Свои сайты"));
-        var box = Ui.MultiLine(string.Join(Environment.NewLine, z.UserDomains()), 110);
-        var ownBody = new StackPanel();
-        ownBody.Children.Add(box);
-        ownBody.Children.Add(Ui.Hint("По одному в строке, поддомены включаются. Новые сайты CHIMERION проверит сама и подскажет, " +
-                                     "поможет ли им zapret или их лучше отправить в Smart DNS", 8).With(t => t.FontSize = 11));
-        // Проверка своих сайтов: сама для новых (когда поле теряет фокус) и по кнопке для всех
-        var checkedHosts = new HashSet<string>(z.UserDomains(), StringComparer.OrdinalIgnoreCase);
-        var results = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        var checkBtn = Ui.Action("Проверить сайты", "Ghost", () => { }).With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(-10, 6, 0, 0); });
-        List<string> Hosts() => box.Text.Split('\n').Select(SplitDns.Clean).Where(h => h.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        async Task CheckSitesAsync(IReadOnlyList<string> hosts)
-        {
-            if (hosts.Count == 0) return;
-            checkBtn.IsEnabled = false;
-            results.Children.Clear();
-            results.Children.Add(new ProgressBar { IsIndeterminate = true, Margin = new Thickness(0, 4, 0, 6) });
-            results.Children.Add(Ui.Hint($"Проверяю {string.Join(", ", hosts.Take(8))}…", 0));
-            var checks2 = await Task.WhenAll(hosts.Take(8).Select(async h => { try { return await SiteCheck.CheckAsync(h); } catch (Exception) { return null; } }));
-            results.Children.Clear();
-            foreach (var r in checks2.Where(r => r != null))
-            {
-                var (text, brush, smart) = r!.Verdict switch
-                {
-                    // С работающим обходом «открывается» может быть его заслугой: убрать не советуем
-                    SiteVerdict.Ok => (z.IsRunning() ? "открывается" : "открывается и без обхода, его можно убрать из списка", "Ok", false),
-                    SiteVerdict.Refused => ("сам закрыт для России: zapret не поможет, отправьте его в Smart DNS", "Warn", true),
-                    SiteVerdict.Throttled => ("загрузка обрывается: zapret поможет, если не поможет, включите обход по адресам (IPSet)", "Warn", false),
-                    SiteVerdict.Blocked or SiteVerdict.NoDns => ("заблокирован: оставьте в списке, zapret его откроет", "Warn", false),
-                    SiteVerdict.Protected => ("закрыт проверкой Cloudflare: откройте в браузере, CHIMERION тут ни при чем", "Muted", false),
-                    _ => ("проверить не удалось", "Muted", false),
-                };
-                var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
-                if (smart && _toSmartDns != null)
-                {
-                    var host = r.Host;
-                    Button? to = null;
-                    to = Ui.Action("В Smart DNS", "Strong", () =>
-                    {
-                        var msg = _toSmartDns(host);
-                        // Убираем из обхода: этот сайт пойдет через Smart DNS
-                        box.Text = string.Join(Environment.NewLine, box.Text.Split('\n').Select(l => l.Trim())
-                                       .Where(l => l.Length > 0 && !string.Equals(SplitDns.Clean(l), host, StringComparison.OrdinalIgnoreCase)));
-                        to!.IsEnabled = false;
-                        to.Content = "Отправлен";
-                        to.ToolTip = msg;
-                    }).With(b => { b.Padding = new Thickness(10, 3, 10, 3); b.MinHeight = 26; b.Margin = new Thickness(8, 0, 0, 0); });
-                    DockPanel.SetDock(to, Dock.Right);
-                    row.Children.Add(to);
-                }
-                row.Children.Add(Ui.Hint($"{r.Host}: {text}", 0, brush).With(t => t.VerticalAlignment = VerticalAlignment.Center));
-                results.Children.Add(row);
-            }
-            foreach (var h in hosts) checkedHosts.Add(h);
-            checkBtn.IsEnabled = true;
-        }
-        checkBtn.Click += (_, _) => _ = CheckSitesAsync(Hosts());
-        box.LostKeyboardFocus += (_, _) => _ = CheckSitesAsync(Hosts().Where(h => !checkedHosts.Contains(h)).ToList());
-        ownBody.Children.Add(checkBtn);
-        ownBody.Children.Add(results);
-        root.Children.Add(Ui.Card(ownBody, bottom: 0));
-
-        var err = Ui.Hint("", 0, "Bad");
-        var save = Ui.Action("Сохранить", "Primary", () =>
-        {
-            var lines = box.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
-            var bad = lines.Where(l => SplitDns.Clean(l).Length == 0).ToList();
-            if (bad.Count > 0) { err.Text = "Не похоже на домен: " + string.Join(", ", bad.Take(3)); return; }
-            var groups = checks.Where(c => c.Box.IsChecked == true).Select(c => c.Id).ToList();
-            var big = bigChecks.Where(c => c.Box.IsChecked == true).Select(c => c.Id).ToList();
-            // Идет другое действие (подбор стратегии, обновление): RunAsync его не прервет и молча пропустит сохранение.
-            // Раньше окно при этом закрывалось, и введенные сайты терялись
-            if (_busy) { err.Text = "Подождите: идет другое действие с zapret. Сохраните, когда оно закончится"; return; }
-            w.Close();
-            _ = RunAsync(z, $"Сайты для обхода сохранены: наборов {groups.Count}, больших списков {big.Count}, своих {lines.Count}", async p =>
-            {
-                if (big.Count > 0) p.Report("Скачиваю большие списки…");
-                await z.SaveSitesAsync(lines, groups, big, catalog);
-            });
+            if (r.Big.Count > 0) p.Report("Скачиваю большие списки…");
+            await z.SaveSitesAsync(r.Own, r.Groups, r.Big, catalog);
         });
-        var cancel = Ui.Action("Отмена", "Ghost", () => w.Close()).With(b => b.IsCancel = true);
-        root.Children.Add(Ui.Footer(err, save, cancel));
-        w.Content = Ui.WindowContent(root);
-        w.ShowDialog();
     }
 
     private void ConnectTelegram()
