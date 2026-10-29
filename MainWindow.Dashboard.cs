@@ -15,6 +15,7 @@ public partial class MainWindow
     private readonly DispatcherTimer _dashboardTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardDns = null!, _dashboardNetwork = null!;
     private TextBlock _dashboardChecked = null!, _dashboardZapret = null!, _dashboardTelegram = null!, _dashboardMessage = null!;
+    private TextBlock _dashboardHeroMode = null!, _dashboardHeroSince = null!, _dashboardHeroServices = null!;
     private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardSiteTelegram = null!, _dashboardDiagnostics = null!, _dashboardEvents = null!;
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
     private readonly Dictionary<string, (TextBlock Status, Ellipse Dot)> _dashboardServices = new();
@@ -29,13 +30,13 @@ public partial class MainWindow
 
     private void SetupDashboard()
     {
-        var page = new StackPanel { Margin = new Thickness(32, 26, 32, 32), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var page = new StackPanel { Margin = new Thickness(32, 30, 32, 36), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
         var top = new DockPanel { Margin = new Thickness(0, 0, 0, 24) };
         var panel = Ui.Action("Панель управления", "Strong", ShowControlPanel);
         panel.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(panel, Dock.Right); top.Children.Add(panel);
         var heading = new StackPanel();
-        heading.Children.Add(new TextBlock { Text = "Главная", FontSize = 28, FontWeight = FontWeights.Bold });
+        heading.Children.Add(new TextBlock { Text = "Главная", FontSize = 30, FontWeight = FontWeights.Bold });
         heading.Children.Add(Ui.Hint("Подключение, сервисы и быстрые действия", 4));
         top.Children.Add(heading); page.Children.Add(top);
 
@@ -44,19 +45,27 @@ public partial class MainWindow
         _dashboardConnect.Padding = new Thickness(20, 10, 20, 10);
         _dashboardConnect.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(_dashboardConnect, Dock.Right); hero.Children.Add(_dashboardConnect);
-        _dashboardHeroIcon = DashboardIcon("shield-check", "AccentSoft", "Accent", 48);
+        _dashboardHeroIcon = DashboardIcon("shield-check", "AccentSoft", "Accent", 64);
         _dashboardHeroIcon.Margin = new Thickness(0, 0, 16, 0);
         _dashboardHeroIcon.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(_dashboardHeroIcon, Dock.Left); hero.Children.Add(_dashboardHeroIcon);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
         heroText.Children.Add(Ui.Hint("SMART DNS", 0));
-        _dashboardTitle = new TextBlock { FontSize = 23, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+        _dashboardTitle = new TextBlock { FontSize = 25, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
         _dashboardDescription = Ui.Hint("", 5); heroText.Children.Add(_dashboardTitle); heroText.Children.Add(_dashboardDescription);
         hero.Children.Add(heroText);
-        _dashboardHero = Ui.Card(hero, bottom: 0); _dashboardHero.Padding = new Thickness(22, 20, 22, 20); page.Children.Add(_dashboardHero);
+        var heroContent = new StackPanel();
+        heroContent.Children.Add(hero);
+        var heroFacts = new Grid { Margin = new Thickness(0, 22, 0, 0) };
+        for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
+        _dashboardHeroMode = DashboardFact(heroFacts, 0, "Режим", "arrow-left-right");
+        _dashboardHeroSince = DashboardFact(heroFacts, 1, "Подключение", "activity");
+        _dashboardHeroServices = DashboardFact(heroFacts, 2, "Доступ к ИИ", "activity");
+        heroContent.Children.Add(heroFacts);
+        _dashboardHero = Ui.Card(heroContent, bottom: 0); _dashboardHero.Padding = new Thickness(24, 22, 24, 22); page.Children.Add(_dashboardHero);
         _dashboardMessage = Ui.Hint("", 10); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
 
-        page.Children.Add(Ui.Section("Подключение"));
+        page.Children.Add(DashboardSection("Подключение"));
         var connection = new Grid(); connection.ColumnDefinitions.Add(new ColumnDefinition()); connection.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardDns = DashboardCard(connection, 0, "Smart DNS", "globe");
         _dashboardNetwork = DashboardCard(connection, 1, "DNS системы", "activity");
@@ -67,7 +76,7 @@ public partial class MainWindow
         _dashboardProbe.Margin = new Thickness(0); _dashboardProbe.Padding = new Thickness(12, 5, 12, 5);
         DockPanel.SetDock(_dashboardProbe, Dock.Right); aiHeader.Children.Add(_dashboardProbe);
         var aiTitle = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        aiTitle.Children.Add(new TextBlock { Text = "ДОСТУП К НЕЙРОСЕТЯМ", FontSize = 11, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        aiTitle.Children.Add(new TextBlock { Text = "Доступ к нейросетям", FontSize = 16, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Text"));
         _dashboardChecked = Ui.Hint("Еще не проверялось", 3); aiTitle.Children.Add(_dashboardChecked);
         aiHeader.Children.Add(aiTitle); page.Children.Add(aiHeader);
         var serviceGrid = new Grid();
@@ -97,7 +106,7 @@ public partial class MainWindow
         _dashboardSiteProbe = Ui.Action("Проверить сайты", "Ghost", () => _ = DashboardSitesAsync());
         _dashboardSiteProbe.Margin = new Thickness(0); _dashboardSiteProbe.Padding = new Thickness(12, 5, 12, 5);
         DockPanel.SetDock(_dashboardSiteProbe, Dock.Right); featuresHeader.Children.Add(_dashboardSiteProbe);
-        featuresHeader.Children.Add(new TextBlock { Text = "ДОПОЛНИТЕЛЬНЫЕ СЕРВИСЫ", FontSize = 11, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        featuresHeader.Children.Add(new TextBlock { Text = "Дополнительные сервисы", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Text"));
         page.Children.Add(featuresHeader);
         var features = new Grid(); features.ColumnDefinitions.Add(new ColumnDefinition()); features.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardZapretButton = Ui.Action("Включить", "Strong", () => _ = DashboardToolAsync(_tools.OfType<ZapretTool>().First()));
@@ -110,7 +119,7 @@ public partial class MainWindow
         telegram.Margin = new Thickness(5, 0, 0, 0); Grid.SetColumn(telegram, 1); features.Children.Add(telegram);
         page.Children.Add(features);
 
-        page.Children.Add(Ui.Section("Диагностика"));
+        page.Children.Add(DashboardSection("Диагностика"));
         var diagnostics = new DockPanel();
         var diagnosticButton = Ui.Action("Открыть диагностику", "Strong", () => DiagToggle_Click(this, new RoutedEventArgs()));
         diagnosticButton.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(diagnosticButton, Dock.Right); diagnostics.Children.Add(diagnosticButton);
@@ -118,7 +127,7 @@ public partial class MainWindow
         diagnosticText.Children.Add(new TextBlock { Text = "Состояние соединения", FontSize = 15, FontWeight = FontWeights.SemiBold });
         _dashboardDiagnostics = Ui.Hint("", 5); diagnosticText.Children.Add(_dashboardDiagnostics); diagnostics.Children.Add(diagnosticText);
         page.Children.Add(Ui.Card(diagnostics, bottom: 0));
-        page.Children.Add(Ui.Section("Последние события"));
+        page.Children.Add(DashboardSection("Последние события"));
         var events = new DockPanel();
         var eventsButton = Ui.Action("Открыть журнал", "Ghost", () =>
         {
@@ -133,9 +142,64 @@ public partial class MainWindow
         footer.Children.Add(Ui.Action("Проверить обновление", "Ghost", () => _ = DashboardUpdateAsync()));
         footer.Children.Add(Ui.Action("Настроить обход", "Ghost", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         page.Children.Add(footer);
-        DashboardHost.Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
+        var layout = new Grid();
+        var sidebarColumn = new ColumnDefinition { Width = new GridLength(208) };
+        layout.ColumnDefinitions.Add(sidebarColumn); layout.ColumnDefinitions.Add(new ColumnDefinition());
+        var sidebar = DashboardSidebar(); Grid.SetColumn(scroll, 1); layout.Children.Add(sidebar); layout.Children.Add(scroll);
+        layout.SizeChanged += (_, e) => { bool wide = e.NewSize.Width >= 1180; sidebarColumn.Width = new GridLength(wide ? 208 : 0); sidebar.Visibility = wide ? Visibility.Visible : Visibility.Collapsed; };
+        DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
+    }
+
+    private FrameworkElement DashboardSidebar()
+    {
+        var content = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
+        var bottom = Ui.Hint($"CHIMERION · {UpdateChecker.CurrentVersion}", 0);
+        bottom.Margin = new Thickness(12, 0, 0, 0); DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
+        var links = new StackPanel();
+        var logo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 2, 0, 24) };
+        logo.Children.Add(new Controls.BrandMark { Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
+        var brandText = new StackPanel();
+        brandText.Children.Add(new TextBlock { Text = "CHIMERION", FontSize = 13, FontWeight = FontWeights.Bold });
+        brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
+        links.Children.Add(DashboardNav("Главная", "globe", () => { }, true));
+        links.Children.Add(DashboardNav("Панель управления", "settings", ShowControlPanel));
+        links.Children.Add(DashboardNav("Диагностика", "activity", () => DiagToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
+        content.Children.Add(links);
+        return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
+    }
+
+    private static Button DashboardNav(string title, string icon, Action click, bool selected = false)
+    {
+        var button = Ui.Action(title, "Ghost", click);
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new Controls.Icon { Kind = icon, Size = 17, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
+        button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
+        button.HorizontalContentAlignment = HorizontalAlignment.Left;
+        if (selected) { button.SetResourceReference(Control.BackgroundProperty, "AccentSoft"); button.SetResourceReference(Control.ForegroundProperty, "Accent"); }
+        return button;
+    }
+
+    private static TextBlock DashboardSection(string title) => new TextBlock
+    {
+        Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(2, 24, 0, 10),
+    };
+
+    private static TextBlock DashboardFact(Grid grid, int index, string label, string kind)
+    {
+        var row = new StackPanel();
+        var heading = new StackPanel { Orientation = Orientation.Horizontal };
+        heading.Children.Add(new Controls.Icon { Kind = kind, Size = 15, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        heading.Children.Add(Ui.Hint(label, 0)); row.Children.Add(heading);
+        var value = new TextBlock { Text = "—", FontSize = 13, FontWeight = FontWeights.SemiBold, Margin = new Thickness(23, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
+        row.Children.Add(value);
+        var card = new Border { Padding = new Thickness(12, 11, 12, 11), Margin = new Thickness(index == 0 ? 0 : 5, 0, index == 2 ? 0 : 5, 0), CornerRadius = new CornerRadius(10), Child = row };
+        card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card); return value;
     }
 
     private static Border DashboardIcon(string kind, string background, string foreground, double size)
@@ -186,6 +250,11 @@ public partial class MainWindow
         _dashboardHeroIcon.SetResourceReference(Border.BackgroundProperty, active == null ? "Surface2" : "Surface");
         _dashboardConnect.Content = _busyConn ? "Подождите…" : active == null ? "Подключить" : "Отключить";
         _dashboardConnect.IsEnabled = !_busyConn && !_dashboardChecking;
+        _dashboardHeroMode.Text = active == null ? "Отключен" : active.Split ? "Два DNS" : "Smart DNS";
+        _dashboardHeroSince.Text = active == null ? "Не подключено" : $"Подключено с {active.Since:dd.MM HH:mm}";
+        var available = snap?.Services.Count(x => (x.Name is "ChatGPT" or "Claude" or "Gemini") && x.Access.StartsWith("✓")) ?? 0;
+        var total = snap?.Services.Count(x => x.Name is "ChatGPT" or "Claude" or "Gemini") ?? 0;
+        _dashboardHeroServices.Text = total == 0 ? "Не проверялось" : $"Доступно: {available} из {total}";
         _dashboardDns.Text = active == null ? "Не подключен" : PrivacyGuard.Mask(active.Name + (active.Addresses.Count > 0 ? "\n" + string.Join(", ", active.Addresses) : ""));
         _dashboardNetwork.Text = snap == null ? "Еще не проверялось" : PrivacyGuard.Mask(snap.SystemDns);
         foreach (var (name, entry) in _dashboardServices)
