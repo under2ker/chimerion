@@ -200,7 +200,7 @@ public partial class MainWindow
 
         // Плитки сервисов: статус доступа сверху, страна (флаг и название) под ним
         // Карточки в колонках, по верху: раскрытая карточка растет сама, соседние не вытягиваются
-        var tiles = new Grid { Margin = new Thickness(-4, _compact ? 0 : 8, -4, 0), VerticalAlignment = VerticalAlignment.Top };
+        var tiles = new Grid { Margin = new Thickness(-4, _compact ? 0 : 8, -4, 0) }; // тянется до высоты строки (FillStackPanel)
         foreach (var _ in cur.Services) tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         foreach (var svc in cur.Services)
         {

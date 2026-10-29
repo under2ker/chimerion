@@ -209,10 +209,15 @@ public partial class MainWindow
         HeaderSep.Visibility = v;
         DnsLine.Visibility = v;
         CompactConnect.Visibility = cv;
-        ConnText.MaxWidth = compact ? 200 : 300;
+        ConnText.MaxWidth = compact ? 380 : 300;
+        // Компактный вид: карточка подключения на всю ширину, как кнопка под ней
+        Grid.SetColumnSpan(ConnHost, compact ? 3 : 1);
+        ConnPill.HorizontalAlignment = compact ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        ColRefresh.Visibility = v; // в компактном виде слева от названий оставалась пустая полоса
         ConnPill.Margin = new Thickness(0);
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
-        ColStatus.Width = compact ? new DataGridLength(40) : new DataGridLength(128);
+        ColStatus.Width = new DataGridLength(92);
+        ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
         ServerGrid.RowStyle = compact ? (Style)FindResource("RowCompact") : null;
@@ -315,14 +320,26 @@ public partial class MainWindow
     {
         var active = DnsSwitcher.GetActive();
         var bypass = UpdateBypassStat();
-        HeaderStats.Visibility = active == null && !bypass ? Visibility.Collapsed : Visibility.Visible;
-        // Без подключения в шапке только обход: пинг и ИИ относятся к серверу
-        var conn = active == null ? Visibility.Collapsed : Visibility.Visible;
-        StatPingBlock.Visibility = StatSep1.Visibility = StatStabBlock.Visibility = StatSep2.Visibility = StatServicesBlock.Visibility = ActiveRefresh.Visibility = conn;
+        HeaderStats.Visibility = Visibility.Visible;
+        // Без подключения шапка не пустая: лучший пинг среди рабочих серверов, сколько их и доступ ИИ по последней проверке
+        StatPingBlock.Visibility = StatSep1.Visibility = StatStabBlock.Visibility = StatSep2.Visibility = StatServicesBlock.Visibility = Visibility.Visible;
+        ActiveRefresh.Visibility = active == null ? Visibility.Collapsed : Visibility.Visible;
+        StatPingLabel.Text = active == null ? "Лучший пинг" : "Пинг";
+        StatStabLabel.Text = active == null ? "Рабочих серверов" : "Стабильность";
         // В компактном окне блок «В обходе» не помещается в строку со статистикой подключения и переносился вниз
         if (_compact) { StatBypassBlock.Visibility = Visibility.Collapsed; bypass = false; }
-        StatSep3.Visibility = active != null && bypass ? Visibility.Visible : Visibility.Collapsed;
-        if (active == null) return;
+        StatSep3.Visibility = bypass ? Visibility.Visible : Visibility.Collapsed;
+        var snap0 = _traySnap;
+        StatServices.Text = snap0 == null ? "—" : $"{snap0.Services.Count(x => x.Access.StartsWith("✓"))} из {snap0.Services.Count}";
+        if (active == null)
+        {
+            var working = _servers.Where(x => x.Status == ServerStatus.Ok && !x.IsJunk).ToList();
+            var best = working.Where(x => x.LatencyMs != null).OrderBy(x => x.LatencyMs).FirstOrDefault();
+            StatPing.Text = best == null ? "—" : $"{best.PingText} мс";
+            StatPingBars.Latency = best?.LatencyMs;
+            StatStab.Text = working.Count.ToString();
+            return;
+        }
         var srv = _servers.FirstOrDefault(x => x.Id == active.ServerId);
         StatPing.Text = srv?.LatencyMs == null ? "—" : $"{srv.PingText} мс";
         StatPingBars.Latency = srv?.LatencyMs;

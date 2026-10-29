@@ -210,7 +210,10 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string ProxyCountryName => string.IsNullOrEmpty(ProxyCountry) ? "" : GeoLocation.CountryName(ProxyCountry);
 
-    /// <summary>Строка для таблицы: «Россия › SmartDNS: Нидерланды». Прокси без страны — «…», без подмены — «нет».</summary>
+    /// <summary>
+    /// Строка для таблицы: «Сервер: Россия · ИИ видят: Нидерланды». Первая страна, где стоит сам DNS-сервер, вторая,
+    /// откуда нейросети видят запросы (страна прокси Smart DNS, а если проверка показала другую страну, она).
+    /// </summary>
     [JsonIgnore]
     public string LocationCell
     {
@@ -221,10 +224,10 @@ public class DnsServer : INotifyPropertyChanged
                       : string.IsNullOrEmpty(ProxyIp) ? "нет подмены" : "…";
             // Выход не там, где прокси: ИИ видят именно выход (так ChatGPT называет Францию у российского сервера)
             var seen = EgressBy.Values.Select(e => e.Country).Distinct().ToList();
-            var egress = seen.Count == 0 ? ""
-                       : seen.Count > 1 ? " → ИИ видят разные страны"
-                       : seen[0] != ProxyCountry ? $" → ИИ видят: {GeoLocation.CountryName(seen[0])}" : "";
-            return $"{server} › SmartDNS: {proxy}{egress}";
+            var ai = seen.Count > 1 ? "разные страны"
+                   : seen.Count == 1 ? GeoLocation.CountryName(seen[0])
+                   : proxy;
+            return string.IsNullOrEmpty(ProxyIp) && seen.Count == 0 ? $"Сервер: {server} · без подмены" : $"Сервер: {server} · ИИ видят: {ai}";
         }
     }
 

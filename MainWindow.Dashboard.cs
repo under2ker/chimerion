@@ -41,6 +41,7 @@ public partial class MainWindow
     private StackPanel _dashboardServers = null!;
     private string? _dashboardServersSignature;
     private bool _dashboardSyncing; // обновление переключателей из кода не должно запускать действия
+    private int _dashboardLogLines = 6;
     private Grid _dashboardHeroBadge = null!;
     private Border _dashboardHeroGlow = null!;
     private Ellipse _dashboardSpinner = null!, _dashboardRipple = null!;
@@ -86,8 +87,8 @@ public partial class MainWindow
         _dashboardHeroBadge.Children.Add(_dashboardRipple); _dashboardHeroBadge.Children.Add(_dashboardSpinner); _dashboardHeroBadge.Children.Add(_dashboardHeroIcon);
         DockPanel.SetDock(_dashboardHeroBadge, Dock.Left); heroTop.Children.Add(_dashboardHeroBadge);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        _dashboardTitle = new TextBlock { FontSize = 26, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
-        _dashboardDescription = new TextBlock { FontSize = 14, Margin = new Thickness(0, 3, 0, 0), TextWrapping = TextWrapping.Wrap };
+        _dashboardTitle = new TextBlock { FontSize = 30, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
+        _dashboardDescription = new TextBlock { FontSize = 15, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
         _dashboardHeroMode = Ui.Hint("", 3);
         heroText.Children.Add(_dashboardTitle); heroText.Children.Add(_dashboardDescription); heroText.Children.Add(_dashboardHeroMode);
         heroTop.Children.Add(heroText);
@@ -96,16 +97,16 @@ public partial class MainWindow
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
         var smartValue = new StackPanel { Orientation = Orientation.Horizontal };
-        _dashboardSmartName = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 210 };
+        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 210 };
         _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
         DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, null);
-        _dashboardPlainDns = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
         _dashboardPlainHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, _dashboardPlainHint);
-        _dashboardUptime = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold };
+        _dashboardUptime = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold };
         _dashboardUptimeHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
 
@@ -186,7 +187,7 @@ public partial class MainWindow
         // ----- Журнал: последние строки как в журнале программы -----
         var logBox = new StackPanel();
         logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", OpenLog)));
-        _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2) }; logBox.Children.Add(_dashboardEvents);
+        _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2), MinHeight = 120 }; logBox.Children.Add(_dashboardEvents);
         var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 12, 14, 12); logCard.Margin = new Thickness(0, 12, 0, 0);
         page.Children.Add(logCard);
 
@@ -210,6 +211,19 @@ public partial class MainWindow
             DashboardReflow(services, mode < 2 ? 1 : 2);
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
+        // Журнал занимает оставшуюся высоту окна: строк столько, сколько помещается, а не пустота под ним
+        void FitLog()
+        {
+            double other = page.ActualHeight + page.Margin.Top + page.Margin.Bottom - _dashboardEvents.ActualHeight;
+            int lines = Math.Clamp((int)((scroll.ViewportHeight - other) / 20), 6, 40);
+            if (lines == _dashboardLogLines) return;
+            _dashboardLogLines = lines;
+            _dashboardEvents.MinHeight = lines * 20; // карточка доходит до низа окна, даже когда строк пока мало
+            _dashboardEventsSignature = null;
+            RefreshDashboardEvents();
+        }
+        scroll.SizeChanged += (_, _) => FitLog();
+        page.SizeChanged += (_, _) => FitLog();
         DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
@@ -245,15 +259,16 @@ public partial class MainWindow
     {
         var g = new Grid { MinHeight = 52 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        // Название фиксированной ширины, состояние сразу за ним: элементы одной строки читаются вместе
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(175) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
         text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
         Grid.SetColumn(text, 1); g.Children.Add(text);
-        var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
         state.Children.Add(line); state.Children.Add(note);
         Grid.SetColumn(state, 2); g.Children.Add(state);
@@ -305,8 +320,10 @@ public partial class MainWindow
     private FrameworkElement DashboardSidebar()
     {
         var content = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
-        var update = CreateUpdateCard();
-        DockPanel.SetDock(update, Dock.Bottom); content.Children.Add(update);
+        var bottom = new StackPanel();
+        foreach (var (title, icon, act) in SideLinks()) bottom.Children.Add(DashboardNav(title, icon, act));
+        bottom.Children.Add(CreateUpdateCard());
+        DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
         var links = new StackPanel();
         var logo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 2, 0, 24) };
         logo.Children.Add(new Controls.BrandMark { Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
@@ -381,9 +398,9 @@ public partial class MainWindow
         icon.SetResourceReference(Controls.Icon.ForegroundProperty, "Accent");
         row.Children.Add(icon);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(Ui.Hint(label, 0).With(t => t.FontSize = 12));
+        text.Children.Add(Ui.Hint(label, 0).With(t => t.FontSize = 13));
         value.Margin = new Thickness(0, 4, 0, 0); text.Children.Add(value);
-        if (hint != null) { hint.FontSize = 12; text.Children.Add(hint); }
+        if (hint != null) { hint.FontSize = 12.5; text.Children.Add(hint); }
         Grid.SetColumn(text, 1); row.Children.Add(text);
         var card = new Border { Padding = new Thickness(14, 12, 14, 12), CornerRadius = new CornerRadius(10), Child = row };
         card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card);
@@ -599,14 +616,14 @@ public partial class MainWindow
     private static Grid DashboardServerGrid()
     {
         var g = new Grid();
-        foreach (var w in new[] { 30.0, -2, -1.2, 80, 110, 120 })
+        foreach (var w in new[] { 30.0, -1.7, -1.3, -0.7, -0.9, -1 }) // ровно по ширине, без провала между названием и страной
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? new GridLength(-w, GridUnitType.Star) : new GridLength(w) });
         return g;
     }
 
     private void RefreshDashboardEvents()
     {
-        var recent = _log.TakeLast(6).ToArray();
+        var recent = _log.TakeLast(_dashboardLogLines).ToArray();
         var signature = string.Join("|", recent.Select(e => $"{e.Time.Ticks}:{e.Text}"));
         if (signature == _dashboardEventsSignature) return;
         _dashboardEventsSignature = signature;

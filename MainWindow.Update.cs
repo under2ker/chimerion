@@ -73,6 +73,37 @@ public partial class MainWindow
         return v.Card;
     }
 
+    /// <summary>Ссылки внизу левого меню над карточкой обновления: сайт, канал с новостями, сообщить о проблеме.</summary>
+    private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
+    {
+        ("Сообщить о сбое", "circle-help", () => DiagToggle_Click(this, new RoutedEventArgs())),
+        ("Канал в Telegram", "send", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
+        ("Сайт chimerion.dev", "external-link", () => AutoStart.OpenUrl("https://chimerion.dev")),
+    };
+
+    /// <summary>Низ меню панели управления: те же ссылки кнопками меню и карточка обновления.</summary>
+    private FrameworkElement CreatePanelBottom()
+    {
+        var box = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var style = (Style)FindResource("PanelNavButton");
+        foreach (var (title, icon, act) in SideLinks())
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(new Controls.Icon { Kind = icon, Size = 16, Margin = new Thickness(0, 0, 10, 0) });
+            var text = new TextBlock { Text = title };
+            row.Children.Add(text);
+            var b = new Button { Content = row, Style = style, ToolTip = title };
+            AutomationProperties.SetName(b, title);
+            b.Click += (_, _) => act();
+            box.Children.Add(b);
+            _panelLinkTexts.Add(text);
+        }
+        box.Children.Add(CreateUpdateCard());
+        return box;
+    }
+
+    private readonly List<TextBlock> _panelLinkTexts = new();
+
     private void UpdateCard_Click()
     {
         if (_updateChecking) return;
@@ -82,7 +113,8 @@ public partial class MainWindow
     /// <summary>В узком меню подписи карточки прозрачны и обрезаются краем, как у пунктов меню.</summary>
     private void SetUpdateCardsExpanded(bool expanded)
     {
-        foreach (var v in _updateCards.Where(c => c.Card == PanelUpdateHost.Content)) { v.Text.Opacity = expanded ? 1 : 0; v.Card.BorderThickness = new Thickness(expanded ? 1 : 0); }
+        foreach (var v in _updateCards.Where(c => ReferenceEquals(c.Card.Parent, PanelUpdateHost.Content))) { v.Text.Opacity = expanded ? 1 : 0; v.Card.BorderThickness = new Thickness(expanded ? 1 : 0); }
+        foreach (var t in _panelLinkTexts) t.Opacity = expanded ? 1 : 0;
     }
 
     private void RefreshUpdateCards() { foreach (var v in _updateCards) PaintUpdateCard(v); }

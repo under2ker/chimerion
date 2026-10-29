@@ -101,7 +101,7 @@ public partial class MainWindow : Window
         _watchdog.Tick += Watchdog_Tick;
         WatchVpn();
         TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
-        PanelUpdateHost.Content = CreateUpdateCard();
+        PanelUpdateHost.Content = CreatePanelBottom();
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
