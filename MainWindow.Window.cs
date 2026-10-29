@@ -216,7 +216,7 @@ public partial class MainWindow
         ColRefresh.Visibility = v; // в компактном виде слева от названий оставалась пустая полоса
         ConnPill.Margin = new Thickness(0);
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
-        ColStatus.Width = new DataGridLength(124);
+        ColStatus.Width = new DataGridLength(136);
         ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);

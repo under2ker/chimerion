@@ -79,7 +79,7 @@ internal sealed class DiagnosticsWindow
         _tools = tools;
         _logTail = logTail;
         _log = log;
-        _w = DnexDialog.CreateWindow("Диагностика", 680);
+        _w = DnexDialog.CreateWindow("Диагностика", 760);
         _w.Closed += (_, _) => _open = null;
         // Кнопки внизу закреплены, прокручивается только список: на маленьком экране они не уезжают
         _w.MaxHeight = Math.Min(960, SystemParameters.WorkArea.Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
