@@ -103,7 +103,7 @@ public class DiagnosticsTests
                    @"путь C:\Users\Alexandr\AppData, почта user.name@gmail.com";
         var s = Dnex.Services.Diagnostics.Sanitize(text, "88.86.206.62", "Alexandr");
         Assert.DoesNotContain("88.86.206.62", s);
-        Assert.Contains("83.217.211.149", s);
+        Assert.DoesNotContain("83.217.211.149", s);
         Assert.DoesNotContain("192.168.1.1", s);
         Assert.DoesNotContain("172.20.0.5", s);
         Assert.DoesNotContain("Alexandr", s);

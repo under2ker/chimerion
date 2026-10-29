@@ -206,6 +206,19 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Locked_active_file_prevents_network_changes()
+    {
+        using var sim = new NetSim(OneEthernet());
+        var path = Path.Combine(TestSetup.DataDir, "active.json");
+        File.WriteAllText(path, "null");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await Assert.ThrowsAsync<IOException>(() => DnsSwitcher.ApplyAsync(Server, new AppSettings(), _ => { }));
+            Assert.DoesNotContain(sim.Scripts, script => script.Contains("$ifs ="));
+            Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        }
+    }
+    [Fact]
     public async Task Connect_and_disconnect_return_dhcp()
     {
         using var sim = new NetSim(OneEthernet());

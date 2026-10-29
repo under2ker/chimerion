@@ -213,31 +213,37 @@ public static class Diagnostics
     }
 
     private static readonly Regex Ipv4 = new(@"\b(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\b", RegexOptions.Compiled);
+    private static readonly Regex Ipv6 = new(@"(?<![\w:])[0-9a-fA-F:.%]+(?::[0-9a-fA-F:.%]*)+(?![\w:])", RegexOptions.Compiled);
     private static readonly Regex Email = new(@"[\w.+-]+@[\w-]+\.[\w.-]+", RegexOptions.Compiled);
+    private static readonly Regex SecretHeader = new(@"(?im)\b(?:authorization|proxy-authorization|cookie|set-cookie)\s*:\s*[^\r\n]*", RegexOptions.Compiled);
+    private static readonly Regex SecretValue = new(@"(?i)([""']?(?:password|passwd|pwd|пароль|token|access_token|refresh_token|api[_-]?key|secret|cookie|authorization)[""']?\s*[:=]\s*)(?:""[^""]*""|'[^']*'|[^\s&,;}]*)", RegexOptions.Compiled);
+    private static readonly Regex Location = new(@"(?im)(?:город|city|region|регион|область|провайдер|provider)\s*[:=]\s*[^,;\r\n]+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Убирает личное: внешний IP пользователя, адреса локальной сети, имя пользователя Windows (в путях) и почту.
-    /// Адреса DNS-серверов и прокси остаются: они публичные и нужны, чтобы понять проблему.
-    /// </summary>
+    /// <summary>Убирает адреса, учетные данные и известные личные данные из журнала и отчета.</summary>
     public static string Sanitize(string text, string? publicIp, string? userName = null)
     {
         if (!string.IsNullOrEmpty(publicIp))
         {
-            text = text.Replace(publicIp, "[ваш IP]");
-            // Рядом с IP журнал пишет место и провайдера: «IP 1.2.3.4 (RU, Область, Город, AS1234 Провайдер)» и
-            // «выход: Россия, Город (1.2.3.4, AS1234 Провайдер)». Это тоже личное, город и провайдер убираются
+            text = text.Replace(publicIp, "[ваш IP]", StringComparison.OrdinalIgnoreCase);
             text = Regex.Replace(text, @"\[ваш IP\] \([^()\n]*\)", "[ваш IP] ([место скрыто])");
             text = Regex.Replace(text, @"(?<=: )[^:()\n]+ \(\[ваш IP\][^()\n]*\)", "[место скрыто] ([ваш IP])");
         }
+        text = SecretHeader.Replace(text, "[учетные данные скрыты]");
+        text = SecretValue.Replace(text, "$1[скрыто]");
+        text = Location.Replace(text, "[место скрыто]");
+        // Сначала IPv6: адрес может содержать IPv4 в конце.
+        text = Ipv6.Replace(text, m => IPAddress.TryParse(m.Value, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "[IP]" : m.Value);
         text = Ipv4.Replace(text, m =>
         {
             int a = int.Parse(m.Groups[1].Value), b = int.Parse(m.Groups[2].Value);
             bool local = a == 10 || a == 127 || (a == 172 && b is >= 16 and <= 31) || (a == 192 && b == 168) || (a == 169 && b == 254)
                          || (a == 100 && b is >= 64 and <= 127);
-            return local ? "[локальный IP]" : m.Value;
+            return local ? "[локальный IP]" : "[IP]";
         });
+        text = Regex.Replace(text, @"(?<=: )[^:()\n]+ \((?:\[IP\]|\[локальный IP\])[^()\n]*\)", "[место скрыто] ([IP])");
+        text = Regex.Replace(text, @"(?:\[IP\]|\[локальный IP\]) \([^()\n]*\)", "[IP] ([место скрыто])");
         var user = userName ?? Environment.UserName;
-        if (user.Length >= 2) text = Regex.Replace(text, $@"(?<=\\Users\\){Regex.Escape(user)}(?=\\|$)", "[пользователь]", RegexOptions.IgnoreCase);
+        if (user.Length >= 1) text = Regex.Replace(text, $@"(?<=\\Users\\){Regex.Escape(user)}(?=\\|$)", "[пользователь]", RegexOptions.IgnoreCase);
         return Email.Replace(text, "[почта]");
     }
 

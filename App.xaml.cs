@@ -79,7 +79,7 @@ public partial class App : Application
 
     private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {e.Exception}\n"); } catch (Exception) { }
+        try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {PrivacyGuard.Scrub(e.Exception.ToString())}\n"); } catch (Exception) { }
         DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
             DialogKind.Error, "Ошибка");
         e.Handled = true;
