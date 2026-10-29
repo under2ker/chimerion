@@ -262,6 +262,25 @@ public class MonitorAndRankingTests
     };
 
     [Fact]
+    public async Task Watchdog_detects_dns_reset_on_one_of_two_adapters()
+    {
+        var m = new ConnectionMonitor();
+        var adapters = new List<IReadOnlyCollection<IPAddress>>
+        {
+            new List<IPAddress> { Ours },
+            new List<IPAddress> { IPAddress.Parse("192.0.2.1") },
+        };
+        var current = adapters.SelectMany(a => a).ToList();
+        bool probed = false;
+        var result = await m.TickAsync(Active(), true, current, true, () => { probed = true; return Task.FromResult(true); }, adapters: adapters);
+        Assert.Equal(ConnectionMonitor.Verdict.Restore, result);
+        Assert.False(probed);
+        adapters[1] = new List<IPAddress> { Ours };
+        Assert.Equal(ConnectionMonitor.Verdict.Ok, await new ConnectionMonitor().TickAsync(Active(), true, current, true, () => Task.FromResult(true), adapters: adapters));
+        Assert.False(ConnectionMonitor.NeedsRestore(Active(split: true), current, true, out _, adapters));
+    }
+
+    [Fact]
     public async Task No_network_waits_and_is_not_a_failure()
     {
         var m = new ConnectionMonitor();
