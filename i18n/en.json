@@ -2009,5 +2009,7 @@
  "Обход": "Bypass",
  "Обход замедления YouTube и Discord (zapret)": "YouTube and Discord unthrottling (zapret)",
  "Отдельно": "Separate",
- "Ускорение Telegram (TG WS Proxy)": "Telegram acceleration (TG WS Proxy)"
+ "Ускорение Telegram (TG WS Proxy)": "Telegram acceleration (TG WS Proxy)",
+ "{0}: ждет разрешения. Включите обход один раз в окне «Telegram и YouTube»: Windows спросит права, дальше он будет включаться сам": "{0}: waiting for permission. Turn the bypass on once in the «Telegram and YouTube» window: Windows will ask for rights, after that it will start by itself",
+ "{0}: включите обход один раз в окне «Telegram и YouTube», дальше он будет запускаться сам": "{0}: turn the bypass on once in the «Telegram and YouTube» window, after that it will start by itself"
 }

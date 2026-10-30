@@ -260,12 +260,13 @@ public partial class MainWindow
     {
         foreach (var t in _tools.Where(t => t.State.Enabled && t.IsInstalled))
         {
-            // Запуск вместе с Windows идет без прав администратора, и UAC спрашивается только ради возврата DNS.
-            // Обход zapret без прав не запустить: не показываем запрос при каждом входе, а говорим, как включить
-            if (t.NeedsAdmin && !DnsSwitcher.IsAdmin() && AutoStart.StartedHidden && !t.IsRunning())
+            // Запуск вместе с Windows идет без прав администратора. Обход zapret запускается заданием Планировщика,
+            // созданным при первом включении (ZapretTask): без вопроса Windows. Заданий нет (включали в старой версии):
+            // не спрашиваем права при каждом входе, а говорим, как включить один раз
+            if (t.NeedsAdmin && !DnsSwitcher.IsAdmin() && AutoStart.StartedHidden && !t.IsRunning() && !(t is ZapretTool && ZapretTask.Ready()))
             {
-                Log($"{t.Title}: ждет разрешения. Откройте «Telegram и YouTube» и нажмите «Включить», Windows спросит права");
-                ShowToast($"{t.Title}: обход ждет разрешения администратора. Включается в окне «Telegram и YouTube»", "Warn");
+                Log($"{t.Title}: ждет разрешения. Включите обход один раз в окне «Telegram и YouTube»: Windows спросит права, дальше он будет включаться сам");
+                ShowToast($"{t.Title}: включите обход один раз в окне «Telegram и YouTube», дальше он будет запускаться сам", "Warn");
                 continue;
             }
             try
