@@ -196,7 +196,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 /* Три шага: настоящая последовательность */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: s; }
 .steps li { counter-increment: s; padding: 30px 28px 30px; background: var(--panel); border-radius: 18px; box-shadow: var(--edge); border: 1px solid var(--line-soft); }
-.steps li::before { content: counter(s); font: 650 48px/1 var(--display); color: transparent; -webkit-text-stroke: 1.5px var(--stone);
+.steps li::before { content: counter(s); font: 700 48px/1 var(--text); color: var(--stone);
   display: block; margin-bottom: 22px; letter-spacing: -.04em; }
 .steps b { display: block; font-size: 18px; margin-bottom: 8px; }
 .steps span { color: var(--soft); font-size: 16px; }
@@ -581,7 +581,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
           <li>DNS работает и в Wi-Fi, и в мобильной сети.</li>
         </ul>
       </div>
-      <div class="shot"><img src="img/phone.webp" width="584" height="478" decoding="async" alt="Окно «Smart DNS на телефоне»: выбор сервера и QR-код с профилем для iPhone"></div>
+      <div class="shot"><img src="img/help-phone-entry.png" width="852" height="816" decoding="async" alt="Окно помощи CHIMERION с вкладкой «На телефоне»"></div>
     </div>
   </section>
 
