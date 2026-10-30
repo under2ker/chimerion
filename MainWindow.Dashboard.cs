@@ -352,20 +352,23 @@ public partial class MainWindow
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
         links.Children.Add(DashboardNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
+        // Раздел в разработке: приглушенный и зачеркнутый, нажатие показывает заглушку
+        links.Children.Add(DashboardNav("Приватный проект", "eye-off", () => PrivateProject_Click(this, new RoutedEventArgs()), soon: true));
         content.Children.Add(links);
         return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
     }
 
-    private static Button DashboardNav(string title, string icon, Action click, bool selected = false)
+    private static Button DashboardNav(string title, string icon, Action click, bool selected = false, bool soon = false)
     {
         var button = Ui.Action(title, "Ghost", click);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(MenuGlyph(icon, 17).With(e => e.VerticalAlignment = VerticalAlignment.Center));
-        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center, TextDecorations = soon ? TextDecorations.Strikethrough : null });
         button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         button.Template = DashboardNavTemplate();
         if (selected) { button.SetResourceReference(Control.BackgroundProperty, "AccentSoft"); button.SetResourceReference(Control.ForegroundProperty, "Accent"); }
+        if (soon) { button.Opacity = .55; button.ToolTip = "В разработке"; }
         return button;
     }
 

@@ -140,6 +140,8 @@
                               Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
                               Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></ToggleButton>
+                <Button x:Name="PrivateButton" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" TextDecorations="Strikethrough" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
                 <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="external-link" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
                 <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource PanelNavButton}"
