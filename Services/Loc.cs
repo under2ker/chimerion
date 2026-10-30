@@ -91,6 +91,14 @@ public static class Loc
         catch (Exception) { /* без словаря интерфейс просто остается русским */ }
     }
 
+    /// <summary>Подпись из словаря интерфейса (постоянный текст программы, не введенное пользователем).</summary>
+    public static bool IsStaticLabel(string? ru)
+    {
+        if (string.IsNullOrWhiteSpace(ru) || ru.Length > 60) return false;
+        Load();
+        return Exact.ContainsKey(ru) || Exact.ContainsKey(ru.Trim(Edge));
+    }
+
     /// <summary>Перевод строки на текущий язык. Русский интерфейс и строки без кириллицы возвращаются как есть.</summary>
     public static string T(string? ru)
     {
