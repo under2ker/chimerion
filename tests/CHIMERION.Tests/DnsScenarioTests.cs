@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using Dnex.Models;
 using Dnex.Services;
@@ -146,10 +146,13 @@ public sealed class NetSim : IDisposable
             if ($Path -like '*Tcpip6*') { if ($a.static6) { return [pscustomobject]@{ NameServer = $a.static6 } } }
             elseif ($a.static4) { return [pscustomobject]@{ NameServer = $a.static4 } } } }
         function Get-DnsClientServerAddress { [CmdletBinding()] param([int]$InterfaceIndex, [string]$AddressFamily)
-          $a = SimByIndex (SimLoad) $InterfaceIndex
-          if (-not $a) { return }
-          if (-not $AddressFamily -or $AddressFamily -eq 'IPv4') { [pscustomobject]@{ ServerAddresses = @($a.dns4) } }
-          if (-not $AddressFamily -or $AddressFamily -eq 'IPv6') { [pscustomobject]@{ ServerAddresses = @($a.dns6) } } }
+          # Без InterfaceIndex, как настоящая команда: все адаптеры сразу (так отключение делает один запрос вместо запроса на каждый)
+          $s = SimLoad
+          $list = if ($PSBoundParameters.ContainsKey('InterfaceIndex')) { @(SimByIndex $s $InterfaceIndex) } else { @($s.adapters) }
+          foreach ($a in $list) {
+            if (-not $a) { continue }
+            if (-not $AddressFamily -or $AddressFamily -eq 'IPv4') { [pscustomobject]@{ InterfaceIndex = $a.index; AddressFamily = 2; ServerAddresses = @($a.dns4) } }
+            if (-not $AddressFamily -or $AddressFamily -eq 'IPv6') { [pscustomobject]@{ InterfaceIndex = $a.index; AddressFamily = 23; ServerAddresses = @($a.dns6) } } } }
         function Set-DnsClientServerAddress { [CmdletBinding()] param([int]$InterfaceIndex, [switch]$ResetServerAddresses, [string[]]$ServerAddresses)
           $s = SimLoad; $a = SimByIndex $s $InterfaceIndex
           if ($a.failSet) { throw "сбой установки DNS на адаптере $($a.name)" }

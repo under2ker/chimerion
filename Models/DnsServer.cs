@@ -99,7 +99,7 @@ public class DnsServer : INotifyPropertyChanged
     public bool IsConnected { get => _isConnected; set { _isConnected = value; On(); } }
 
     private ServerStatus _status;
-    public ServerStatus Status { get => _status; set { _status = value; On(); On(nameof(StatusText)); On(nameof(Rank)); } }
+    public ServerStatus Status { get => _status; set { _status = value; On(); On(nameof(StatusText)); On(nameof(FailReason)); On(nameof(Rank)); } }
 
     private long? _latencyMs;
     public long? LatencyMs { get => _latencyMs; set { _latencyMs = value; On(); On(nameof(PingText)); On(nameof(Score)); } }
@@ -274,7 +274,7 @@ public class DnsServer : INotifyPropertyChanged
     public DateTime? LastChecked { get => _lastChecked; set { _lastChecked = value; On(); } }
 
     private string? _lastError;
-    public string? LastError { get => _lastError; set { _lastError = value; On(); } }
+    public string? LastError { get => _lastError; set { _lastError = value; On(); On(nameof(FailReason)); } }
 
     /// <summary>Сколько проверок подряд прошли успешно / всего — для оценки стабильности.</summary>
     public int ChecksOk { get; set; }
@@ -359,6 +359,16 @@ public class DnsServer : INotifyPropertyChanged
     [JsonIgnore]
     public string AiText => AiMs is null ? "—" : $"{AiMs}";
 
+    // Скорость DNS: отдельное измерение по запросу (SpeedTest), не пинг и не доступ к нейросетям
+    private long? _speedMs;
+    /// <summary>Медиана ответа сервера на поток разных запросов, мс. Null, если скорость не измерялась.</summary>
+    public long? SpeedMs { get => _speedMs; set { _speedMs = value; On(); On(nameof(SpeedText)); } }
+    /// <summary>Итог измерения словами: «быстрый: медиана 41 мс, ...».</summary>
+    public string? SpeedSummary { get; set; }
+    public DateTime? SpeedAt { get; set; }
+    [JsonIgnore]
+    public string SpeedText => SpeedMs is null ? "—" : $"{SpeedMs}";
+
     /// <summary>Итоговая оценка 0–100: доля успешных проверок, пинг, разброс, свежесть.</summary>
     [JsonIgnore]
     public int Score
@@ -431,6 +441,32 @@ public class DnsServer : INotifyPropertyChanged
         ServerStatus.Checking => "Проверка…",
         _ => "Не проверен",
     };
+
+    /// <summary>
+    /// Почему сервер не работает или работает не полностью, человеческими словами. Пусто, если с ним все хорошо.
+    /// Показывается подсказкой у статуса и в вопросе перед подключением: «Не работает» без причины ни о чем не говорит.
+    /// </summary>
+    [JsonIgnore]
+    public string FailReason => FailReasonOf(Status, NoProxy, LastError, Summary);
+
+    public static string FailReasonOf(ServerStatus status, bool noProxy, string? error, string? summary)
+    {
+        if (status == ServerStatus.Partial)
+            return string.IsNullOrWhiteSpace(summary) ? "Открываются не все нейросети" : "Открываются не все нейросети: " + summary;
+        if (status != ServerStatus.Fail) return "";
+        if (noProxy) return "Обычный DNS: не подменяет адреса нейросетей, поэтому они не открываются";
+        var e = (error ?? "").Trim();
+        var s = summary ?? "";
+        bool Has(string text, params string[] any) => any.Any(a => text.Contains(a, StringComparison.OrdinalIgnoreCase));
+        if (Has(e, "регион")) return "Нейросети закрыты для региона: сервер не помогает обойти ограничение";
+        if (Has(s, "нет DNS") && !Has(s, "✓")) return "Сервер не отвечает на DNS-запросы: выключен, недоступен или блокируется сетью";
+        if (Has(e, "пустой ответ")) return "Сервер ответил без адресов";
+        if (Has(e, "капч")) return "Сервис показывает капчу этому серверу: доступ не подтвердить";
+        if (Has(e, "не отвечает нормально", "HTTP 5")) return "Сервис не отвечает нормально через этот сервер";
+        if (Has(e, "время", "таймаут", "timeout", "истек", "canceled")) return "Сервер не ответил вовремя";
+        if (Has(e, "соединени", "reset", "сброшен", "refused")) return "Соединение сорвалось или отклонено";
+        return e.Length > 0 ? e : "Причина не установлена: ни одна нейросеть не открылась через этот сервер";
+    }
 
     /// <summary>Ключ для дедупликации.</summary>
     [JsonIgnore]

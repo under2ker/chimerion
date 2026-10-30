@@ -7,7 +7,11 @@ using System.Security.Cryptography;
 namespace Dnex.Services;
 
 /// <summary>Обновление не установилось. Message — понятная причина для окна обновления.</summary>
-public sealed class UpdateException(string message) : Exception(message);
+public sealed class UpdateException(string message, UpdateFailure kind = UpdateFailure.Unreachable) : Exception(message)
+{
+    /// <summary>BadSignature: контрольная сумма или подпись архива не сошлась. Unreachable: все остальные сбои скачивания и установки.</summary>
+    public UpdateFailure Kind { get; } = kind;
+}
 
 /// <summary>
 /// Обновление внутри программы. Из релиза на GitHub скачиваются архив CHIMERION-x.y.z-win-x64.zip и файл
@@ -331,7 +335,7 @@ public static class Updater
         {
             TryDelete(zipPath);
             throw mismatch
-                ? new UpdateException("Контрольная сумма архива не совпала. Архив не установлен, программа не изменена")
+                ? new UpdateException("Контрольная сумма архива не совпала. Архив не установлен, программа не изменена", UpdateFailure.BadSignature)
                 : new UpdateException("Не удалось скачать архив: " + Short(lastError!));
         }
 
@@ -345,7 +349,7 @@ public static class Updater
         }
         catch (Exception e) when (!ct.IsCancellationRequested) { throw new UpdateException("Не удалось получить подпись релиза: " + Short(e)); }
         if (!VerifySignature(await File.ReadAllBytesAsync(zipPath, ct), sig, TrustedKey))
-            throw new UpdateException("Подпись архива не прошла проверку. Архив не установлен, программа не изменена");
+            throw new UpdateException("Подпись архива не прошла проверку. Архив не установлен, программа не изменена", UpdateFailure.BadSignature);
 
         // 4. Распаковка рядом с программой (тот же диск: переименование мгновенное и не ломается посередине)
         try
@@ -356,9 +360,14 @@ public static class Updater
                         ?? zip.Entries.FirstOrDefault(e => e.Name.Equals("DNEX.exe", StringComparison.OrdinalIgnoreCase))
                         ?? throw new UpdateException("В архиве нет CHIMERION.exe");
             entry.ExtractToFile(NewPath, overwrite: true);
+            // Целостность до замены: размер как в архиве и заголовок программы Windows. Битый или чужой файл не должен встать на место рабочего
+            if (new FileInfo(NewPath).Length != entry.Length) throw new UpdateException("Распакованный файл не совпал с архивом по размеру. Программа не изменена");
+            using (var fs = File.OpenRead(NewPath))
+                if (fs.ReadByte() != 'M' || fs.ReadByte() != 'Z') throw new UpdateException("Файл в архиве не похож на программу Windows. Программа не изменена");
         }
         catch (UnauthorizedAccessException) { throw new UpdateException($"Нет прав на запись в папку программы ({Dir}). Скачайте версию вручную со страницы релиза"); }
-        catch (InvalidDataException) { throw new UpdateException("Архив поврежден"); }
+        catch (InvalidDataException) { TryDelete(NewPath); throw new UpdateException("Архив поврежден"); }
+        catch (UpdateException) { TryDelete(NewPath); throw; }
 
         var fileVer = FileVersionInfo.GetVersionInfo(NewPath).ProductVersion ?? "";
         if (!fileVer.StartsWith(ver, StringComparison.Ordinal))
@@ -370,11 +379,15 @@ public static class Updater
         // 5. Замена. Прежняя версия копируется в папку данных (для отката и ручного возврата), запущенный файл
         //    откладывается под именем <имя>.bad.exe (удалится при следующем запуске), новая встает как CHIMERION.exe.
         //    Старый DNEX.exe так исчезает с рабочего стола, ярлыки и автозапуск переводятся на новый файл
-        progress.Report((1, "Устанавливаю…"));
         var target = TargetPath;
         var stash = StashFor(ExePath);
+        var oldPath = ExePath;
         try
         {
+            progress.Report((1, "Устанавливаю…"));
+            // Отметка до замены файлов: если новая версия не запустится (или процесс оборвется посередине), счет неподтвержденных
+            // запусков уже идет и откат сработает. Любой сбой ниже отметку убирает: тогда ничего не менялось
+            SavePending(new Pending { From = UpdateChecker.CurrentVersion.ToString(3), To = ver, OldPath = oldPath });
             Directory.CreateDirectory(BackupDir);
             File.Copy(ExePath, PrevBackup, overwrite: true);
             File.Move(ExePath, stash, overwrite: true);
@@ -382,13 +395,16 @@ public static class Updater
             catch { File.Move(stash, ExePath); throw; }
             Hide(stash);
         }
-        catch (UnauthorizedAccessException) { TryDelete(NewPath); throw new UpdateException($"Нет прав на запись в папку программы ({Dir}). Скачайте версию вручную со страницы релиза"); }
-        catch (IOException e) { TryDelete(NewPath); throw new UpdateException("Не удалось заменить файл программы: " + e.Message); }
+        catch (UnauthorizedAccessException) { TryDelete(NewPath); DeletePending(); throw new UpdateException($"Нет прав на запись в папку программы ({Dir}). Скачайте версию вручную со страницы релиза"); }
+        catch (OperationCanceledException) { TryDelete(NewPath); DeletePending(); throw; }
+        catch (Exception e) when (e is not UpdateException)
+        {
+            TryDelete(NewPath); DeletePending();
+            throw new UpdateException("Не удалось заменить файл программы: " + e.Message);
+        }
         TryDelete(zipPath);
-        var oldPath = ExePath;
         if (!oldPath.Equals(target, StringComparison.OrdinalIgnoreCase)) { Shortcuts.Retarget(oldPath, target); _movedTo = target; }
         Installed = v;
-        SavePending(new Pending { From = UpdateChecker.CurrentVersion.ToString(3), To = ver, OldPath = oldPath });
     }
 
     /// <summary>Запускает программу заново (новую или возвращенную версию). Она дождется, пока эта копия закроется (см. App.OnStartup).</summary>

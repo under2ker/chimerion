@@ -394,6 +394,17 @@
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
+                        <TextBlock Text="ПЕРЕНОС НА ДРУГОЙ КОМПЬЮТЕР" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="Файл с настройками и избранными серверами. Cookie, источники поиска, согласие на общую карту, «Два DNS» и сведения о подключении в него не попадают. Окно настроек закроется: сначала сохраните изменения"
+                                           Style="{StaticResource FieldHint}" TextWrapping="Wrap"/>
+                                <WrapPanel Margin="0,12,0,0">
+                                    <Button Content="Экспортировать…" Click="Export_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Сохранить настройки и избранные серверы в файл"/>
+                                    <Button Content="Импортировать…" Click="Import_Click" Style="{StaticResource Strong}" ToolTip="Взять настройки и избранные серверы из файла. Перед применением программа покажет, что изменится"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
                         <TextBlock Text="ЧТО ВНУТРИ" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <Grid>

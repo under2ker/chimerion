@@ -351,6 +351,8 @@ public partial class MainWindow : Window
         var w = new SettingsWindow(_settings) { Owner = this };
         w.ShowDialog();
         if (w.RollbackRequested) { RollbackAndRestart(); return; }
+        if (w.TransferRequested == "export") { ExportSettings(); return; }
+        if (w.TransferRequested == "import") { ImportSettings(); return; }
         if (w.SplitChanged)
         {
             if (!w.Saved) _settings = LoadSettings(); // «Два DNS» сохраняются сразу, даже если настройки закрыли кнопкой «Отмена»

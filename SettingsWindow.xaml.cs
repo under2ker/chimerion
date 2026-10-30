@@ -15,6 +15,11 @@ public partial class SettingsWindow : Window
     public bool Saved { get; private set; }
     /// <summary>Пользователь попросил вернуть прежнюю версию: главное окно поменяет файлы и перезапустит программу.</summary>
     public bool RollbackRequested { get; private set; }
+    /// <summary>«export» или «import»: окно закрыто ради переноса настроек, его выполняет главное окно (там список серверов).</summary>
+    public string? TransferRequested { get; private set; }
+
+    private void Export_Click(object sender, RoutedEventArgs e) { TransferRequested = "export"; Close(); }
+    private void Import_Click(object sender, RoutedEventArgs e) { TransferRequested = "import"; Close(); }
     /// <summary>Настройки «Два DNS» сохранены: главное окно применит их к текущему подключению.</summary>
     public bool SplitChanged { get; private set; }
 

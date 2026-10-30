@@ -61,16 +61,25 @@ public static class HotfixChannel
     }
 
     /// <summary>Последнее быстрое обновление. Null, если канал выключен, бакет недоступен или подпись не сошлась.</summary>
-    public static async Task<Manifest?> CheckAsync(CancellationToken ct)
+    public static async Task<Manifest?> CheckAsync(CancellationToken ct) => (await CheckDetailedAsync(ct)).Manifest;
+
+    /// <summary>
+    /// То же с причиной: None (канал выключен или все хорошо), Unreachable (бакет не ответил),
+    /// BadSignature (манифест получен, но подпись не сошлась).
+    /// </summary>
+    public static async Task<(Manifest? Manifest, UpdateFailure Problem)> CheckDetailedAsync(CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(BaseUrl)) return null;
+        if (string.IsNullOrEmpty(BaseUrl)) return (null, UpdateFailure.None);
+        string json, sig;
         try
         {
-            var json = await Http.GetStringAsync($"{BaseUrl}/{ManifestFile}", ct);
-            var sig = await Http.GetStringAsync($"{BaseUrl}/{ManifestFile}.sig", ct);
-            return Parse(json, sig, Updater.TrustedKey);
+            json = await Http.GetStringAsync($"{BaseUrl}/{ManifestFile}", ct);
+            sig = await Http.GetStringAsync($"{BaseUrl}/{ManifestFile}.sig", ct);
         }
-        catch (Exception) when (!ct.IsCancellationRequested) { return null; }
+        catch (Exception) when (!ct.IsCancellationRequested) { return (null, UpdateFailure.Unreachable); }
+        if (!Updater.VerifySignature(System.Text.Encoding.UTF8.GetBytes(json), sig, Updater.TrustedKey))
+            return (null, UpdateFailure.BadSignature);
+        return (Parse(json, sig, Updater.TrustedKey), UpdateFailure.None);
     }
 
     public static string ZipUrl(Manifest m) => $"{BaseUrl}/{m.Zip}";

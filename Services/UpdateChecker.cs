@@ -11,8 +11,17 @@ public sealed record UpdateInfo(Version Version, string Notes, string PageUrl, H
 
 public enum UpdateStatus { UpToDate, Available, Failed }
 
-/// <summary>Итог проверки: последняя версия, есть новая или проверка не удалась. Reason — почему не удалась.</summary>
-public sealed record UpdateCheck(UpdateStatus Status, UpdateInfo? Info, Version? Latest, string? Reason = null);
+/// <summary>
+/// Почему проверка или установка не удалась. Unreachable: сервер обновлений недоступен (сеть, лимит, 5xx, таймаут).
+/// BadSignature: подпись манифеста или архива неверна, файл мог быть подменен. Эти два случая требуют разных действий.
+/// </summary>
+public enum UpdateFailure { None, Unreachable, BadSignature }
+
+/// <summary>
+/// Итог проверки: последняя версия, есть новая или проверка не удалась. Reason: почему не удалась,
+/// Failure: к какому из двух видов сбоя это относится.
+/// </summary>
+public sealed record UpdateCheck(UpdateStatus Status, UpdateInfo? Info, Version? Latest, string? Reason = null, UpdateFailure Failure = UpdateFailure.None);
 
 /// <summary>
 /// Проверка наличия новой версии. Только чтение данных о релизе из GitHub API по HTTPS.
@@ -68,11 +77,11 @@ public static class UpdateChecker
     private static async Task<UpdateCheck> CheckDetailedCoreAsync(CancellationToken ct)
     {
         // GitHub (большие релизы) и R2 (быстрые исправления) спрашиваются одновременно, побеждает более новая версия
-        var hotTask = HotfixChannel.CheckAsync(ct);
+        var hotTask = HotfixChannel.CheckDetailedAsync(ct);
         var gh = await CheckGitHubAsync(ct);
-        var hot = await hotTask;
-        var result = Combine(gh, hot, CurrentVersion);
-        SupportTrace.Write($"Обновление: итог={result.Status}; GitHub={gh.Status}; быстрый канал ответил={hot != null}");
+        var (hot, hotProblem) = await hotTask;
+        var result = Combine(gh, hot, CurrentVersion, hotProblem);
+        SupportTrace.Write($"Обновление: итог={result.Status}; сбой={result.Failure}; GitHub={gh.Status}; быстрый канал ответил={hot != null}; проблема канала={hotProblem}");
         return result;
     }
 
@@ -80,8 +89,13 @@ public static class UpdateChecker
     /// Итог по двум каналам. Быстрое исправление берется, если оно новее и программы, и последнего релиза GitHub.
     /// Если GitHub не ответил, а R2 ответил, итог все равно есть: обновление или «последняя версия».
     /// </summary>
-    internal static UpdateCheck Combine(UpdateCheck gh, HotfixChannel.Manifest? hot, Version current)
+    internal static UpdateCheck Combine(UpdateCheck gh, HotfixChannel.Manifest? hot, Version current, UpdateFailure hotProblem = UpdateFailure.None)
     {
+        // Манифест быстрого канала с неверной подписью: файл подменен или поврежден. Это не «нет связи», об этом говорим отдельно.
+        // Если GitHub при этом ответил, его итог верен и остается как есть
+        if (hotProblem == UpdateFailure.BadSignature && gh.Status == UpdateStatus.Failed)
+            return new UpdateCheck(UpdateStatus.Failed, null, null,
+                "подпись быстрого обновления не прошла проверку: файл на сервере подменен или поврежден. Ничего не установлено", UpdateFailure.BadSignature);
         if (hot?.ParsedVersion is not { } hv) return gh;
         var ghLatest = gh.Latest ?? new Version(0, 0, 0);
         if (hv > current && hv > ghLatest)
@@ -160,7 +174,7 @@ public static class UpdateChecker
         catch (Exception e) when (!ct.IsCancellationRequested)
         { SupportTrace.Write("Обновление: зеркало номеров версий: " + SupportTrace.Error(e)); }
 
-        return new UpdateCheck(UpdateStatus.Failed, null, null, reason);
+        return new UpdateCheck(UpdateStatus.Failed, null, null, reason, UpdateFailure.Unreachable);
     }
 
     /// <summary>Самая новая версия из ответа jsDelivr («versions»: [{ "version": "0.1.26" }, ...]). Null, если не разобрать.</summary>

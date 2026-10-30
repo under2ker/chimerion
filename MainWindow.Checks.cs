@@ -268,6 +268,42 @@ public partial class MainWindow
     private async void CheckSelected_Click(object sender, RoutedEventArgs e) =>
         await RunChecksAsync(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
 
+    private bool _speedBusy;
+
+    /// <summary>
+    /// Измерение скорости DNS у выбранных серверов (не больше десяти за раз): по очереди, чтобы они не мешали друг другу.
+    /// Итог пишется в журнал, в строку выбранного сервера и в список, пинг и статус не меняются.
+    /// </summary>
+    private async void MeasureSpeed_Click(object sender, RoutedEventArgs e)
+    {
+        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().Where(s => s.Status != ServerStatus.Checking).Take(10).ToList();
+        if (picked.Count == 0) { ShowToast("Выберите сервер в таблице", "Warn"); return; }
+        if (_speedBusy) { ShowToast("Измерение уже идет", "Warn"); return; }
+        _speedBusy = true;
+        var checker = new ServerChecker(_settings);
+        try
+        {
+            int n = 0;
+            foreach (var s in picked)
+            {
+                n++;
+                ProgressText.Text = $"Измеряю скорость DNS: {s.ShortName} ({n} из {picked.Count})";
+                SpeedResult r;
+                try { r = await SpeedTest.MeasureAsync((host, ct) => checker.ResolveViaAsync(s, host, ct), CancellationToken.None); }
+                catch (Exception ex) { Log($"Скорость DNS «{s.ShortName}»: не удалось измерить: {ex.Message}"); continue; }
+                s.SpeedMs = r.Ok == 0 ? null : r.MedianMs;
+                s.SpeedSummary = r.Summary;
+                s.SpeedAt = DateTime.Now;
+                Log($"Скорость DNS «{s.ShortName}»: {r.Summary}");
+            }
+            SaveServers();
+            Grid_SelectionChanged(ServerGrid, null!);
+            ShowToast(picked.Count == 1 ? $"{picked[0].ShortName}: {picked[0].SpeedSummary}" : $"Скорость DNS измерена у {picked.Count} серверов, итоги в журнале",
+                picked.All(p => p.SpeedMs != null) ? "Ok" : "Warn");
+        }
+        finally { _speedBusy = false; ProgressText.Text = ""; }
+    }
+
     /// <summary>Меню у «Перепроверить»: полная, глубокая или только один сервис.</summary>
     /// <summary>Выделить в таблице серверы по состоянию. Нерабочие скрыты фильтром «Рабочие», поэтому показываем все.</summary>
     private void SelectWhere(Func<DnsServer, bool> match, string what)
