@@ -186,6 +186,8 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 .pair .shot { padding: 8px; border-radius: 18px; background: linear-gradient(180deg, #23262B, #16181B);
   box-shadow: var(--edge), 0 50px 120px -40px rgba(0,0,0,.9), 0 0 0 1px var(--line); }
 .pair img { border-radius: 11px; max-height: 620px; width: auto; }
+.phone-shot { overflow: hidden; padding: 0 !important; }
+.phone-shot img { transform: scaleX(1.02); }
 .ticks { list-style: none; padding: 0; margin: 0; }
 .ticks li { padding: 14px 0 14px 36px; position: relative; color: var(--soft); border-top: 1px solid var(--line); }
 .ticks li:first-child { border-top: 0; }
@@ -581,7 +583,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
           <li>DNS работает и в Wi-Fi, и в мобильной сети.</li>
         </ul>
       </div>
-      <div class="shot"><img src="img/help-phone-entry.png" width="852" height="816" decoding="async" alt="Окно помощи CHIMERION с вкладкой «На телефоне»"></div>
+      <div class="shot phone-shot"><img src="img/help-phone-entry.png" width="852" height="816" decoding="async" alt="Окно помощи CHIMERION с вкладкой «На телефоне»"></div>
     </div>
   </section>
 
