@@ -170,6 +170,7 @@ public partial class MainWindow
     /// </summary>
     private async Task<List<string>> ApplyModeAsync(Mode mode, Action<string>? progress = null)
     {
+        using var cause = NetHistory.Because("режим «" + mode switch { Mode.AiOnly => "Только ИИ", Mode.All => "Все сразу", Mode.Games => "Игры", Mode.Off => "Все выключить", _ => mode.ToString() } + "»");
         if (_modeBusy || _busyConn) { ShowToast("Подождите: предыдущее действие еще идет", "Warn"); return new List<string> { "занято другим действием" }; }
         _modeBusy = true;
         var title = Modes.First(m => m.Mode == mode).Title;
@@ -388,8 +389,17 @@ public partial class MainWindow
                     ShowUpdateResult($"У вас последняя версия {UpdateChecker.CurrentVersion}", "Ok", null);
                     break;
                 default:
-                    Log("Проверка обновления не удалась: " + r.Reason);
-                    ShowUpdateResult("Не удалось проверить обновление", "Warn", r.Reason);
+                    // Два разных сбоя: сервер недоступен (подождать или проверить сеть) и неверная подпись (не устанавливать)
+                    if (r.Failure == UpdateFailure.BadSignature)
+                    {
+                        Log("Подпись обновления не прошла проверку: " + r.Reason);
+                        ShowUpdateResult("Подпись обновления неверна", "Bad", r.Reason);
+                    }
+                    else
+                    {
+                        Log("Сервер обновлений недоступен: " + r.Reason);
+                        ShowUpdateResult("Сервер обновлений недоступен", "Warn", r.Reason);
+                    }
                     break;
             }
         }

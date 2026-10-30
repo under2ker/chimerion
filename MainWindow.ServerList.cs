@@ -91,6 +91,7 @@ public partial class MainWindow
         if (!string.IsNullOrEmpty(s.DohUrl) && !string.IsNullOrEmpty(s.Primary)) parts.Add(s.DohUrl!);
         parts.Add(s.StatusText.ToLowerInvariant());
         if (s.LatencyMs != null) parts.Add($"пинг {s.PingText} мс");
+        if (s.SpeedMs != null) parts.Add($"скорость DNS {s.SpeedMs} мс ({s.SpeedSummary?.Split(':')[0] ?? "измерено"})");
         if (s.ChecksTotal > 0) parts.Add($"стабильность {s.Stability}");
         SelectionDetails.Text = string.Join("   ·   ", parts);
     }

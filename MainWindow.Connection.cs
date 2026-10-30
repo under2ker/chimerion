@@ -115,7 +115,7 @@ public partial class MainWindow
                 await new ServerChecker(_settings).CheckAsync(s, CancellationToken.None);
             }
             if (s.Status == ServerStatus.Fail && (auto ||
-                !DnexDialog.Ask($"«{s.DisplayName}» сейчас не работает", $"Последняя проверка: {s.LastError}\n\nВсе равно подключиться?",
+                !DnexDialog.Ask($"«{s.DisplayName}» сейчас не работает", $"Причина: {s.FailReason}\n\nВсе равно подключиться?",
                     "Подключиться", windowTitle: "Подключение")))
                 return false;
             if (!auto && !ConfirmCountryChange(s)) return false;
@@ -395,6 +395,7 @@ public partial class MainWindow
     /// </summary>
     private async Task EnsureConnectionAfterStartAsync()
     {
+        using var cause = NetHistory.Because("возврат подключения после запуска Windows");
         if (DnsSwitcher.GetActive() is not { } active) return;
         // Копия данных для тестов и снимков: подключение в ней чужое, DNS этого компьютера не трогаем
         if (Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1") return;
@@ -449,6 +450,7 @@ public partial class MainWindow
     /// </summary>
     private async void Watchdog_Tick(object? sender, EventArgs e)
     {
+        using var cause = NetHistory.Because("сторож");
         if (NoAutoDns) return; // копия данных: подключение в ней чужое
         if (Watchdog.IsChecked != true || _busyConn) return;
         if (_disconnectFailed) return; // пользователь пытался отключиться: подключение не возвращаем
@@ -519,6 +521,7 @@ public partial class MainWindow
 
     private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active, bool byUser = false)
     {
+        using var cause = byUser ? null : NetHistory.Because("замена сервера: прежний перестал отвечать");
         if (!byUser && !_settings.AllowServerSwitch)
         {
             // Сторож зовет сюда каждые три неудачи подряд: без ограничения уведомление повторялось бы каждые 3 минуты

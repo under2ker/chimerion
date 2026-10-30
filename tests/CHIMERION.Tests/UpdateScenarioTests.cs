@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
@@ -285,6 +285,96 @@ public sealed class UpdateScenarioTests : IDisposable
         var got = await GitHubMirrors.SignedRawAsync(new HttpClient(fake), "https://raw.githubusercontent.com/under2ker/chimerion/main/catalog/x.json",
             (b, sig) => sig == "SIG", CancellationToken.None);
         Assert.Equal(("{\"ok\":1}", "SIG"), got);
+    }
+
+    /// <summary>Отчет о ходе, который «обрывает» установку на нужном этапе: исключение вместо перехода к следующему шагу.</summary>
+    private sealed class BreakAt(string stage) : IProgress<(double? Part, string Stage)>
+    {
+        public void Report((double? Part, string Stage) v) { if (v.Stage.StartsWith(stage, StringComparison.Ordinal)) throw new IOException("обрыв на шаге: " + stage); }
+    }
+
+    [Theory]
+    [InlineData("Получаю контрольную сумму")]
+    [InlineData("Скачиваю")]
+    [InlineData("Проверяю архив")]
+    [InlineData("Проверяю подпись")]
+    [InlineData("Устанавливаю")]
+    public async Task Interruption_at_each_stage_leaves_the_program_untouched(string stage)
+    {
+        Publish();
+        // Обрыв при скачивании сообщается как «не удалось скачать» (пробуется следующее зеркало), на остальных шагах как сбой шага
+        await Assert.ThrowsAnyAsync<Exception>(() => Updater.InstallAsync(V, new BreakAt(stage), CancellationToken.None));
+        AssertUntouched(); // прежний exe на месте, ни .new.exe, ни .bad.exe, ни отметки об обновлении
+        // Повторная установка после обрыва проходит чисто
+        await Install();
+        Assert.Equal(NewExe, File.ReadAllBytes(Exe));
+    }
+
+    [Fact]
+    public async Task Cancellation_during_download_changes_nothing()
+    {
+        Publish();
+        using var cts = new CancellationTokenSource();
+        var progress = new CancelOnDownload(cts);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Updater.InstallAsync(V, progress, cts.Token));
+        AssertUntouched();
+    }
+
+    private sealed class CancelOnDownload(CancellationTokenSource cts) : IProgress<(double? Part, string Stage)>
+    {
+        public void Report((double? Part, string Stage) v) { if (v.Stage.StartsWith("Скачиваю", StringComparison.Ordinal)) cts.Cancel(); }
+    }
+
+    [Fact]
+    public async Task Failure_while_saving_the_backup_changes_nothing()
+    {
+        Publish();
+        // На месте папки резервных копий лежит файл: создать ее нельзя, замена должна остановиться до перемещения exe
+        var backup = Storage.PathOf("backup");
+        if (Directory.Exists(backup)) Directory.Delete(backup, true);
+        File.WriteAllText(backup, "занято");
+        try
+        {
+            var e = await Assert.ThrowsAsync<UpdateException>(Install);
+            Assert.Contains("Не удалось заменить файл программы", e.Message);
+            AssertUntouched();
+        }
+        finally { File.Delete(backup); }
+    }
+
+    [Fact]
+    public async Task Something_that_is_not_a_program_is_never_put_in_place_of_the_exe()
+    {
+        // Подпись и сумма верны (автор подписал), но внутри не exe: целостность проверяется отдельно
+        Publish(chimerionZip: Zip("CHIMERION.exe", "это не программа Windows"u8.ToArray()));
+        var e = await Assert.ThrowsAsync<UpdateException>(Install);
+        Assert.Contains("не похож на программу Windows", e.Message);
+        AssertUntouched();
+    }
+
+    [Fact]
+    public async Task Pending_mark_survives_so_that_a_dead_new_version_rolls_back()
+    {
+        Publish();
+        await Install();
+        // Новая версия «не запускается»: три запуска без подтверждения возвращают прежнюю даже после обрыва посреди обновления
+        var pending = System.Text.Json.JsonSerializer.Deserialize<Updater.Pending>(File.ReadAllText(Storage.PathOf("update-pending.json")))!;
+        Assert.Equal(V.ToString(3), pending.To);
+        Assert.Equal(Exe, pending.OldPath);
+        Assert.Equal(OldExe, File.ReadAllBytes(Backup));
+    }
+
+    [Fact]
+    public void Leftovers_of_an_interrupted_update_are_cleaned_on_next_start()
+    {
+        // Процесс оборвался после распаковки: рядом .new.exe, а отметка относится к версии, которой не стало
+        File.WriteAllBytes(Side(".new.exe"), new byte[] { 1, 2, 3 });
+        File.WriteAllText(Storage.PathOf("update-pending.json"),
+            System.Text.Json.JsonSerializer.Serialize(new Updater.Pending { From = "0.0.1", To = "9.9.9", OldPath = Exe }));
+        Assert.False(Updater.OnStartup());
+        Assert.False(File.Exists(Side(".new.exe")));
+        Assert.False(File.Exists(Storage.PathOf("update-pending.json")));
+        Assert.Equal(OldExe, File.ReadAllBytes(Exe));
     }
 
     [Fact]

@@ -166,8 +166,9 @@ internal static class UpdateWindow
             }
             catch (Exception e)
             {
-                log("Обновление не установилось: " + e.Message);
-                if (w.IsVisible) Failed(e.Message);
+                var kind = (e as UpdateException)?.Kind ?? UpdateFailure.Unreachable;
+                log((kind == UpdateFailure.BadSignature ? "Обновление отклонено, подпись или сумма неверны: " : "Обновление не установилось: ") + e.Message);
+                if (w.IsVisible) Failed(e.Message, kind);
             }
             finally { cts = null; }
         }
@@ -206,14 +207,18 @@ internal static class UpdateWindow
         }
 
         // ---------- Ошибка ----------
-        void Failed(string reason)
+        void Failed(string reason, UpdateFailure kind)
         {
-            Swap(hero, Hero(ResultMark("circle-x", "BadSoft", "Bad"), "Не получилось", "Обновление не установилось", null));
+            bool signature = kind == UpdateFailure.BadSignature;
+            Swap(hero, Hero(ResultMark("circle-x", "BadSoft", "Bad"), signature ? "Подпись неверна" : "Не получилось",
+                signature ? "Обновление отклонено" : "Сервер обновлений недоступен или обрыв при скачивании", null));
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock { Text = reason, FontSize = 13, TextWrapping = TextWrapping.Wrap, LineHeight = 20 });
             panel.Children.Add(new TextBlock
             {
-                Text = "Программа осталась прежней и работает как раньше. Можно повторить позже или скачать версию вручную со страницы релиза.",
+                Text = signature
+                    ? "Программа не изменена. Файл не прошел проверку автора: не повторяйте установку, а скачайте программу заново на chimerion.dev."
+                    : "Программа осталась прежней и работает как раньше. Можно повторить позже или скачать версию вручную со страницы релиза.",
                 FontSize = 12, TextWrapping = TextWrapping.Wrap, LineHeight = 18, Margin = new Thickness(0, 8, 0, 0),
             }.Ref(TextBlock.ForegroundProperty, "Muted"));
             Swap(body, Card(panel, padding: new Thickness(16, 14, 16, 14)));

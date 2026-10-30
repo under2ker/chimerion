@@ -369,6 +369,7 @@
                         <ContextMenu Opened="RowMenu_Opened">
                             <MenuItem x:Name="MenuConnect" Header="Подключить" Click="MenuConnect_Click" InputGestureText="Enter"/>
                             <MenuItem Header="Проверить" Click="CheckSelected_Click"/>
+                            <MenuItem Header="Измерить скорость DNS" Click="MeasureSpeed_Click" ToolTip="Как быстро сервер отвечает на поток разных запросов. Отдельно от пинга и доступа к нейросетям"/>
                             <MenuItem x:Name="MenuFav" Header="В избранное" Click="MenuFav_Click"/>
                             <Separator/>
                             <MenuItem x:Name="MenuSource" Header="Открыть источник" Click="MenuSource_Click"/>
@@ -500,11 +501,13 @@
                                             <Setter TargetName="st" Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Partial">
+                                            <Setter TargetName="stRoot" Property="ToolTip" Value="{Binding FailReason}"/>
                                             <Setter TargetName="dot" Property="Fill" Value="{DynamicResource Warn}"/>
                                             <Setter TargetName="st" Property="Foreground" Value="{DynamicResource Text}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Fail">
                                             <Setter TargetName="dot" Property="Fill" Value="{DynamicResource Bad}"/>
+                                            <Setter TargetName="stRoot" Property="ToolTip" Value="{Binding FailReason}"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding Status}" Value="Checking">
                                             <Setter TargetName="dot" Property="Fill" Value="{DynamicResource Accent}"/>

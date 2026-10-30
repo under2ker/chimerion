@@ -1,4 +1,4 @@
-# Сборка и тесты при каждом пуше в main и в pull request
+# Сборка и проверки при каждом пуше в main и в pull request
 name: Сборка и тесты
 
 on:
@@ -17,9 +17,19 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: Тесты
-        run: dotnet test tests/CHIMERION.Tests -c Release
-      - name: Сборка
+      - name: Сборка, предупреждения считаются ошибками
+        run: |
+          dotnet build CHIMERION.csproj -c Release -warnaserror
+          dotnet build tests/CHIMERION.Tests -c Release -warnaserror
+      - name: Уязвимые пакеты
+        shell: pwsh
+        run: |
+          $out = dotnet list CHIMERION.csproj package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $out
+          if ($out -match 'has the following vulnerable packages') { Write-Error 'Найдены пакеты с известными уязвимостями'; exit 1 }
+      - name: Тесты (в них подписи каталогов, поиск секретов, ё и длинные тире в текстах, версия в CHANGELOG)
+        run: dotnet test tests/CHIMERION.Tests -c Release --no-build
+      - name: Сборка релизного файла
         run: dotnet publish CHIMERION.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:DebugType=none -o out
       - uses: actions/upload-artifact@v4
         with:

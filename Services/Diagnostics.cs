@@ -210,7 +210,9 @@ public static class Diagnostics
         {
             UpdateStatus.Available => new DiagItem(DiagLevel.Warn, $"Доступна CHIMERION {u.Latest}", "Обновление ставится в программе и заработает после перезапуска", "update", "Обновить"),
             UpdateStatus.UpToDate => new DiagItem(DiagLevel.Ok, "Установлена последняя версия CHIMERION"),
-            _ => new DiagItem(DiagLevel.Info, "Новую версию проверить не удалось", u.Reason ?? ""),
+            _ when u.Failure == UpdateFailure.BadSignature => new DiagItem(DiagLevel.Bad, "Подпись обновления неверна",
+                (u.Reason ?? "") + ". Не устанавливайте это обновление и скачайте программу заново с chimerion.dev"),
+            _ => new DiagItem(DiagLevel.Info, "Сервер обновлений недоступен", (u.Reason ?? "") + ". Это не мешает работе: программа проверит снова позже"),
         });
 
         for (int k = 0; k < items.Count; k++)

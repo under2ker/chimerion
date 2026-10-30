@@ -79,7 +79,7 @@ internal sealed class DiagnosticsWindow
         _tools = tools;
         _logTail = logTail;
         _log = log;
-        _w = DnexDialog.CreateWindow("Диагностика", 760);
+        _w = DnexDialog.CreateWindow("Диагностика", 860);
         _w.Closed += (_, _) => _open = null;
         // Кнопки внизу закреплены, прокручивается только список: на маленьком экране они не уезжают
         _w.MaxHeight = Math.Min(960, SystemParameters.WorkArea.Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
@@ -123,6 +123,7 @@ internal sealed class DiagnosticsWindow
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Add("Скопировать отчет", "Strong", Copy).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
         left.Children.Add(Add("Сохранить отчет", "Strong", Save).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Сохранить отчет текстовым файлом, например на рабочий стол"; }));
+        left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(_w)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
         var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", Report), close);

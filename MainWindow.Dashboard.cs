@@ -185,7 +185,8 @@ public partial class MainWindow
         // ----- Лучшие серверы: три самых надежных, щелчок подключает -----
         var serversBox = new StackPanel();
         serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Выберите строку и нажмите «Подключить». Смену страны выхода программа подтвердит отдельно", 0),
-            DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); })));
+            DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); }),
+            DashboardHeaderButton("Подобрать автоматически", () => _ = AutoPickAsync()).With(b => b.ToolTip = "Программа сама пробует лучшие серверы по очереди и остается на том, через который открываются нейросети. Страну выхода не меняет")));
         _dashboardServers = new StackPanel(); serversBox.Children.Add(_dashboardServers);
         var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 12, 14, 10); serversCard.Margin = new Thickness(0, 12, 0, 0);
         page.Children.Add(serversCard);
@@ -242,10 +243,17 @@ public partial class MainWindow
         return b;
     }
 
-    private static DockPanel DashboardPanelHeader(string title, TextBlock? hint, Button? action)
+    private static DockPanel DashboardPanelHeader(string title, TextBlock? hint, params Button?[] actions)
     {
         var d = new DockPanel { Margin = new Thickness(2, 0, 0, 8) };
-        if (action != null) { DockPanel.SetDock(action, Dock.Right); d.Children.Add(action); }
+        bool first = true;
+        foreach (var action in actions.OfType<Button>())
+        {
+            // Первая кнопка стоит у правого края, следующие левее, между ними промежуток
+            action.Margin = new Thickness(0, 0, first ? 0 : 8, 0);
+            first = false;
+            DockPanel.SetDock(action, Dock.Right); d.Children.Add(action);
+        }
         var t = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         t.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold });
         if (hint != null) { hint.FontSize = 12; t.Children.Add(hint); }

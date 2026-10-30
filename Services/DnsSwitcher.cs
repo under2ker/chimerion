@@ -332,6 +332,7 @@ public static class DnsSwitcher
         {
             // Права не выданы (UAC отклонен): скрипт не запускался, DNS не менялся. Если до этого было подключение,
             // его DNS по-прежнему стоит на адаптерах: возвращаем запись о нем, иначе отключить его будет нечем.
+            NetHistory.Add($"Подключение к «{s.ShortName}» не выполнено", "Windows не получила права администратора, настройки сети не менялись");
             if (prev != null) Storage.Save(ActiveFile, prev);
             else
             {
@@ -344,6 +345,7 @@ public static class DnsSwitcher
         {
             // Скрипт мог успеть поменять часть адаптеров: возвращаем все, что было до подключения.
             log("Подключение не удалось, возвращаю исходные настройки DNS");
+            NetHistory.Add($"Подключение к «{s.ShortName}» не удалось", "исходные настройки DNS возвращаются");
             try { await RestoreAsync(log); }
             catch (Exception re) { log("Откат не удался, см. журнал: " + re.Message); }
             throw;
@@ -354,6 +356,12 @@ public static class DnsSwitcher
         if (split != null && SplitDns.GeneralIsSmart(split, primaryAddrs)) log("Внимание: " + SplitDns.GeneralIsSmartWarning);
         if (backupAddrs.Count > 0)
             log($"Запасной сервер: {backup!.Name} ({string.Join(", ", backupAddrs)}). Если основной перестанет отвечать, Windows перейдет на него сама");
+        // История сетевых изменений: что именно поменялось в системе
+        var changed = new List<string> { split != null ? $"два DNS: нейросети через Smart DNS, остальное через «{split.GeneralName}»" : "DNS адаптеров заменен на Smart DNS" };
+        if (doh != null) changed.Add("с шифрованием DoH");
+        if (backupAddrs.Count > 0) changed.Add($"запасной сервер «{backup!.Name}»");
+        if (active.Ipv6Disabled.Count > 0) changed.Add($"IPv6 выключен на {active.Ipv6Disabled.Count} адаптерах на время подключения");
+        NetHistory.Add($"Подключено: {s.ShortName}", string.Join("; ", changed));
     }
 
     /// <summary>Запоминаем исходные настройки один раз — до первой смены.</summary>
@@ -426,9 +434,20 @@ public static class DnsSwitcher
         foreach (var a in backup.Where(a => string.IsNullOrEmpty(a.Guid)))
             sb.AppendLine($"$byIndex[{a.InterfaceIndex}] = {Q(string.Join(",", Ips(a.Static)))}");
         sb.AppendLine("""
+            # Один запрос DNS-адресов на все адаптеры вместо запроса на каждый: отключение заметно быстрее, особенно со скрытыми адаптерами
+            function Get-DnsByIndex {
+              $h = @{}
+              foreach ($d in @(Get-DnsClientServerAddress -ErrorAction SilentlyContinue)) {
+                $k = [int]$d.InterfaceIndex
+                $h[$k] = @($h[$k]) + @($d.ServerAddresses)
+              }
+              $h
+            }
+            $dnsBefore = Get-DnsByIndex
+            $touched = @()
             foreach ($a in Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue) {
               $g = ([string]$a.InterfaceGuid).ToUpper()
-              $cur = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
+              $cur = @($dnsBefore[[int]$a.ifIndex] | Where-Object { $_ })
               $hasOurs = @($cur | Where-Object { $ours -contains $_ }).Count -gt 0
               if ($backup.ContainsKey($g)) { $want = $backup[$g] }
               elseif ($byIndex.ContainsKey([int]$a.ifIndex)) { $want = $byIndex[[int]$a.ifIndex] }
@@ -447,10 +466,14 @@ public static class DnsSwitcher
               foreach ($ip in $ours) {
                 Remove-Item "HKLM:\SYSTEM\CurrentControlSet\Services\Dnscache\InterfaceSpecificParameters\$g\DohInterfaceSettings\Doh\$ip" -Recurse -ErrorAction SilentlyContinue
               }
-              $after = @((Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ErrorAction SilentlyContinue).ServerAddresses)
-              $mode = if ($want) { 'исходные' } else { 'автоматически (DHCP)' }
-              Write-Output "RESULT $($a.Name) → $($mode): $(@($after | Select-Object -Unique) -join ', ')"
-              if (@($after | Where-Object { $ours -contains $_ }).Count -gt 0) { Write-Output "LEFT $($a.Name)" }
+              $touched += [pscustomobject]@{ Name = $a.Name; Index = [int]$a.ifIndex; Mode = $(if ($want) { 'исходные' } else { 'автоматически (DHCP)' }) }
+            }
+            # Итог по тронутым адаптерам одним запросом
+            $dnsAfter = Get-DnsByIndex
+            foreach ($t in $touched) {
+              $after = @($dnsAfter[$t.Index] | Where-Object { $_ })
+              Write-Output "RESULT $($t.Name) → $($t.Mode): $(@($after | Select-Object -Unique) -join ', ')"
+              if (@($after | Where-Object { $ours -contains $_ }).Count -gt 0) { Write-Output "LEFT $($t.Name)" }
             }
             # На Windows 10 без DoH (до сборки 19628) этой команды нет: без проверки отключение падало целиком,
             # запись о подключении оставалась, и сторож подключал снова
@@ -487,8 +510,8 @@ public static class DnsSwitcher
             }
             else if (line.Length > 0) log("  " + line);
         }
-        if (code != 0) throw new InvalidOperationException("Ошибка отключения, см. журнал");
-        if (left) throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал");
+        if (code != 0) { NetHistory.Add("Отключение не удалось", "ошибка при возврате DNS, подробности в журнале"); throw new InvalidOperationException("Ошибка отключения, см. журнал"); }
+        if (left) { NetHistory.Add("Отключение прошло не полностью", "на части адаптеров остались адреса CHIMERION, подробности в журнале"); throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал"); }
 
         if (File.Exists(path)) File.Delete(path);
         var v6path = Storage.PathOf(Ipv6OffFile);
@@ -498,6 +521,10 @@ public static class DnsSwitcher
         var activePath = Storage.PathOf(ActiveFile);
         if (File.Exists(activePath)) File.Delete(activePath);
         log("Отключено: исходные настройки DNS восстановлены");
+        var restored = new List<string> { "DNS адаптеров возвращен к исходному (из резервной копии или автоматический)" };
+        if (active?.Split == true) restored.Add("правила «Двух DNS» сняты");
+        if (v6off.Count > 0) restored.Add(v6failed.Count == 0 ? $"IPv6 включен обратно на {v6off.Count} адаптерах" : $"IPv6 включен не везде: не вернулся на {v6failed.Count} из {v6off.Count}");
+        NetHistory.Add("Отключено: исходные настройки DNS восстановлены", string.Join("; ", restored));
     }
 
     /// <summary>
