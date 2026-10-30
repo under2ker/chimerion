@@ -307,6 +307,7 @@ public partial class MainWindow
     private void UpdateToolsTray()
     {
         ModeWindow.Refresh(); // окно «Режим» показывает то же состояние программ
+        RefreshToolSwitches(); // переключатели на главной и в компактном виде
         void Set(System.Windows.Forms.ToolStripMenuItem? item, Tool t, string name)
         {
             if (item == null) return;

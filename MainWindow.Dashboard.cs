@@ -173,17 +173,7 @@ public partial class MainWindow
             var status = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             var toggle = new Controls.Switch { Width = 44, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = name + ": включить или выключить" };
             System.Windows.Automation.AutomationProperties.SetName(toggle, name);
-            var getTool = tool;
-            toggle.Click += async (_, _) =>
-            {
-                if (_dashboardSyncing) return;
-                if (_dashboardToolBusy || _dashboardToolTarget != null) { RefreshDashboard(); return; }
-                var t = getTool();
-                _dashboardToolTarget = (t, toggle.IsChecked == true);
-                RefreshDashboard();
-                try { await DashboardToolAsync(t); }
-                finally { _dashboardToolTarget = null; RefreshDashboard(); }
-            };
+            WireToolSwitch(toggle, tool);
             var symbol = DashboardLogo(kind); // фирменный логотип, как у нейросетей
             extra.Children.Add(DashboardRow(symbol, name, sub, dot, status, site, toggle));
             _dashboardToolRows.Add((toggle, status, dot, tool));
@@ -352,6 +342,8 @@ public partial class MainWindow
         links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
+        // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
+        links.Children.Add(DashboardNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
         content.Children.Add(links);
         return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
     }
@@ -522,6 +514,32 @@ public partial class MainWindow
         _dashboardSiteYoutube.Text = DashboardSiteStatus("youtube.com");
         _dashboardSiteDiscord.Text = DashboardSiteStatus("discord.com");
         _dashboardSiteTelegram.Text = DashboardSiteStatus("t.me");
+        RefreshToolSwitches();
+
+        RefreshDashboardServers(active);
+        RefreshDashboardEvents();
+    }
+
+    /// <summary>
+    /// Переключатель Telegram или обхода: на главной и в компактном виде одно и то же действие и одно состояние.
+    /// </summary>
+    private void WireToolSwitch(Controls.Switch toggle, Func<Tool> getTool)
+    {
+        toggle.Click += async (_, _) =>
+        {
+            if (_dashboardSyncing) return;
+            if (_dashboardToolBusy || _dashboardToolTarget != null) { RefreshToolSwitches(); return; }
+            var t = getTool();
+            _dashboardToolTarget = (t, toggle.IsChecked == true);
+            RefreshToolSwitches(); RefreshDashboard();
+            try { await DashboardToolAsync(t); }
+            finally { _dashboardToolTarget = null; RefreshToolSwitches(); RefreshDashboard(); }
+        };
+    }
+
+    /// <summary>Состояние переключателей программ (главная и компактный вид): включено, идет включение, запущено отдельно.</summary>
+    private void RefreshToolSwitches()
+    {
         _dashboardSyncing = true;
         foreach (var (toggle, status, dot, getTool) in _dashboardToolRows)
         {
@@ -530,19 +548,18 @@ public partial class MainWindow
             bool foreign = tool is TgProxyTool tg && tg.ForeignCopyRunning() || tool is ZapretTool && running && !tool.State.Enabled;
             bool pending = _dashboardToolTarget is { } tt && tt.Tool == tool;
             bool want = pending ? _dashboardToolTarget!.Value.On : running;
-            Ui.SwapText(status, pending ? (want ? "Включаю…" : "Выключаю…") : foreign ? "Запущен отдельно" : running ? (tool is ZapretTool ? "Обход включен" : "Прокси включен") : tool.IsInstalled ? "Выключен" : "Не установлен", 4);
+            bool narrow = _compactToolSwitches.Contains(toggle); // компактный вид: ячейка узкая, состояние одним словом
+            Ui.SwapText(status, pending ? (want ? "Включаю…" : "Выключаю…") : foreign ? (narrow ? "Отдельно" : "Запущен отдельно")
+                : running ? (narrow ? "Работает" : tool is ZapretTool ? "Обход включен" : "Прокси включен") : tool.IsInstalled ? (narrow ? "Выключено" : "Выключен") : "Не установлен", 4);
             var color = pending ? "Accent" : running ? "Ok" : "Muted";
             Ui.FadeBrush(status, TextBlock.ForegroundProperty, color);
             Ui.FadeBrush(dot, Shape.FillProperty, color);
             toggle.IsChecked = want;
             toggle.IsEnabled = !foreign;
             toggle.IsHitTestVisible = !_dashboardToolBusy && _dashboardToolTarget == null;
-            toggle.ToolTip = foreign ? "Запущен другой программой: управляйте им там" : null;
+            if (!narrow) toggle.ToolTip = foreign ? "Запущен другой программой: управляйте им там" : null;
         }
         _dashboardSyncing = false;
-
-        RefreshDashboardServers(active);
-        RefreshDashboardEvents();
         _dashboardMessage.Text = _dashboardMessageText ?? "";
         _dashboardMessage.Visibility = string.IsNullOrEmpty(_dashboardMessageText) ? Visibility.Collapsed : Visibility.Visible;
         _dashboardMessage.SetResourceReference(TextBlock.ForegroundProperty, _dashboardMessageError ? "Bad" : "Muted");
@@ -766,7 +783,11 @@ public partial class MainWindow
                 Log($"{tool.Title}: включено"); DashboardMessage($"{tool.Title}: включено");
             }
         }
-        catch (Exception ex) { Log($"{tool.Title}: {ex.Message}"); DashboardMessage($"{tool.Title}: {ex.Message}", true); }
+        catch (Exception ex)
+        {
+            Log($"{tool.Title}: {ex.Message}"); DashboardMessage($"{tool.Title}: {ex.Message}", true);
+            if (DashboardHost.Visibility != Visibility.Visible) ShowToast($"{tool.Title}: {ex.Message}", "Warn");
+        }
         finally { _dashboardToolBusy = false; UpdateToolsTray(); RefreshDashboard(); }
     }
     private void ShowControlPanel() { DashboardHost.Visibility = Visibility.Collapsed; RootGrid.Visibility = Visibility.Visible; }
