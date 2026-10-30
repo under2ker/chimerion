@@ -57,6 +57,37 @@ public class QualityStatsTests
     }
 
     [Fact]
+    public void Buckets_align_to_the_clock_and_count_failures_per_interval()
+    {
+        var points = new List<CheckPoint>
+        {
+            new(new DateTime(2026, 10, 29, 19, 10, 0), true, 80),
+            new(new DateTime(2026, 10, 29, 19, 40, 0), false, null),
+            new(new DateTime(2026, 10, 29, 19, 50, 0), true, 60),
+            new(new DateTime(2026, 10, 30, 7, 0, 0), true, 40),
+        };
+        var buckets = QualityStats.Buckets(points, Now, 6);
+        Assert.Equal(new DateTime(2026, 10, 29, 18, 0, 0), buckets[0].Start);
+        Assert.Equal(3, buckets[0].Count);
+        Assert.Equal(1, buckets[0].Failed);
+        Assert.Equal(33, buckets[0].FailPercent);
+        Assert.Equal(80, buckets[0].MedianMs);
+        Assert.Equal(60, buckets[0].MinMs);
+        Assert.Equal(new DateTime(2026, 10, 30, 0, 0, 0), buckets[1].Start);
+        Assert.Equal(0, buckets[1].Count);
+        Assert.Equal(new DateTime(2026, 10, 30, 6, 0, 0), buckets[^1].Start);
+        Assert.Equal(1, buckets[^1].Count);
+    }
+
+    [Fact]
+    public void Bucket_size_grows_with_the_span()
+    {
+        Assert.Equal(2, QualityStats.BucketHours(Now.AddHours(-5), Now));
+        Assert.Equal(6, QualityStats.BucketHours(Now.AddDays(-3), Now));
+        Assert.Equal(24, QualityStats.BucketHours(Now.AddDays(-13), Now));
+    }
+
+    [Fact]
     public void Report_text_includes_recent_errors_section()
     {
         var report = new DiagReport(new List<DiagItem>(), null, DateTime.Now);
