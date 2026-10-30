@@ -22,12 +22,46 @@ public sealed record QualitySummary(int Count, int OkCount, long? MedianMs, long
     }
 }
 
+/// <summary>Один столбец графика: проверки внутри интервала времени.</summary>
+public sealed record QualityBucket(DateTime Start, DateTime End, long? MedianMs, long? MinMs, long? MaxMs, int Count, int Failed)
+{
+    public int FailPercent => Count == 0 ? 0 : Failed * 100 / Count;
+}
+
 /// <summary>Расчет по истории проверок, которую каждый сервер уже хранит (до 14 дней, до 200 точек).</summary>
 public static class QualityStats
 {
     public static readonly string[] Parts = { "ночью (0:00-6:00)", "утром (6:00-12:00)", "днем (12:00-18:00)", "вечером (18:00-24:00)" };
 
     public static int PartOf(DateTime t) => t.Hour / 6;
+
+    /// <summary>Ширина столбца графика: короткий период крупнее по времени, длинный грубее, чтобы столбцы были читаемы.</summary>
+    public static int BucketHours(DateTime first, DateTime now)
+    {
+        var span = now - first;
+        return span <= TimeSpan.FromDays(1) ? 2 : span <= TimeSpan.FromDays(7) ? 6 : 24;
+    }
+
+    /// <summary>Проверки по интервалам, выровненным по часам суток (0:00, 2:00 или 6:00...), от первой проверки до сейчас.</summary>
+    public static List<QualityBucket> Buckets(IReadOnlyList<Models.CheckPoint> points, DateTime now, int hours)
+    {
+        var list = points.Where(p => p.T <= now && now - p.T <= TimeSpan.FromDays(14)).OrderBy(p => p.T).ToList();
+        var result = new List<QualityBucket>();
+        if (list.Count == 0) return result;
+        var origin = list[0].T.Date.AddHours(list[0].T.Hour / hours * hours);
+        for (var start = origin; start < now; start = start.AddHours(hours))
+        {
+            var end = start.AddHours(hours);
+            var inside = list.Where(p => p.T >= start && p.T < end).ToList();
+            var ok = inside.Where(p => p.Ok && p.Ms is > 0).Select(p => p.Ms!.Value).OrderBy(x => x).ToList();
+            result.Add(new QualityBucket(start, end,
+                ok.Count == 0 ? null : ok[ok.Count / 2],
+                ok.Count == 0 ? null : ok[0],
+                ok.Count == 0 ? null : ok[^1],
+                inside.Count, inside.Count(p => !p.Ok)));
+        }
+        return result;
+    }
 
     public static QualitySummary Summarize(IReadOnlyList<Models.CheckPoint> points, DateTime now, int days = 14)
     {
