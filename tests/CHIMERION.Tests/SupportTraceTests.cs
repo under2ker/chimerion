@@ -119,6 +119,31 @@ public sealed class SupportTraceTests : IDisposable
     }
 
     [Fact]
+    public async Task Ui_label_names_window_and_known_captions_but_never_user_text()
+    {
+        await OnSta(() =>
+        {
+            var known = new Button { Name = "Go", ToolTip = "Проверить" };
+            var typed = new Button { Content = "my-private-server" };
+            var window = new Window { Content = new StackPanel { Children = { known, typed } } };
+            var label = SupportTraceUi.Label(known);
+            Assert.Contains("имя=Go", label);
+            Assert.Contains("окно=", SupportTraceUi.Label(typed));
+            Assert.DoesNotContain("my-private-server", SupportTraceUi.Label(typed));
+            Assert.False(Dnex.Services.Loc.IsStaticLabel("my-private-server"));
+            GC.KeepAlive(window);
+        });
+    }
+
+    [Fact]
+    public void Report_marks_clicks_and_windows_as_user_actions_but_not_server_checks()
+    {
+        Assert.True(MainWindow.IsUserAction("01.01 10:00:00 [Подробно; сеанс=a; запись=1] Нажатие: окно=MainWindow"));
+        Assert.True(MainWindow.IsUserAction("01.01 10:00:00 [Подробно; сеанс=a; запись=2] Окно открыто: SettingsWindow"));
+        Assert.False(MainWindow.IsUserAction("01.01 10:00:00 [Подробно; сеанс=a; запись=3] Начало: DNS через сервер; номер=1"));
+    }
+
+    [Fact]
     public async Task Ui_identity_accepts_only_source_literals_and_never_evaluates_dynamic_captions()
     {
         await OnSta(() =>

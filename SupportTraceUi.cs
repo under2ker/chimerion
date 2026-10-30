@@ -54,7 +54,7 @@ internal static class SupportTraceUi
         if (!ReferenceEquals(sender, e.Source) || sender is not FrameworkElement element || !element.IsLoaded) return;
         if (element is RepeatButton) return;
         var state = element is ToggleButton t ? $"; включено={t.IsChecked?.ToString() ?? "не определено"}" : "";
-        SupportTrace.Write($"Нажатие: {Describe(element)}{state}");
+        SupportTrace.Write($"Нажатие: {Label(element)}; путь={Describe(element)}{state}");
     }
 
     private static void Mouse(object sender, MouseButtonEventArgs e)
@@ -65,7 +65,7 @@ internal static class SupportTraceUi
         // Кнопки и меню имеют собственное событие Click, а карточки часто работают через MouseDown.
         if (chain.Any(x => x is ButtonBase or MenuItem)) return;
         if (chain.OfType<FrameworkElement>().FirstOrDefault(x => x.Cursor == Cursors.Hand) is { } card)
-            SupportTrace.Write($"Нажатие карточки: {Describe(card)}");
+            SupportTrace.Write($"Нажатие карточки: {Label(card)}; путь={Describe(card)}");
     }
 
     private static void Key(object sender, KeyEventArgs e)
@@ -95,6 +95,21 @@ internal static class SupportTraceUi
     {
         if (sender is not Selector selector || !ReferenceEquals(e.Source, selector) || !Gestures.TryGetValue(selector, out _)) return;
         SupportTrace.Write($"Выбор: {Describe(selector)}; индекс={selector.SelectedIndex}; добавлено={e.AddedItems.Count}; снято={e.RemovedItems.Count}");
+    }
+
+    /// <summary>Читаемое название элемента: окно и подпись. Берется только имя, подсказка или постоянный текст из словаря интерфейса.</summary>
+    internal static string Label(DependencyObject? element)
+    {
+        var window = Ancestors(element).OfType<Window>().FirstOrDefault();
+        var parts = new List<string> { $"окно={window?.GetType().Name ?? "нет"}" };
+        if (element is FrameworkElement fe)
+        {
+            if (fe.Name.Length > 0) parts.Add($"имя={fe.Name}");
+            var caption = fe.ToolTip as string ?? System.Windows.Automation.AutomationProperties.GetName(fe);
+            if (string.IsNullOrEmpty(caption)) caption = (fe as ContentControl)?.Content as string;
+            if (Dnex.Services.Loc.IsStaticLabel(caption)) parts.Add($"подпись=«{caption!.Trim()}»");
+        }
+        return string.Join("; ", parts);
     }
 
     internal static string Describe(DependencyObject? element)
