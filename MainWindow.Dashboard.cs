@@ -338,7 +338,7 @@ public partial class MainWindow
         brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
         // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
         links.Children.Add(DashboardNav("Главная", "shield-check", () => { }, true));
-        links.Children.Add(DashboardNav("Панель управления", "activity", ShowControlPanel));
+        links.Children.Add(DashboardNav("Панель управления", "sliders-horizontal", ShowControlPanel));
         links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
