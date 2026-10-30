@@ -370,6 +370,7 @@
                             <MenuItem x:Name="MenuConnect" Header="Подключить" Click="MenuConnect_Click" InputGestureText="Enter"/>
                             <MenuItem Header="Проверить" Click="CheckSelected_Click"/>
                             <MenuItem Header="Измерить скорость DNS" Click="MeasureSpeed_Click" ToolTip="Как быстро сервер отвечает на поток разных запросов. Отдельно от пинга и доступа к нейросетям"/>
+                            <MenuItem Header="График качества" Click="Quality_Click" ToolTip="Как сервер отвечал за последние 14 дней: время ответа и проверки без ответа"/>
                             <MenuItem x:Name="MenuFav" Header="В избранное" Click="MenuFav_Click"/>
                             <Separator/>
                             <MenuItem x:Name="MenuSource" Header="Открыть источник" Click="MenuSource_Click"/>

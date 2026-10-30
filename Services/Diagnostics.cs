@@ -221,7 +221,7 @@ public static class Diagnostics
     }
 
     /// <summary>Отчет текстом для копирования и для GitHub: строки отчета и хвост журнала, без личных данных.</summary>
-    public static string ToText(DiagReport r, IEnumerable<string> logTail)
+    public static string ToText(DiagReport r, IEnumerable<string> logTail, IEnumerable<string>? errors = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"Отчет CHIMERION от {r.Taken:dd.MM.yyyy HH:mm}");
@@ -233,6 +233,13 @@ public static class Diagnostics
             if (i.Detail.Length > 0) sb.AppendLine("    " + i.Detail);
             if (i.More.Length > 0) sb.AppendLine("    " + i.More);
         }
+        var failures = errors?.ToList() ?? new List<string>();
+        if (failures.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("Ошибки программы (error.log, последние):");
+            foreach (var l in failures) sb.AppendLine(l);
+        }
         var tail = logTail.ToList();
         if (tail.Count > 0)
         {
@@ -241,6 +248,19 @@ public static class Diagnostics
             foreach (var l in tail) sb.AppendLine(l);
         }
         return Sanitize(sb.ToString(), r.PublicIp);
+    }
+
+    /// <summary>Последние строки error.log (необработанные исключения): без них по отчету не видно, почему программа падала.</summary>
+    public static List<string> RecentErrors(int lines = 40)
+    {
+        try
+        {
+            var path = Storage.PathOf("error.log");
+            if (!System.IO.File.Exists(path)) return new List<string>();
+            var all = System.IO.File.ReadAllLines(path);
+            return all.Skip(Math.Max(0, all.Length - lines)).Select(l => l.Length > 400 ? l[..400] + "…" : l).Select(PrivacyGuard.Scrub).ToList();
+        }
+        catch (Exception) { return new List<string>(); }
     }
 
     /// <summary>Название сервера из списка, если адреса в Windows — его адреса: Smart DNS, выставленный вручную.</summary>

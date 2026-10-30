@@ -2087,5 +2087,13 @@
  "ни один запрос не получил ответа": "no query got an answer",
  "Отключение не удалось": "Disconnect failed",
  "Подключение к «{0}» не удалось": "Connection to «{0}» failed",
- "Подключение к «{0}» не выполнено": "Connection to «{0}» was not made"
+ "Подключение к «{0}» не выполнено": "Connection to «{0}» was not made",
+ "Отчет в один клик": "One-click report",
+ "Проверить, собрать отчет, сохранить его на рабочий стол, скопировать и показать файл": "Run the check, build the report, save it to the desktop, copy it and show the file",
+ "График качества": "Quality chart",
+ "Как сервер отвечал за последние 14 дней: время ответа и проверки без ответа": "How the server responded over the last 14 days: response time and failed checks",
+ "Пока нет серверов с историей проверок. Запустите проверку списка": "No servers with check history yet. Run a check of the list",
+ "Пока мало проверок: график появится, когда их наберется несколько": "Not enough checks yet: the chart appears after a few more",
+ "Отчет сохранен на рабочий стол: {0}, также скопирован в буфер обмена. Ваш IP, локальные адреса, имя пользователя и почта из него убраны": "Report saved to the desktop: {0}, also copied to the clipboard. Your IP, local addresses, user name and email are removed from it",
+ "Отчет сохранен на рабочий стол: {0}. Ваш IP, локальные адреса, имя пользователя и почта из него убраны": "Report saved to the desktop: {0}. Your IP, local addresses, user name and email are removed from it"
 }

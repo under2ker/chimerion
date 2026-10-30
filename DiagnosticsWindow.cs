@@ -122,7 +122,7 @@ internal sealed class DiagnosticsWindow
         Button Add(string text, string style, Action click) { var b = Ui.Action(text, style, click); _buttons.Add(b); return b; }
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Add("Скопировать отчет", "Strong", Copy).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
-        left.Children.Add(Add("Сохранить отчет", "Strong", Save).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Сохранить отчет текстовым файлом, например на рабочий стол"; }));
+        left.Children.Add(Add("Отчет в один клик", "Strong", () => _ = OneClickAsync()).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Проверить, собрать отчет, сохранить его на рабочий стол, скопировать и показать файл"; }));
         left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(_w)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
@@ -276,7 +276,7 @@ internal sealed class DiagnosticsWindow
         return g;
     }
 
-    private string? ReportText() => _report == null ? null : Diagnostics.ToText(_report, _logTail());
+    private string? ReportText() => _report == null ? null : Diagnostics.ToText(_report, _logTail(), Diagnostics.RecentErrors());
 
     private void Copy()
     {
@@ -284,6 +284,37 @@ internal sealed class DiagnosticsWindow
         _state.Text = Ui.CopyText(text)
             ? "Отчет скопирован. Ваш IP, локальные адреса, имя пользователя и почта из него убраны"
             : "Буфер обмена занят другой программой. Сохраните отчет в файл кнопкой «Сохранить отчет»";
+    }
+
+    /// <summary>
+    /// Все за одно нажатие: при необходимости сама запускает проверку, сохраняет отчет на рабочий стол под новым именем,
+    /// копирует его в буфер обмена и показывает файл в проводнике. Рабочий стол недоступен: обычный диалог сохранения.
+    /// </summary>
+    private async Task OneClickAsync()
+    {
+        if (_report == null) await RunAsync();
+        if (ReportText() is not { } text) return;
+        var dir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        var path = System.IO.Path.Combine(dir, $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}.txt");
+        try
+        {
+            for (int n = 2; System.IO.File.Exists(path); n++)
+                path = System.IO.Path.Combine(dir, $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}-{n}.txt");
+            System.IO.File.WriteAllText(path, text, new System.Text.UTF8Encoding(false));
+        }
+        catch (Exception e)
+        {
+            SupportTrace.Write($"Отчет в один клик: рабочий стол недоступен ({e.GetType().Name})");
+            Save();
+            return;
+        }
+        bool copied = Ui.CopyText(text);
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false }); } catch (Exception) { }
+        var name = System.IO.Path.GetFileName(path);
+        _state.Text = copied
+            ? $"Отчет сохранен на рабочий стол: {name}, также скопирован в буфер обмена. Ваш IP, локальные адреса, имя пользователя и почта из него убраны"
+            : $"Отчет сохранен на рабочий стол: {name}. Ваш IP, локальные адреса, имя пользователя и почта из него убраны";
+        _log("Отчет диагностики собран в один клик");
     }
 
     /// <summary>Отчет файлом: когда буфер обмена занят или отчет нужно приложить к сообщению.</summary>
