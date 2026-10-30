@@ -256,8 +256,69 @@ public sealed class ZapretTool : Tool
             throw new ToolException("winws.exe уже запущен другой программой или вручную. Закройте его, чтобы CHIMERION управляла обходом сама");
         }
         EnsureNoForeignService();
-        var strategy = IsStrategyName(State.Strategy) && File.Exists(Path.Combine(Dir, State.Strategy!)) ? State.Strategy! : DefaultStrategy;
+        var strategy = SavedStrategy();
+        if (!DnsSwitcher.IsAdmin())
+        {
+            var args = await PrepareAsync(strategy, State.Games);
+            if (await StartViaTaskAsync()) return;
+            await ExecAsync(args); // задание не сработало: как раньше, Windows спросит права
+            return;
+        }
         await LaunchAsync(strategy, State.Games);
+    }
+
+    /// <summary>Стратегия из настроек, если такой файл есть в сборке, иначе основная.</summary>
+    private string SavedStrategy() =>
+        IsStrategyName(State.Strategy) && File.Exists(Path.Combine(Dir, State.Strategy!)) ? State.Strategy! : DefaultStrategy;
+
+    /// <summary>
+    /// Запуск через задание Планировщика (см. <see cref="ZapretTask"/>). Заданий нет — Windows один раз спросит права,
+    /// чтобы их создать, дальше обход включается без вопросов. False — задание не помогло, нужен обычный запуск.
+    /// </summary>
+    private async Task<bool> StartViaTaskAsync()
+    {
+        try
+        {
+            if (!ZapretTask.Ready() && !await ZapretTask.CreateAsync()) return false;
+        }
+        catch (UacDeclinedException) { throw new ToolException("Права администратора не выданы: без них zapret не работает"); }
+        SaveState(); // задание берет стратегию и игровой фильтр из tools.json
+        if (!ZapretTask.Run(ZapretTask.StartName)) return false;
+        for (int i = 0; i < 40 && !IsRunning(); i++) await Task.Delay(250);
+        return IsRunning();
+    }
+
+    /// <summary>
+    /// Работа по заданию Планировщика: процесс CHIMERION с правами администратора, без окна. start — запустить winws
+    /// по сохраненной стратегии (списки уже подготовила обычная копия программы), stop — остановить winws и драйвер.
+    /// Возвращает код завершения процесса.
+    /// </summary>
+    public static int RunHelper(string verb)
+    {
+        if (!DnsSwitcher.IsAdmin()) return 2;
+        try
+        {
+            if (verb == "stop")
+            {
+                foreach (var p in Process.GetProcessesByName("winws"))
+                    using (p) try { p.Kill(); p.WaitForExit(3000); } catch (Exception) { }
+                using var sc = Process.Start(new ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "sc.exe"), "stop WinDivert")
+                                             { UseShellExecute = false, CreateNoWindow = true });
+                sc?.WaitForExit(5000);
+                return 0;
+            }
+            if (verb != "start") return 2;
+            if (WinwsCount() > 0) return 0;
+            var z = new ZapretTool();
+            if (!z.IsInstalled || ForeignServiceInstalled()) return 1;
+            var strategy = z.SavedStrategy();
+            var args = ParseArgs(File.ReadAllText(Path.Combine(Dir, strategy)), Bin, Lists, z.State.Games);
+            if (args == null) return 1;
+            using var proc = Process.Start(new ProcessStartInfo(Path.Combine(Bin, "winws.exe"), args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Bin });
+            Thread.Sleep(2000);
+            return proc == null || proc.HasExited ? 1 : 0;
+        }
+        catch (Exception) { return 1; }
     }
 
     private static void EnsureNoForeignService()
@@ -267,7 +328,10 @@ public sealed class ZapretTool : Tool
     }
 
     /// <summary>Запуск winws.exe со стратегией strategy. Выбор пользователя (State) не меняется.</summary>
-    private async Task LaunchAsync(string strategy, bool games)
+    private async Task LaunchAsync(string strategy, bool games) => await ExecAsync(await PrepareAsync(strategy, games));
+
+    /// <summary>Подготовка к запуску: списки и строка параметров winws. Файлы пишет обычная копия программы, без прав.</summary>
+    private async Task<string> PrepareAsync(string strategy, bool games)
     {
         if (!IsInstalled) throw new ToolException("zapret не установлен");
         if (!IsStrategyName(strategy)) throw new ToolException($"Некорректное имя стратегии: {strategy}");
@@ -281,7 +345,12 @@ public sealed class ZapretTool : Tool
         var args = ParseArgs(await File.ReadAllTextAsync(Path.Combine(Dir, strategy)), Bin, Lists, games)
                    ?? throw new ToolException($"В стратегии {strategy} не нашлась строка запуска winws.exe. Возможно, формат сборки изменился");
         EnsureUserLists();
+        return args;
+    }
 
+    /// <summary>Запуск winws.exe: с правами напрямую, без них через запрос Windows.</summary>
+    private async Task ExecAsync(string args)
+    {
         var exe = Path.Combine(Bin, "winws.exe");
         var psi = DnsSwitcher.IsAdmin()
             ? new ProcessStartInfo(exe, args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Bin }
@@ -446,6 +515,12 @@ public sealed class ZapretTool : Tool
     public override async Task StopAsync()
     {
         if (!IsRunning()) return;
+        // Без прав: остановка заданием Планировщика, без вопроса Windows (см. ZapretTask)
+        if (!DnsSwitcher.IsAdmin() && ZapretTask.Ready() && ZapretTask.Run(ZapretTask.StopName))
+        {
+            for (int i = 0; i < 32 && IsRunning(); i++) await Task.Delay(250);
+            if (!IsRunning()) return;
+        }
         // Драйвер WinDivert тоже останавливаем: иначе при обновлении его файл занят
         await DnsSwitcher.RunPsAsync(
             "Get-Process winws -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep -Milliseconds 500; " +
