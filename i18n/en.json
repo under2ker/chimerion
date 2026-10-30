@@ -2095,5 +2095,8 @@
  "Пока нет серверов с историей проверок. Запустите проверку списка": "No servers with check history yet. Run a check of the list",
  "Пока мало проверок: график появится, когда их наберется несколько": "Not enough checks yet: the chart appears after a few more",
  "Отчет сохранен на рабочий стол: {0}, также скопирован в буфер обмена. Ваш IP, локальные адреса, имя пользователя и почта из него убраны": "Report saved to the desktop: {0}, also copied to the clipboard. Your IP, local addresses, user name and email are removed from it",
- "Отчет сохранен на рабочий стол: {0}. Ваш IP, локальные адреса, имя пользователя и почта из него убраны": "Report saved to the desktop: {0}. Your IP, local addresses, user name and email are removed from it"
+ "Отчет сохранен на рабочий стол: {0}. Ваш IP, локальные адреса, имя пользователя и почта из него убраны": "Report saved to the desktop: {0}. Your IP, local addresses, user name and email are removed from it",
+ "Приватный проект": "Private project",
+ "Приватный проект: раздел в разработке": "Private project: section in development",
+ "Раздел в разработке. Он появится в одной из следующих версий.": "This section is in development. It will appear in one of the next versions."
 }

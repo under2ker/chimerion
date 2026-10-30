@@ -279,6 +279,9 @@ public partial class MainWindow : Window
     private static readonly TimeSpan JunkTtl = TimeSpan.FromDays(14);
 
 
+    private void PrivateProject_Click(object sender, RoutedEventArgs e) =>
+        DnexDialog.Show("Приватный проект", "Раздел в разработке. Он появится в одной из следующих версий.", windowTitle: "Приватный проект");
+
     private void OpenData_Click(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo("explorer.exe", Storage.Dir) { UseShellExecute = true });
 
