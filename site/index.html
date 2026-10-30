@@ -279,6 +279,25 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 .hero::after { transform: translateY(calc(var(--py, 0) * .6px)); }
 .demo { transition: transform .9s cubic-bezier(.2,.7,.2,1); }
 
+/* Просмотр скриншота: картинка плавно вырастает из своего места и так же возвращается */
+.zoomable { cursor: zoom-in; }
+.zoomable:focus-visible { outline: 2px solid var(--lime); outline-offset: 4px; }
+.lb { position: fixed; inset: 0; z-index: 100; cursor: zoom-out; background: rgba(8,9,10,.86); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  opacity: 0; transition: opacity .42s ease; }
+.lb.open { opacity: 1; }
+.lb-img { position: fixed; z-index: 101; margin: 0; border-radius: 12px; transform-origin: 0 0; cursor: zoom-out; max-width: none; max-height: none;
+  box-shadow: 0 40px 120px -30px rgba(0,0,0,.9), 0 0 0 1px var(--line); transition: transform .5s cubic-bezier(.2,.8,.2,1), border-radius .5s; will-change: transform; }
+.lb-x { position: fixed; z-index: 102; top: 18px; right: 18px; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--bone, #F3F2EC); background: rgba(26,28,32,.9); border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.45);
+  opacity: 0; transform: scale(.6) rotate(-90deg); transition: opacity .3s ease, transform .45s cubic-bezier(.3,1.5,.5,1), background .2s, border-color .2s, color .2s; }
+.lb.open ~ .lb-x { opacity: 1; transform: none; transition-delay: .18s, .18s, 0s, 0s, 0s; }
+.lb.open ~ .lb-x:hover { background: var(--lime); border-color: var(--lime); color: #12150a; transform: rotate(90deg); transition-delay: 0s; }
+.lb.open ~ .lb-x:active { transform: rotate(90deg) scale(.9); }
+.lb-x:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+.lb-x svg { width: 20px; height: 20px; }
+@media (max-width: 600px) { .lb-x { top: 12px; right: 12px; width: 42px; height: 42px; } }
+@media (prefers-reduced-motion: reduce) { .lb-img { transition: none; } .lb-x, .lb.open ~ .lb-x { transition: opacity .2s; transform: none; } }
+
 /* Скриншот выпрямляется по мере прокрутки */
 .screen .frame { transform: perspective(1800px) rotateX(calc(var(--tilt, 0) * 14deg)) scale(calc(1 - var(--tilt, 0) * .06)); transform-origin: 50% 100%;
   will-change: transform; }
@@ -865,6 +884,101 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       news.href = rel.html_url;
     })
     .catch(() => {});
+})();
+</script>
+<script>
+(() => {
+  // Просмотр скриншотов: щелчок открывает картинку на весь экран, она плавно вырастает из своего места.
+  // Закрывается крестиком, щелчком по фону или Esc и так же плавно возвращается
+  const imgs = document.querySelectorAll(".screen .frame img, .pair .shot img");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let open = null;
+
+  imgs.forEach(img => {
+    img.classList.add("zoomable");
+    img.tabIndex = 0;
+    img.setAttribute("role", "button");
+    img.setAttribute("aria-label", "Открыть скриншот: " + (img.alt || "снимок программы"));
+    img.addEventListener("click", () => show(img));
+    img.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); show(img); } });
+  });
+
+  // Где картинка будет на экране: целиком, с полями, не крупнее исходного размера файла
+  function target(img) {
+    const pad = innerWidth < 600 ? 12 : 64;
+    // Размер файла: у снимка с srcset загруженный вариант бывает меньше, полный размер записан в width
+    const nw = img.naturalWidth || img.width, nh = img.naturalHeight || img.height;
+    const w0 = Math.max(nw, +img.getAttribute("width") || 0), h0 = Math.round(w0 * nh / nw);
+    const k = Math.min((innerWidth - pad * 2) / w0, (innerHeight - pad * 2) / h0, 1);
+    const w = Math.round(w0 * k), h = Math.round(h0 * k);
+    return { left: Math.round((innerWidth - w) / 2), top: Math.round((innerHeight - h) / 2), width: w, height: h };
+  }
+
+  // Самый крупный вариант из srcset: на телефоне страница грузит уменьшенный, а в просмотре он был бы мутным
+  function largest(img) {
+    const list = (img.getAttribute("srcset") || "").split(",").map(x => x.trim().split(/\s+/)).filter(x => x[0]);
+    if (!list.length) return img.currentSrc || img.src;
+    list.sort((a, b) => parseInt(b[1]) - parseInt(a[1]));
+    return new URL(list[0][0], document.baseURI).href;
+  }
+
+  // Сдвиг и масштаб, которые ставят большую картинку на место маленькой
+  function from(r, t) { return `translate(${r.left - t.left}px, ${r.top - t.top}px) scale(${r.width / t.width}, ${r.height / t.height})`; }
+
+  function show(img) {
+    if (open) return;
+    const r = img.getBoundingClientRect();
+    const t = target(img);
+    const back = document.createElement("div"); back.className = "lb";
+    const big = document.createElement("img"); big.className = "lb-img"; big.alt = img.alt; big.src = largest(img);
+    Object.assign(big.style, { left: t.left + "px", top: t.top + "px", width: t.width + "px", height: t.height + "px" });
+    const x = document.createElement("button"); x.className = "lb-x"; x.type = "button"; x.setAttribute("aria-label", "Закрыть");
+    x.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+    const dlg = document.createElement("div"); dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true"); dlg.setAttribute("aria-label", img.alt || "Скриншот");
+    dlg.append(back, big, x);
+    if (!reduce) big.style.transform = from(r, t);
+    // Прокрутка страницы под просмотром выключена; ширина полосы прокрутки возмещается, чтобы страница не прыгала
+    const bar = innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.overflow = "hidden";
+    if (bar) document.body.style.paddingRight = bar + "px";
+    document.body.append(dlg);
+    img.style.visibility = "hidden";
+    open = { img, dlg, back, big, x };
+    big.getBoundingClientRect(); // начальное положение применяется до перехода
+    requestAnimationFrame(() => { back.classList.add("open"); big.style.transform = "none"; big.style.borderRadius = "14px"; });
+    back.addEventListener("click", close);
+    big.addEventListener("click", close);
+    x.addEventListener("click", close);
+    x.focus({ preventScroll: true });
+  }
+
+  function close() {
+    if (!open || open.closing) return;
+    const o = open; o.closing = true;
+    const t = o.big.getBoundingClientRect();
+    const r = o.img.getBoundingClientRect();
+    o.back.classList.remove("open");
+    if (!reduce) { o.big.style.borderRadius = "10px"; o.big.style.transform = from(r, t); }
+    const done = () => {
+      o.img.style.visibility = "";
+      o.dlg.remove();
+      document.documentElement.style.overflow = "";
+      document.body.style.paddingRight = "";
+      o.img.focus({ preventScroll: true });
+      open = null;
+    };
+    if (reduce) setTimeout(done, 200);
+    else { o.big.addEventListener("transitionend", done, { once: true }); setTimeout(() => { if (open === o) done(); }, 700); }
+  }
+
+  addEventListener("keydown", e => { if (open && e.key === "Escape") close(); });
+  // Поворот телефона или смена размера окна: картинка встает по центру нового экрана
+  addEventListener("resize", () => {
+    if (!open || open.closing) return;
+    const t = target(open.img);
+    Object.assign(open.big.style, { transition: "none", left: t.left + "px", top: t.top + "px", width: t.width + "px", height: t.height + "px" });
+    open.big.getBoundingClientRect(); open.big.style.transition = "";
+  });
 })();
 </script>
 </body>
