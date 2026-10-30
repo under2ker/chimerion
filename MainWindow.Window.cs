@@ -171,6 +171,59 @@ public partial class MainWindow
 
     private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);
 
+    /// <summary>
+    /// Строка компактного вида: Telegram и «YouTube и Discord» с логотипом, состоянием и переключателем, как на главной.
+    /// Собирается один раз; состояние обновляет RefreshToolSwitches вместе с главной.
+    /// </summary>
+    private readonly HashSet<Controls.Switch> _compactToolSwitches = new(); // в узкой ячейке состояние одним словом
+
+    private void EnsureCompactTools()
+    {
+        if (CompactTools.Child != null) { RefreshToolSwitches(); return; }
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2 };
+        int i = 0;
+        foreach (var (name, logos, tool) in new (string, string[], Func<Tool>)[]
+                 {
+                     ("Telegram", new[] { "LogoTelegram" }, () => _tools.OfType<TgProxyTool>().First()),
+                     ("Обход", new[] { "LogoYouTube", "LogoDiscord" }, () => _tools.OfType<ZapretTool>().First()),
+                 })
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var icons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            foreach (var l in logos)
+            {
+                var img = new Image { Width = 18, Height = 18, Margin = new Thickness(0, 0, 3, 0) };
+                img.SetResourceReference(Image.SourceProperty, l);
+                icons.Children.Add(img);
+            }
+            g.Children.Add(icons);
+            var dot = new System.Windows.Shapes.Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+            var status = new TextBlock { FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            text.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
+            text.Children.Add(line);
+            Grid.SetColumn(text, 1); g.Children.Add(text);
+            var toggle = new Controls.Switch { Width = 40, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Automation.AutomationProperties.SetName(toggle, name == "Обход" ? "Обход YouTube и Discord" : name);
+            toggle.ToolTip = name == "Обход" ? "Обход замедления YouTube и Discord (zapret)" : "Ускорение Telegram (TG WS Proxy)";
+            WireToolSwitch(toggle, tool);
+            _compactToolSwitches.Add(toggle);
+            Grid.SetColumn(toggle, 2); g.Children.Add(toggle);
+            var cell = new Border { Child = g, Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
+                                    Margin = new Thickness(i == 0 ? 0 : 5, 0, i == 0 ? 5 : 0, 0) }
+                .Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
+            grid.Children.Add(cell);
+            _dashboardToolRows.Add((toggle, status, dot, tool));
+            i++;
+        }
+        CompactTools.Child = grid;
+        RefreshToolSwitches();
+    }
+
     private void SetCompact(bool compact, bool animate = true)
     {
         bool wasCompact = _compact;
@@ -209,6 +262,8 @@ public partial class MainWindow
         HeaderSep.Visibility = v;
         DnsLine.Visibility = v;
         CompactConnect.Visibility = cv;
+        if (compact) EnsureCompactTools();
+        CompactTools.Visibility = cv;
         ConnText.MaxWidth = compact ? 380 : 300;
         // Компактный вид: карточка подключения на всю ширину, как кнопка под ней
         Grid.SetColumnSpan(ConnHost, compact ? 3 : 1);
@@ -246,7 +301,7 @@ public partial class MainWindow
             Grid.SetRow(HeaderStats, 2); Grid.SetColumn(HeaderStats, 0); Grid.SetColumnSpan(HeaderStats, 3);
             HeaderStats.Margin = new Thickness(0, 10, 0, 0);
             HeaderStats.HorizontalAlignment = HorizontalAlignment.Center; // в компактном виде статистика по центру
-            ResizeTo(485, 775, animate);
+            ResizeTo(485, 840, animate); // выше на строку переключателей Telegram и обхода
         }
         else
         {

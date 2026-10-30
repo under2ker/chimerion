@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CHIMERION: ChatGPT, Claude и Gemini из России без VPN</title>
-<meta name="description" content="Бесплатная программа для Windows. Сама находит рабочий Smart DNS для ChatGPT, Claude и Gemini, снимает замедление YouTube и Discord, ускоряет Telegram. Банки и российские сайты работают как обычно.">
+<meta name="description" content="Бесплатная программа для Windows. Сама находит рабочий Smart DNS для ChatGPT, Claude и Gemini, снимает замедление YouTube и Discord, ускоряет Telegram. Режим «Два DNS» разделяет запросы нейросетей и остальных сайтов.">
 <link rel="canonical" href="https://chimerion.dev/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://chimerion.dev/">
@@ -368,6 +368,24 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
   .top nav a:not(.get) { display: block; padding: 14px 4px; font-size: 17px; color: var(--bone); border-bottom: 1px solid var(--line-soft); }
   .top nav .get { margin-top: 14px; text-align: center; padding: 14px; }
 }
+
+/* Обзор инструментов: тот же ритм и палитра, что у основных разделов. */
+.eyebrow { margin: 0 0 18px; color: var(--lime); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
+.eyebrow span { display: block; margin-top: 7px; color: var(--fog); font-size: 11px; letter-spacing: .08em; }
+.demo-note { margin: 12px 10px 4px; color: var(--fog); font-size: 12px; line-height: 1.5; }
+.section-heading { display: grid; grid-template-columns: 1.2fr 1fr; align-items: end; gap: 40px; margin-bottom: 30px; }
+.section-heading h2, .section-heading .intro { margin-bottom: 0; }
+.tool-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+.tool { display:flex; flex-direction:column; padding:28px; border:1px solid var(--line); border-radius:18px; background:linear-gradient(145deg,var(--panel),var(--graphite)); }
+.tool-index { color:var(--lime); font-size:12px; letter-spacing:.1em; }
+.tool h3 { font:600 20px/1.4 var(--text); margin:20px 0 12px; }
+.tool p { color:var(--soft); font-size:15px; margin:0 0 25px; }
+.tool-tags { display:flex; flex-wrap:wrap; gap:7px; margin-top:auto; }
+.tool-tags span { border:1px solid var(--line); padding:4px 9px; border-radius:6px; color:var(--stone); font-size:12px; }
+.tool-note { color:var(--fog); font-size:14px; margin:22px 0 0; max-width:80ch; }
+.tool-note a { color:var(--stone); }
+@media (max-width:760px) { .tool-grid,.section-heading { grid-template-columns:1fr; } .section-heading { gap:16px; } .tool { padding:24px; } }
+
 </style>
 </head>
 <body>
@@ -382,7 +400,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     </a>
     <button class="menu" type="button" aria-expanded="false" aria-controls="nav" aria-label="Меню"><span></span><span></span></button>
     <nav id="nav" aria-label="Разделы">
-      <a href="#cases">Что умеет</a>
+      <a href="#toolkit-h">Что умеет</a>
       <a href="#compare">Сравнение</a>
       <a href="#faq">Вопросы</a>
       <a href="https://t.me/chimeriondns">Telegram</a>
@@ -396,20 +414,21 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
   <section class="hero">
     <div class="wrap">
       <div>
+        <p class="eyebrow">WINDOWS 10 И 11 <span>SMART DNS · ZAPRET · TELEGRAM</span></p>
         <h1>ChatGPT, Claude и Gemini из России без VPN</h1>
-        <p class="lead">Программа для Windows сама находит рабочий Smart DNS, проверяет его на нейросетях и подключает в один клик. Банки, Госуслуги и остальной интернет работают как раньше.</p>
+        <p class="lead">Один экран для нейросетей, YouTube, Discord и Telegram. CHIMERION подбирает Smart DNS, показывает результат проверок и помогает включить нужный обход.</p>
         <div class="actions">
           <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/latest">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
             <span class="dl-text">Скачать для Windows</span>
           </a>
-          <a class="btn" href="https://t.me/chimeriondns">Новости в Telegram</a>
+          <a class="btn" href="#start">Как начать <span aria-hidden="true">↘</span></a>
         </div>
         <p class="fine"><span class="dl-meta">Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
       </div>
 
       <div class="demo" data-on="0" role="region" aria-label="Что открывается без программы и с ней">
-        <div class="demo-head" aria-hidden="true"><i></i><i></i><i></i><span>Что открывается</span></div>
+        <div class="demo-head" aria-hidden="true"><i></i><i></i><i></i><span>Пример работы</span></div>
         <div class="switch" role="group" aria-label="Показать">
           <span class="thumb" aria-hidden="true"></span>
           <button type="button" aria-pressed="true" data-v="0">Без программы</button>
@@ -443,7 +462,8 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
             <span class="state same" data-off="Как обычно" data-on="Как обычно" data-on-class="same">Как обычно</span>
           </li>
         </ul>
-        <p class="dns" data-off="Запросы идут к DNS провайдера, и сервисы видят адрес из России." data-on="Нейросети идут через проверенный Smart DNS, все остальное через обычный DNS. Ваш IP не меняется.">Запросы идут к DNS провайдера, и сервисы видят адрес из России.</p>
+        <p class="dns" data-off="Запросы идут к DNS провайдера, и сервисы видят адрес из России." data-on="Нейросети идут через проверенный Smart DNS, все остальное через обычный DNS. Для нейросетей может измениться страна выхода.">Запросы идут к DNS провайдера, и сервисы видят адрес из России.</p>
+        <p class="demo-note">Иллюстрация, а не проверка вашей сети. Доступность зависит от сервера, провайдера и самого сервиса.</p>
       </div>
     </div>
   </section>
@@ -456,6 +476,18 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <li><b><span class="num" data-to="38">38</span> наборов</b><span>сайтов для zapret: соцсети, видео, игры, работа</span></li>
         <li><b><span class="num" data-to="0">0</span> рублей</b><span>открытый код и подписанные сборки на GitHub</span></li>
       </ul>
+    </div>
+  </section>
+
+  <section class="band toolkit" aria-labelledby="toolkit-h">
+    <div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow">ЧТО ВНУТРИ</p><h2 id="toolkit-h">Нужные инструменты в одном окне</h2></div><p class="intro">Включите только то, чем пользуетесь. На главном экране видно, что запущено и что удалось проверить.</p></div>
+      <div class="tool-grid">
+        <article class="tool"><span class="tool-index">01 / SMART DNS</span><h3>Нейросети для работы</h3><p>Подбор серверов для ChatGPT, Claude и Gemini, проверка доступа и контроль страны выхода.</p><div class="tool-tags"><span>ChatGPT</span><span>Claude</span><span>Gemini</span></div></article>
+        <article class="tool"><span class="tool-index">02 / ZAPRET</span><h3>Видео и общение</h3><p>Отдельный обход для YouTube и Discord. Готовые наборы сайтов и подбор стратегии под вашу сеть.</p><div class="tool-tags"><span>YouTube</span><span>Discord</span><span>Свои сайты</span></div></article>
+        <article class="tool"><span class="tool-index">03 / TELEGRAM</span><h3>Telegram через прокси</h3><p>Запуск TG WS Proxy и состояние его работы в программе. Управление рядом с остальными инструментами.</p><div class="tool-tags"><span>TG WS Proxy</span><span>Один переключатель</span></div></article>
+      </div>
+      <p class="tool-note">CHIMERION не заменяет VPN для всего трафика и не скрывает вашу личность в интернете. <a href="#compare">Сравнить способы подключения</a></p>
     </div>
   </section>
 
@@ -491,7 +523,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <li><q>ChatGPT пишет «not available in your country», а Claude просит VPN</q>
           <p><b>Подключает Smart DNS</b>, который открывает нейросети. Перед этим программа проверяет сервер на всех трех сервисах.</p></li>
         <li><q>С VPN не пускает банк, а без него не открываются нейросети</q>
-          <p><b>Два DNS:</b> только нейросети идут через Smart DNS, все остальное как раньше. VPN не нужен, IP остается вашим.</p></li>
+          <p><b>Два DNS:</b> только нейросети идут через Smart DNS, все остальное как раньше. При этом страна выхода у нейросетей может измениться.</p></li>
         <li><q>YouTube грузится по минуте, Discord не подключается</q>
           <p><b>Ставит zapret</b> и по кнопке подбирает стратегию обхода, которая работает у вашего провайдера.</p></li>
         <li><q>Вчерашний DNS сегодня уже не работает</q>
@@ -561,26 +593,26 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <thead><tr><th scope="col"><span class="sr">Что важно</span></th><th scope="col" class="us">CHIMERION</th><th scope="col">VPN</th><th scope="col">DNS вручную</th></tr></thead>
         <tbody>
           <tr><th scope="row">ChatGPT, Claude и Gemini</th><td class="us"><span class="mk y">Открываются</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk m">Пока сервер жив</span></td></tr>
-          <tr><th scope="row">Банки и Госуслуги</th><td class="us"><span class="mk y">Как обычно</span></td><td><span class="mk n">Часто не пускают</span></td><td><span class="mk y">Как обычно</span></td></tr>
-          <tr><th scope="row">Скорость интернета</th><td class="us"><span class="mk y">Не меняется</span></td><td><span class="mk m">Падает</span></td><td><span class="mk y">Не меняется</span></td></tr>
-          <tr><th scope="row">Если сервер упал</th><td class="us"><span class="mk y">Переключит сама</span></td><td><span class="mk m">Сменить вручную</span></td><td><span class="mk n">Искать новый</span></td></tr>
+          <tr><th scope="row">Банки и Госуслуги</th><td class="us"><span class="mk y">Как обычно</span></td><td><span class="mk n">Зависит от маршрута</span></td><td><span class="mk y">Как обычно</span></td></tr>
+          <tr><th scope="row">Скорость интернета</th><td class="us"><span class="mk y">Зависит от маршрута</span></td><td><span class="mk m">Зависит от сервера</span></td><td><span class="mk y">Зависит от маршрута</span></td></tr>
+          <tr><th scope="row">Если сервер упал</th><td class="us"><span class="mk y">По настройкам</span></td><td><span class="mk m">Сменить вручную</span></td><td><span class="mk n">Искать новый</span></td></tr>
           <tr><th scope="row">YouTube и Discord</th><td class="us"><span class="mk y">zapret внутри</span></td><td><span class="mk y">Работают</span></td><td><span class="mk n">Не помогает</span></td></tr>
           <tr><th scope="row">Сайты, закрытые по адресу</th><td class="us"><span class="mk m">Часть через zapret</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk n">Не помогает</span></td></tr>
           <tr><th scope="row">Цена</th><td class="us"><span class="mk y">Бесплатно</span></td><td><span class="mk m">Обычно платно</span></td><td><span class="mk y">Бесплатно</span></td></tr>
         </tbody>
       </table>
-      <p class="compare-note">Если вам нужен доступ вообще ко всему заблокированному, VPN надежнее. Если нужны нейросети, YouTube и Telegram без потери скорости и без проблем с банками, хватит CHIMERION.</p>
+      <p class="compare-note">Выбор зависит от задачи: VPN меняет маршрут трафика, CHIMERION объединяет отдельные инструменты для нейросетей, видео и Telegram. Ни один способ не гарантирует доступность всех сайтов.</p>
     </div>
   </section>
 
   <section class="band" aria-labelledby="start">
     <div class="wrap">
       <h2 id="start">Как начать</h2>
-      <p class="intro">Устанавливать ничего не нужно, программа работает из папки и дальше обновляется сама.</p>
+      <p class="intro">Программа работает из папки. Нужны Windows 10 или 11 и .NET 8 Desktop Runtime. Обновления устанавливаются из самой программы.</p>
       <ol class="steps">
         <li><b>Скачайте архив</b><span>Распакуйте в любую папку и запустите CHIMERION.exe.</span></li>
         <li><b>Дождитесь проверки</b><span>Программа соберет серверы и проверит их на нейросетях. Лучшие окажутся наверху.</span></li>
-        <li><b>Нажмите «Подключить»</b><span>Windows спросит разрешение на смену DNS. «Отключить» вернет все как было.</span></li>
+        <li><b>Включите «Защиту»</b><span>Разрешите Windows изменить DNS и посмотрите результаты проверки. Для возврата исходного DNS выключите защиту.</span></li>
       </ol>
     </div>
   </section>
@@ -602,7 +634,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         </details>
         <details>
           <summary>Чем это лучше VPN?</summary>
-          <p>Меняется только DNS. Скорость не падает, банки и российские сайты работают как обычно, IP остается вашим. Подробнее в <a href="#compare">сравнении</a>.</p>
+          <p>Для нейросетей используется Smart DNS, для YouTube и Discord доступен zapret, для Telegram отдельный прокси. В режиме «Два DNS» остальные запросы идут через общий DNS. Скорость и доступность зависят от вашей сети и выбранного сервера. Подробнее в <a href="#compare">сравнении</a>.</p>
         </details>
         <details>
           <summary>Могут ли заблокировать аккаунт?</summary>
@@ -814,14 +846,15 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
   });
 
   // Кнопки «Скачать» ведут прямо на архив последней версии. Без ответа GitHub остается ссылка на страницу релиза
-  fetch("https://api.github.com/repos/under2ker/chimerion/releases/latest")
+  fetch("https://api.github.com/repos/under2ker/chimerion/releases/latest", { signal: AbortSignal.timeout(8000) })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(rel => {
       const zip = (rel.assets || []).find(a => /^CHIMERION-.*-win-x64\.zip$/.test(a.name));
       if (!zip) return;
-      const ver = rel.tag_name.replace(/^v/, "");
+      const ver = String(rel.tag_name || "").replace(/^v/, "");
+      if (!/^\d+\.\d+\.\d+$/.test(ver) || !zip.browser_download_url.startsWith("https://github.com/under2ker/chimerion/releases/download/")) return;
       document.querySelectorAll("a.dl").forEach(a => { a.href = zip.browser_download_url; });
-      document.querySelectorAll(".dl-text").forEach(t => { t.innerHTML = "Скачать " + ver + " <small>" + (zip.size / 1048576).toFixed(1).replace(".", ",") + " МБ</small>"; });
+      document.querySelectorAll(".dl-text").forEach(t => { t.textContent = "Скачать " + ver; const size = document.createElement("small"); size.textContent = " " + (zip.size / 1048576).toFixed(1).replace(".", ",") + " МБ"; t.append(size); });
       document.querySelector(".dl-meta").textContent = "Бесплатно и с открытым кодом. Версия " + ver + ".";
       document.querySelectorAll(".code").forEach(c => { c.textContent = c.textContent.replace(/CHIMERION-[\d.]+-win-x64\.zip/, zip.name); });
       const date = new Date(rel.published_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });

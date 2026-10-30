@@ -171,6 +171,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/> <!-- статистика в компактном виде -->
+                <RowDefinition Height="Auto"/> <!-- переключатели Telegram и обхода в компактном виде -->
             </Grid.RowDefinitions>
 
             <StackPanel x:Name="ConnHost" VerticalAlignment="Center">
@@ -252,6 +253,8 @@
             <Button x:Name="CompactConnect" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Padding="16,9"
                     Style="{StaticResource Primary}" Click="Main_Click" Visibility="Collapsed"
                     ToolTip="Подключиться к выбранному серверу. По умолчанию выбирается лучший"/>
+            <!-- Компактный вид: Telegram и обход YouTube и Discord своими переключателями, как на главной (заполняется в коде) -->
+            <Border x:Name="CompactTools" Grid.Row="3" Grid.ColumnSpan="3" Margin="0,10,0,0" Visibility="Collapsed"/>
         </Grid>
 
         <!-- ================= ПРОВЕРКА ПОДКЛЮЧЕНИЯ И ЛУЧШИЕ ПО СТАБИЛЬНОСТИ ================= -->
