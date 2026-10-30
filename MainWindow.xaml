@@ -317,6 +317,8 @@
                         ToolTip="Еще раз проверить все серверы в списке"/>
                 <Button x:Name="RecheckMenuButton" Click="RecheckMenu_Click" Style="{StaticResource Strong}"
                         Padding="10,9" Margin="4,0,0,0" ToolTip="Режим проверки: глубокая, только ChatGPT, Claude или Gemini"><controls:Icon Kind="chevron-down" Size="14"/></Button>
+                <Button Content="График качества" Click="Quality_Click" Style="{StaticResource Strong}" Margin="8,0,0,0"
+                        ToolTip="Как выбранный сервер отвечал за последние 14 дней: время ответа и проверки без ответа"/>
                 <Button Content="Найти новые серверы" Click="Fetch_Click" Style="{StaticResource Primary}"
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
