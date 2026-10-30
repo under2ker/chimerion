@@ -159,17 +159,58 @@ internal static class Ui
     public static bool CopyText(string text)
     {
         if (string.IsNullOrEmpty(text)) return false;
-        for (int i = 0; i < 6; i++)
+        string last = "";
+        for (int i = 0; i < 4; i++)
         {
             try { Clipboard.SetDataObject(text, true); return true; }
-            catch (Exception) { System.Threading.Thread.Sleep(100); }
+            catch (Exception e) { last = e.GetType().Name + " 0x" + e.HResult.ToString("X8"); System.Threading.Thread.Sleep(100); }
         }
-        for (int i = 0; i < 6; i++)
+        // Большой отчет (мегабайт) WPF иногда не может отдать системе: пишем напрямую через Windows и ждем дольше
+        if (NativeCopy(text, out var code)) { Dnex.Services.SupportTrace.Write($"Буфер обмена: WPF не справился ({last}), записано напрямую; символов={text.Length}"); return true; }
+        Dnex.Services.SupportTrace.Write($"Буфер обмена не записан: {last}; код Windows={code}; символов={text.Length}");
+        return false;
+    }
+
+    private static bool NativeCopy(string text, out int error)
+    {
+        error = 0;
+        for (int i = 0; i < 30; i++)
         {
-            try { Clipboard.SetDataObject(text, false); return true; }
-            catch (Exception) { System.Threading.Thread.Sleep(150); }
+            if (!NativeClip.OpenClipboard(IntPtr.Zero)) { error = System.Runtime.InteropServices.Marshal.GetLastWin32Error(); System.Threading.Thread.Sleep(100); continue; }
+            IntPtr mem = IntPtr.Zero;
+            try
+            {
+                var bytes = (text.Length + 1) * 2;
+                mem = NativeClip.GlobalAlloc(0x0042, (UIntPtr)bytes); // GMEM_MOVEABLE | GMEM_ZEROINIT
+                if (mem == IntPtr.Zero) { error = System.Runtime.InteropServices.Marshal.GetLastWin32Error(); return false; }
+                var ptr = NativeClip.GlobalLock(mem);
+                if (ptr == IntPtr.Zero) { error = System.Runtime.InteropServices.Marshal.GetLastWin32Error(); return false; }
+                System.Runtime.InteropServices.Marshal.Copy(text.ToCharArray(), 0, ptr, text.Length);
+                NativeClip.GlobalUnlock(mem);
+                NativeClip.EmptyClipboard();
+                if (NativeClip.SetClipboardData(13, mem) == IntPtr.Zero) { error = System.Runtime.InteropServices.Marshal.GetLastWin32Error(); return false; }
+                mem = IntPtr.Zero; // теперь памятью владеет система
+                return true;
+            }
+            finally
+            {
+                NativeClip.CloseClipboard();
+                if (mem != IntPtr.Zero) NativeClip.GlobalFree(mem);
+            }
         }
         return false;
+    }
+
+    private static class NativeClip
+    {
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)] public static extern bool OpenClipboard(IntPtr owner);
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)] public static extern bool CloseClipboard();
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)] public static extern bool EmptyClipboard();
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)] public static extern IntPtr SetClipboardData(uint format, IntPtr mem);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GlobalLock(IntPtr mem);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] public static extern bool GlobalUnlock(IntPtr mem);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] public static extern IntPtr GlobalFree(IntPtr mem);
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, Dictionary<DependencyProperty, (SolidColorBrush Brush, Color Target)>> Fades = new();

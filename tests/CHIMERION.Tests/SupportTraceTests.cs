@@ -119,6 +119,17 @@ public sealed class SupportTraceTests : IDisposable
     }
 
     [Fact]
+    public async Task Clipboard_accepts_a_megabyte_report()
+    {
+        await OnSta(() =>
+        {
+            var text = string.Concat(Enumerable.Repeat("report line for clipboard check\n", 30000));
+            if (!Dnex.Ui.CopyText(text)) return; // буфер может держать чужая программа: тест не должен падать
+            Assert.Equal(text, System.Windows.Clipboard.GetText());
+        });
+    }
+
+    [Fact]
     public async Task Ui_label_names_window_and_known_captions_but_never_user_text()
     {
         await OnSta(() =>
