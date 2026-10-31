@@ -4,6 +4,7 @@ using Xunit;
 
 namespace Dnex.Tests;
 
+[Collection("language")] // тесты переключают язык программы: не параллельно
 public class QualityStatsTests
 {
     private static readonly DateTime Now = new(2026, 10, 30, 12, 0, 0);
@@ -85,6 +86,21 @@ public class QualityStatsTests
         Assert.Equal(2, QualityStats.BucketHours(Now.AddHours(-5), Now));
         Assert.Equal(6, QualityStats.BucketHours(Now.AddDays(-3), Now));
         Assert.Equal(24, QualityStats.BucketHours(Now.AddDays(-13), Now));
+    }
+
+    [Fact]
+    public void Quality_conclusion_is_fully_translated()
+    {
+        var p = typeof(Dnex.Services.Loc).GetProperty("Lang")!;
+        p.SetValue(null, "en");
+        try
+        {
+            var text = new Dnex.Services.QualitySummary(201, 169, 52, 150, Dnex.Services.QualityStats.Parts[3], 42, 7, null).Text;
+            Assert.DoesNotMatch("[А-Яа-я]", text);
+            Assert.Contains("84%", text);
+            Assert.Contains("in the evening", text);
+        }
+        finally { p.SetValue(null, "ru"); }
     }
 
     [Fact]

@@ -10,13 +10,17 @@ public sealed record QualitySummary(int Count, int OkCount, long? MedianMs, long
     {
         get
         {
-            if (Count < 3) return "Пока мало проверок: график появится, когда их наберется несколько";
-            var parts = new List<string> { $"отвечал в {OkPercent}% проверок ({OkCount} из {Count})" };
-            if (MedianMs is { } m) parts.Add($"обычный ответ {m} мс" + (SlowMs is { } s && s > m * 2 ? $", в плохие моменты до {s} мс" : ""));
-            if (Outages > 0) parts.Add($"провалов подряд: {Outages}");
+            if (Count < 3) return Loc.T("Пока мало проверок: график появится, когда их наберется несколько");
+            var parts = new List<string> { Loc.T($"отвечал в {OkPercent}% проверок ({OkCount} из {Count})") };
+            if (MedianMs is { } m)
+            {
+                parts.Add(Loc.T($"обычный ответ {m} мс"));
+                if (SlowMs is { } s && s > m * 2) parts.Add(Loc.T($"в плохие моменты до {s} мс"));
+            }
+            if (Outages > 0) parts.Add(Loc.T($"провалов подряд: {Outages}"));
             var joined = string.Join(", ", parts);
             var text = char.ToUpper(joined[0]) + joined[1..] + ".";
-            if (WorstPart != null) text += $" Чаще всего сбои {WorstPart}: {WorstPercent}% проверок не прошли.";
+            if (WorstPart != null) text += " " + Loc.T($"Чаще всего сбои {WorstPart}: {WorstPercent}% проверок не прошли.");
             return text;
         }
     }

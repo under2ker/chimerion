@@ -102,6 +102,9 @@
                 <!-- Версия видна всегда, в том числе в компактном окне -->
                 <TextBlock x:Name="TitleVersion" Margin="6,0,0,0" FontSize="12" Foreground="{DynamicResource Muted}" Opacity="0.7" VerticalAlignment="Center"/>
             </StackPanel>
+            <!-- ID устройства, который уходит в счетчик: виден всегда, щелчок копирует -->
+            <TextBlock x:Name="TitleId" Grid.Column="1" Margin="0,0,12,0" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Muted}" Opacity="0.7"
+                       VerticalAlignment="Center" Cursor="Hand" Background="Transparent" WindowChrome.IsHitTestVisibleInChrome="True" MouseLeftButtonUp="TitleId_Click"/>
             <Button Grid.Column="2" Style="{StaticResource CaptionButton}" Click="Minimize_Click"
                     WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Свернуть"><controls:Icon Kind="minus" Size="14" StrokeWidth="1.6"/></Button>
             <Button Grid.Column="3" x:Name="MaxButton" Style="{StaticResource CaptionButton}" Click="MaxRestore_Click"

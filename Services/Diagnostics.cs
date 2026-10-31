@@ -52,6 +52,10 @@ public static class Diagnostics
         // То же имя, что на главной и в журнале («Россия, Москва»), а не технический источник вроде raw.githubusercontent.com
         var activeName = activeServer?.ShortName ?? active?.Name;
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
+        foreach (var issue in (await Task.Run(() => StartupCheck.Inspect(StartupCheck.Current(tools)))).Where(i => i != StartupIssue.StaleBackup))
+            items.Add(StartupCheck.NeedsRestore(issue)
+                ? new DiagItem(DiagLevel.Bad, StartupCheck.Describe(issue), "Прошлое изменение сети оборвалось. Кнопка вернет исходные настройки", "restore-network", "Вернуть настройки")
+                : new DiagItem(DiagLevel.Warn, StartupCheck.Describe(issue)));
         if (active == null)
             items.Add(new DiagItem(DiagLevel.Info, "Не подключено", "DNS системы: " + (current.Count == 0 ? "автоматически" : string.Join(", ", current)),
                 "connect", "Подключить лучший"));

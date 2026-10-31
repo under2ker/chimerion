@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Threading;
 using Dnex.Models;
 using Dnex.Services;
@@ -11,9 +12,29 @@ public partial class MainWindow
     private Crowd.Stats? _crowd = Crowd.LoadStats();
     private readonly DispatcherTimer _crowdTimer = new() { Interval = TimeSpan.FromMinutes(10) };
 
+    /// <summary>
+    /// ID устройства в заголовке окна: человек видит ровно то, что уходит в счетчик. В узком компактном виде первые 8 знаков.
+    /// Показывается всегда, в том числе в режиме скрытия данных: личных данных в ID нет. На копии данных для снимков выдуманный ID.
+    /// </summary>
+    private void UpdateTitleId()
+    {
+        var id = NoAutoDns ? "a1b2c3d4e5f60718293a4b5c6d7e8f90" : UsageCounter.DeviceId(_settings);
+        TitleId.Text = "ID " + (_compact ? id[..8] + "…" : id);
+        TitleId.ToolTip = $"ID устройства: {id}. В счетчик пользователей уходят он, версия и время работы, данных о вас там нет. Щелчок копирует";
+    }
+
+    private void TitleId_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (Ui.CopyText(UsageCounter.DeviceId(_settings))) ShowToast("ID скопирован");
+        else ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn");
+    }
+
     /// <summary>При запуске: таймер обмена с общей картой и, один раз, вопрос о согласии.</summary>
+    private DateTime _usageTick = DateTime.UtcNow;
+
     private void StartCrowd()
     {
+        _settings.UsageRuns++;
         _crowdTimer.Tick += async (_, _) => await CrowdSyncAsync();
         _crowdTimer.Start();
         _ = Dispatcher.InvokeAsync(async () =>
@@ -56,6 +77,14 @@ public partial class MainWindow
             if (_settings.CrowdConsent == true && await Crowd.SendAsync(_crowdQueue)) Crowd.SaveQueue(_crowdQueue);
         }
         catch (Exception) { /* сервер недоступен: отправим в следующий раз */ }
+        try
+        {
+            UsageCounter.AddSession(_settings, DateTime.UtcNow - _usageTick);
+            _usageTick = DateTime.UtcNow;
+            await UsageCounter.PingAsync(_settings, DateTime.Now);
+            Storage.Save("settings.json", _settings);
+        }
+        catch (Exception) { /* отметимся при следующей попытке */ }
         try
         {
             if (_crowd == null || DateTime.Now - _crowd.Fetched > Crowd.FetchEvery)

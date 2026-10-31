@@ -402,6 +402,76 @@ public class DnsScenarioTests
         Assert.Null(DnsSwitcher.GetActive());
     }
 
+    /// <summary>Подключение «упало» прямо перед запуском скрипта или после него: процесс не дождался ответа.</summary>
+    private static async Task KillDuring(NetSim sim, Func<string, Task> beforeDeath)
+    {
+        var hang = new TaskCompletionSource();
+        var reached = new TaskCompletionSource();
+        sim.Before = async script =>
+        {
+            if (!script.Contains("$ifs =")) return;
+            await beforeDeath(script);
+            reached.SetResult();
+            await hang.Task;
+        };
+        var (_, write) = NewLog();
+        _ = DnsSwitcher.ApplyAsync(Server, new AppSettings(), write);
+        await reached.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        sim.Before = null;
+    }
+
+    [Fact]
+    public async Task Crash_after_backup_before_any_change_recovers_cleanly()
+    {
+        using var sim = new NetSim(OneEthernet(a => { a.static4 = "9.9.9.9"; a.dns4 = new() { "9.9.9.9" }; }));
+        await KillDuring(sim, _ => Task.CompletedTask);
+        Assert.True(DnsSwitcher.BackupExists);
+        Assert.NotNull(DnsSwitcher.GetActive());
+
+        var (_, write) = NewLog();
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.Equal(new[] { "9.9.9.9" }, sim["Sim-Ethernet"].dns4);
+        Assert.Null(DnsSwitcher.GetActive());
+        Assert.False(DnsSwitcher.BackupExists);
+    }
+
+    [Fact]
+    public async Task Crash_after_part_of_adapters_is_noticed_and_rolled_back()
+    {
+        using var sim = new NetSim(new NetSim.State
+        {
+            adapters = { new NetSim.Adapter(), new NetSim.Adapter { name = "Sim-WiFi", index = 15, guid = "{22222222-2222-2222-2222-222222222222}" } },
+        });
+        // Успел поменяться только первый адаптер
+        await KillDuring(sim, _ => { sim.Edit(s => s.adapters[0].dns4 = Ours.ToList()); return Task.CompletedTask; });
+        var active = DnsSwitcher.GetActive()!;
+        var perAdapter = sim.Load().adapters.Select(a => (IReadOnlyCollection<IPAddress>)a.dns4.Select(IPAddress.Parse).ToList()).ToList();
+        Assert.True(ConnectionMonitor.NeedsRestore(active, sim.CurrentDns(), true, out _, perAdapter));
+
+        var (_, write) = NewLog();
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-WiFi"].dns4);
+        Assert.Null(DnsSwitcher.GetActive());
+    }
+
+    [Fact]
+    public async Task Crash_after_ipv6_off_without_connection_record_is_found_at_start()
+    {
+        using var sim = new NetSim(OneEthernet(a => a.dns6 = new() { "fd00::1" }));
+        await KillDuring(sim, async script => await sim.RunReal(script));
+        Assert.False(sim["Sim-Ethernet"].v6);
+        File.Delete(Path.Combine(TestSetup.DataDir, "active.json")); // запись о подключении потеряна
+
+        var state = new StartupState(false, DnsSwitcher.Ipv6LeftOff, DnsSwitcher.BackupExists, false, false, false);
+        Assert.Contains(StartupIssue.Ipv6LeftOff, StartupCheck.Inspect(state));
+
+        var (_, write) = NewLog();
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.True(sim["Sim-Ethernet"].v6);
+        Assert.Empty(StartupCheck.Inspect(new StartupState(false, DnsSwitcher.Ipv6LeftOff, DnsSwitcher.BackupExists, false, false, false)));
+    }
+
     [Fact]
     public async Task Ipv6_turned_off_for_connection_is_turned_back_on()
     {

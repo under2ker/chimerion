@@ -97,7 +97,7 @@ internal sealed class QualityWindow
 
     private static Color AccentColor() => (Application.Current?.TryFindResource("Accent") as SolidColorBrush)?.Color ?? Colors.GreenYellow;
 
-    private static string D(DateTime t) => t.ToString("d MMM", Ru);
+    private static string D(DateTime t) => t.ToString("d MMM", Loc.En ? CultureInfo.InvariantCulture : Ru);
 
     private void Render()
     {
@@ -274,9 +274,9 @@ internal sealed class QualityWindow
     private static string Tip(QualityBucket b)
     {
         var head = $"{D(b.Start)}, {b.Start:HH:mm}–{b.End:HH:mm}";
-        if (b.Count == 0) return head + ": проверок не было";
-        var stat = $"проверок {b.Count}, без ответа {b.Failed}";
-        return head + "\n" + (b.MedianMs is { } m ? $"обычно {m} мс, " : "") + stat;
+        if (b.Count == 0) return head + ": " + Loc.T("проверок не было");
+        var stat = Loc.T($"проверок {b.Count}, без ответа {b.Failed}");
+        return head + "\n" + (b.MedianMs is { } m ? Loc.T($"обычно {m} мс") + ", " : "") + stat;
     }
 
     private TextBlock Text(string text, double x, double y, string color)
