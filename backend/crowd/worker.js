@@ -2,7 +2,7 @@
 //
 // POST /v1/report   программа присылает итоги своих проверок: сервер, сервис, работает или нет. Сеть провайдера
 //                   (AS) берется из cf.asn, IP не хранится. С одного адреса не больше 5 отчетов в час.
-// POST /v1/ping    отметка копии программы раз в сутки: ID устройства, версия, время работы, признаки подмены.
+// POST /v1/ping    отметка копии программы при запуске и каждые 6 часов: ID устройства, версия, время работы, признаки подмены.
 // GET  /v1/usage   сводка для владельца по ключу администратора: сколько устройств всего и активных.
 // GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий.
 // POST /tg/<secret> Telegram-бот: /dns — что работает сейчас, /status — сколько данных.
@@ -243,17 +243,39 @@ async function ping(req, env) {
       .bind(taken ? id : prev, ...(taken ? [] : [id])).run();
     if (taken) await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(prev).run();
   }
+  // Первая отметка устройства за сутки: для точного счета по дням
+  const seen = await env.DB.prepare("SELECT last_day FROM devices WHERE id = ?").bind(id).first();
+  if (!seen || seen.last_day < d)
+    await env.DB.prepare("INSERT INTO device_days (day, n) VALUES (?, 1) ON CONFLICT (day) DO UPDATE SET n = n + 1").bind(d).run();
   const ver = typeof body.ver === "string" && /^\d+\.\d+\.\d+$/.test(body.ver) ? body.ver : null;
   const src = ["board", "windows", "random"].includes(body.src) ? body.src : "?";
   const token = typeof body.tok === "string" && hex.test(body.tok) ? await salted(body.tok) : "";
   const sec = count(body.sec, 864000), runs = count(body.runs, 10000);
   await env.DB.prepare(`INSERT INTO devices (id, mask, first_day, last_day, days, version, source, token, moved, total_sec, last_sec, runs)
       VALUES (?1, ?2, ?3, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?8, ?9)
-      ON CONFLICT (id) DO UPDATE SET days = days + (excluded.last_day > last_day), last_day = excluded.last_day, version = excluded.version, source = excluded.source,
+      ON CONFLICT (id) DO UPDATE SET days = days + (excluded.last_day > last_day), version = excluded.version, source = excluded.source,
         token_changes = token_changes + (token <> '' AND excluded.token <> '' AND token <> excluded.token), token = excluded.token,
-        moved = moved + excluded.moved, total_sec = total_sec + excluded.total_sec, last_sec = excluded.last_sec, runs = runs + excluded.runs`)
+        moved = moved + excluded.moved, total_sec = total_sec + excluded.total_sec, last_sec = CASE WHEN excluded.last_day > last_day THEN excluded.last_sec ELSE last_sec + excluded.last_sec END, runs = runs + excluded.runs, last_day = excluded.last_day`)
     .bind(id, `${body.id.slice(0, 4)}****${body.id.slice(-4)}`, d, ver, src, token, body.moved === true ? 1 : 0, sec, runs).run();
   return json({ ok: true });
+}
+
+/**
+ * Приблизительная оценка аудитории: разные адреса за сутки, запросившие рейтинг. Работает со всеми версиями программы.
+ * Адрес хранится только как хэш с солью суток: сравнить человека между днями нельзя, поэтому оценка считается по одному дню.
+ * Метка в кэше экономит запись в базу: программа спрашивает рейтинг каждый час.
+ */
+async function noteReach(req, env) {
+  try {
+    const ip = req.headers.get("cf-connecting-ip");
+    if (!ip) return;
+    const d = today();
+    const k = await sha256(`reach|${ip}|${d}|${env.USAGE_SALT || ""}`);
+    const mark = new Request(`https://reach.cache/${k}`);
+    if (await caches.default.match(mark)) return;
+    await caches.default.put(mark, new Response("1", { headers: { "cache-control": "max-age=86400" } }));
+    await env.DB.prepare("INSERT OR IGNORE INTO reach (day, k) VALUES (?, ?)").bind(d, k).run();
+  } catch (e) { console.log("reach", String(e)); }
 }
 
 /** Сводка для владельца: устройства всего и активные, время работы, подозрительные, версии и список устройств. */
@@ -264,8 +286,15 @@ async function usageReport(env) {
     .bind(d - 1, d - 7, d - 30, d - 7).first();
   const v = await env.DB.prepare("SELECT version, COUNT(*) AS n FROM devices WHERE last_day >= ? GROUP BY version ORDER BY n DESC LIMIT 8").bind(d - 30).all();
   const list = await env.DB.prepare("SELECT mask, first_day, last_day, days, version, source, replaced, token_changes, moved, total_sec, last_sec, runs FROM devices ORDER BY last_day DESC, total_sec DESC LIMIT 200").all();
+  const reach = await env.DB.prepare("SELECT day, COUNT(*) AS n FROM reach WHERE day >= ? GROUP BY day").bind(d - 30).all();
+  const ids = await env.DB.prepare("SELECT day, n FROM device_days WHERE day >= ?").bind(d - 30).all();
+  const byDay = (rows) => Object.fromEntries(rows.results.map((x) => [x.day, x.n]));
+  const est = byDay(reach), exact = byDay(ids);
+  const last7 = [...Array(7).keys()].map((i) => est[d - 1 - i] || 0).filter((x) => x > 0);
+  const estimate = { today: est[d] || 0, yesterday: est[d - 1] || 0, avg7: last7.length ? Math.round(last7.reduce((a, b) => a + b, 0) / last7.length) : 0, peak30: Math.max(0, ...Object.values(est)) };
+  const daily = [...Array(14).keys()].map((i) => ({ day: d - i, ids: exact[d - i] || 0, estimate: est[d - i] || 0 }));
   const n = (x) => x || 0;
-  return { total: n(r?.total), day: n(r?.day), week: n(r?.week), month: n(r?.month), fresh: n(r?.fresh), seconds: n(r?.seconds), flagged: n(r?.flagged), versions: v.results, devices: list.results, today: d };
+  return { estimate, daily, total: n(r?.total), day: n(r?.day), week: n(r?.week), month: n(r?.month), fresh: n(r?.fresh), seconds: n(r?.seconds), flagged: n(r?.flagged), versions: v.results, devices: list.results, today: d };
 }
 
 /** Не больше limit запросов в час с одного адреса для дорогих проверок (probe). */
@@ -564,7 +593,7 @@ export default {
     const url = new URL(req.url);
     try {
       if (req.method === "POST" && url.pathname === "/v1/report") return await report(req, env);
-      if (req.method === "GET" && url.pathname === "/v1/stats") return await stats(req, env, ctx);
+      if (req.method === "GET" && url.pathname === "/v1/stats") { ctx.waitUntil(noteReach(req, env)); return await stats(req, env, ctx); }
       if (req.method === "POST" && url.pathname === "/v1/ping") return await ping(req, env);
       if (req.method === "GET" && url.pathname === "/v1/usage" && env.ADMIN_KEY && env.OWNER_ID && req.headers.get("x-admin-key") === env.ADMIN_KEY && req.headers.get("x-device-id") === env.OWNER_ID) return json(await usageReport(env));
       if (req.method === "POST" && env.TG_WEBHOOK_SECRET && url.pathname === `/tg/${env.TG_WEBHOOK_SECRET}`) return await telegram(req, env);
@@ -595,6 +624,8 @@ export default {
       env.DB.prepare("DELETE FROM stats WHERE hour < ?").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM seen WHERE hour < ?").bind(h - 48),
       env.DB.prepare("DELETE FROM devices WHERE last_day < ?").bind(today() - 180),
+      env.DB.prepare("DELETE FROM reach WHERE day < ?").bind(today() - 31),
+      env.DB.prepare("DELETE FROM device_days WHERE day < ?").bind(today() - 180),
     ]);
   },
 };

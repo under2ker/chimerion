@@ -85,13 +85,15 @@ public class UsageCounterTests
     }
 
     [Fact]
-    public async Task Ping_sends_only_id_and_version_once_a_day() => await With(async h =>
+    public async Task Ping_goes_at_start_and_every_six_hours() => await With(async h =>
     {
         var s = new AppSettings();
         Assert.True(await UsageCounter.PingAsync(s, Now));
         Assert.False(await UsageCounter.PingAsync(s, Now.AddHours(3)));
-        Assert.True(await UsageCounter.PingAsync(s, Now.AddDays(1)));
-        Assert.Equal(2, h.Calls.Count);
+        Assert.True(await UsageCounter.PingAsync(s, Now.AddHours(3), atStart: true));
+        Assert.False(await UsageCounter.PingAsync(s, Now.AddHours(8)));
+        Assert.True(await UsageCounter.PingAsync(s, Now.AddHours(9)));
+        Assert.Equal(3, h.Calls.Count);
         Assert.EndsWith("/v1/ping", h.Calls[0].Url);
         using var doc = System.Text.Json.JsonDocument.Parse(h.Calls[0].Body);
         Assert.Equal(new[] { "v", "id", "ver", "src", "tok", "prev", "moved", "sec", "runs" }, doc.RootElement.EnumerateObject().Select(p => p.Name));
@@ -182,7 +184,7 @@ public class UsageCounterTests
         h.Code = HttpStatusCode.NotFound; // сервер еще не обновлен
         var s = new AppSettings();
         Assert.False(await UsageCounter.PingAsync(s, Now));
-        Assert.Null(s.UsagePingDay);
+        Assert.Null(s.UsagePingAt);
         h.Code = HttpStatusCode.OK;
         Assert.True(await UsageCounter.PingAsync(s, Now));
     });
