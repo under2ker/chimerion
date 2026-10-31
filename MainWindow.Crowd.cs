@@ -31,6 +31,7 @@ public partial class MainWindow
 
     /// <summary>При запуске: таймер обмена с общей картой и, один раз, вопрос о согласии.</summary>
     private DateTime _usageTick = DateTime.UtcNow;
+    private bool _usageAtStart = true;
 
     private void StartCrowd()
     {
@@ -81,7 +82,7 @@ public partial class MainWindow
         {
             UsageCounter.AddSession(_settings, DateTime.UtcNow - _usageTick);
             _usageTick = DateTime.UtcNow;
-            await UsageCounter.PingAsync(_settings, DateTime.Now);
+            if (await UsageCounter.PingAsync(_settings, DateTime.Now, _usageAtStart)) _usageAtStart = false;
             Storage.Save("settings.json", _settings);
         }
         catch (Exception) { /* отметимся при следующей попытке */ }

@@ -106,8 +106,8 @@ public class AppSettings
     /// <summary>Секунды работы и запуски с прошлой отметки в счетчике.</summary>
     public long UsageSeconds { get; set; }
     public int UsageRuns { get; set; }
-    /// <summary>День последней отметки в счетчике (yyyy-MM-dd).</summary>
-    public string? UsagePingDay { get; set; }
+    /// <summary>Время последней отметки в счетчике.</summary>
+    public DateTime? UsagePingAt { get; set; }
     /// <summary>Следить за сайтами, которыми пользуется человек (SiteWatch): открываются ли и почему нет.</summary>
     public bool SiteWatch { get; set; } = true;
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>

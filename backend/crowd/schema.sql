@@ -60,3 +60,16 @@ CREATE TABLE IF NOT EXISTS devices (
   runs          INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS devices_last ON devices (last_day);
+
+-- Точный счет по дням: сколько разных ID отметилось
+CREATE TABLE IF NOT EXISTS device_days (
+  day INTEGER PRIMARY KEY,
+  n   INTEGER NOT NULL
+);
+
+-- Приблизительная оценка: разные адреса за сутки. k: хэш адреса с солью суток, между днями не сравнивается
+CREATE TABLE IF NOT EXISTS reach (
+  day INTEGER NOT NULL,
+  k   TEXT NOT NULL,
+  PRIMARY KEY (day, k)
+);

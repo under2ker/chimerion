@@ -8,7 +8,7 @@ using Dnex.Models;
 namespace Dnex.Services;
 
 /// <summary>
-/// Счетчик копий программы. Раз в сутки на сервер общей карты уходят ID устройства, версия, время работы и служебные отметки
+/// Счетчик копий программы. При запуске и каждые 6 часов на сервер общей карты уходят ID устройства, версия, время работы и служебные отметки
 /// о подмене. ID виден в заголовке окна. Его считает DeviceIdentity от UUID материнской платы, сам UUID компьютер не покидает.
 /// Запретить подмену на чужом компьютере нельзя, поэтому она обнаруживается: метка device.lock зашифрована ключом этой установки
 /// Windows и хранит прежний ID. ID сменился: сервер получает прежний и переносит на новый историю устройства. Метка не читается:
@@ -17,6 +17,7 @@ namespace Dnex.Services;
 public static class UsageCounter
 {
     internal const string LockFile = "device.lock";
+    public static readonly TimeSpan PingEvery = TimeSpan.FromHours(6);
 
     internal static Func<string?> Source = DeviceIdentity.ReadSource;
     internal static Func<string> Kind = () => DeviceIdentity.SourceKind;
@@ -32,7 +33,7 @@ public static class UsageCounter
     /// <summary>ID этой машины. Компьютер его не отдал: случайный, он хранится в настройках.</summary>
     public static string DeviceId(AppSettings s) => IdOf(Source()) ?? (s.UsageId ??= Guid.NewGuid().ToString("N"));
 
-    public static bool Due(AppSettings s, DateTime now) => s.UsagePingDay != now.ToString("yyyy-MM-dd");
+    public static bool Due(AppSettings s, DateTime now, bool atStart = false) => atStart || s.UsagePingAt is not { } last || now - last >= PingEvery;
 
     /// <summary>Время работы между отметками. Сон компьютера не считается: один шаг не длиннее 15 минут.</summary>
     public static void AddSession(AppSettings s, TimeSpan elapsed) =>
@@ -59,10 +60,10 @@ public static class UsageCounter
         File.WriteAllBytes(Storage.PathOf(LockFile), ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine));
     }
 
-    /// <summary>Отметка за сутки. True: сервер принял, настройки изменились и их нужно сохранить.</summary>
-    public static async Task<bool> PingAsync(AppSettings s, DateTime now, CancellationToken ct = default)
+    /// <summary>Отметка. atStart: первая после запуска, она идет всегда. True: сервер принял.</summary>
+    public static async Task<bool> PingAsync(AppSettings s, DateTime now, bool atStart = false, CancellationToken ct = default)
     {
-        if (!Due(s, now)) return false;
+        if (!Due(s, now, atStart)) return false;
         var id = DeviceId(s);
         var check = Inspect(id);
         var body = JsonSerializer.Serialize(new
@@ -74,7 +75,7 @@ public static class UsageCounter
         using var resp = await Crowd.Http.PostAsync(Crowd.BaseUrl() + "/v1/ping", content, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode) return false;
         SaveLock(id, check.Token);
-        s.UsagePingDay = now.ToString("yyyy-MM-dd");
+        s.UsagePingAt = now;
         s.UsageSeconds = 0;
         s.UsageRuns = 0;
         return true;
