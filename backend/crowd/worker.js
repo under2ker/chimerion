@@ -219,7 +219,8 @@ async function usageBody(req) {
   return body && body.v === 1 && typeof body.id === "string" && /^[0-9a-f]{32}$/.test(body.id) ? body : null;
 }
 
-const today = () => Math.floor(Date.now() / 86400000);
+// Сутки статистики начинаются в полночь по времени владельца (UTC+5)
+const today = () => Math.floor((Date.now() + 5 * 3600000) / 86400000);
 
 const count = (v, max) => (Number.isInteger(v) && v >= 0 ? Math.min(v, max) : 0);
 
