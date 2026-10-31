@@ -33,6 +33,7 @@ public class UiTests
     }
 }
 
+[Collection("language")] // тесты переключают язык программы: не параллельно
 public class LocTests
 {
     /// <summary>Английский без окон: свойство Lang ставится напрямую (SetLanguage создает элементы интерфейса).</summary>

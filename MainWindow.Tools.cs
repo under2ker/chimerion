@@ -450,6 +450,14 @@ public partial class MainWindow
                     await ConnectToAsync(cur); // ApplyAsync заново ставит DNS и правила на адаптеры
                 break;
             case "switch": await SwitchToBestAsync(); break;
+            case "restore-network":
+                using (NetHistory.Because("возврат настроек после оборванного изменения"))
+                {
+                    try { await DnsSwitcher.RestoreAsync(Log); }
+                    catch (OperationCanceledException) { Log("Настройки сети не возвращены: права администратора не выданы"); }
+                    catch (Exception e) { Log("Не удалось вернуть настройки сети: " + e.Message); }
+                }
+                break;
             case "update": CheckUpdate_Click(this, new RoutedEventArgs()); break;
             case "tools": ToolsToggle_Click(this, new RoutedEventArgs()); break;
             case "split":

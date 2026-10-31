@@ -389,6 +389,21 @@ public partial class MainWindow
 
 
     /// <summary>
+    /// После запуска: следы оборванного изменения сети. Устаревшая копия убирается сама, откат требует прав и идет из «Диагностики».
+    /// </summary>
+    private async Task CheckStartupStateAsync()
+    {
+        if (NoAutoDns) return;
+        var issues = await Task.Run(() => StartupCheck.Inspect(StartupCheck.Current(_tools)));
+        foreach (var issue in issues)
+        {
+            if (issue == StartupIssue.StaleBackup) { DnsSwitcher.DropStaleBackup(); Log("Устаревшая копия настроек DNS убрана"); }
+            else Log($"После запуска: {StartupCheck.Describe(issue)}");
+        }
+        if (issues.Any(StartupCheck.NeedsRestore)) ShowToast("Прошлый запуск оборвался: верните настройки сети в «Диагностике»", "Warn");
+    }
+
+    /// <summary>
     /// После запуска (обычно вместе с Windows): если было подключение, проверяет, что DNS на месте, и возвращает его.
     /// Статический DNS обычно переживает перезагрузку, но его сбрасывают обновления Windows, новый адаптер
     /// (другой Wi-Fi, USB-модем) или другие программы. Сеть после загрузки поднимается не сразу: ждем до 90 секунд.

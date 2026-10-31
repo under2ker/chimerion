@@ -10,8 +10,13 @@ $signing = 'E:\DNEX\signing'
 
 function Random-Secret { -join ((1..40) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }) }
 function Put-Secret([string]$name, [string]$value) {
-    $value | npx wrangler secret put $name | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Не удалось записать секрет $name" }
+    # Через файл, а не канал: канал PowerShell дописывает к значению лишние символы, и ключ не совпадает
+    $tmp = Join-Path $env:TEMP ("wr-" + [guid]::NewGuid().ToString('N') + ".json")
+    try {
+        [IO.File]::WriteAllText($tmp, (@{ $name = $value } | ConvertTo-Json -Compress), (New-Object Text.UTF8Encoding $false))
+        npx wrangler secret bulk $tmp 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Не удалось записать секрет $name" }
+    } finally { Remove-Item $tmp -ErrorAction SilentlyContinue }
     Write-Output "Секрет $name записан"
 }
 
@@ -49,14 +54,19 @@ if (-not $url) { throw "Не нашел адрес Worker в выводе: $out"
 Write-Output "Worker: $url"
 
 Put-Secret 'SALT' (Random-Secret)
+# Соль счетчика постоянная: при смене все устройства посчитались бы заново
+$usageFile = Join-Path $signing 'crowd-usage-salt.txt'
+$usageSalt = if (Test-Path $usageFile) { (Get-Content $usageFile -Raw).Trim() } else { Random-Secret }
+Set-Content -Path $usageFile -Value $usageSalt -Encoding ascii -NoNewline
+Put-Secret 'USAGE_SALT' $usageSalt
 Put-Secret 'TG_WEBHOOK_SECRET' (Random-Secret)
 Put-Secret 'ADMIN_KEY' $admin
 Put-Secret 'TG_BOT_TOKEN' $token
 
 # 5. Бот: вебхук и команды. Запрос к Telegram делает сам Worker, поэтому блокировка Telegram здесь не мешает
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 20
 $r = Invoke-RestMethod -Method Post -Uri "$url/tg-setup" -Headers @{ 'X-Admin-Key' = $admin }
-Write-Output "Бот: вебхук $($r.webhook), команды $($r.commands)"
+Write-Output "Бот: вебхук $($r.webhook) ($($r.webhookError)), команды $($r.commands)"
 $s = Invoke-RestMethod -Uri "$url/v1/stats"
 Write-Output "Проверка: сеть AS$($s.asn) $($s.org), записей $($s.global.Count)"
 Write-Output 'Готово'

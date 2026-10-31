@@ -2,6 +2,8 @@
 //
 // POST /v1/report   программа присылает итоги своих проверок: сервер, сервис, работает или нет. Сеть провайдера
 //                   (AS) берется из cf.asn, IP не хранится. С одного адреса не больше 5 отчетов в час.
+// POST /v1/ping    отметка копии программы раз в сутки: ID устройства, версия, время работы, признаки подмены.
+// GET  /v1/usage   сводка для владельца по ключу администратора: сколько устройств всего и активных.
 // GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий.
 // POST /tg/<secret> Telegram-бот: /dns — что работает сейчас, /status — сколько данных.
 // POST /tg-setup    подключить бота (заголовок X-Admin-Key): адрес вебхука и команды.
@@ -11,7 +13,7 @@
 // GET  /v1/ios      профиль DNS для iPhone (.mobileconfig) с DoH выбранного сервера.
 // GET  /            страница со статусом серверов для людей.
 //
-// Переменные: DB (D1), SALT, TG_BOT_TOKEN, TG_WEBHOOK_SECRET, ADMIN_KEY (секреты wrangler).
+// Переменные: DB (D1), SALT, USAGE_SALT, TG_BOT_TOKEN, TG_WEBHOOK_SECRET, ADMIN_KEY (секреты wrangler).
 
 const MAX_BODY = 64 * 1024;
 const MAX_ITEMS = 400;
@@ -204,9 +206,67 @@ async function setup(req, env) {
     { command: "status", description: "Сколько данных за сутки" },
     { command: "help", description: "Что умеет бот" },
   ] });
-  return json({ webhook: hook.ok, commands: cmds.ok });
+  return json({ webhook: hook.ok, webhookError: hook.description, commands: cmds.ok });
 }
 
+
+/** Тело запроса счетчика: { v: 1, id: 32 шестнадцатеричных знака, ver }. Null, если формат другой. */
+async function usageBody(req) {
+  const text = await req.text();
+  if (text.length > 512) return null;
+  let body;
+  try { body = JSON.parse(text); } catch { return null; }
+  return body && body.v === 1 && typeof body.id === "string" && /^[0-9a-f]{32}$/.test(body.id) ? body : null;
+}
+
+const today = () => Math.floor(Date.now() / 86400000);
+
+const count = (v, max) => (Number.isInteger(v) && v >= 0 ? Math.min(v, max) : 0);
+
+/**
+ * Отметка копии программы за сутки. Хранятся хэш ID с постоянной солью, маска для владельца, дни, версия, время работы и признаки
+ * подмены. USAGE_SALT не меняется: иначе все устройства посчитались бы заново. IP не хранится.
+ * prev: прежний ID, история переносится на новый. Смена токена при том же ID: другая установка Windows или копия. moved: перенос данных.
+ */
+async function ping(req, env) {
+  if (!await allow(env, req, "ping", 1000)) return json({ error: "too many" }, 429);
+  const body = await usageBody(req);
+  if (!body) return json({ error: "bad format" }, 400);
+  const salted = (x) => sha256(`usage|${x}|${env.USAGE_SALT || ""}`);
+  const hex = /^[0-9a-f]{32}$/;
+  const id = await salted(body.id);
+  const d = today();
+  if (typeof body.prev === "string" && hex.test(body.prev) && body.prev !== body.id) {
+    const prev = await salted(body.prev);
+    const taken = await env.DB.prepare("SELECT 1 FROM devices WHERE id = ?").bind(id).first();
+    await env.DB.prepare(taken ? "UPDATE devices SET replaced = replaced + 1 WHERE id = ?" : "UPDATE devices SET id = ?2, replaced = replaced + 1 WHERE id = ?1")
+      .bind(taken ? id : prev, ...(taken ? [] : [id])).run();
+    if (taken) await env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(prev).run();
+  }
+  const ver = typeof body.ver === "string" && /^\d+\.\d+\.\d+$/.test(body.ver) ? body.ver : null;
+  const src = ["board", "windows", "random"].includes(body.src) ? body.src : "?";
+  const token = typeof body.tok === "string" && hex.test(body.tok) ? await salted(body.tok) : "";
+  const sec = count(body.sec, 864000), runs = count(body.runs, 10000);
+  await env.DB.prepare(`INSERT INTO devices (id, mask, first_day, last_day, days, version, source, token, moved, total_sec, last_sec, runs)
+      VALUES (?1, ?2, ?3, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?8, ?9)
+      ON CONFLICT (id) DO UPDATE SET days = days + (excluded.last_day > last_day), last_day = excluded.last_day, version = excluded.version, source = excluded.source,
+        token_changes = token_changes + (token <> '' AND excluded.token <> '' AND token <> excluded.token), token = excluded.token,
+        moved = moved + excluded.moved, total_sec = total_sec + excluded.total_sec, last_sec = excluded.last_sec, runs = runs + excluded.runs`)
+    .bind(id, `${body.id.slice(0, 4)}****${body.id.slice(-4)}`, d, ver, src, token, body.moved === true ? 1 : 0, sec, runs).run();
+  return json({ ok: true });
+}
+
+/** Сводка для владельца: устройства всего и активные, время работы, подозрительные, версии и список устройств. */
+async function usageReport(env) {
+  const d = today();
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(last_day >= ?) AS day, SUM(last_day >= ?) AS week, SUM(last_day >= ?) AS month, SUM(first_day >= ?) AS fresh,
+      SUM(total_sec) AS seconds, SUM(source <> 'board' OR replaced > 0 OR token_changes > 0 OR moved > 0) AS flagged FROM devices`)
+    .bind(d - 1, d - 7, d - 30, d - 7).first();
+  const v = await env.DB.prepare("SELECT version, COUNT(*) AS n FROM devices WHERE last_day >= ? GROUP BY version ORDER BY n DESC LIMIT 8").bind(d - 30).all();
+  const list = await env.DB.prepare("SELECT mask, first_day, last_day, days, version, source, replaced, token_changes, moved, total_sec, last_sec, runs FROM devices ORDER BY last_day DESC, total_sec DESC LIMIT 200").all();
+  const n = (x) => x || 0;
+  return { total: n(r?.total), day: n(r?.day), week: n(r?.week), month: n(r?.month), fresh: n(r?.fresh), seconds: n(r?.seconds), flagged: n(r?.flagged), versions: v.results, devices: list.results, today: d };
+}
 
 /** Не больше limit запросов в час с одного адреса для дорогих проверок (probe). */
 async function allow(env, req, kind, limit) {
@@ -505,6 +565,8 @@ export default {
     try {
       if (req.method === "POST" && url.pathname === "/v1/report") return await report(req, env);
       if (req.method === "GET" && url.pathname === "/v1/stats") return await stats(req, env, ctx);
+      if (req.method === "POST" && url.pathname === "/v1/ping") return await ping(req, env);
+      if (req.method === "GET" && url.pathname === "/v1/usage" && env.ADMIN_KEY && env.OWNER_ID && req.headers.get("x-admin-key") === env.ADMIN_KEY && req.headers.get("x-device-id") === env.OWNER_ID) return json(await usageReport(env));
       if (req.method === "POST" && env.TG_WEBHOOK_SECRET && url.pathname === `/tg/${env.TG_WEBHOOK_SECRET}`) return await telegram(req, env);
       if (req.method === "POST" && url.pathname === "/tg-setup") return await setup(req, env);
       if (req.method === "GET" && url.pathname === "/v1/discover") return json({ v: 1, servers: await discover(env) }, 200, { "cache-control": "public, max-age=900" });
@@ -532,6 +594,7 @@ export default {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM stats WHERE hour < ?").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM seen WHERE hour < ?").bind(h - 48),
+      env.DB.prepare("DELETE FROM devices WHERE last_day < ?").bind(today() - 180),
     ]);
   },
 };

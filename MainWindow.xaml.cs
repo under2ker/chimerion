@@ -101,6 +101,7 @@ public partial class MainWindow : Window
         _watchdog.Tick += Watchdog_Tick;
         WatchVpn();
         TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
+        UpdateTitleId();
         PanelUpdateHost.Content = CreatePanelBottom();
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
@@ -180,6 +181,7 @@ public partial class MainWindow : Window
             catch (Exception) { }
             await RefreshConnectionAsync();
             _ = AutoStart.RefreshPathAsync(Log);
+            await CheckStartupStateAsync();
             await EnsureConnectionAfterStartAsync();
             _ = StartToolsAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска

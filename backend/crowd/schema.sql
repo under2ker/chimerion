@@ -41,3 +41,22 @@ CREATE TABLE IF NOT EXISTS seen (
   hour    INTEGER NOT NULL,
   n       INTEGER NOT NULL DEFAULT 1
 );
+
+-- Счетчик копий программы: хэш ID устройства, маска для владельца, дни, версия, время работы и признаки подмены
+CREATE TABLE IF NOT EXISTS devices (
+  id            TEXT PRIMARY KEY,      -- SHA-256 от ID устройства с солью сервера
+  mask          TEXT NOT NULL,         -- первые и последние 4 знака ID
+  first_day     INTEGER NOT NULL,
+  last_day      INTEGER NOT NULL,
+  days          INTEGER NOT NULL DEFAULT 1,
+  version       TEXT,
+  source        TEXT NOT NULL DEFAULT '?',  -- board, windows (UUID скрыт), random
+  token         TEXT NOT NULL DEFAULT '',
+  token_changes INTEGER NOT NULL DEFAULT 0, -- другая установка Windows или копия
+  replaced      INTEGER NOT NULL DEFAULT 0, -- ID сменился
+  moved         INTEGER NOT NULL DEFAULT 0, -- папку данных перенесли
+  total_sec     INTEGER NOT NULL DEFAULT 0,
+  last_sec      INTEGER NOT NULL DEFAULT 0,
+  runs          INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS devices_last ON devices (last_day);

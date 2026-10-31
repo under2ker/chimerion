@@ -28,6 +28,17 @@ public static class DnsSwitcher
     /// </summary>
     public static List<string> Ipv6NotRestored { get; } = new();
 
+    /// <summary>Адаптеры, где IPv6 выключен и не включен обратно (остаток оборванного изменения).</summary>
+    public static int Ipv6LeftOff => Ipv6OffFromFile().Count;
+
+    public static bool BackupExists => File.Exists(Storage.PathOf(BackupFile));
+
+    /// <summary>Копия без подключения: иначе следующее подключение вернуло бы при отключении устаревшие DNS.</summary>
+    public static void DropStaleBackup()
+    {
+        try { File.Delete(Storage.PathOf(BackupFile)); } catch (IOException) { }
+    }
+
     private static List<string> Ipv6OffFromFile()
     {
         try
@@ -513,13 +524,14 @@ public static class DnsSwitcher
         if (code != 0) { NetHistory.Add("Отключение не удалось", "ошибка при возврате DNS, подробности в журнале"); throw new InvalidOperationException("Ошибка отключения, см. журнал"); }
         if (left) { NetHistory.Add("Отключение прошло не полностью", "на части адаптеров остались адреса CHIMERION, подробности в журнале"); throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал"); }
 
-        if (File.Exists(path)) File.Delete(path);
         var v6path = Storage.PathOf(Ipv6OffFile);
         // Адаптеры, где IPv6 включить не удалось, остаются в файле: следующее отключение или подключение попробует снова
         if (v6failed.Count > 0) File.WriteAllLines(v6path, v6failed);
         else if (File.Exists(v6path)) File.Delete(v6path);
         var activePath = Storage.PathOf(ActiveFile);
         if (File.Exists(activePath)) File.Delete(activePath);
+        // Копия удаляется последней: при обрыве раньше нее запись о подключении осталась бы без исходных DNS
+        if (File.Exists(path)) File.Delete(path);
         log("Отключено: исходные настройки DNS восстановлены");
         var restored = new List<string> { "DNS адаптеров возвращен к исходному (из резервной копии или автоматический)" };
         if (active?.Split == true) restored.Add("правила «Двух DNS» сняты");

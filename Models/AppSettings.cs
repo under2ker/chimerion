@@ -101,6 +101,13 @@ public class AppSettings
     public string? EgressCountry { get; set; }
     /// <summary>Отправлять итоги проверок в общую карту серверов (Crowd). null — еще не спрашивали.</summary>
     public bool? CrowdConsent { get; set; }
+    /// <summary>Запасной случайный ID, если Windows не отдала свой идентификатор.</summary>
+    public string? UsageId { get; set; }
+    /// <summary>Секунды работы и запуски с прошлой отметки в счетчике.</summary>
+    public long UsageSeconds { get; set; }
+    public int UsageRuns { get; set; }
+    /// <summary>День последней отметки в счетчике (yyyy-MM-dd).</summary>
+    public string? UsagePingDay { get; set; }
     /// <summary>Следить за сайтами, которыми пользуется человек (SiteWatch): открываются ли и почему нет.</summary>
     public bool SiteWatch { get; set; } = true;
     /// <summary>Как часто сторож проверяет DNS, пока подключение активно (секунды, 15–600).</summary>
