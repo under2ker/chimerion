@@ -139,6 +139,8 @@
                               Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="DiagToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></ToggleButton>
+                <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="download" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
                 <ToggleButton x:Name="HelpToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
