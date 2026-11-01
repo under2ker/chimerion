@@ -246,6 +246,7 @@ public partial class MainWindow
         SettingsButton.Visibility = v;
         DataButton.Visibility = v;
         PrivateButton.Visibility = v;
+        SpeedButton.Visibility = v;
         UpdateTitleId();
         Watchdog.Visibility = v;
         // Компактный вид: одна кнопка подключения, плашки сервисов, таблица только со статусом, именем и пингом

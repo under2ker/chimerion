@@ -268,6 +268,9 @@ public partial class MainWindow
     private async void CheckSelected_Click(object sender, RoutedEventArgs e) =>
         await RunChecksAsync(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
 
+    private void SpeedTest_Click(object sender, RoutedEventArgs e) =>
+        SpeedWindow.Show(_settings, _servers.FirstOrDefault(s => s.Id == DnsSwitcher.GetActive()?.ServerId), _after ?? _before, Log);
+
     private void Quality_Click(object sender, RoutedEventArgs e) =>
         QualityWindow.Show(this, _servers, ServerGrid.SelectedItem as DnsServer);
 

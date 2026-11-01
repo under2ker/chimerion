@@ -349,6 +349,7 @@ public partial class MainWindow
         links.Children.Add(DashboardNav("Панель управления", "sliders-horizontal", ShowControlPanel));
         links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(DashboardNav("Тест скорости", "activity", () => SpeedTest_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
         links.Children.Add(DashboardNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
