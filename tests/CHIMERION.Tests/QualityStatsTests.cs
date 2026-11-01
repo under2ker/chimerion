@@ -17,7 +17,7 @@ public class QualityStatsTests
     {
         var s = QualityStats.Summarize(new List<CheckPoint>(), Now);
         Assert.Equal(0, s.Count);
-        Assert.Contains("мало проверок", s.Text);
+        Assert.Null(s.Last);
     }
 
     [Fact]
@@ -27,15 +27,16 @@ public class QualityStatsTests
         var s = QualityStats.Summarize(points, Now);
         Assert.Equal(4, s.Count);
         Assert.Equal(3, s.OkCount);
-        Assert.Equal(75, s.OkPercent);
+        Assert.Equal(75, s.OkRate);
         Assert.Equal(50, s.MedianMs);
     }
 
     [Fact]
-    public void Two_failures_in_a_row_are_one_outage()
+    public void Longest_and_current_failure_runs_are_separate()
     {
         var points = new List<CheckPoint> { P(5, 9, true), P(4, 9, false), P(4, 10, false), P(4, 11, false), P(3, 9, true), P(2, 9, false), P(1, 9, true) };
-        Assert.Equal(1, QualityStats.Summarize(points, Now).Outages);
+        Assert.Equal(3, QualityStats.Summarize(points, Now).MaxRun);
+        Assert.Equal(0, QualityStats.Summarize(points, Now).CurrentRun);
     }
 
     [Fact]
@@ -46,7 +47,6 @@ public class QualityStatsTests
         var s = QualityStats.Summarize(points, Now);
         Assert.Equal(QualityStats.Parts[3], s.WorstPart);
         Assert.Equal(50, s.WorstPercent);
-        Assert.Contains("вечером", s.Text);
     }
 
     [Fact]
@@ -72,7 +72,7 @@ public class QualityStatsTests
         Assert.Equal(3, buckets[0].Count);
         Assert.Equal(1, buckets[0].Failed);
         Assert.Equal(33, buckets[0].FailPercent);
-        Assert.Equal(80, buckets[0].MedianMs);
+        Assert.Equal(60, buckets[0].MedianMs); // медиана по ближайшему рангу
         Assert.Equal(60, buckets[0].MinMs);
         Assert.Equal(new DateTime(2026, 10, 30, 0, 0, 0), buckets[1].Start);
         Assert.Equal(0, buckets[1].Count);
@@ -81,27 +81,82 @@ public class QualityStatsTests
     }
 
     [Fact]
-    public void Bucket_size_grows_with_the_span()
+    public void Bucket_size_follows_the_period()
     {
-        Assert.Equal(2, QualityStats.BucketHours(Now.AddHours(-5), Now));
-        Assert.Equal(6, QualityStats.BucketHours(Now.AddDays(-3), Now));
-        Assert.Equal(24, QualityStats.BucketHours(Now.AddDays(-13), Now));
+        Assert.Equal(1, QualityStats.BucketHours(1));
+        Assert.Equal(6, QualityStats.BucketHours(7));
+        Assert.Equal(12, QualityStats.BucketHours(14));
+    }
+
+    private static List<CheckPoint> Series(int ok, int failed) =>
+        Enumerable.Range(0, ok + failed).Select(i => new CheckPoint(Now.AddHours(-i - 1), i >= failed, i >= failed ? 40 : null)).ToList();
+
+    [Theory]
+    [InlineData(43, 2, 95.6)]
+    [InlineData(42, 2, 95.5)]
+    [InlineData(45, 0, 100)]
+    [InlineData(4999, 1, 99.9)] // 99,98% не показывается как идеал
+    public void Availability_is_rounded_by_one_rule(int ok, int failed, double expected)
+    {
+        var points = Enumerable.Range(0, ok + failed).Select(i => new CheckPoint(Now.AddSeconds(-i - 1), i >= failed, 40L)).ToList();
+        Assert.Equal(expected, QualityStats.RoundRate(QualityStats.Summarize(points, Now)));
+    }
+
+    [Theory]
+    [InlineData(100, "Ok")]
+    [InlineData(99, "Ok")]
+    [InlineData(95.6, "Warn")]
+    [InlineData(94.9, "Bad")]
+    public void Grade_depends_on_thresholds(double rate, string grade) => Assert.Equal(grade, QualityStats.Grade(rate));
+
+    [Fact]
+    public void Current_run_counts_failures_at_the_end()
+    {
+        var s = QualityStats.Summarize(Series(5, 2), Now);
+        Assert.Equal(2, s.CurrentRun);
+        Assert.Equal(2, s.MaxRun);
+        Assert.Equal(2, s.Failed);
     }
 
     [Fact]
-    public void Quality_conclusion_is_fully_translated()
+    public void Small_difference_from_median_is_not_called_a_spike()
     {
-        var p = typeof(Dnex.Services.Loc).GetProperty("Lang")!;
-        p.SetValue(null, "en");
-        try
-        {
-            var text = new Dnex.Services.QualitySummary(201, 169, 52, 150, Dnex.Services.QualityStats.Parts[3], 42, 7, null).Text;
-            Assert.DoesNotMatch("[А-Яа-я]", text);
-            Assert.Contains("84%", text);
-            Assert.Contains("in the evening", text);
-        }
-        finally { p.SetValue(null, "ru"); }
+        var calm = Enumerable.Range(0, 20).Select(i => new CheckPoint(Now.AddHours(-i - 1), true, 70 + i % 4)).ToList();
+        Assert.False(QualityStats.Summarize(calm, Now).HasSpikes);
+        var spiky = Enumerable.Range(0, 20).Select(i => new CheckPoint(Now.AddHours(-i - 1), true, i < 3 ? 900L : 70L)).ToList();
+        var s = QualityStats.Summarize(spiky, Now);
+        Assert.True(s.HasSpikes);
+        Assert.Equal(70, s.MedianMs);
+        Assert.Equal(900, s.P95Ms);
     }
+
+    [Fact]
+    public void Line_breaks_where_a_bucket_has_no_measurements()
+    {
+        var points = new List<CheckPoint> { new(Now.AddHours(-11), true, 40), new(Now.AddHours(-10), true, 50), new(Now.AddHours(-3), false, null), new(Now.AddHours(-1), true, 60) };
+        var buckets = QualityStats.Buckets(points, Now, 1, Now.AddHours(-12));
+        var segments = QualityStats.Segments(buckets);
+        Assert.Equal(2, segments.Count); // пустые часы и час только со сбоем не соединяются
+        Assert.Equal(2, segments[0].Count);
+        Assert.Single(segments[1]);
+        Assert.Contains(buckets, b => b.Failed == 1 && b.MedianMs == null);
+    }
+
+    [Fact]
+    public void Axis_starts_at_period_start_and_empty_buckets_are_kept()
+    {
+        var buckets = QualityStats.Buckets(new List<CheckPoint> { new(Now.AddHours(-2), true, 40) }, Now, 6, Now.AddDays(-7));
+        Assert.Equal(Now.AddDays(-7).Date.AddHours(12), buckets[0].Start);
+        Assert.True(buckets.Count(b => b.Count == 0) > 20);
+    }
+
+    [Theory]
+    [InlineData(73, 100)]
+    [InlineData(100, 100)]
+    [InlineData(101, 200)]
+    [InlineData(380, 500)]
+    [InlineData(1500, 2000)]
+    public void Scale_top_is_a_round_number(long value, long top) => Assert.Equal(top, QualityStats.NiceTop(value));
 
     [Fact]
     public void Report_text_includes_recent_errors_section()
