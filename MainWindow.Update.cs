@@ -76,9 +76,9 @@ public partial class MainWindow
     /// <summary>Ссылки внизу левого меню над карточкой обновления: сайт, канал с новостями, сообщить о проблеме.</summary>
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
-        ("Сообщить о сбое", "circle-help", () => DiagToggle_Click(this, new RoutedEventArgs())),
+        ("Сообщить о сбое", "triangle-alert", () => DiagToggle_Click(this, new RoutedEventArgs())),
         ("Канал в Telegram", "logo:LogoTelegram", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
-        ("Сайт chimerion.dev", "external-link", () => AutoStart.OpenUrl("https://chimerion.dev")),
+        ("Сайт chimerion.dev", "globe", () => AutoStart.OpenUrl("https://chimerion.dev")),
     };
 
     /// <summary>Низ меню панели управления: те же ссылки кнопками меню и карточка обновления.</summary>
