@@ -26,12 +26,16 @@ public class InternetSpeedTests
     {
         var fake = new Fake(reply);
         InternetSpeed.Handler = fake;
+        var (connect, resolve) = (InternetSpeed.Connect, InternetSpeed.Resolve);
+        InternetSpeed.Connect = (_, _) => Task.FromResult(12L);
+        InternetSpeed.Resolve = (_, _) => Task.FromResult(new[] { IPAddress.Loopback });
         (InternetSpeed.PilotTime, InternetSpeed.DownTime, InternetSpeed.UpTime, InternetSpeed.WarmUp) = (TimeSpan.FromMilliseconds(40), TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(50));
         try { return (await InternetSpeed.RunAsync(null, CancellationToken.None), fake); }
         finally
         {
             InternetSpeed.Handler = null;
-            (InternetSpeed.PilotTime, InternetSpeed.DownTime, InternetSpeed.UpTime, InternetSpeed.WarmUp) = (TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(1.5));
+            (InternetSpeed.Connect, InternetSpeed.Resolve) = (connect, resolve);
+            (InternetSpeed.PilotTime, InternetSpeed.DownTime, InternetSpeed.UpTime, InternetSpeed.WarmUp) = (TimeSpan.FromSeconds(3.5), TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(1.5));
         }
     }
 
@@ -58,7 +62,8 @@ public class InternetSpeedTests
         Assert.Equal("Cloudflare", r.Source);
         Assert.True(r.DownMbit > 0);
         Assert.True(r.UpMbit > 0);
-        Assert.NotNull(r.PingMs);
+        Assert.Equal(12, r.PingMs);
+        Assert.Equal(0, r.JitterMs);
     }
 
     [Fact]
@@ -87,4 +92,34 @@ public class InternetSpeedTests
         try { await Assert.ThrowsAnyAsync<OperationCanceledException>(() => InternetSpeed.RunAsync(null, cts.Token)); }
         finally { InternetSpeed.Handler = null; }
     }
+}
+
+public class SpeedVerdictTests
+{
+    [Fact]
+    public void Fast_connection_fits_everything()
+    {
+        var uses = SpeedVerdict.For(new InternetResult("Cloudflare", 18, 3, 133.6, 47.2));
+        Assert.All(uses, u => Assert.True(u.Ok, u.Title));
+    }
+
+    [Fact]
+    public void Slow_upload_and_high_ping_are_called_out()
+    {
+        var uses = SpeedVerdict.For(new InternetResult("Selectel", 180, 40, 30, 1.5)).ToDictionary(u => u.Title, u => u.Ok);
+        Assert.True(uses["Видео в 4K"]);
+        Assert.False(uses["Видеозвонки"]);
+        Assert.False(uses["Онлайн-игры"]);
+        Assert.False(uses["Отправка больших файлов"]);
+    }
+
+    [Fact]
+    public void Failed_test_fits_nothing() =>
+        Assert.All(SpeedVerdict.For(new InternetResult(null, null, null, null, null)), u => Assert.False(u.Ok));
+
+    [Theory]
+    [InlineData("быстрый", "Ok")]
+    [InlineData("медленный", "Warn")]
+    [InlineData("нет ответов", "Bad")]
+    public void Dns_grade_colors(string grade, string color) => Assert.Equal(color, SpeedVerdict.DnsColor(grade));
 }

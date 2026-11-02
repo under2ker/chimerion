@@ -19,7 +19,7 @@ public partial class SettingsWindow
     private string _theme = "dark", _themeBefore = "dark";
     private bool Dark => _theme != "light";
     /// <summary>Наборы на светлой теме задают только оттенки: подложки программа выводит сама, светлыми.</summary>
-    private static readonly string[] HueSlots = { "Accent", "AccentButton", "ToggleOn", "Lime" };
+    private static readonly string[] HueSlots = { "Accent", "AccentButton", "ToggleOn", "Lime", "Progress" };
     private string K(string slot) => ThemeColors.CustomKey(slot, Dark);
 
     /// <summary>Палитра быстрого выбора: спокойные цвета, которые читаются на темном фоне.</summary>

@@ -2194,5 +2194,22 @@
  "Тест остановлен": "Test stopped",
  "Тест не удался, подробности в журнале": "Test failed, see the log",
  "не ответил ни один": "none responded",
- "Оценка: {0}, ответов {1} из {2}": "Rating: {0}, {1} of {2} answered"
+ "Оценка: {0}, ответов {1} из {2}": "Rating: {0}, {1} of {2} answered",
+ "Полосы загрузки": "Progress bars",
+ "ход проверки, скачивания и ожидания, в том числе бегущая полоса": "check, download and waiting progress, including the moving bar",
+ "Узнаю адрес и провайдера…": "Looking up address and provider…",
+ "оценка": "rating",
+ "Нужно: ": "Needs: ",
+ "Видео в 4K": "4K video",
+ "Видеозвонки": "Video calls",
+ "Онлайн-игры": "Online games",
+ "Отправка больших файлов": "Uploading large files",
+ "от 25 Мбит/с на скачивание": "25 Mbit/s or more download",
+ "от 5 и 3 Мбит/с, пинг до 150 мс": "5 and 3 Mbit/s, ping up to 150 ms",
+ "пинг до 60 мс, джиттер до 20 мс": "ping up to 60 ms, jitter up to 20 ms",
+ "от 20 Мбит/с на отправку": "20 Mbit/s or more upload",
+ "Готово, замер {0}": "Done, measured at {0}",
+ "Smart DNS не подключен: его скорость не измерялась": "Smart DNS is not connected, its speed was not measured",
+ "Ответов {0} из {1}, сервер {2}": "{0} of {1} answered, server {2}",
+ "DNS": "DNS"
 }

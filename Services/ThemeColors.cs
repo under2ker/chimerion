@@ -25,6 +25,7 @@ public static class ThemeColors
         new Slot("AccentSoft", "Активная вкладка", "«Рабочие», «Общий DNS» и другие вкладки", "#2A3413"),
         new Slot("Selection", "Выделенные строки", "выделение в таблице серверов и журнале", "#2B3816"),
         new Slot("MenuBg", "Меню и подменю", "меню по правой кнопке, «Режим», «Выделить», меню в трее", "#1C1E21", "#FFFFFF"),
+        new Slot("Progress", "Полосы загрузки", "ход проверки, скачивания и ожидания, в том числе бегущая полоса", "#C5F23A", "#B8E52C"),
         new Slot("Lime", "Метки «рекомендуем»", "метки «рекомендуем», «лучший», подключенный сервер", "#C5F23A", "#C5F23A"),
     };
 
@@ -178,6 +179,7 @@ public static class ThemeColors
         var toggle = Derived("ToggleOn", () => accentHue);
         var menu = Get(custom, "MenuBg", dark);
         var limeHue = Derived("Lime", () => accentHue);
+        var progress = Derived("Progress", () => accentHue);
         // Светлая: лайм на белом как текст не читается — акцент и метки затемняются до контраста 4.5, заливки остаются
         var accent = dark ? accentHue : EnsureContrast(accentHue, surface, 4.5);
         var lime = dark ? limeHue : EnsureContrast(limeHue, Mix(limeHue, White, 0.8), 4.5);
@@ -193,6 +195,7 @@ public static class ThemeColors
         Set("StrongButton", strong);
         Set("OnStrongButton", OnFill(strong));
         Set("ToggleOn", toggle);
+        Set("Progress", progress);
         Set("OnToggle", OnFill(toggle));
         Set("AccentSoft", tab);
         Set("InfoSoft", Mix(accentHue, paper, dark ? 0.82 : 0.84));
