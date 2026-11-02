@@ -44,7 +44,11 @@ public class SiteWatchTests
         var down = w.Apply(figma, SiteWatch.Verdict.Blocked, "снаружи открывается", t);
         Assert.True(down!.Down);
         Assert.Null(w.Apply(figma, SiteWatch.Verdict.Blocked, null, t)); // уже сообщили
+        Assert.Null(w.Apply(figma, SiteWatch.Verdict.Ok, null, t)); // одна удачная проверка еще не восстановление
+        Assert.Contains(figma, w.Due(t.AddMinutes(1), TimeSpan.FromMinutes(30))); // упавший проверяется в каждом круге
         Assert.False(w.Apply(figma, SiteWatch.Verdict.Ok, null, t)!.Down); // снова открывается
+        Assert.Null(w.Apply(figma, SiteWatch.Verdict.Blocked, null, t));
+        Assert.Null(w.Apply(figma, SiteWatch.Verdict.Ok, null, t)); // одиночный сбой без уведомления и без «снова открывается»
 
         // Упавший проверяется в каждом круге, свежепроверенный рабочий ждет
         w.Apply(figma, SiteWatch.Verdict.Blocked, null, t);

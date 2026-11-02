@@ -24,6 +24,7 @@ public sealed class SiteWatch
     public const int SeenToWatch = 2;
     /// <summary>Сколько неудач подряд считать падением (разовая неудача бывает у любого сайта).</summary>
     public const int FailsToAlert = 2;
+    public const int OksToRecover = 2;
     /// <summary>Забывать сайт, если его не открывали столько дней.</summary>
     public const int ForgetDays = 14;
     /// <summary>Сколько сайтов держать в списке.</summary>
@@ -39,6 +40,8 @@ public sealed class SiteWatch
         public DateTime? LastChecked { get; set; }
         public Verdict State { get; set; }
         public int Fails { get; set; }
+        /// <summary>Удачные проверки подряд у упавшего сайта: восстановление засчитывается со второй.</summary>
+        public int Oks { get; set; }
         /// <summary>Хоть раз открывался: о падении сообщаем только для таких (трекеры и мертвые адреса не шумят).</summary>
         public bool EverOk { get; set; }
         public bool Down { get; set; }
@@ -126,8 +129,8 @@ public sealed class SiteWatch
     /// <summary>Что проверить в этом круге: сайты под наблюдением, давно не проверенные первыми; упавшие в каждом круге.</summary>
     public List<Site> Due(DateTime now, TimeSpan every) =>
         Sites.Values.Where(s => s.Seen >= SeenToWatch && !Ignored.Contains(s.Host) && !IsNotSite(s))
-             .Where(s => s.Fails > 0 || s.LastChecked == null || now - s.LastChecked >= every)
-             .OrderByDescending(s => s.Fails > 0).ThenBy(s => s.LastChecked ?? DateTime.MinValue)
+             .Where(s => s.Fails > 0 || s.Down || s.LastChecked == null || now - s.LastChecked >= every)
+             .OrderByDescending(s => s.Fails > 0 || s.Down).ThenBy(s => s.LastChecked ?? DateTime.MinValue)
              .Take(PerRound).ToList();
 
     /// <summary>Ни разу не открылся за GiveUpFails проверок: служебный адрес, а не сайт. Не проверяется и не показывается.</summary>
@@ -143,10 +146,15 @@ public sealed class SiteWatch
         s.Detail = detail;
         if (v == Verdict.Ok)
         {
-            bool was = s.Down;
-            s.Fails = 0; s.Down = false; s.EverOk = true;
-            return was ? new Change(s, false) : null;
+            s.Fails = 0; s.EverOk = true;
+            if (!s.Down) return null;
+            // Провайдер часто режет сайт то включая, то выключая блокировку: без второй проверки
+            // уведомления «перестал» и «снова открывается» шли по кругу каждые 10 минут
+            if (++s.Oks < OksToRecover) return null;
+            s.Down = false; s.Oks = 0;
+            return new Change(s, false);
         }
+        s.Oks = 0;
         s.Fails++;
         if (!s.Down && s.EverOk && s.Fails >= FailsToAlert)
         {

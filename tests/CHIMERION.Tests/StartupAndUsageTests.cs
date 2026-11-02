@@ -200,3 +200,29 @@ public class UsageCounterTests
         await Task.CompletedTask;
     });
 }
+
+public class RecentErrorsTests
+{
+    [Fact]
+    public void Only_whole_entries_from_the_last_two_weeks()
+    {
+        var path = Path.Combine(TestSetup.DataDir, $"error-{Guid.NewGuid():N}.log");
+        File.WriteAllLines(path, new[]
+        {
+            "   at Обрывок.Старой.Записи()",
+            "2026-10-01 10:00:00Z System.Exception: старая",
+            "   at Old()",
+            "2026-10-30 12:00:00Z System.ArgumentNullException: свежая",
+            "   at Dnex.MainWindow.PickBest()",
+            "   at Dnex.MainWindow.UpdateTopList()",
+        });
+        try
+        {
+            var lines = Dnex.Services.Diagnostics.RecentErrors(path, new DateTime(2026, 11, 2));
+            Assert.Equal(3, lines.Count);
+            Assert.StartsWith("2026-10-30", lines[0]);
+            Assert.DoesNotContain(lines, l => l.Contains("старая") || l.Contains("Обрывок"));
+        }
+        finally { File.Delete(path); }
+    }
+}
