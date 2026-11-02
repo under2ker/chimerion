@@ -20,4 +20,12 @@ public class DashboardTextTests
     [Fact]
     public void UpdateCheckingIsVisibleLongEnough() =>
         Assert.InRange(MainWindow.UpdateCheckMinShow.TotalMilliseconds, 500, 1500);
+
+    [Theory]
+    [InlineData(Dnex.Services.SiteWatch.Verdict.Ok, "открывается")]
+    [InlineData(Dnex.Services.SiteWatch.Verdict.Unknown, "без результата")]
+    [InlineData(Dnex.Services.SiteWatch.Verdict.Blocked, "не открывается")]
+    [InlineData(Dnex.Services.SiteWatch.Verdict.NoDns, "не открывается")]
+    public void Site_status_on_home_screen(Dnex.Services.SiteWatch.Verdict verdict, string text) =>
+        Assert.Equal(text, Dnex.MainWindow.DashboardSiteVerdict(verdict));
 }

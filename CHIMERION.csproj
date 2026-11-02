@@ -14,7 +14,9 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.93</Version>
+    <Version>0.1.94</Version>
+    <!-- Сбой сети при загрузке базы уязвимостей (NU1900) не должен ронять сборку: уязвимости проверяет отдельный шаг CI -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -46,7 +48,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 

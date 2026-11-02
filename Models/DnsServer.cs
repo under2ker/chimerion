@@ -281,6 +281,7 @@ public class DnsServer : INotifyPropertyChanged
     public int ChecksTotal { get; set; }
 
     /// <summary>История полных проверок за последние 14 дней (не больше 200 точек): работал ли сервер и пинг.</summary>
+    public const int MaxHistory = 336;
     public List<CheckPoint> History { get; set; } = new();
 
     public void AddHistory(bool ok, long? ms, DateTime? at = null)
@@ -288,7 +289,8 @@ public class DnsServer : INotifyPropertyChanged
         var now = at ?? DateTime.Now;
         History.Add(new CheckPoint(now, ok, ms));
         History.RemoveAll(p => now - p.T > TimeSpan.FromDays(14));
-        if (History.Count > 200) History.RemoveRange(0, History.Count - 200);
+        // 14 дней по проверке в час: 336 точек. Раньше 200, и при частых проверках график качества видел меньше 14 дней
+        if (History.Count > MaxHistory) History.RemoveRange(0, History.Count - MaxHistory);
     }
 
     /// <summary>Итог истории для подсказки: доступность и пинг за 7 дней, сравнение с предыдущей неделей.</summary>

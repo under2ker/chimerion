@@ -18,7 +18,7 @@ public sealed record QualityBucket(DateTime Start, DateTime End, long? MedianMs,
     public int FailPercent => Count == 0 ? 0 : Failed * 100 / Count;
 }
 
-/// <summary>Расчет по истории проверок, которую каждый сервер уже хранит (до 14 дней, до 200 точек).</summary>
+/// <summary>Расчет по истории проверок, которую каждый сервер уже хранит (до 14 дней, до 336 точек).</summary>
 public static class QualityStats
 {
     public static readonly string[] Parts = { "ночью (0:00-6:00)", "утром (6:00-12:00)", "днем (12:00-18:00)", "вечером (18:00-24:00)" };
