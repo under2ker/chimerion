@@ -346,10 +346,10 @@ public partial class MainWindow
         brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
         // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
         links.Children.Add(DashboardNav("Главная", "shield-check", () => { }, true));
-        links.Children.Add(DashboardNav("Панель управления", "sliders-horizontal", ShowControlPanel));
+        links.Children.Add(DashboardNav("Панель управления", "layout-dashboard", ShowControlPanel));
         links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
-        links.Children.Add(DashboardNav("Тест скорости", "activity", () => SpeedTest_Click(this, new RoutedEventArgs())));
+        links.Children.Add(DashboardNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
         links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
         links.Children.Add(DashboardNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));

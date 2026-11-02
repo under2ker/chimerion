@@ -140,7 +140,7 @@
                 <ToggleButton x:Name="DiagToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></ToggleButton>
                 <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="download" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
+                        ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="gauge" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
                 <ToggleButton x:Name="HelpToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
@@ -148,7 +148,7 @@
                 <Button x:Name="PrivateButton" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" TextDecorations="Strikethrough" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
                 <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="external-link" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
+                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="folder" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
                 <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Настройки программы"><StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSettingsText" Text="Настройки"/></StackPanel></Button>
                 <Button x:Name="ModeButton" Click="Mode_Click" Style="{StaticResource PanelNavButton}"
