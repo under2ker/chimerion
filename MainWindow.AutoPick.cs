@@ -1,5 +1,6 @@
 using Dnex.Models;
 using Dnex.Services;
+using Dnex.Services.Tools;
 
 namespace Dnex;
 
@@ -42,6 +43,7 @@ public partial class MainWindow
                     ShowToast($"Режим подобран: {s.DisplayName}, {mode}. Открываются {tally.Open} нейросетей" +
                               (tally.Unknown > 0 ? $", {tally.Unknown} без подтверждения" : "") + $" (попыток: {tried})");
                     Log($"Автоподбор: найден рабочий режим на попытке {tried}: «{s.DisplayName}»");
+                    await OfferToolsAsync();
                     return;
                 }
                 if (AutoPick.Score(tally) > bestScore) { best = s; bestScore = AutoPick.Score(tally); }
@@ -53,6 +55,7 @@ public partial class MainWindow
                 DashboardMessage(null);
                 ShowToast($"Полностью рабочего режима не нашлось. Оставил «{best.DisplayName}»: часть нейросетей открывается", "Warn");
                 Log($"Автоподбор: полностью рабочего режима нет, выбран «{best.DisplayName}»");
+                await OfferToolsAsync();
             }
             else
             {
@@ -62,5 +65,19 @@ public partial class MainWindow
             }
         }
         finally { _autoPicking = false; RefreshDashboard(); }
+    }
+
+    /// <summary>
+    /// Вторая часть подбора: обход YouTube и Discord и ускорение Telegram. Установленные, но выключенные программа не включает
+    /// молча (их могли выключить намеренно), а спрашивает один раз за подбор и включает выбранное по очереди.
+    /// </summary>
+    private async Task OfferToolsAsync()
+    {
+        var off = _tools.Where(t => t is ZapretTool or TgProxyTool && t.IsInstalled && !t.IsRunning() && !t.State.Enabled).ToList();
+        if (off.Count == 0) return;
+        var names = string.Join(" и ", off.Select(t => t is ZapretTool ? "обход замедления YouTube и Discord" : "ускорение Telegram"));
+        if (!DnexDialog.Ask("Включить остальное?", $"Нейросети подобраны. Сейчас выключено: {names}. Включить, чтобы работало все сразу?",
+                "Включить", "Не сейчас", DialogKind.Info, windowTitle: "Автоподбор")) { Log("Автоподбор: обход и ускорение оставлены как были"); return; }
+        foreach (var t in off) await DashboardToolAsync(t);
     }
 }

@@ -207,10 +207,11 @@ public partial class MainWindow
         int lastLayout = -1;
         layout.SizeChanged += (_, e) =>
         {
+            // Узкое окно: меню сворачивается в полоску значков, а не пропадает (раньше вместе с ним пропадала и кнопка обновления)
             bool wide = e.NewSize.Width >= 900;
-            sidebarColumn.Width = new GridLength(wide ? 208 : 0);
-            sidebar.Visibility = wide ? Visibility.Visible : Visibility.Collapsed;
-            double available = e.NewSize.Width - (wide ? 208 : 0);
+            sidebarColumn.Width = new GridLength(wide ? 208 : 64);
+            SetDashboardRail(!wide);
+            double available = e.NewSize.Width - (wide ? 208 : 64);
             int mode = available < 640 ? 0 : available < 960 ? 1 : 2;
             if (mode == lastLayout) return;
             lastLayout = mode;
@@ -331,11 +332,50 @@ public partial class MainWindow
         }
     }
 
+    private readonly List<(Button Button, TextBlock Text, string Title)> _dashNav = new();
+    private DockPanel? _dashSidebarContent;
+    private FrameworkElement? _dashBrandText;
+    private bool? _dashRail;
+
+    /// <summary>Полоска значков вместо меню: подписи прозрачные, название пункта в подсказке, карточка обновления одним значком.</summary>
+    private void SetDashboardRail(bool rail)
+    {
+        if (_dashRail == rail) return;
+        _dashRail = rail;
+        if (_dashSidebarContent != null) _dashSidebarContent.Margin = rail ? new Thickness(8, 24, 8, 18) : new Thickness(15, 24, 15, 18);
+        if (_dashBrandText != null) _dashBrandText.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var (button, text, title) in _dashNav)
+        {
+            text.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+            button.ToolTip = rail ? title : null;
+            button.HorizontalContentAlignment = rail ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        }
+        foreach (var v in _updateCards.Where(c => _dashSidebarContent != null && IsInside(c.Card, _dashSidebarContent)))
+        {
+            v.Text.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
+            v.Card.BorderThickness = new Thickness(rail ? 0 : 1);
+        }
+    }
+
+    private static bool IsInside(DependencyObject child, DependencyObject parent)
+    {
+        for (var d = child; d != null; d = LogicalTreeHelper.GetParent(d) ?? (d is Visual ? VisualTreeHelper.GetParent(d) : null))
+            if (ReferenceEquals(d, parent)) return true;
+        return false;
+    }
+
+    private Button SideNav(string title, string icon, Action click, bool selected = false, bool soon = false)
+    {
+        var b = DashboardNav(title, icon, click, selected, soon);
+        if (b.Content is StackPanel { Children.Count: > 1 } row && row.Children[1] is TextBlock t) _dashNav.Add((b, t, title));
+        return b;
+    }
+
     private FrameworkElement DashboardSidebar()
     {
-        var content = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
+        var content = _dashSidebarContent = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
         var bottom = new StackPanel();
-        foreach (var (title, icon, act) in SideLinks()) bottom.Children.Add(DashboardNav(title, icon, act));
+        foreach (var (title, icon, act) in SideLinks()) bottom.Children.Add(SideNav(title, icon, act));
         bottom.Children.Add(CreateUpdateCard());
         DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
         var links = new StackPanel();
@@ -344,17 +384,18 @@ public partial class MainWindow
         var brandText = new StackPanel();
         brandText.Children.Add(new TextBlock { Text = "CHIMERION", FontSize = 13, FontWeight = FontWeights.Bold });
         brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
+        _dashBrandText = brandText;
         // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
-        links.Children.Add(DashboardNav("Главная", "shield-check", () => { }, true));
-        links.Children.Add(DashboardNav("Панель управления", "layout-dashboard", ShowControlPanel));
-        links.Children.Add(DashboardNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
-        links.Children.Add(DashboardNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
-        links.Children.Add(DashboardNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
-        links.Children.Add(DashboardNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Главная", "shield-check", () => { }, true));
+        links.Children.Add(SideNav("Панель управления", "layout-dashboard", ShowControlPanel));
+        links.Children.Add(SideNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
-        links.Children.Add(DashboardNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
+        links.Children.Add(SideNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
         // Раздел в разработке: приглушенный и зачеркнутый, нажатие показывает заглушку
-        links.Children.Add(DashboardNav("Приватный проект", "eye-off", () => PrivateProject_Click(this, new RoutedEventArgs()), soon: true));
+        links.Children.Add(SideNav("Приватный проект", "eye-off", () => PrivateProject_Click(this, new RoutedEventArgs()), soon: true));
         content.Children.Add(links);
         return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
     }
@@ -727,7 +768,7 @@ public partial class MainWindow
         if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Проверка сайта: {DashboardSiteVerdict(site.State)} {Ago(time)}";
         return "Сайт не проверялся";
     }
-    private static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
+    internal static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
     {
         SiteWatch.Verdict.Ok => "открывается", SiteWatch.Verdict.Unknown => "без результата", _ => "не открывается"
     };

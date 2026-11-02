@@ -12,7 +12,7 @@ namespace Dnex;
 /// <summary>
 /// Окно «График качества»: сравнение серверов таблицей (строка выбирает сервер), карточки выбранного и две дорожки с общей осью времени.
 /// Верхняя: медиана ответа по столбцам и разброс. Нижняя: доля проверок без ответа. Столбец без проверок серый и рвет линию,
-/// значения между измерениями не придумываются. Данные из истории проверок, которую программа уже хранит: до 14 дней и 200 точек.
+/// значения между измерениями не придумываются. Данные из истории проверок, которую программа уже хранит: до 14 дней и 336 точек.
 /// </summary>
 internal sealed class QualityWindow
 {
@@ -46,7 +46,8 @@ internal sealed class QualityWindow
 
         // Кандидаты: выбранный сервер, подключенный, избранные, затем с самой длинной историей
         void Add(DnsServer? s) { if (s != null && !s.IsJunk && !_candidates.Contains(s)) _candidates.Add(s); }
-        Add(first);
+        // Сервер, который человек выбрал сам, показывается всегда, даже если программа считает его мусором
+        if (first != null) _candidates.Add(first);
         Add(servers.FirstOrDefault(s => s.IsConnected));
         foreach (var s in servers.Where(s => s.IsFavorite)) Add(s);
         foreach (var s in servers.Where(s => s.History.Count >= 3).OrderByDescending(s => s.History.Count).Take(30)) Add(s);
