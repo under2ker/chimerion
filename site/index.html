@@ -26,7 +26,7 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"CHIMERION","operatingSystem":"Windows 10, Windows 11",
  "applicationCategory":"UtilitiesApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"RUB"},
- "downloadUrl":"https://github.com/under2ker/chimerion/releases/latest","author":{"@type":"Person","name":"under2ker"},
+ "downloadUrl":"https://chimerion.dev/download/CHIMERION-0.1.95-win-x64.zip","author":{"@type":"Person","name":"under2ker"},
  "description":"Smart DNS для ChatGPT, Claude и Gemini, обход замедления YouTube и Discord, ускорение Telegram."}
 </script>
 <script>document.documentElement.classList.add("js")</script>
@@ -426,7 +426,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       <a href="#faq">Вопросы</a>
       <a href="https://t.me/chimeriondns">Telegram</a>
       <a href="https://github.com/under2ker/chimerion">GitHub</a>
-      <a class="get dl" href="https://github.com/under2ker/chimerion/releases/latest">Скачать</a>
+      <a class="get" href="/download/CHIMERION-0.1.95-win-x64.zip">Скачать</a>
     </nav>
   </div>
 </header>
@@ -439,13 +439,14 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <h1>ChatGPT, Claude и Gemini из России без VPN</h1>
         <p class="lead">Один экран для нейросетей, YouTube, Discord и Telegram. CHIMERION подбирает Smart DNS, показывает результат проверок и помогает включить нужный обход.</p>
         <div class="actions">
-          <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/latest">
+          <a class="btn go" href="/download/CHIMERION-0.1.95-win-x64.zip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
-            <span class="dl-text">Скачать для Windows</span>
+            <span>Скачать 0.1.95 <small>1,1 МБ</small></span>
           </a>
+          <a class="btn" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">Скачать с GitHub</a>
           <a class="btn" href="#start">Как начать <span aria-hidden="true">↘</span></a>
         </div>
-        <p class="fine"><span class="dl-meta">Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
+        <p class="fine"><span>Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
       </div>
 
       <div class="demo" data-on="0" role="region" aria-label="Что открывается без программы и с ней">
@@ -651,7 +652,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         </details>
         <details>
           <summary>Как проверить, что архив настоящий?</summary>
-          <p>Каждый архив собирается на GitHub Actions из открытого кода, а GitHub подтверждает происхождение. Проверить можно командой <span class="code">gh attestation verify CHIMERION-0.1.64-win-x64.zip -R under2ker/chimerion</span>. Программа сама проверяет подпись каждого обновления.</p>
+          <p>Каждый архив собирается на GitHub Actions из открытого кода, а GitHub подтверждает происхождение. Проверить можно командой <span class="code">gh attestation verify CHIMERION-0.1.95-win-x64.zip -R under2ker/chimerion</span>. Программа сама проверяет подпись каждого обновления.</p>
         </details>
         <details>
           <summary>Чем это лучше VPN?</summary>
@@ -686,10 +687,11 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <p class="intro">Бесплатно. Новые версии ставятся кнопкой внутри программы. <a class="news" href="https://github.com/under2ker/chimerion/blob/main/CHANGELOG.md">Что нового</a></p>
       </div>
       <div class="actions">
-        <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/latest">
+        <a class="btn go" href="/download/CHIMERION-0.1.95-win-x64.zip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
-          <span class="dl-text">Скачать для Windows</span>
+          <span>Скачать 0.1.95 <small>1,1 МБ</small></span>
         </a>
+        <a class="btn" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">Скачать с GitHub</a>
         <a class="btn" href="https://t.me/+rXN4fR7HWcxlMTYy">Чат и помощь</a>
       </div>
       </div>
@@ -866,18 +868,12 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     });
   });
 
-  // Кнопки «Скачать» ведут прямо на архив последней версии. Без ответа GitHub остается ссылка на страницу релиза
+  // Ссылка на новости последнего релиза; скачивание работает и без GitHub API
   fetch("https://api.github.com/repos/under2ker/chimerion/releases/latest", { signal: AbortSignal.timeout(8000) })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(rel => {
-      const zip = (rel.assets || []).find(a => /^CHIMERION-.*-win-x64\.zip$/.test(a.name));
-      if (!zip) return;
       const ver = String(rel.tag_name || "").replace(/^v/, "");
-      if (!/^\d+\.\d+\.\d+$/.test(ver) || !zip.browser_download_url.startsWith("https://github.com/under2ker/chimerion/releases/download/")) return;
-      document.querySelectorAll("a.dl").forEach(a => { a.href = zip.browser_download_url; });
-      document.querySelectorAll(".dl-text").forEach(t => { t.textContent = "Скачать " + ver; const size = document.createElement("small"); size.textContent = " " + (zip.size / 1048576).toFixed(1).replace(".", ",") + " МБ"; t.append(size); });
-      document.querySelector(".dl-meta").textContent = "Бесплатно и с открытым кодом. Версия " + ver + ".";
-      document.querySelectorAll(".code").forEach(c => { c.textContent = c.textContent.replace(/CHIMERION-[\d.]+-win-x64\.zip/, zip.name); });
+      if (!/^\d+\.\d+\.\d+$/.test(ver)) return;
       const date = new Date(rel.published_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
       const news = document.querySelector(".news");
       news.textContent = "Что нового в " + ver + " от " + date;
