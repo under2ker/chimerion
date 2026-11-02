@@ -14,7 +14,7 @@ public enum SpeedPhase { Ping, Download, Upload }
 public sealed record SpeedProgress(SpeedPhase Phase, double Mbit, double Fraction);
 
 /// <summary>Итог замера. Null: этап не удался.</summary>
-public sealed record InternetResult(string? Source, long? PingMs, long? JitterMs, double? DownMbit, double? UpMbit);
+public sealed record InternetResult(string? Source, long? PingMs, long? JitterMs, double? DownMbit, double? UpMbit, string? Error = null);
 
 /// <summary>
 /// Замер скорости интернета. Основной сервер Cloudflare, запасные нужны, когда провайдер режет канал до него: короткая проба
@@ -24,7 +24,7 @@ public static class InternetSpeed
 {
     public static readonly SpeedSource[] Sources =
     {
-        new("Cloudflare", "https://speed.cloudflare.com/__down?bytes=100000000", "https://speed.cloudflare.com/__up"),
+        new("Cloudflare", "https://speed.cloudflare.com/__down?bytes=25000000", "https://speed.cloudflare.com/__up"), // больше 50 МБ за запрос Cloudflare не отдает (403)
         new("Selectel", "https://speedtest.selectel.ru/100MB", null),
         new("Hetzner", "https://fsn1-speed.hetzner.com/100MB.bin", null),
     };
@@ -33,7 +33,7 @@ public static class InternetSpeed
     private const double GoodPilotMbit = 5;
 
     internal static HttpMessageHandler? Handler;
-    internal static TimeSpan PilotTime = TimeSpan.FromSeconds(1.5), DownTime = TimeSpan.FromSeconds(8), UpTime = TimeSpan.FromSeconds(6), WarmUp = TimeSpan.FromSeconds(1.5);
+    internal static TimeSpan PilotTime = TimeSpan.FromSeconds(3.5), DownTime = TimeSpan.FromSeconds(8), UpTime = TimeSpan.FromSeconds(6), WarmUp = TimeSpan.FromSeconds(1.5);
 
     public static double Mbit(long bytes, double seconds) => seconds <= 0 ? 0 : bytes * 8 / 1_000_000.0 / seconds;
 
@@ -50,9 +50,9 @@ public static class InternetSpeed
     public static async Task<InternetResult> RunAsync(IProgress<SpeedProgress>? progress, CancellationToken ct)
     {
         using var http = NewClient();
-        var source = await PickAsync(http, ct).ConfigureAwait(false);
-        if (source == null) return new InternetResult(null, null, null, null, null);
-        var (ping, jitter) = await PingAsync(http, source, progress, ct).ConfigureAwait(false);
+        var (source, error) = await PickAsync(http, ct).ConfigureAwait(false);
+        if (source == null) return new InternetResult(null, null, null, null, null, error);
+        var (ping, jitter) = await PingAsync(source, progress, ct).ConfigureAwait(false);
         var down = await TransferAsync(SpeedPhase.Download, DownTime, Streams, progress, (add, token) => DownloadOnce(http, source.Download, add, token), ct).ConfigureAwait(false);
         // Отправку принимает только основной сервер
         var upUrl = source.Upload ?? Sources.Select(s => s.Upload).First(u => u != null)!;
@@ -61,42 +61,59 @@ public static class InternetSpeed
     }
 
     /// <summary>Короткая проба серверов по порядку.</summary>
-    private static async Task<SpeedSource?> PickAsync(HttpClient http, CancellationToken ct)
+    private static async Task<(SpeedSource?, string?)> PickAsync(HttpClient http, CancellationToken ct)
     {
         SpeedSource? best = null;
         double bestMbit = 0;
+        string? error = null;
         foreach (var source in Sources)
         {
             ct.ThrowIfCancellationRequested();
             long got = 0;
+            double firstByte = -1;
             var sw = Stopwatch.StartNew();
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
             limit.CancelAfter(PilotTime);
-            try { await DownloadOnce(http, source.Download, n => Interlocked.Add(ref got, n), limit.Token).ConfigureAwait(false); }
+            // Скорость пробы считается с первого байта: у далеких серверов ответ приходит через пару секунд
+            void Add(long n) { if (Interlocked.Add(ref got, n) == n) firstByte = sw.Elapsed.TotalSeconds; }
+            try { await DownloadOnce(http, source.Download, Add, limit.Token).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
-            catch (Exception) when (!ct.IsCancellationRequested) { continue; }
-            double mbit = Mbit(Interlocked.Read(ref got), sw.Elapsed.TotalSeconds);
-            if (mbit >= GoodPilotMbit) return source;
+            catch (Exception e) when (!ct.IsCancellationRequested) { error = $"{source.Name}: {e.GetBaseException().Message}"; continue; }
+            double mbit = firstByte < 0 ? 0 : Mbit(Interlocked.Read(ref got), sw.Elapsed.TotalSeconds - firstByte);
+            if (mbit >= GoodPilotMbit) return (source, null);
             if (mbit > bestMbit) { best = source; bestMbit = mbit; }
         }
-        return best;
+        return (best, best == null ? error ?? "ни один сервер не передал данные" : null);
     }
 
-    private static async Task<(long?, long?)> PingAsync(HttpClient http, SpeedSource source, IProgress<SpeedProgress>? progress, CancellationToken ct)
+    /// <summary>Одна проба задержки: время TCP-подключения к адресу, без DNS и без обработки на сервере.</summary>
+    internal static Func<IPAddress, CancellationToken, Task<long>> Connect = async (ip, ct) =>
+    {
+        using var socket = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+        var sw = Stopwatch.StartNew();
+        await socket.ConnectAsync(new IPEndPoint(ip, 443), ct).ConfigureAwait(false);
+        return sw.ElapsedMilliseconds;
+    };
+
+    internal static Func<string, CancellationToken, Task<IPAddress[]>> Resolve = (host, ct) => Dns.GetHostAddressesAsync(host, ct);
+
+    /// <summary>Пинг до сервера замера: несколько TCP-подключений к уже найденному адресу, первое не считается.</summary>
+    private static async Task<(long?, long?)> PingAsync(SpeedSource source, IProgress<SpeedProgress>? progress, CancellationToken ct)
     {
         const int count = 7;
+        IPAddress? ip;
+        try { ip = (await Resolve(new Uri(source.Download).Host, ct).ConfigureAwait(false)).OrderBy(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 0 : 1).FirstOrDefault(); }
+        catch (Exception) when (!ct.IsCancellationRequested) { ip = null; }
+        if (ip == null) return (null, null);
         var samples = new List<long>();
         for (int i = 0; i < count; i++)
         {
             try
             {
                 using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                limit.CancelAfter(TimeSpan.FromSeconds(4));
-                using var request = new HttpRequestMessage(HttpMethod.Get, source.Download);
-                request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
-                var sw = Stopwatch.StartNew();
-                using var resp = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit.Token).ConfigureAwait(false);
-                if (i > 0) samples.Add(sw.ElapsedMilliseconds); // первый запрос считает установку соединения
+                limit.CancelAfter(TimeSpan.FromSeconds(3));
+                long ms = await Connect(ip, limit.Token).ConfigureAwait(false);
+                if (i > 0) samples.Add(ms);
             }
             catch (Exception) when (!ct.IsCancellationRequested) { }
             progress?.Report(new SpeedProgress(SpeedPhase.Ping, 0, (i + 1.0) / count));

@@ -513,7 +513,7 @@
              диагностика), по дорожке слева направо скользит мягкий блик того же цвета: двигается только градиент. -->
         <Style TargetType="ProgressBar">
             <Setter Property="Height" Value="6"/>
-            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Progress}"/>
             <Setter Property="Background" Value="{DynamicResource Surface2}"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -523,17 +523,18 @@
                                 <Border x:Name="PART_Track"/>
                                 <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
                                         CornerRadius="3" HorizontalAlignment="Left"/>
-                                <Border x:Name="Glide" CornerRadius="3" Visibility="Collapsed">
-                                    <Border.Background>
+                                <!-- Бегущая полоса: цвет из палитры («Полосы загрузки»), блик задает маска прозрачности -->
+                                <Border x:Name="Glide" CornerRadius="3" Visibility="Collapsed" Background="{TemplateBinding Foreground}">
+                                    <Border.OpacityMask>
                                         <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
                                             <LinearGradientBrush.RelativeTransform>
                                                 <TranslateTransform X="-1"/>
                                             </LinearGradientBrush.RelativeTransform>
-                                            <GradientStop Color="#00C5F23A" Offset="0.30"/>
-                                            <GradientStop Color="#FFC5F23A" Offset="0.50"/>
-                                            <GradientStop Color="#00C5F23A" Offset="0.70"/>
+                                            <GradientStop Color="#00000000" Offset="0.30"/>
+                                            <GradientStop Color="#FF000000" Offset="0.50"/>
+                                            <GradientStop Color="#00000000" Offset="0.70"/>
                                         </LinearGradientBrush>
-                                    </Border.Background>
+                                    </Border.OpacityMask>
                                 </Border>
                             </Grid>
                         </Border>
@@ -545,7 +546,7 @@
                                     <BeginStoryboard x:Name="GlideStory">
                                         <Storyboard RepeatBehavior="Forever">
                                             <DoubleAnimation Storyboard.TargetName="Glide"
-                                                             Storyboard.TargetProperty="Background.RelativeTransform.X"
+                                                             Storyboard.TargetProperty="OpacityMask.RelativeTransform.X"
                                                              From="-0.7" To="0.7" Duration="0:0:1.4">
                                                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                             </DoubleAnimation>
