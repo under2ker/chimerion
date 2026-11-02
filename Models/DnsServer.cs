@@ -280,17 +280,39 @@ public class DnsServer : INotifyPropertyChanged
     public int ChecksOk { get; set; }
     public int ChecksTotal { get; set; }
 
-    /// <summary>История полных проверок за последние 14 дней (не больше 200 точек): работал ли сервер и пинг.</summary>
+    /// <summary>История полных проверок за последние 14 дней (не больше 336 точек): работал ли сервер и пинг.</summary>
     public const int MaxHistory = 336;
-    public List<CheckPoint> History { get; set; } = new();
+    private readonly object _historyLock = new();
+    private List<CheckPoint> _history = new();
+
+    /// <summary>
+    /// Копия истории. Проверка дописывает ее в фоновом потоке, а окна и сохранение списка читают в потоке интерфейса:
+    /// чтение живого списка во время записи падало с «Collection was modified». Менять историю только методами ниже.
+    /// </summary>
+    public List<CheckPoint> History
+    {
+        get { lock (_historyLock) return new List<CheckPoint>(_history); }
+        set { lock (_historyLock) _history = value ?? new(); }
+    }
+
+    public int HistoryCount { get { lock (_historyLock) return _history.Count; } }
 
     public void AddHistory(bool ok, long? ms, DateTime? at = null)
     {
         var now = at ?? DateTime.Now;
-        History.Add(new CheckPoint(now, ok, ms));
-        History.RemoveAll(p => now - p.T > TimeSpan.FromDays(14));
-        // 14 дней по проверке в час: 336 точек. Раньше 200, и при частых проверках график качества видел меньше 14 дней
-        if (History.Count > MaxHistory) History.RemoveRange(0, History.Count - MaxHistory);
+        lock (_historyLock)
+        {
+            _history.Add(new CheckPoint(now, ok, ms));
+            _history.RemoveAll(p => now - p.T > TimeSpan.FromDays(14));
+            // 14 дней по проверке в час: 336 точек. Раньше 200, и при частых проверках график качества видел меньше 14 дней
+            if (_history.Count > MaxHistory) _history.RemoveRange(0, _history.Count - MaxHistory);
+        }
+    }
+
+    /// <summary>Оставить первые count точек: откат проверки, которую испортил сбой сети.</summary>
+    public void TrimHistory(int count)
+    {
+        lock (_historyLock) if (_history.Count > count) _history.RemoveRange(count, _history.Count - count);
     }
 
     /// <summary>Итог истории для подсказки: доступность и пинг за 7 дней, сравнение с предыдущей неделей.</summary>

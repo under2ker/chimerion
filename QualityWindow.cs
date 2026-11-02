@@ -32,7 +32,17 @@ internal sealed class QualityWindow
 
     public static void Show(Window? owner, IReadOnlyList<DnsServer> servers, DnsServer? first)
     {
-        if (_open != null) { _open._w.Activate(); return; }
+        if (_open != null)
+        {
+            if (first != null)
+            {
+                if (!_open._candidates.Contains(first)) _open._candidates.Insert(0, first);
+                _open._current = first;
+                _open.Render();
+            }
+            _open._w.Activate();
+            return;
+        }
         _open = new QualityWindow(servers, first);
         _open._w.Show();
     }
@@ -50,7 +60,7 @@ internal sealed class QualityWindow
         if (first != null) _candidates.Add(first);
         Add(servers.FirstOrDefault(s => s.IsConnected));
         foreach (var s in servers.Where(s => s.IsFavorite)) Add(s);
-        foreach (var s in servers.Where(s => s.History.Count >= 3).OrderByDescending(s => s.History.Count).Take(30)) Add(s);
+        foreach (var s in servers.Where(s => s.HistoryCount >= 3).OrderByDescending(s => s.HistoryCount).Take(30)) Add(s);
         _current = _candidates.FirstOrDefault();
 
         var body = new StackPanel();

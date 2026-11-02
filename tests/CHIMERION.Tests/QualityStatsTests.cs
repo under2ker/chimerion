@@ -168,3 +168,36 @@ public class QualityStatsTests
         Assert.DoesNotContain("Ошибки программы", Diagnostics.ToText(report, new[] { "строка журнала" }));
     }
 }
+
+public class HistoryThreadSafetyTests
+{
+    [Fact]
+    public async Task Background_check_and_ui_reading_do_not_collide()
+    {
+        var s = new DnsServer { Name = "Тест", Primary = "203.0.113.10" };
+        var stop = DateTime.Now.AddMilliseconds(600);
+        var writer = Task.Run(() => { int i = 0; while (DateTime.Now < stop) s.AddHistory(i++ % 3 != 0, 40); });
+        var reader = Task.Run(() =>
+        {
+            while (DateTime.Now < stop)
+            {
+                System.Text.Json.JsonSerializer.Serialize(new List<DnsServer> { s }, Dnex.Services.Storage.Options);
+                QualityStats.Summarize(s.History, DateTime.Now);
+            }
+        });
+        await Task.WhenAll(writer, reader); // раньше: InvalidOperationException «Collection was modified»
+        Assert.InRange(s.HistoryCount, 1, DnsServer.MaxHistory);
+    }
+
+    [Fact]
+    public void Trim_keeps_the_first_points_and_copy_is_detached()
+    {
+        var s = new DnsServer();
+        for (int i = 0; i < 5; i++) s.AddHistory(true, i, DateTime.Now.AddMinutes(i));
+        var copy = s.History;
+        copy.Clear();
+        Assert.Equal(5, s.HistoryCount);
+        s.TrimHistory(3);
+        Assert.Equal(new long?[] { 0, 1, 2 }, s.History.Select(p => p.Ms));
+    }
+}

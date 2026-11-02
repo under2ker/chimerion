@@ -1,3 +1,4 @@
+using System.IO;
 ﻿using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -272,9 +273,15 @@ public partial class MainWindow
             }
             try
             {
-                if (!t.IsRunning()) { await t.StartAsync(); Log($"{t.Title}: включено"); }
+                // Без прав zapret поднимается только заданием: запасной путь с запросом прав при входе в Windows не нужен
+                if (t is ZapretTool zt && !DnsSwitcher.IsAdmin() && !t.IsRunning())
+                {
+                    if (await zt.RestartSilentlyAsync()) Log($"{t.Title}: включено");
+                    else Log($"{t.Title}: не включилось без запроса прав. Включите обход в окне «Telegram и YouTube»");
+                }
+                else if (!t.IsRunning()) { await t.StartAsync(); Log($"{t.Title}: включено"); }
             }
-            catch (ToolException ex) { Log($"{t.Title}: не включилось. {ex.Message}"); ShowToast($"{t.Title}: не включилось, подробности в журнале", "Warn"); }
+            catch (Exception ex) when (ex is ToolException or IOException or InvalidOperationException) { Log($"{t.Title}: не включилось. {ex.Message}"); ShowToast($"{t.Title}: не включилось, подробности в журнале", "Warn"); }
         }
         UpdateToolsTray();
         if (!_settings.CheckUpdates) return;

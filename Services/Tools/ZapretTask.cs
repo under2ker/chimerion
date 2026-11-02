@@ -11,6 +11,9 @@ namespace Dnex.Services.Tools;
 /// загрузка Windows снова спрашивали права. Теперь при первом включении Windows спрашивает один раз, и программа
 /// создает два задания Планировщика с наивысшими правами: «запустить обход» и «остановить обход». Задания запускают
 /// саму CHIMERION с ключом <see cref="HelperArg"/>: она только включает или выключает winws и сразу закрывается.
+/// Задание запускает не программу с рабочего стола и не winws из ProgramData (туда может писать любой процесс без прав,
+/// и подмена файла дала бы ему права администратора без вопроса), а их копии в Program Files\CHIMERION\helper,
+/// куда пишет только администратор. Копии делаются вместе с созданием задания, когда Windows и так спрашивает права.
 /// Запустить задание может текущий пользователь, а изменить его только администратор (дескриптор безопасности в XML).
 /// </summary>
 public static class ZapretTask
@@ -21,11 +24,52 @@ public static class ZapretTask
 
     private static string? ExePath => Updater.CurrentExePath;
 
-    /// <summary>Оба задания есть и запускают эту копию программы. Тогда обход включается и выключается без вопроса Windows.</summary>
+    /// <summary>Защищенная папка копий: запись только у администраторов (наследуется от Program Files).</summary>
+    public static string HelperDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "CHIMERION", "helper");
+    public static string HelperExe => Path.Combine(HelperDir, "CHIMERION.exe");
+    public static string HelperBin => Path.Combine(HelperDir, "zapret-bin") + Path.DirectorySeparatorChar;
+
+    /// <summary>Эта программа запущена из защищенной копии: значит, ее запустило задание.</summary>
+    public static bool IsHelperCopy => Environment.ProcessPath is { } p &&
+        string.Equals(Path.GetDirectoryName(p), HelperDir.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+
+    private static (DateTime At, bool Value)? _ready;
+
+    /// <summary>
+    /// Оба задания есть, запускают защищенную копию, и копия winws совпадает с установленной (иначе после обновления zapret
+    /// задание запускало бы старую версию). Ответ запоминается на минуту: schtasks медленный, а спрашивают часто.
+    /// </summary>
     public static bool Ready()
     {
-        if (ExePath is not { } exe) return false;
-        return TaskRuns(StartName, exe, "start") && TaskRuns(StopName, exe, "stop");
+        if (_ready is { } r && DateTime.Now - r.At < TimeSpan.FromMinutes(1)) return r.Value;
+        bool value = File.Exists(HelperExe) && SameFile(Path.Combine(HelperBin, "winws.exe"), Path.Combine(ZapretTool.BinDir, "winws.exe"))
+                     && TaskRuns(StartName, HelperExe, "start") && TaskRuns(StopName, HelperExe, "stop");
+        _ready = (DateTime.Now, value);
+        return value;
+    }
+
+    private static bool SameFile(string a, string b)
+    {
+        try
+        {
+            if (!File.Exists(a) || !File.Exists(b)) return false;
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            return sha.ComputeHash(File.ReadAllBytes(a)).AsSpan().SequenceEqual(sha.ComputeHash(File.ReadAllBytes(b)));
+        }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>Файлы программы для копии: одиночный exe, а у сборки разработчика еще ее библиотеки и описания запуска.</summary>
+    internal static IEnumerable<string> AppFiles(string exe)
+    {
+        yield return exe;
+        if (!string.IsNullOrEmpty(typeof(ZapretTask).Assembly.Location) && Path.GetDirectoryName(exe) is { } dir)
+            foreach (var f in Directory.GetFiles(dir))
+            {
+                var name = Path.GetFileName(f);
+                if (name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || name.StartsWith("CHIMERION.", StringComparison.OrdinalIgnoreCase) && name.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    yield return f;
+            }
     }
 
     private static bool TaskRuns(string name, string exe, string verb)
@@ -51,12 +95,20 @@ public static class ZapretTask
         var start = Path.Combine(dir, "zapret-start.xml");
         var stop = Path.Combine(dir, "zapret-stop.xml");
         // schtasks читает XML задания в UTF-16
-        await File.WriteAllTextAsync(start, Xml(exe, "start", user), Encoding.Unicode);
-        await File.WriteAllTextAsync(stop, Xml(exe, "stop", user), Encoding.Unicode);
+        await File.WriteAllTextAsync(start, Xml(HelperExe, "start", user), Encoding.Unicode);
+        await File.WriteAllTextAsync(stop, Xml(HelperExe, "stop", user), Encoding.Unicode);
         try
         {
             var schtasks = Path.Combine(Environment.SystemDirectory, "schtasks.exe");
-            var script = $"& '{schtasks}' /Create /TN '{StartName}' /XML '{start}' /F | Out-Null; " +
+            static string Q(string v) => "'" + v.Replace("'", "''") + "'";
+            // Копии делаются в том же запросе прав: папка в Program Files, запись только у администраторов
+            var copy = new StringBuilder();
+            copy.Append($"$h = {Q(HelperDir)}; New-Item -ItemType Directory -Force -Path $h | Out-Null; ");
+            foreach (var f in AppFiles(exe))
+                copy.Append($"Copy-Item -LiteralPath {Q(f)} -Destination (Join-Path $h {Q(Path.GetFileName(f) == Path.GetFileName(exe) ? "CHIMERION.exe" : Path.GetFileName(f))}) -Force; ");
+            copy.Append($"Remove-Item -LiteralPath {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force -ErrorAction SilentlyContinue; ");
+            copy.Append($"Copy-Item -LiteralPath {Q(ZapretTool.BinDir.TrimEnd(Path.DirectorySeparatorChar))} -Destination {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force; ");
+            var script = copy + $"& '{schtasks}' /Create /TN '{StartName}' /XML '{start}' /F | Out-Null; " +
                          $"& '{schtasks}' /Create /TN '{StopName}' /XML '{stop}' /F | Out-Null";
             await DnsSwitcher.RunPsAsync(script, elevated: true);
         }
@@ -64,6 +116,7 @@ public static class ZapretTask
         {
             try { File.Delete(start); } catch (IOException) { }
             try { File.Delete(stop); } catch (IOException) { }
+            _ready = null;
         }
         return Ready();
     }

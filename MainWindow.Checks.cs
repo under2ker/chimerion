@@ -402,7 +402,7 @@ public partial class MainWindow
     private sealed record CheckCounters(ServerStatus Status, int Total, int Ok, int FailStreak, int ServiceChecks, int AllOk, Dictionary<string, int> ServiceOk, int History);
 
     private static Dictionary<DnsServer, CheckCounters> SnapshotCounters(IEnumerable<DnsServer> list) =>
-        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk), s.History.Count));
+        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk), s.HistoryCount));
 
     /// <summary>
     /// После пакетной проверки: сохранение, итог, автоочистка. Защита от ложного карантина: если сети нет
@@ -428,7 +428,7 @@ public partial class MainWindow
             {
                 s.ChecksTotal = c.Total; s.ChecksOk = c.Ok; s.FailStreak = c.FailStreak;
                 s.ServiceChecks = c.ServiceChecks; s.AllOk = c.AllOk; s.ServiceOk = new(c.ServiceOk);
-                if (s.History.Count > c.History) s.History.RemoveRange(c.History, s.History.Count - c.History); // сбой сети не пишем в историю
+                s.TrimHistory(c.History); // сбой сети не пишем в историю
                 s.NotifyStability();
             }
             if (vpnSkewed)
