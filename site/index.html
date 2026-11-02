@@ -26,7 +26,7 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"CHIMERION","operatingSystem":"Windows 10, Windows 11",
  "applicationCategory":"UtilitiesApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"RUB"},
- "downloadUrl":"https://chimerion.dev/download/CHIMERION-0.1.95-win-x64.zip","author":{"@type":"Person","name":"under2ker"},
+ "downloadUrl":"https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip","author":{"@type":"Person","name":"under2ker"},
  "description":"Smart DNS для ChatGPT, Claude и Gemini, обход замедления YouTube и Discord, ускорение Telegram."}
 </script>
 <script>document.documentElement.classList.add("js")</script>
@@ -426,7 +426,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       <a href="#faq">Вопросы</a>
       <a href="https://t.me/chimeriondns">Telegram</a>
       <a href="https://github.com/under2ker/chimerion">GitHub</a>
-      <a class="get" href="/download/CHIMERION-0.1.95-win-x64.zip">Скачать</a>
+      <a class="get dl" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">Скачать</a>
     </nav>
   </div>
 </header>
@@ -436,14 +436,14 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     <div class="wrap">
       <div>
         <p class="eyebrow">WINDOWS 10 И 11 <span>SMART DNS · ZAPRET · TELEGRAM</span></p>
-        <h1>ChatGPT, Claude и Gemini из России без VPN</h1>
-        <p class="lead">Один экран для нейросетей, YouTube, Discord и Telegram. CHIMERION подбирает Smart DNS, показывает результат проверок и помогает включить нужный обход.</p>
+        <h1>Нейросети, YouTube и Telegram в одной программе</h1>
+        <p class="lead">CHIMERION помогает подобрать сервер и включить нужные инструменты. Для Windows 10 и 11. Результат зависит от вашей сети и выбранного сервера.</p>
         <div class="actions">
-          <a class="btn go" href="/download/CHIMERION-0.1.95-win-x64.zip">
+          <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
-            <span>Скачать 0.1.95 <small>1,1 МБ</small></span>
+            <span class="dl-text">Скачать 0.1.95 <small>1,1 МБ</small></span>
           </a>
-          <a class="btn" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">Скачать с GitHub</a>
+          <a class="btn" href="https://github.com/under2ker/chimerion/releases/latest">Релиз на GitHub</a>
           <a class="btn" href="#start">Как начать <span aria-hidden="true">↘</span></a>
         </div>
         <p class="fine"><span>Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
@@ -501,22 +501,10 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     </div>
   </section>
 
-  <section class="band toolkit" aria-labelledby="toolkit-h">
-    <div class="wrap">
-      <div class="section-heading"><div><p class="eyebrow">ЧТО ВНУТРИ</p><h2 id="toolkit-h">Нужные инструменты в одном окне</h2></div><p class="intro">Включите только то, чем пользуетесь. На главном экране видно, что запущено и что удалось проверить.</p></div>
-      <div class="tool-grid">
-        <article class="tool"><span class="tool-index">01 / SMART DNS</span><h3>Нейросети для работы</h3><p>Подбор серверов для ChatGPT, Claude и Gemini, проверка доступа и контроль страны выхода.</p><div class="tool-tags"><span>ChatGPT</span><span>Claude</span><span>Gemini</span></div></article>
-        <article class="tool"><span class="tool-index">02 / ZAPRET</span><h3>Видео и общение</h3><p>Отдельный обход для YouTube и Discord. Готовые наборы сайтов и подбор стратегии под вашу сеть.</p><div class="tool-tags"><span>YouTube</span><span>Discord</span><span>Свои сайты</span></div></article>
-        <article class="tool"><span class="tool-index">03 / TELEGRAM</span><h3>Telegram через прокси</h3><p>Запуск TG WS Proxy и состояние его работы в программе. Управление рядом с остальными инструментами.</p><div class="tool-tags"><span>TG WS Proxy</span><span>Один переключатель</span></div></article>
-      </div>
-      <p class="tool-note">CHIMERION не заменяет VPN для всего трафика и не скрывает вашу личность в интернете. <a href="#compare">Сравнить способы подключения</a></p>
-    </div>
-  </section>
-
   <section class="band" aria-labelledby="look">
     <div class="wrap">
       <h2 id="look">Включили и пользуетесь</h2>
-      <p class="intro">Программа сама собирает Smart DNS с форумов, сайтов и Telegram-каналов и проверяет каждый: открывается ли сервис, из какой страны вас видят. На главном экране только важное, а полный список серверов и тонкие настройки в панели управления.</p>
+      <p class="intro">На главном экране видно состояние подключения, доступность сервисов и нужные переключатели. Сначала программа проверит серверы, затем можно включить защиту и выбрать остальные инструменты.</p>
       <figure class="screen">
         <div class="frame">
           <img src="img/main.webp?v=0.1.95" srcset="img/main-480.webp?v=0.1.95 480w, img/main-800.webp?v=0.1.95 800w, img/main-1200.webp?v=0.1.95 1200w, img/main.webp?v=0.1.95 1440w" sizes="(max-width: 1220px) calc(100vw - 56px), 1164px" width="1440" height="900" loading="lazy" alt="Главный экран CHIMERION: защита включена, ChatGPT, Claude и Gemini доступны, Telegram, YouTube и Discord работают, три лучших сервера">
@@ -535,6 +523,30 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     </div>
   </section>
 
+  <section class="band" aria-labelledby="start">
+    <div class="wrap">
+      <h2 id="start">Как начать</h2>
+      <p class="intro">Программа работает из папки. Нужны Windows 10 или 11 и .NET 8 Desktop Runtime. Если Windows попросит установить .NET, <a href="https://dotnet.microsoft.com/download/dotnet/8.0">скачайте Desktop Runtime</a> и запустите программу снова.</p>
+      <ol class="steps">
+        <li><b>Скачайте архив</b><span>Распакуйте в любую папку и запустите CHIMERION.exe.</span></li>
+        <li><b>Дождитесь проверки</b><span>Программа соберет серверы и проверит их на нейросетях. Лучшие окажутся наверху.</span></li>
+        <li><b>Включите «Защиту»</b><span>Разрешите Windows изменить DNS и посмотрите результаты. Для YouTube, Discord и Telegram включите отдельные переключатели. Чтобы вернуть DNS, выключите защиту.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="band toolkit" aria-labelledby="toolkit-h">
+    <div class="wrap">
+      <div class="section-heading"><div><p class="eyebrow">ЧТО ВНУТРИ</p><h2 id="toolkit-h">Нужные инструменты в одном окне</h2></div><p class="intro">Включите только то, чем пользуетесь. На главном экране видно, что запущено и что удалось проверить.</p></div>
+      <div class="tool-grid">
+        <article class="tool"><span class="tool-index">01 / SMART DNS</span><h3>Нейросети для работы</h3><p>Подбор серверов для ChatGPT, Claude и Gemini, проверка доступа и контроль страны выхода.</p><div class="tool-tags"><span>ChatGPT</span><span>Claude</span><span>Gemini</span></div></article>
+        <article class="tool"><span class="tool-index">02 / ZAPRET</span><h3>Видео и общение</h3><p>Отдельный обход для YouTube и Discord. Готовые наборы сайтов и подбор стратегии под вашу сеть.</p><div class="tool-tags"><span>YouTube</span><span>Discord</span><span>Свои сайты</span></div></article>
+        <article class="tool"><span class="tool-index">03 / TELEGRAM</span><h3>Telegram через прокси</h3><p>Запуск TG WS Proxy и состояние его работы в программе. Управление рядом с остальными инструментами.</p><div class="tool-tags"><span>TG WS Proxy</span><span>Один переключатель</span></div></article>
+      </div>
+      <p class="tool-note">CHIMERION не заменяет VPN для всего трафика и не скрывает вашу личность в интернете. <a href="#compare">Сравнить способы подключения</a></p>
+    </div>
+  </section>
+
   <section class="band alt" id="cases" aria-labelledby="cases-h">
     <div class="wrap cases-wrap">
       <div class="side">
@@ -542,20 +554,14 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <p class="intro">Красным то, с чем к нам приходят. Салатовым то, что делает программа.</p>
       </div>
       <ul class="cases">
-        <li><q>ChatGPT пишет «not available in your country», а Claude просит VPN</q>
-          <p><b>Подключает Smart DNS</b>, который открывает нейросети. Перед этим программа проверяет сервер на всех трех сервисах.</p></li>
         <li><q>С VPN не пускает банк, а без него не открываются нейросети</q>
           <p><b>Два DNS:</b> только нейросети идут через Smart DNS, все остальное как раньше. При этом страна выхода у нейросетей может измениться.</p></li>
-        <li><q>YouTube грузится по минуте, Discord не подключается</q>
-          <p><b>Ставит zapret</b> и по кнопке подбирает стратегию обхода, которая работает у вашего провайдера.</p></li>
         <li><q>Вчерашний DNS сегодня уже не работает</q>
-          <p><b>Сторож замечает</b>, что сервер упал, а запасной подхватывает за секунды. Программа предложит замену.</p></li>
+          <p><b>Сторож замечает</b>, что сервер упал, а Windows может перейти на запасной сервер. Программа предложит замену.</p></li>
         <li><q>Сайт не открывается, и непонятно почему</q>
-          <p><b>Проверяет сам сайт</b> и называет причину: блокирует провайдер, лежит у всех или закрыт для России.</p></li>
+          <p><b>Проверяет сам сайт</b> и помогает понять причину: блокировка, ограничение региона или сбой сайта.</p></li>
         <li><q>Нейросети нужны и на телефоне</q>
           <p><b>Переносит тот же сервер</b> на iPhone по QR-коду, для Android дает короткую инструкцию.</p></li>
-        <li><q>Telegram Desktop долго грузит картинки и видео</q>
-          <p><b>Включает ускорение Telegram</b> одной кнопкой: прокси работает на вашем компьютере.</p></li>
       </ul>
     </div>
   </section>
@@ -564,12 +570,12 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     <div class="wrap pair">
       <div>
         <h2 id="sites-h">Скажет, почему сайт не открывается</h2>
-        <p class="intro">Программа следит за сайтами, которыми вы пользуетесь. Если какой-то перестал открываться, придет уведомление с причиной, а в «Помощи» на вкладке «Под наблюдением» будет кнопка, которая это исправит.</p>
+        <p class="intro">Программа следит за сайтами, которыми вы пользуетесь. Если какой-то перестал открываться, программа уведомит об этом и попробует определить причину. В «Помощи» на вкладке «Под наблюдением» появится доступное действие.</p>
         <ul class="ticks">
           <li><b>Блокирует провайдер:</b> одна кнопка добавит сайт в обход zapret.</li>
           <li><b>Закрыт для России:</b> сайт отправится в Smart DNS.</li>
           <li><b>Лежит у всех:</b> программа проверит сайт снаружи России и скажет, что дело не в вашей сети.</li>
-          <li><b>Список хранится у вас.</b> Наружу уходит только имя сайта, который не открылся.</li>
+          <li><b>Список хранится у вас.</b> При проверке недоступного сайта наружу уходит его имя.</li>
         </ul>
       </div>
       <div class="shot watched-shot"><img src="img/watched-tab-demo-v2.png?v=0.1.95" width="844" height="700" decoding="async" alt="Вкладка «Под наблюдением»: пример результатов проверки сайтов"></div>
@@ -580,11 +586,11 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     <div class="wrap pair flip">
       <div>
         <h2 id="acc">Следит, чтобы страна входа не скакала</h2>
-        <p class="intro">Частая смена страны входа повышает риск блокировки аккаунта. Поэтому программа держит одну страну для каждого сервиса.</p>
+        <p class="intro">Частая смена страны входа повышает риск блокировки аккаунта. Программа запоминает известную страну для каждого сервиса, учитывает ее при выборе и предупреждает об обнаруженной смене. Риск блокировки остается.</p>
         <ul class="ticks">
           <li>Помнит, из какой страны ChatGPT, Claude и Gemini обычно видят вас.</li>
-          <li>Спрашивает перед подключением к серверу с другой страной выхода.</li>
-          <li>Замену и запасной сервер подбирает с той же страной.</li>
+          <li>Предупреждает перед подключением, если обнаружена другая страна выхода.</li>
+          <li>При подборе замены учитывает известную страну выхода.</li>
           <li>Может вообще не менять сервер без вас, это включается в настройках.</li>
         </ul>
       </div>
@@ -614,28 +620,16 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       <table class="compare">
         <thead><tr><th scope="col"><span class="sr">Что важно</span></th><th scope="col" class="us">CHIMERION</th><th scope="col">VPN</th><th scope="col">DNS вручную</th></tr></thead>
         <tbody>
-          <tr><th scope="row">ChatGPT, Claude и Gemini</th><td class="us"><span class="mk y">Открываются</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk m">Пока сервер жив</span></td></tr>
-          <tr><th scope="row">Банки и Госуслуги</th><td class="us"><span class="mk y">Как обычно</span></td><td><span class="mk m">Зависит от маршрута</span></td><td><span class="mk y">Как обычно</span></td></tr>
-          <tr><th scope="row">Скорость обычных сайтов</th><td class="us"><span class="mk y">Не меняется</span></td><td><span class="mk m">Зависит от сервера</span></td><td><span class="mk y">Не меняется</span></td></tr>
-          <tr><th scope="row">Если сервер упал</th><td class="us"><span class="mk y">По настройкам</span></td><td><span class="mk m">Сменить вручную</span></td><td><span class="mk n">Искать новый</span></td></tr>
-          <tr><th scope="row">YouTube и Discord</th><td class="us"><span class="mk y">zapret внутри</span></td><td><span class="mk y">Работают</span></td><td><span class="mk n">Не помогает</span></td></tr>
-          <tr><th scope="row">Сайты, закрытые по адресу</th><td class="us"><span class="mk m">Часть через zapret</span></td><td><span class="mk y">Открываются</span></td><td><span class="mk n">Не помогает</span></td></tr>
+          <tr><th scope="row">ChatGPT, Claude и Gemini</th><td class="us"><span class="mk m">Зависит от сервера</span></td><td><span class="mk m">Зависит от сервера</span></td><td><span class="mk m">Зависит от сервера</span></td></tr>
+          <tr><th scope="row">Банки и Госуслуги</th><td class="us"><span class="mk m">Обычно как раньше</span></td><td><span class="mk m">Зависит от маршрута</span></td><td><span class="mk m">Зависит от DNS</span></td></tr>
+          <tr><th scope="row">Скорость обычных сайтов</th><td class="us"><span class="mk m">Зависит от сети</span></td><td><span class="mk m">Зависит от сервера</span></td><td><span class="mk m">Зависит от DNS</span></td></tr>
+          <tr><th scope="row">Если сервер упал</th><td class="us"><span class="mk y">По настройкам</span></td><td><span class="mk m">Зависит от VPN</span></td><td><span class="mk n">Искать новый</span></td></tr>
+          <tr><th scope="row">YouTube и Discord</th><td class="us"><span class="mk y">zapret внутри</span></td><td><span class="mk m">Зависит от VPN</span></td><td><span class="mk n">Не помогает</span></td></tr>
+          <tr><th scope="row">Сайты, закрытые по адресу</th><td class="us"><span class="mk m">Часть через zapret</span></td><td><span class="mk m">Зависит от VPN</span></td><td><span class="mk n">Не помогает</span></td></tr>
           <tr><th scope="row">Цена</th><td class="us"><span class="mk y">Бесплатно</span></td><td><span class="mk m">Обычно платно</span></td><td><span class="mk y">Бесплатно</span></td></tr>
         </tbody>
       </table>
-      <p class="compare-note">Выбор зависит от задачи: VPN меняет маршрут трафика, CHIMERION объединяет отдельные инструменты для нейросетей, видео и Telegram. Ни один способ не гарантирует доступность всех сайтов.</p>
-    </div>
-  </section>
-
-  <section class="band" aria-labelledby="start">
-    <div class="wrap">
-      <h2 id="start">Как начать</h2>
-      <p class="intro">Программа работает из папки. Нужны Windows 10 или 11 и .NET 8 Desktop Runtime. Обновления устанавливаются из самой программы.</p>
-      <ol class="steps">
-        <li><b>Скачайте архив</b><span>Распакуйте в любую папку и запустите CHIMERION.exe.</span></li>
-        <li><b>Дождитесь проверки</b><span>Программа соберет серверы и проверит их на нейросетях. Лучшие окажутся наверху.</span></li>
-        <li><b>Включите «Защиту»</b><span>Разрешите Windows изменить DNS и посмотрите результаты проверки. Для возврата исходного DNS выключите защиту.</span></li>
-      </ol>
+      <p class="compare-note">В режиме «Два DNS» запросы остальных сайтов идут через общий DNS. Результат зависит от сети, настроек и выбранного сервера. Ни один способ не гарантирует доступность всех сайтов.</p>
     </div>
   </section>
 
@@ -648,7 +642,7 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       <div class="faq">
         <details>
           <summary>Это безопасно?</summary>
-          <p>Код открыт на <a href="https://github.com/under2ker/chimerion">GitHub</a>. Архив собирается на GitHub Actions и подписан ключом автора: без верной подписи программа обновление не поставит. Права администратора нужны только в момент смены DNS.</p>
+          <p>Код открыт на <a href="https://github.com/under2ker/chimerion">GitHub</a>. Архив собирается на GitHub Actions и подписан ключом автора: без верной подписи программа обновление не поставит. Windows может запросить права администратора при смене DNS и настройке обхода zapret.</p>
         </details>
         <details>
           <summary>Как проверить, что архив настоящий?</summary>
@@ -660,15 +654,15 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         </details>
         <details>
           <summary>Могут ли заблокировать аккаунт?</summary>
-          <p>Обход региональных ограничений нарушает условия сервисов, риск есть всегда. Чтобы его снизить, программа держит одну страну входа и предупреждает, если она меняется.</p>
+          <p>Обход региональных ограничений нарушает условия сервисов, риск есть всегда. Программа запоминает известную страну входа и предупреждает об обнаруженной смене, но не может исключить риск.</p>
         </details>
         <details>
           <summary>Что программа отправляет в сеть?</summary>
-          <p>Запросы для проверки серверов и сервисов и проверку обновлений. Итоги проверок для общей карты серверов уходят только с вашего согласия, без IP и списка сайтов. Полный список есть в <a href="https://github.com/under2ker/chimerion#что-уходит-в-сеть">README</a>.</p>
+          <p>Запросы для проверки серверов и сервисов и проверку обновлений. Для статистики использования программы отправляется служебная отметка. Итоги проверок для общей карты серверов уходят только с вашего согласия, без IP и списка сайтов. Полный список есть в <a href="https://github.com/under2ker/chimerion#что-уходит-в-сеть">README</a>.</p>
         </details>
         <details>
           <summary>Если после программы что-то сломалось?</summary>
-          <p>«Отключить» возвращает исходные DNS. Если программа не запускается, в архиве лежит reset-dns.cmd: он вернет все как было. С вопросами приходите в <a href="https://t.me/+rXN4fR7HWcxlMTYy">чат</a>.</p>
+          <p>«Отключить» возвращает исходные DNS. Если программа не запускается, в архиве лежит reset-dns.cmd: он попытается восстановить исходные DNS и убрать правила «Двух DNS». Если восстановить настройки не удалось, обратитесь за помощью. С вопросами приходите в <a href="https://t.me/+rXN4fR7HWcxlMTYy">чат</a>.</p>
         </details>
         <details>
           <summary>Есть версия для Mac или Linux?</summary>
@@ -687,11 +681,11 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
         <p class="intro">Бесплатно. Новые версии ставятся кнопкой внутри программы. <a class="news" href="https://github.com/under2ker/chimerion/blob/main/CHANGELOG.md">Что нового</a></p>
       </div>
       <div class="actions">
-        <a class="btn go" href="/download/CHIMERION-0.1.95-win-x64.zip">
+        <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
-          <span>Скачать 0.1.95 <small>1,1 МБ</small></span>
+          <span class="dl-text">Скачать 0.1.95 <small>1,1 МБ</small></span>
         </a>
-        <a class="btn" href="https://github.com/under2ker/chimerion/releases/download/v0.1.95/CHIMERION-0.1.95-win-x64.zip">Скачать с GitHub</a>
+        <a class="btn" href="https://github.com/under2ker/chimerion/releases/latest">Релиз на GitHub</a>
         <a class="btn" href="https://t.me/+rXN4fR7HWcxlMTYy">Чат и помощь</a>
       </div>
       </div>
@@ -868,12 +862,23 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     });
   });
 
-  // Ссылка на новости последнего релиза; скачивание работает и без GitHub API
+  // Последний архив GitHub; без ответа API остается ссылка на опубликованный архив
   fetch("https://api.github.com/repos/under2ker/chimerion/releases/latest", { signal: AbortSignal.timeout(8000) })
     .then(r => r.ok ? r.json() : Promise.reject())
     .then(rel => {
       const ver = String(rel.tag_name || "").replace(/^v/, "");
       if (!/^\d+\.\d+\.\d+$/.test(ver)) return;
+      const expected = `CHIMERION-${ver}-win-x64.zip`;
+      const zip = (rel.assets || []).find(a => a.name === expected && a.browser_download_url === `https://github.com/under2ker/chimerion/releases/download/v${ver}/${expected}`);
+      if (!zip) return;
+      {
+        document.querySelectorAll("a.dl").forEach(a => { a.href = zip.browser_download_url; });
+        document.querySelectorAll(".dl-text").forEach(t => {
+          t.textContent = "Скачать " + ver;
+          if (Number.isFinite(zip.size) && zip.size > 0) { const size = document.createElement("small"); size.textContent = " " + (zip.size / 1048576).toFixed(1).replace(".", ",") + " МБ"; t.append(size); }
+        });
+        document.querySelectorAll(".code").forEach(c => { c.textContent = c.textContent.replace(/CHIMERION-[\d.]+-win-x64\.zip/, expected); });
+      }
       const date = new Date(rel.published_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
       const news = document.querySelector(".news");
       news.textContent = "Что нового в " + ver + " от " + date;
