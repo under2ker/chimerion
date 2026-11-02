@@ -28,7 +28,7 @@ if (-not $db) {
     $db = (npx wrangler d1 list --json | Out-String | ConvertFrom-Json) | Where-Object { $_.name -eq 'chimerion-crowd' } | Select-Object -First 1
 }
 if (-not $db) { throw 'База chimerion-crowd не создалась' }
-$toml = Get-Content wrangler.toml -Raw
+$toml = Get-Content wrangler.toml -Raw -Encoding UTF8  # без -Encoding Windows PowerShell читал кириллицу как cp1251 и портил файл
 $toml = $toml -replace 'database_id = ".*"', "database_id = `"$($db.uuid)`""
 [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'wrangler.toml'), $toml, (New-Object Text.UTF8Encoding $false))
 Write-Output "База D1: $($db.uuid)"

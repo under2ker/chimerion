@@ -467,7 +467,7 @@ public partial class MainWindow
     {
         using var cause = NetHistory.Because("сторож");
         if (NoAutoDns) return; // копия данных: подключение в ней чужое
-        if (Watchdog.IsChecked != true || _busyConn) return;
+        if (Watchdog.IsChecked != true || _busyConn || _autoPicking) return; // автоподбор сам переключает серверы
         if (_disconnectFailed) return; // пользователь пытался отключиться: подключение не возвращаем
         if (_uacDeclined) return;      // в правах отказали: без действия пользователя запрос не повторяем
         var active = DnsSwitcher.GetActive();

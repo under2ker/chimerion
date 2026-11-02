@@ -32,6 +32,7 @@ public sealed class ZapretTool : Tool
         ? Path.Combine(Storage.Dir, "tools", "zapret")
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DNEX", "zapret");
     private static string Bin => Path.Combine(Dir, "bin") + Path.DirectorySeparatorChar;
+    internal static string BinDir => Bin;
     private static string Lists => Path.Combine(Dir, "lists") + Path.DirectorySeparatorChar;
 
     public override bool IsInstalled => File.Exists(Path.Combine(Bin, "winws.exe"));
@@ -267,6 +268,23 @@ public sealed class ZapretTool : Tool
         await LaunchAsync(strategy, State.Games);
     }
 
+    /// <summary>
+    /// Перезапуск без участия человека: с правами напрямую, без них только через готовое задание Планировщика.
+    /// Запрос прав Windows здесь не показывается никогда, даже если задание не сработало. True: обход снова работает.
+    /// </summary>
+    public async Task<bool> RestartSilentlyAsync()
+    {
+        if (IsRunning() || ForeignServiceInstalled()) return IsRunning();
+        var strategy = SavedStrategy();
+        if (DnsSwitcher.IsAdmin()) { await LaunchAsync(strategy, State.Games); return IsRunning(); }
+        if (!ZapretTask.Ready()) return false;
+        await PrepareAsync(strategy, State.Games);
+        SaveState();
+        if (!ZapretTask.Run(ZapretTask.StartName)) return false;
+        for (int i = 0; i < 40 && !IsRunning(); i++) await Task.Delay(250);
+        return IsRunning();
+    }
+
     /// <summary>Стратегия из настроек, если такой файл есть в сборке, иначе основная.</summary>
     private string SavedStrategy() =>
         IsStrategyName(State.Strategy) && File.Exists(Path.Combine(Dir, State.Strategy!)) ? State.Strategy! : DefaultStrategy;
@@ -308,13 +326,16 @@ public sealed class ZapretTool : Tool
                 return 0;
             }
             if (verb != "start") return 2;
+            // С правами запускается только winws из защищенной копии: файл в ProgramData мог подменить любой процесс
+            if (!ZapretTask.IsHelperCopy) return 2;
             if (WinwsCount() > 0) return 0;
             var z = new ZapretTool();
             if (!z.IsInstalled || ForeignServiceInstalled()) return 1;
             var strategy = z.SavedStrategy();
-            var args = ParseArgs(File.ReadAllText(Path.Combine(Dir, strategy)), Bin, Lists, z.State.Games);
+            var bin = ZapretTask.HelperBin;
+            var args = ParseArgs(File.ReadAllText(Path.Combine(Dir, strategy)), bin, Lists, z.State.Games);
             if (args == null) return 1;
-            using var proc = Process.Start(new ProcessStartInfo(Path.Combine(Bin, "winws.exe"), args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Bin });
+            using var proc = Process.Start(new ProcessStartInfo(Path.Combine(bin, "winws.exe"), args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Bin });
             Thread.Sleep(2000);
             return proc == null || proc.HasExited ? 1 : 0;
         }

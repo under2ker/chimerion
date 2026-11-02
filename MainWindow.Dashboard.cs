@@ -332,7 +332,7 @@ public partial class MainWindow
         }
     }
 
-    private readonly List<(Button Button, TextBlock Text, string Title)> _dashNav = new();
+    private readonly List<(Button Button, TextBlock Text, string Title, object? Tip)> _dashNav = new();
     private DockPanel? _dashSidebarContent;
     private FrameworkElement? _dashBrandText;
     private bool? _dashRail;
@@ -344,10 +344,10 @@ public partial class MainWindow
         _dashRail = rail;
         if (_dashSidebarContent != null) _dashSidebarContent.Margin = rail ? new Thickness(8, 24, 8, 18) : new Thickness(15, 24, 15, 18);
         if (_dashBrandText != null) _dashBrandText.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var (button, text, title) in _dashNav)
+        foreach (var (button, text, title, tip) in _dashNav)
         {
             text.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-            button.ToolTip = rail ? title : null;
+            button.ToolTip = rail ? (tip is string t ? $"{title}: {t}" : title) : tip;
             button.HorizontalContentAlignment = rail ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         }
         foreach (var v in _updateCards.Where(c => _dashSidebarContent != null && IsInside(c.Card, _dashSidebarContent)))
@@ -367,7 +367,7 @@ public partial class MainWindow
     private Button SideNav(string title, string icon, Action click, bool selected = false, bool soon = false)
     {
         var b = DashboardNav(title, icon, click, selected, soon);
-        if (b.Content is StackPanel { Children.Count: > 1 } row && row.Children[1] is TextBlock t) _dashNav.Add((b, t, title));
+        if (b.Content is StackPanel { Children.Count: > 1 } row && row.Children[1] is TextBlock t) _dashNav.Add((b, t, title, b.ToolTip));
         return b;
     }
 

@@ -37,6 +37,8 @@ internal sealed class ToolsWindow
     private string? _pickSignature;
 
     private static ToolsWindow? _open;
+    /// <summary>В окне сейчас включают, выключают или подбирают обход: фоновый перезапуск не должен вмешиваться.</summary>
+    internal static bool Busy => _open?._busy == true;
 
     /// <summary>Отправить домен в Smart DNS («Два DNS» → свои домены). Задает главное окно.</summary>
     private static Func<string, string>? _toSmartDns;

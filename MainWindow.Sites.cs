@@ -25,6 +25,7 @@ public partial class MainWindow
 
     private string? _zapretWarned;
     private readonly List<DateTime> _zapretRestarts = new();
+    private int _zapretMissing;
 
     /// <summary>
     /// Раз в 5 минут: обход включен, но winws пропал, или рядом работает служба zapret из service.bat (две копии
@@ -43,7 +44,10 @@ public partial class MainWindow
             else if (_tools.OfType<ZapretTool>().FirstOrDefault() is not { State.Enabled: true }) _zapretWarned = null;
             return;
         }
-        if (!z.IsRunning() && ZapretTool.Conflict() == null)
+        // Перезапуск только если обход пропал на двух проверках подряд и человек сейчас ничего с ним не делает:
+        // иначе можно было перезапустить обход, который как раз выключают
+        _zapretMissing = z.IsRunning() ? 0 : _zapretMissing + 1;
+        if (_zapretMissing >= 2 && !_dashboardToolBusy && !_modeBusy && !ToolsWindow.Busy && ZapretTool.Conflict() == null)
         {
             _zapretRestarts.RemoveAll(t => DateTime.Now - t > TimeSpan.FromHours(1));
             bool silent = DnsSwitcher.IsAdmin() || ZapretTask.Ready();
@@ -53,10 +57,10 @@ public partial class MainWindow
                 Log($"YouTube и Discord: обход zapret остановился сам (процесс winws.exe завершился). Перезапускаю, попытка {_zapretRestarts.Count} из 3 за час");
                 try
                 {
-                    await z.StartAsync();
-                    if (z.IsRunning()) { Log("YouTube и Discord: обход zapret перезапущен"); UpdateToolsTray(); return; }
+                    if (await z.RestartSilentlyAsync()) { Log("YouTube и Discord: обход zapret перезапущен"); UpdateToolsTray(); return; }
+                    Log("YouTube и Discord: перезапуск без запроса прав не удался");
                 }
-                catch (ToolException e) { Log("YouTube и Discord: перезапуск не удался. " + e.Message); }
+                catch (Exception e) when (e is ToolException or System.IO.IOException or InvalidOperationException) { Log("YouTube и Discord: перезапуск не удался. " + e.Message); }
             }
         }
         var problem = !z.IsRunning() ? "YouTube и Discord: обход zapret остановился. Включите его в трее или в «Telegram и YouTube»" : ZapretTool.Conflict();

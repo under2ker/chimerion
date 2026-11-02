@@ -26,10 +26,11 @@ public partial class MainWindow
                 return;
             }
             Log($"Автоподбор: пробую до {candidates.Count} серверов по очереди, страну выхода не меняю");
+            var before = DnsSwitcher.GetActive() is { } was ? _servers.FirstOrDefault(x => x.Id == was.ServerId) : null;
             DnsServer? best = null; int bestScore = int.MinValue, tried = 0;
             foreach (var s in candidates)
             {
-                if (_uacDeclined) { Log("Автоподбор остановлен: права администратора не выданы"); return; }
+                if (_uacDeclined) { Log("Автоподбор остановлен: права администратора не выданы. Подключение могло остаться на последнем опробованном сервере"); return; }
                 tried++;
                 DashboardMessage($"Подбираю режим: пробую «{s.DisplayName}» ({tried} из {candidates.Count})…");
                 if (!await ConnectToAsync(s, auto: true)) { Log($"Автоподбор: «{s.DisplayName}» не подключился, иду дальше"); continue; }
@@ -59,7 +60,9 @@ public partial class MainWindow
             }
             else
             {
-                if (DnsSwitcher.GetActive() != null) await DisconnectAsync("автоподбор: ни один сервер не открыл нейросети");
+                // Ничего не подошло: возвращаем то, что было до подбора, а не оставляем человека без Smart DNS
+                if (before != null) { if (DnsSwitcher.GetActive()?.ServerId != before.Id) await ConnectToAsync(before, auto: true); }
+                else if (DnsSwitcher.GetActive() != null) await DisconnectAsync("автоподбор: ни один сервер не открыл нейросети");
                 DashboardMessage("Подобрать режим не удалось: ни один из проверенных серверов не открыл нейросети. Подробности в «Диагностике»", true);
                 Log("Автоподбор: ни один сервер не открыл нейросети, DNS возвращены");
             }
