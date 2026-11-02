@@ -255,14 +255,28 @@ public static class Diagnostics
     }
 
     /// <summary>Последние строки error.log (необработанные исключения): без них по отчету не видно, почему программа падала.</summary>
-    public static List<string> RecentErrors(int lines = 40)
+    public static List<string> RecentErrors() => RecentErrors(Storage.PathOf("error.log"), DateTime.Now);
+
+    /// <summary>
+    /// Последние записи error.log целиком, только за 14 дней: старые сбои прошлых версий уже не про эту программу.
+    /// Запись начинается строкой с датой, за ней стек. Не больше 5 записей и 12 строк в каждой.
+    /// </summary>
+    internal static List<string> RecentErrors(string path, DateTime now)
     {
         try
         {
-            var path = Storage.PathOf("error.log");
             if (!System.IO.File.Exists(path)) return new List<string>();
-            var all = System.IO.File.ReadAllLines(path);
-            return all.Skip(Math.Max(0, all.Length - lines)).Select(l => l.Length > 400 ? l[..400] + "…" : l).Select(PrivacyGuard.Scrub).ToList();
+            var entries = new List<(DateTime At, List<string> Lines)>();
+            foreach (var line in System.IO.File.ReadAllLines(path))
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(line, @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})Z? ");
+                if (m.Success && DateTime.TryParse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var at))
+                    entries.Add((at, new List<string> { line }));
+                else if (entries.Count > 0) entries[^1].Lines.Add(line);
+            }
+            return entries.Where(e => now - e.At <= TimeSpan.FromDays(14)).TakeLast(5)
+                .SelectMany(e => e.Lines.Take(12).Concat(e.Lines.Count > 12 ? new[] { "   …" } : Array.Empty<string>()))
+                .Select(l => l.Length > 400 ? l[..400] + "…" : l).Select(PrivacyGuard.Scrub).ToList();
         }
         catch (Exception) { return new List<string>(); }
     }

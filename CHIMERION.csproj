@@ -14,7 +14,7 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.92</Version>
+    <Version>0.1.93</Version>
   </PropertyGroup>
 
   <PropertyGroup>

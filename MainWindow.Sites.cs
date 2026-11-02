@@ -18,20 +18,47 @@ public partial class MainWindow
 
     private void StartSiteWatch()
     {
-        _sitesTimer.Tick += async (_, _) => { CheckZapretHealth(); await SitesRoundAsync(); };
+        _sitesTimer.Tick += async (_, _) => { await CheckZapretHealthAsync(); await SitesRoundAsync(); };
         _sitesTimer.Start();
         _ = Dispatcher.InvokeAsync(async () => { await Task.Delay(TimeSpan.FromSeconds(45)); await SitesRoundAsync(); });
     }
 
     private string? _zapretWarned;
+    private readonly List<DateTime> _zapretRestarts = new();
 
     /// <summary>
     /// Раз в 5 минут: обход включен, но winws пропал, или рядом работает служба zapret из service.bat (две копии
-    /// мешают друг другу, обход «работает минут 20 и перестает»). Об одной и той же проблеме сообщаем один раз.
+    /// мешают друг другу, обход «работает минут 20 и перестает»). Пропавший обход программа перезапускает сама, если может
+    /// без вопроса Windows (есть права или задание Планировщика), но не чаще трех раз в час. О проблеме сообщает один раз.
     /// </summary>
-    private void CheckZapretHealth()
+    private async Task CheckZapretHealthAsync()
     {
-        if (_tools.OfType<ZapretTool>().FirstOrDefault() is not { IsInstalled: true, State.Enabled: true } z) { _zapretWarned = null; return; }
+        if (_tools.OfType<ZapretTool>().FirstOrDefault() is not { IsInstalled: true, State.Enabled: true } z)
+        {
+            if (_tools.OfType<ZapretTool>().FirstOrDefault() is { State.Enabled: true } gone && !gone.IsInstalled && _zapretWarned == null)
+            {
+                _zapretWarned = "YouTube и Discord: файлы zapret пропали, похоже, их удалил антивирус. Добавьте папку zapret в исключения и включите обход снова";
+                Notify(_zapretWarned, "Warn", logLine: _zapretWarned, feature: FeatureBypass);
+            }
+            else if (_tools.OfType<ZapretTool>().FirstOrDefault() is not { State.Enabled: true }) _zapretWarned = null;
+            return;
+        }
+        if (!z.IsRunning() && ZapretTool.Conflict() == null)
+        {
+            _zapretRestarts.RemoveAll(t => DateTime.Now - t > TimeSpan.FromHours(1));
+            bool silent = DnsSwitcher.IsAdmin() || ZapretTask.Ready();
+            if (silent && _zapretRestarts.Count < 3)
+            {
+                _zapretRestarts.Add(DateTime.Now);
+                Log($"YouTube и Discord: обход zapret остановился сам (процесс winws.exe завершился). Перезапускаю, попытка {_zapretRestarts.Count} из 3 за час");
+                try
+                {
+                    await z.StartAsync();
+                    if (z.IsRunning()) { Log("YouTube и Discord: обход zapret перезапущен"); UpdateToolsTray(); return; }
+                }
+                catch (ToolException e) { Log("YouTube и Discord: перезапуск не удался. " + e.Message); }
+            }
+        }
         var problem = !z.IsRunning() ? "YouTube и Discord: обход zapret остановился. Включите его в трее или в «Telegram и YouTube»" : ZapretTool.Conflict();
         if (problem == _zapretWarned) return;
         _zapretWarned = problem;
