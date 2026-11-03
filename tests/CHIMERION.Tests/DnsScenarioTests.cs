@@ -636,6 +636,30 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Server_name_with_typographic_quote_cannot_add_commands_to_the_script()
+    {
+        // Имя сервера приходит из источника или импорта: типографская кавычка закрывала строку PowerShell,
+        // и следующая команда выполнялась с правами администратора.
+        var marker = "chimerion-injection-" + Guid.NewGuid().ToString("N");
+        var markerPath = Path.Combine(Path.GetTempPath(), marker);
+        var evil = new DnsServer { Name = $"Тест’; New-Item -ItemType File -Force -Path $env:TEMP\\{marker} | Out-Null; ’", Primary = "203.0.113.10", Secondary = "203.0.113.11" };
+        using var sim = new NetSim(OneEthernet());
+        var st = new AppSettings();
+        st.SplitDns.Enabled = true;
+        st.SplitDns.GeneralName = "Общий";
+        st.SplitDns.GeneralAddresses = new() { "198.51.100.1" };
+        var (log, write) = NewLog();
+        try
+        {
+            await DnsSwitcher.ApplyAsync(evil, st, write);
+            Assert.False(File.Exists(markerPath), "команда из имени сервера выполнилась");
+            Assert.Contains(log, line => line.Contains("Домены ИИ") && line.Contains("Тест’"));
+            await DnsSwitcher.RestoreAsync(write);
+        }
+        finally { File.Delete(markerPath); }
+    }
+
+    [Fact]
     public async Task Leftover_rules_are_removed_even_without_connection_record()
     {
         var state = OneEthernet();
