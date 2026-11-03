@@ -776,7 +776,10 @@ public static class DnsSwitcher
         await File.WriteAllBytesAsync(scriptFile, bytes);
         try
         {
-            if (!elevated || IsAdmin()) return await RunHiddenAsync(powershell, Launcher(scriptFile, bytes, null));
+            // Скрипты без прав только читают (поддержка DoH, исходные DNS, состояние): зависший PowerShell не должен
+            // держать подключение бесконечно. Скрипты, меняющие DNS, не обрываем: остановка посередине хуже ожидания
+            if (!elevated) return await RunHiddenAsync(powershell, Launcher(scriptFile, bytes, null), ReadOnlyScriptTimeout);
+            if (IsAdmin()) return await RunHiddenAsync(powershell, Launcher(scriptFile, bytes, null), null);
 
             // Повышенный процесс не дает перенаправить вывод, поэтому он пишет его в файл в профиле пользователя.
             var psi = new ProcessStartInfo(powershell, Arguments(Launcher(scriptFile, bytes, outFile), hidden: true))
@@ -837,7 +840,10 @@ public static class DnsSwitcher
         $"-NoProfile -NonInteractive -ExecutionPolicy Bypass{(hidden ? " -WindowStyle Hidden" : "")} -EncodedCommand " +
         Convert.ToBase64String(Encoding.Unicode.GetBytes(launcher));
 
-    private static async Task<(int Code, string Output)> RunHiddenAsync(string powershell, string launcher)
+    /// <summary>Сколько ждать скрипт только на чтение. Обычно он идет секунду-две; меняется в тестах.</summary>
+    internal static TimeSpan ReadOnlyScriptTimeout = TimeSpan.FromSeconds(60);
+
+    private static async Task<(int Code, string Output)> RunHiddenAsync(string powershell, string launcher, TimeSpan? timeout)
     {
         // $ProgressPreference в загрузчике: иначе PowerShell пишет в stderr служебный CLIXML («Подготовка модулей…»).
         var psi = new ProcessStartInfo(powershell, Arguments(launcher, hidden: false))
@@ -852,7 +858,17 @@ public static class DnsSwitcher
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Не удалось запустить PowerShell");
         var stdout = proc.StandardOutput.ReadToEndAsync();
         var stderr = proc.StandardError.ReadToEndAsync();
-        await proc.WaitForExitAsync();
+        if (timeout is { } limit)
+        {
+            using var cts = new CancellationTokenSource(limit);
+            try { await proc.WaitForExitAsync(cts.Token); }
+            catch (OperationCanceledException)
+            {
+                try { proc.Kill(entireProcessTree: true); } catch (Exception) { /* уже завершился */ }
+                return (-1, $"PowerShell не ответил за {limit.TotalSeconds:0} с и остановлен");
+            }
+        }
+        else await proc.WaitForExitAsync();
         var err = (await stderr).Trim();
         err = ClixmlErrors(err);
         var outp = (await stdout).Trim();

@@ -153,30 +153,45 @@ internal static class Ui
 
     /// <summary>
     /// Текст в буфер обмена. Буфер часто на миг держат другие программы (ShareX, менеджеры буфера, удаленный рабочий
-    /// стол), и обычный Clipboard.SetText падал «буфер занят». Сначала копирование с повторами, затем без сброса
-    /// буфера (OleFlushClipboard): именно сброс обычно и не проходит. false: скопировать не удалось.
+    /// стол). Пишем напрямую через Windows с короткими повторами: Clipboard.SetDataObject из WPF на части машин
+    /// отказывает «буфер занят» даже при свободном буфере и каждый раз тратит около секунды на свои повторы, а
+    /// копирование идет в потоке окна, и программа замирала на несколько секунд. WPF — запасной путь, одна попытка.
+    /// Занятый буфер — около 0,5 с, иначе не больше ~2,5 с. false: скопировать не удалось.
     /// </summary>
     public static bool CopyText(string text)
     {
         if (string.IsNullOrEmpty(text)) return false;
-        string last = "";
-        for (int i = 0; i < 4; i++)
+        if (NativeCopy(text, OwnerWindow(), out var code)) return true;
+        // Буфер так и не открылся, его держит другая программа: WPF упрется в то же и потратит еще около секунды
+        if (code == -1) { Dnex.Services.SupportTrace.Write($"Буфер обмена занят другой программой; символов={text.Length}"); return false; }
+        // Только с copy: true. Без него данные отдаются позже по запросу, а программы, которые читают буфер после каждой
+        // записи (общий буфер VirtualBox, RDP, менеджеры буфера), ждут занятый поток окна и держат буфер открытым
+        try { Clipboard.SetDataObject(text, true); return true; }
+        catch (Exception e)
         {
-            try { Clipboard.SetDataObject(text, true); return true; }
-            catch (Exception e) { last = e.GetType().Name + " 0x" + e.HResult.ToString("X8"); System.Threading.Thread.Sleep(100); }
+            Dnex.Services.SupportTrace.Write($"Буфер обмена не записан: код Windows={code}, WPF {e.GetType().Name} 0x{e.HResult:X8}; символов={text.Length}");
+            return false;
         }
-        // Большой отчет (мегабайт) WPF иногда не может отдать системе: пишем напрямую через Windows и ждем дольше
-        if (NativeCopy(text, out var code)) { Dnex.Services.SupportTrace.Write($"Буфер обмена: WPF не справился ({last}), записано напрямую; символов={text.Length}"); return true; }
-        Dnex.Services.SupportTrace.Write($"Буфер обмена не записан: {last}; код Windows={code}; символов={text.Length}");
-        return false;
     }
 
-    private static bool NativeCopy(string text, out int error)
+    /// <summary>Окно программы для владения буфером: без владельца Windows может не принять данные после EmptyClipboard.</summary>
+    private static IntPtr OwnerWindow()
     {
-        error = 0;
-        for (int i = 0; i < 30; i++)
+        if (Application.Current is not { } app) return IntPtr.Zero;
+        foreach (var w in new[] { app.MainWindow }.Concat(app.Windows.OfType<Window>()))
+            if (w != null && new System.Windows.Interop.WindowInteropHelper(w).Handle is var h && h != IntPtr.Zero) return h;
+        return IntPtr.Zero;
+    }
+
+    /// <summary>Запись напрямую через Windows. error = -1: буфер так и не открылся, его держит другая программа.</summary>
+    private static bool NativeCopy(string text, IntPtr owner, out int error)
+    {
+        error = -1;
+        // До 12 попыток через 40 мс (около 0,5 с): дольше буфер держат только зависшие программы
+        for (int i = 0; i < 12; i++)
         {
-            if (!NativeClip.OpenClipboard(IntPtr.Zero)) { error = System.Runtime.InteropServices.Marshal.GetLastWin32Error(); System.Threading.Thread.Sleep(100); continue; }
+            if (!NativeClip.OpenClipboard(owner)) { System.Threading.Thread.Sleep(40); continue; }
+            error = 0;
             IntPtr mem = IntPtr.Zero;
             try
             {
