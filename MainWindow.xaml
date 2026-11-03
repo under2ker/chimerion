@@ -402,7 +402,7 @@
                         <!-- Статус -->
                         <!-- Обновление одного сервера: полная проверка строки -->
                         <!-- 52 px: кнопка 30 px плюс отступы ячейки 10 px с каждой стороны -->
-                        <DataGridTemplateColumn x:Name="ColRefresh" Width="52" CanUserResize="False" CanUserSort="False">
+                        <DataGridTemplateColumn x:Name="ColRefresh" Width="52" MinWidth="52" CanUserResize="False" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Style="{StaticResource RowRefresh}" Click="RowRefresh_Click"
@@ -434,7 +434,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Избранное: звездочка. В компактном виде колонка скрыта, там действует меню строки -->
-                        <DataGridTemplateColumn x:Name="ColFav" Width="40" CanUserResize="False" SortMemberPath="IsFavorite">
+                        <DataGridTemplateColumn x:Name="ColFav" Width="40" MinWidth="40" CanUserResize="False" SortMemberPath="IsFavorite">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Button Click="Fav_Click" Cursor="Hand" Background="Transparent" BorderThickness="0" Padding="0" Margin="0"
@@ -460,7 +460,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="136" SortMemberPath="Rank">
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="136" MinWidth="136" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid x:Name="stRoot" ClipToBounds="True" Margin="0,0,12,0">
@@ -645,7 +645,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Пинг -->
-                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="105" SortMemberPath="LatencyMs">
+                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="105" MinWidth="105" SortMemberPath="LatencyMs">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -660,7 +660,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Скорость нейросетей через прокси сервера -->
-                        <DataGridTemplateColumn x:Name="ColAi" Header="ИИ" Width="84" SortMemberPath="AiMs">
+                        <DataGridTemplateColumn x:Name="ColAi" Header="ИИ" Width="84" MinWidth="84" SortMemberPath="AiMs">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock VerticalAlignment="Center" FontWeight="Normal"
@@ -673,7 +673,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Оценка -->
-                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="105" SortMemberPath="Score">
+                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="105" MinWidth="105" SortMemberPath="Score">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -688,7 +688,7 @@
 
                         <!-- Стабильность -->
                         <!-- Стабильность: в подсказке история проверок за 7 дней и график -->
-                        <DataGridTemplateColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Width="145" SortMemberPath="StabilityShown">
+                        <DataGridTemplateColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Width="145" MinWidth="145" SortMemberPath="StabilityShown">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding StabilityShown}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"
