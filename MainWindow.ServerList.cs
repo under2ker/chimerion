@@ -427,6 +427,8 @@ public partial class MainWindow
     }
 
 
+    private readonly HashSet<string> _dashboardExitFlagsRequested = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Определяет страну и город серверов без данных или с устаревшими данными (старше 30 дней).</summary>
     private async Task ResolveLocationsAsync()
     {
@@ -459,6 +461,11 @@ public partial class MainWindow
         // Город выхода (страну дает сам trace Cloudflare)
         var egressTodo = _servers.SelectMany(s => s.EgressBy.Values.Where(e => !s.EgressCityByIp.ContainsKey(e.Ip)).Select(e => (s, e.Ip)))
                                  .ToList();
+        var egressCountries = _servers.SelectMany(s => s.EgressBy.Values.Select(e => e.Country))
+            .Where(c => c is { Length: 2 } && c.All(ch => ch is >= 'A' and <= 'Z' or >= 'a' and <= 'z'))
+            .Where(c => GeoLocation.FlagPath(c) == null && _dashboardExitFlagsRequested.Add(c)).ToList();
+        await Task.WhenAll(egressCountries.Select(c => GeoLocation.FlagPathAsync(c, CancellationToken.None)));
+        foreach (var s in _servers.Where(s => s.EgressBy.Count > 0)) s.NotifyEgress();
         var egressCities = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
 
         await Task.WhenAll(todo.Select(ResolveOneAsync).Concat(proxyTodo.Select(ResolveProxyAsync))

@@ -14,18 +14,18 @@ public class DnsServer : INotifyPropertyChanged
     public Guid Id { get; set; } = Guid.NewGuid();
 
     private string _name = "";
-    public string Name { get => _name; set { _name = value; On(); On(nameof(DisplayName)); } }
+    public string Name { get => _name; set { _name = value; On(); On(nameof(DisplayName)); On(nameof(ShortName)); } }
 
     private string _primary = "";
     /// <summary>Основной IPv4. Может быть пустым у DoH-only записей.</summary>
-    public string Primary { get => _primary; set { _primary = value?.Trim() ?? ""; On(); On(nameof(Address)); On(nameof(DisplayName)); } }
+    public string Primary { get => _primary; set { _primary = value?.Trim() ?? ""; On(); On(nameof(Address)); On(nameof(DisplayName)); On(nameof(ShortName)); } }
 
     private string? _secondary;
-    public string? Secondary { get => _secondary; set { _secondary = value?.Trim(); On(); On(nameof(Address)); } }
+    public string? Secondary { get => _secondary; set { _secondary = value?.Trim(); On(); On(nameof(Address)); On(nameof(DisplayName)); On(nameof(ShortName)); } }
 
     private string? _dohUrl;
     /// <summary>DNS-over-HTTPS адрес, например https://example/dns-query.</summary>
-    public string? DohUrl { get => _dohUrl; set { _dohUrl = value?.Trim(); On(); On(nameof(Address)); } }
+    public string? DohUrl { get => _dohUrl; set { _dohUrl = value?.Trim(); On(); On(nameof(Address)); On(nameof(DisplayName)); On(nameof(ShortName)); } }
 
     /// <summary>IPv6-адреса этого же сервера (из источника или DoH). При подключении DNS ставится и для IPv6,
     /// и запросы по IPv6 не уходят мимо сервера к DNS роутера.</summary>
@@ -112,7 +112,8 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Сервисы для таблицы: ChatGPT / Claude / Gemini с состоянием (ok / region / fail).
     /// Разбирается один раз на каждое изменение Summary: список нужен таблице и выбору лучших каждые полсекунды.</summary>
     [JsonIgnore]
-    public List<ServiceChip> Chips => _chips ??= ServiceChip.Parse(_summary);
+    public List<ServiceChip> Chips => _chips ??= ServiceChip.Parse(_summary).Select(chip =>
+        EgressBy.TryGetValue(chip.Name, out var e) ? chip with { Country = e.Country } : chip).ToList();
 
     /// <summary>Короткое имя без повтора адреса: «trofimovsky.ru: 1.2.3.4» → «trofimovsky.ru».</summary>
     [JsonIgnore]
@@ -142,7 +143,7 @@ public class DnsServer : INotifyPropertyChanged
 
     private string? _country;
     /// <summary>Код страны, где находится сервер (NL, RU…). Сохраняется, чтобы не запрашивать геолокацию заново.</summary>
-    public string? Country { get => _country; set { _country = value; On(); On(nameof(CountryName)); On(nameof(LocationText)); On(nameof(LocationCell)); } }
+    public string? Country { get => _country; set { _country = value; On(); On(nameof(CountryName)); On(nameof(LocationText)); On(nameof(LocationCell)); On(nameof(ShortName)); } }
 
     /// <summary>Город по IP (ipinfo). Может быть пустым, если сервис его не знает.</summary>
     public string? City { get; set; }
@@ -205,7 +206,7 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Город выхода по адресу (страну дает сам trace Cloudflare, город — IP-база).</summary>
     public Dictionary<string, string> EgressCityByIp { get; set; } = new();
 
-    public void NotifyEgress() { On(nameof(LocationCell)); On(nameof(LocationTooltip)); }
+    public void NotifyEgress() { _chips = null; On(nameof(Chips)); On(nameof(LocationCell)); On(nameof(LocationTooltip)); }
 
     [JsonIgnore]
     public string ProxyCountryName => string.IsNullOrEmpty(ProxyCountry) ? "" : GeoLocation.CountryName(ProxyCountry);
@@ -430,10 +431,11 @@ public class DnsServer : INotifyPropertyChanged
         {
             var n = DisplayName;
             if (CatalogNames.Contains(n)) return Clip(n);
-            // Страна и город говорят больше, чем конец IP; адрес и так показан строкой ниже
+            if (Uri.TryCreate(n, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || uri.Scheme == "http")) n = uri.Host;
+            if (!string.IsNullOrWhiteSpace(n) && !System.Net.IPAddress.TryParse(n, out _)) return Clip(n);
             if (!string.IsNullOrEmpty(Country))
                 return Clip(CountryName + (string.IsNullOrEmpty(City) ? "" : ", " + GeoLocation.CityName(City)));
-            return Clip(string.IsNullOrEmpty(DohUrl) ? n : "DoH · " + n);
+            return Clip(n);
         }
     }
 
@@ -515,6 +517,11 @@ public sealed record CheckPoint(DateTime T, bool Ok, long? Ms);
 
 public sealed record ServiceChip(string Name, string State)
 {
+    /// <summary>Страна выхода, подтвержденная проверкой именно этого сервиса.</summary>
+    public string? Country { get; init; }
+    public string? CountryName => string.IsNullOrWhiteSpace(Country) ? null : GeoLocation.CountryName(Country);
+    public string? FlagPath => Country is { Length: 2 } code && code.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z') ? GeoLocation.FlagPath(code) : null;
+
     /// <summary>Сервис, по которому выстроен список (после проверки только его). Null — порядок для всех сервисов.</summary>
     public static string? Focus { get; set; }
 

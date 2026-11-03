@@ -600,7 +600,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервисы: плашки -->
-                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="260" MinWidth="200" SortMemberPath="Summary">
+                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="320" MinWidth="260" SortMemberPath="Summary">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <ItemsControl ItemsSource="{Binding Chips}" ToolTip="{Binding Summary}" VerticalAlignment="Center">
@@ -613,9 +613,13 @@
                                                     <StackPanel Orientation="Horizontal">
                                                         <Image Source="{Binding Logo}" Width="12" Height="12" Margin="0,0,5,0" Stretch="Uniform" VerticalAlignment="Center"/>
                                                         <TextBlock x:Name="t" Text="{Binding Name}" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource Muted}"/>
+                                                        <Image x:Name="countryFlag" Source="{Binding FlagPath}" Width="16" Height="11" Margin="5,0,0,0" Stretch="Uniform" VerticalAlignment="Center" ToolTip="{Binding CountryName}"/>
                                                     </StackPanel>
                                                 </Border>
                                                 <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding FlagPath}" Value="{x:Null}">
+                                                        <Setter TargetName="countryFlag" Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
                                                     <!-- Список выстроен по другому сервису: эта плашка приглушена -->
                                                     <DataTrigger Binding="{Binding Dim}" Value="True">
                                                         <Setter TargetName="chip" Property="Opacity" Value="0.35"/>
