@@ -13,6 +13,11 @@ public partial class App : Application
     /// <summary>Только один экземпляр: две копии CHIMERION, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
+        if (e.Args.Contains(Dnex.Services.DohRelayTask.HelperArgument, StringComparer.Ordinal))
+        {
+            Shutdown(Dnex.Services.DohRelayHelper.Run());
+            return;
+        }
         // Запуск заданием Планировщика: только включить или выключить обход zapret и закрыться (см. ZapretTask).
         // Без окна, трея и проверки второй копии: обычная CHIMERION в это время уже работает
         int helper = Array.IndexOf(e.Args, Dnex.Services.Tools.ZapretTask.HelperArg);
