@@ -65,6 +65,10 @@ public static class DnsSwitcher
         public string Name { get; set; } = "";
         public List<string> Addresses { get; set; } = new();
         public string? DohTemplate { get; set; }
+        public string? ProtectedDohTemplate { get; set; }
+        /// <summary>Адрес системного DoH для проверки наборов. Старые записи читаются без изменений.</summary>
+        public string? ReadDohTemplate() => ProtectedDohTemplate is { Length: > 0 } value
+            ? Storage.Unprotect(value) is { Length: > 0 } decoded ? decoded : null : DohTemplate;
         /// <summary>Адреса, для которых CHIMERION сама зарегистрировала DoH, — только их и удаляем при отключении.</summary>
         public List<string> DohAddedFor { get; set; } = new();
         /// <summary>Подключение через локальный посредник DoH (Windows без системного DoH):
@@ -124,6 +128,22 @@ public static class DnsSwitcher
         {
             _activeCache = Storage.LoadOrCreate<ActiveConnection?>(ActiveFile, () => null);
             _activeStamp = stamp;
+        }
+        if (_activeCache is { DohTemplate: not null } active)
+        {
+            // Старые версии сохраняли адрес DoH без защиты в active.json.
+            try
+            {
+                if (active.RelayChannel == null) active.ProtectedDohTemplate = Storage.Protect(active.DohTemplate);
+                active.DohTemplate = null;
+                Storage.SaveRequired(ActiveFile, active);
+                _activeStamp = File.GetLastWriteTimeUtc(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+            {
+                Storage.Trace?.Invoke("Не удалось защитить адрес DoH в записи подключения");
+                _activeStamp = default;
+            }
         }
         return _activeCache is { Addresses.Count: > 0 } ? _activeCache : null;
     }
@@ -203,11 +223,11 @@ public static class DnsSwitcher
         {
             if (!Uri.TryCreate(s.DohUrl.Split('{')[0], UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
                 throw new ArgumentException("Некорректный DoH-адрес");
-            doh = u.GetLeftPart(UriPartial.Path).Replace("'", "''");
+            var endpoint = new Uri(u.GetLeftPart(UriPartial.Query));
+            doh = endpoint.AbsoluteUri.Replace("'", "''");
 
-            if (addrs.Count == 0)
             {
-                // Без системного DoH IP веб-сервера не обязательно принимает обычные DNS-запросы.
+                // Без системного DoH даже заданный IP не заменяет шифрованное подключение.
                 var (capabilityCode, capability) = await Runner(
                     "if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) { 'DOH_AVAILABLE' } else { 'DOH_UNAVAILABLE' }", false);
                 if (capabilityCode != 0) throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
@@ -216,15 +236,16 @@ public static class DnsSwitcher
                     // Windows 10 без системного DoH: DNS-ссылку обслуживает локальный посредник.
                     // Прежний посредник не останавливаем: он на другом локальном адресе и продолжает работать,
                     // пока новое подключение не подтверждено.
-                    var upstream = await RelayUpstreamAsync(settings, u, log);
+                    var upstream = await RelayUpstreamAsync(settings, endpoint, log);
                     try
                     {
-                        relay = await DohRelayStart(new Uri(doh.Replace("''", "'")), upstream, log, CancellationToken.None);
+                        relay = await DohRelayStart(endpoint, upstream, log, CancellationToken.None);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         throw new DohRelayFailedException("Не удалось запустить локальный посредник DoH: " + ex.Message);
                     }
+                    addrs.Clear();
                     addrs.Add(relay.ListenAddress);
                     log($"Windows не поддерживает системный DoH. DNS работает через локальный посредник {relay.ListenAddress}:{relay.Port}");
                 }
@@ -234,14 +255,18 @@ public static class DnsSwitcher
             if (addrs.Count == 0)
             {
                 // Для DoH Windows нужен IP сервера: узнаем его через эталонный резолвер.
-                var (ips, _) = await DnsWire.ResolveDohAsync(settings.ReferenceDoh, u.Host, TimeSpan.FromSeconds(8), CancellationToken.None);
-                addrs.AddRange(ips.Take(2).Select(i => i.ToString()));
+                if (IPAddress.TryParse(u.Host, out var endpointIp)) addrs.Add(endpointIp.ToString());
+                else
+                {
+                    var (ips, _) = await DnsWire.ResolveDohAsync(settings.ReferenceDoh, u.Host, TimeSpan.FromSeconds(8), CancellationToken.None);
+                    addrs.AddRange(ips.Take(2).Select(i => i.ToString()));
+                }
                 log($"IP DoH-сервера {u.Host}: {string.Join(", ", addrs)}");
             }
 
             // IPv6 DoH-сервера: с ним DNS ставится и для IPv6, и IPv6 на адаптере выключать не нужно.
             // Через посредник DNS ставится на локальный адрес, поэтому IPv6-адреса сервера не нужны.
-            if (relay == null && !addrs.Any(IsV6))
+            if (relay == null && !addrs.Any(IsV6) && !IPAddress.TryParse(u.Host, out _))
             {
                 try
                 {
@@ -280,7 +305,7 @@ public static class DnsSwitcher
             adapterAddrs = split.GeneralAddresses.Where(a => IPAddress.TryParse(a, out _)).Select(a => IPAddress.Parse(a).ToString()).Distinct().ToList();
             if (adapterAddrs.Any(IsV6) && !Ipv6Internet()) adapterAddrs.RemoveAll(IsV6);
             adapterDoh = Uri.TryCreate(split.GeneralDoh?.Split('{')[0], UriKind.Absolute, out var gu) && gu.Scheme == Uri.UriSchemeHttps
-                ? gu.GetLeftPart(UriPartial.Path).Replace("'", "''") : null;
+                ? gu.GetLeftPart(UriPartial.Query).Replace("'", "''") : null;
         }
         bool touchAdapters = adapterAddrs.Count > 0;
 
@@ -374,7 +399,8 @@ public static class DnsSwitcher
         // Запись о подключении сохраняем ДО смены DNS: если что-то упадет посередине, отключение все равно сработает.
         var active = new ActiveConnection
         {
-            ServerId = s.Id, Name = s.Name, Addresses = addrs, DohTemplate = doh?.Replace("''", "'"),
+            ServerId = s.Id, Name = s.Name, Addresses = addrs,
+            ProtectedDohTemplate = relay == null && doh != null ? Storage.Protect(doh.Replace("''", "'")) : null,
             DohAddedFor = prev?.DohAddedFor.ToList() ?? new(),
             Ipv6Disabled = prevV6,
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
@@ -631,7 +657,7 @@ public static class DnsSwitcher
                 "  Write-Output ('DNS ' + $a.Name + ': ' + ($s -join ', '))\n" +
                 "}\n" +
                 "$d = @(if (Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue) { Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue })\n" +
-                "if ($d.Count -gt 0) { foreach ($x in $d) { Write-Output ('DoH ' + $x.ServerAddress + ' ' + $x.DohTemplate) } }\n" +
+                "if ($d.Count -gt 0) { foreach ($x in $d) { Write-Output ('DoH ' + $x.ServerAddress) } }\n" +
                 "else { Write-Output 'DoH: записей нет' }", false);
             foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()))
                 if (line.Length > 0) log("  " + line);

@@ -66,7 +66,7 @@ public static class Diagnostics
             items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {activeName} с {active.Since:dd.MM HH:mm}",
                 !onAdapters ? $"DNS системы не совпадает с подключением ({string.Join(", ", current)}) или пропали правила для ИИ: их сбросила другая программа или Windows"
                 : active.Split ? $"Два DNS: домены ИИ через {activeName} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
-                : $"DNS системы: {string.Join(", ", current)}" + (active.DohTemplate != null ? $", DoH {active.DohTemplate}" : ""),
+                : $"DNS системы: {string.Join(", ", current)}" + (active.ReadDohTemplate() != null || active.RelayChannel != null ? ", DoH" : ""),
                 onAdapters ? null : "reconnect", "Переподключить"));
             if (active.Split && SplitDns.GeneralIsSmart(st.SplitDns, active.Addresses))
                 items.Add(new DiagItem(DiagLevel.Warn, "Общий DNS совпадает со Smart DNS", SplitDns.GeneralIsSmartWarning, "split", "Открыть «Два DNS»"));

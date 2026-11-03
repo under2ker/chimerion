@@ -131,7 +131,7 @@ public static class DnsWire
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new TimeoutException($"DoH {url}: нет ответа за {timeout.TotalSeconds:0} с");
+            throw new TimeoutException($"DoH: нет ответа за {timeout.TotalSeconds:0} с");
         }
     }
 }

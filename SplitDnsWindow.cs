@@ -230,7 +230,7 @@ internal sealed class SplitDnsWindow
             var server = new DnsServer
             {
                 Name = active.Name, Primary = active.Addresses[0],
-                Secondary = active.Addresses.Count > 1 && active.BackupAddresses.Count == 0 ? active.Addresses[1] : null, DohUrl = active.DohTemplate,
+                Secondary = active.Addresses.Count > 1 && active.BackupAddresses.Count == 0 ? active.Addresses[1] : null, DohUrl = active.ReadDohTemplate(),
             };
             btn.IsEnabled = false;
             state.Text = $"Проверяю наборы на «{DnsServer.Clip(active.Name)}»…";
