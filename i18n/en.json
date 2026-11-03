@@ -2212,5 +2212,7 @@
  "Smart DNS не подключен: его скорость не измерялась": "Smart DNS is not connected, its speed was not measured",
  "Ответов {0} из {1}, сервер {2}": "{0} of {1} answered, server {2}",
  "DNS": "DNS",
- "Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Работает, когда включено «Программа может сама переходить». Изменение вступит в силу после переподключения": "A second server with the same exit country. If the main server stops responding, Windows will switch to it within seconds. Works when automatic server switching is allowed. Changes take effect after reconnecting."
+ "Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Работает, когда включено «Программа может сама переходить». Изменение вступит в силу после переподключения": "A second server with the same exit country. If the main server stops responding, Windows will switch to it within seconds. Works when automatic server switching is allowed. Changes take effect after reconnecting.",
+ "Не удалось подключить DoH": "Could not connect to DoH",
+ "Эта версия Windows не поддерживает системный DoH. Выберите сервер с обычным DNS или используйте Windows с поддержкой DoH. Настройки сети не изменены.": "This version of Windows does not support system DoH. Choose a server with regular DNS or use Windows with DoH support. Your network settings have not been changed."
 }

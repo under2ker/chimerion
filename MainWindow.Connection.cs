@@ -183,6 +183,13 @@ public partial class MainWindow
                 connected = true;
             }
         }
+        catch (DohUnavailableException)
+        {
+            Log("Windows не поддерживает подключение этого сервера через DoH. DNS не изменен");
+            if (!auto)
+                DnexDialog.Show("Не удалось подключить DoH", "Эта версия Windows не поддерживает системный DoH. Выберите сервер с обычным DNS или используйте Windows с поддержкой DoH. Настройки сети не изменены.",
+                    DialogKind.Warn, "Подключение");
+        }
         catch (UacDeclinedException)
         {
             // Пользователь отказал в правах (UAC): DNS не менялся. Автоматика больше не спрашивает, пока он сам
