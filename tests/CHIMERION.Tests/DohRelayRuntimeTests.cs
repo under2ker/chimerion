@@ -151,6 +151,27 @@ public class DohRelayRuntimeTests
     }
 
     [Fact]
+    public async Task Ensure_running_does_not_wait_indefinitely_for_a_missing_pipe()
+    {
+        var oldPing = DohRelayRuntime.PingHelper;
+        var oldScheduler = DohRelayRuntime.Scheduler;
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        try
+        {
+            DohRelayRuntime.PingHelper = (channel, ct) => DohRelayHost.CommandAsync(channel, "ping", ct);
+            DohRelayRuntime.Scheduler = () => new DohRelayScheduler((_, _) => Task.FromResult(1));
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Assert.False(await DohRelayRuntime.EnsureRunningAsync(Session(Guid.NewGuid().ToString("N")), _ => { }, cancel.Token));
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2.5));
+        }
+        finally
+        {
+            DohRelayRuntime.PingHelper = oldPing;
+            DohRelayRuntime.Scheduler = oldScheduler;
+        }
+    }
+
+    [Fact]
     public async Task Ensure_running_keeps_a_live_helper_and_does_not_touch_the_task()
     {
         var oldPing = DohRelayRuntime.PingHelper;
@@ -357,6 +378,40 @@ public class DohRelayRuntimeTests
         }
         finally
         {
+            DohRelayRuntime.StopHelper = oldStop;
+            DohRelayRuntime.StopCommand = oldStopCommand;
+            RemoveFiles();
+        }
+    }
+
+    [Fact]
+    public async Task Start_stops_waiting_if_scheduler_does_not_answer()
+    {
+        var oldScheduler = DohRelayRuntime.Scheduler;
+        var oldExe = DohRelayRuntime.ExecutablePath;
+        var oldSid = DohRelayRuntime.CurrentUserSid;
+        var oldTimeout = DohRelayRuntime.SchedulerTimeout;
+        var oldStop = DohRelayRuntime.StopHelper;
+        var oldStopCommand = DohRelayRuntime.StopCommand;
+        try
+        {
+            RemoveFiles();
+            DohRelayRuntime.ExecutablePath = () => @"C:\Example\CHIMERION.exe";
+            DohRelayRuntime.CurrentUserSid = () => "S-1-5-21-100-200-300-1001";
+            DohRelayRuntime.SchedulerTimeout = TimeSpan.FromMilliseconds(100);
+            DohRelayRuntime.Scheduler = () => new DohRelayScheduler(async (_, ct) => { await Task.Delay(Timeout.Infinite, ct); return 0; });
+            DohRelayRuntime.StopCommand = (_, _) => Task.FromResult(false);
+            DohRelayRuntime.StopHelper = (_, _) => Task.FromResult(true);
+            using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => DohRelayRuntime.StartAsync(Endpoint, Upstream, _ => { }, cancel.Token));
+            Assert.Empty(RelayFiles());
+        }
+        finally
+        {
+            DohRelayRuntime.Scheduler = oldScheduler;
+            DohRelayRuntime.ExecutablePath = oldExe;
+            DohRelayRuntime.CurrentUserSid = oldSid;
+            DohRelayRuntime.SchedulerTimeout = oldTimeout;
             DohRelayRuntime.StopHelper = oldStop;
             DohRelayRuntime.StopCommand = oldStopCommand;
             RemoveFiles();
