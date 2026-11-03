@@ -35,6 +35,7 @@ internal sealed class DohLocalListener : IAsyncDisposable
             udp = new UdpClient(address.AddressFamily);
             udp.ExclusiveAddressUse = true;
             udp.Client.Bind(new IPEndPoint(address, Port));
+            DisableConnectionReset(udp.Client);
             _udp = udp;
         }
         catch { udp?.Dispose(); _tcp.Stop(); throw; }
@@ -56,6 +57,8 @@ internal sealed class DohLocalListener : IAsyncDisposable
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
             catch (SocketException) when (_stop.IsCancellationRequested) { break; }
+            // Запасная защита к DisableConnectionReset: сброс от закрытого порта клиента не останавливает прием.
+            catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.MessageSize) { continue; }
             if (!IPAddress.IsLoopback(packet.RemoteEndPoint.Address) || !_slots.Wait(0)) continue;
             Track(HandleUdpAsync(packet));
         }
@@ -114,6 +117,19 @@ internal sealed class DohLocalListener : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or HttpRequestException or OperationCanceledException or SocketException or ObjectDisposedException) { }
         finally { _slots.Release(); }
+    }
+
+    /// <summary>
+    /// Windows сообщает о недоставленном UDP-ответе (клиент уже закрыл порт, ICMP «порт недоступен») ошибкой 10054
+    /// на следующем приеме. Без этой настройки один опоздавший ответ останавливал прием всех DNS-запросов.
+    /// </summary>
+    private static void DisableConnectionReset(Socket socket)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        const int SIO_UDP_CONNRESET = unchecked((int)0x9800000C);
+        try { socket.IOControl(SIO_UDP_CONNRESET, new byte[] { 0, 0, 0, 0 }, null); }
+        catch (SocketException) { }
+        catch (PlatformNotSupportedException) { }
     }
 
     private void Track(Task task)

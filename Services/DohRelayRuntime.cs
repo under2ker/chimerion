@@ -20,7 +20,6 @@ internal static class DohRelayRuntime
     /// DoH-сервер прежний еще работает, поэтому новый берет следующий свободный адрес. DNS ставится на выбранный.
     /// </summary>
     internal static readonly string[] CandidateAddresses = { ListenAddress, "127.0.0.3", "127.0.0.4", "127.0.0.5" };
-    private const string ErrorFileName = "doh-relay-error.json";
 
     // Точки подмены для сценарных проверок: настоящие запуск и остановка требуют Планировщика и отдельного процесса.
     internal static Func<string> ExecutablePath = () => Environment.ProcessPath ?? "";
@@ -51,9 +50,10 @@ internal static class DohRelayRuntime
             DohRelayConfig config;
             try { config = DohRelayConfig.Create(endpoint, IPAddress.Parse(candidate), upstream); }
             catch (ArgumentException) { continue; }
+            // Настройки пишутся в файл этого канала: работающий прежний посредник свои не теряет, даже если смена не удастся.
             config.Save();
             // Файл ошибки прошлой попытки не должен ускорять отказ этой: его пишет сам посредник.
-            DeleteFile(ErrorFileName, log);
+            DeleteFile(DohRelayConfig.ErrorFileNameFor(config.Channel), log);
             bool started;
             try { started = await StartHelper(config, cancellationToken).ConfigureAwait(false); }
             catch (OperationCanceledException)
@@ -105,31 +105,26 @@ internal static class DohRelayRuntime
 
     internal static async Task CleanupStaleAsync(DohRelaySession? active, Action<string> log)
     {
-        DohRelayConfig? config;
-        try
-        {
-            // Отсутствующий файл не создаем через Load: иначе в папке данных появились бы пустые настройки.
-            if (!File.Exists(Storage.PathOf(DohRelayConfig.FileName)))
-            {
-                DeleteFile(ErrorFileName, log);
-                return;
-            }
-            config = DohRelayConfig.Load();
-        }
+        List<string> channels;
+        try { channels = DohRelayConfig.SavedChannels(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             log("Не удалось прочитать настройки прежнего локального посредника DoH");
             return;
         }
-        if (config is null)
+        // Файл ошибки общего формата прежних сборок больше никто не читает. Файлы ошибок каналов без настроек
+        // остаются от посредников, которые уже убраны: их тоже некому читать.
+        DeleteFile(DohRelayConfig.LegacyErrorFileName, log);
+        foreach (var orphan in DohRelayConfig.OrphanErrorChannels(channels))
+            if (active is null || !string.Equals(active.Channel, orphan, StringComparison.Ordinal))
+                DeleteFile(DohRelayConfig.ErrorFileNameFor(orphan), log);
+        foreach (var channel in channels)
         {
-            DeleteFile(ErrorFileName, log);
-            return;
+            // Текущее подключение не трогаем: его посредник нужен прямо сейчас.
+            if (active is not null && string.Equals(active.Channel, channel, StringComparison.Ordinal)) continue;
+            await StopChannelAsync(channel, log).ConfigureAwait(false);
+            log("Убран прежний локальный посредник DoH");
         }
-        // Текущее подключение не трогаем: его посредник нужен прямо сейчас.
-        if (active is not null && string.Equals(active.Channel, config.Channel, StringComparison.Ordinal)) return;
-        await StopChannelAsync(config.Channel, log).ConfigureAwait(false);
-        log("Убран прежний локальный посредник DoH");
     }
 
     private static async Task<bool> DefaultStartHelper(DohRelayConfig config, CancellationToken cancellationToken)
@@ -169,21 +164,19 @@ internal static class DohRelayRuntime
         }
         catch (Exception) { log("Не удалось удалить задание локального посредника DoH"); }
 
-        // Настройки удаляем только свои: при переключении на другой адрес в файле уже могут лежать настройки нового.
-        DohRelayConfig? current = null;
-        try
+        // У каждого канала свой файл настроек: удаляем только свои, настройки работающего посредника остаются.
+        try { DohRelayConfig.Delete(channel); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            if (File.Exists(Storage.PathOf(DohRelayConfig.FileName))) current = DohRelayConfig.Load();
+            log("Не удалось удалить служебный файл локального посредника DoH");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { current = null; }
-        if (current is null || !string.Equals(current.Channel, channel, StringComparison.Ordinal)) return;
-        DeleteFile(DohRelayConfig.FileName, log);
-        DeleteFile(ErrorFileName, log);
+        if (DohRelayConfig.IsChannel(channel)) DeleteFile(DohRelayConfig.ErrorFileNameFor(channel), log);
     }
 
     private static async Task<bool> WaitReadyAsync(string channel, CancellationToken cancellationToken)
     {
-        var error = Storage.PathOf(ErrorFileName);
+        if (!DohRelayConfig.IsChannel(channel)) return false;
+        var error = Storage.PathOf(DohRelayConfig.ErrorFileNameFor(channel));
         var until = DateTime.UtcNow + StartTimeout;
         while (true)
         {

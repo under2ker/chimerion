@@ -27,7 +27,7 @@ public class DohRelayProcessTests
             Assert.False(File.Exists(Path.Combine(data, "active.json")));
             Assert.False(File.Exists(Path.Combine(data, "dns-backup.json")));
             // Настроек нет: посредник не должен создавать пустой файл, по которому его запустят в следующий раз.
-            Assert.False(File.Exists(Path.Combine(data, "doh-relay.json")));
+            Assert.Empty(Directory.GetFiles(data, "doh-relay*.json"));
         }
         finally { Directory.Delete(data, true); }
     }
