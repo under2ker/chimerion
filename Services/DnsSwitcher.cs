@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -12,6 +12,9 @@ public sealed class UacDeclinedException() : OperationCanceledException("Зап�
 
 /// <summary>Windows не умеет подключать сервер, доступный только через DoH.</summary>
 public sealed class DohUnavailableException() : InvalidOperationException("Windows не поддерживает подключение этого сервера через DoH");
+
+/// <summary>Windows без системного DoH, а локальный посредник DoH не запустился: подключение невозможно.</summary>
+public sealed class DohRelayFailedException(string message) : InvalidOperationException(message);
 
 /// <summary>Смена DNS на активных адаптерах Windows через PowerShell (NetTCPIP / DnsClient).</summary>
 public static class DnsSwitcher
@@ -64,6 +67,10 @@ public static class DnsSwitcher
         public string? DohTemplate { get; set; }
         /// <summary>Адреса, для которых CHIMERION сама зарегистрировала DoH, — только их и удаляем при отключении.</summary>
         public List<string> DohAddedFor { get; set; } = new();
+        /// <summary>Подключение через локальный посредник DoH (Windows без системного DoH):
+        /// канал управления и локальный адрес, который стоит в DNS. Адрес DoH и токен здесь не хранятся.</summary>
+        public string? RelayChannel { get; set; }
+        public string? RelayListen { get; set; }
         /// <summary>Адаптеры (GUID), на которых CHIMERION на время подключения выключила IPv6: у сервера нет IPv6,
         /// а DNS роутера по IPv6 вел бы запросы мимо сервера. При отключении IPv6 включается обратно.</summary>
         public List<string> Ipv6Disabled { get; set; } = new();
@@ -93,6 +100,15 @@ public static class DnsSwitcher
 
     /// <summary>Есть ли IPv6-интернет. Подменяется в тестах, в программе HasGlobalIpv6.</summary>
     internal static Func<bool> Ipv6Internet = HasGlobalIpv6;
+
+    /// <summary>Запуск локального посредника DoH. В программе это DohRelayRuntime, сценарные тесты подставляют свой:
+    /// настоящий Планировщик и порт 53 в тестах не нужны.</summary>
+    internal static Func<Uri, IReadOnlyList<IPAddress>, Action<string>, CancellationToken, Task<DohRelaySession>> DohRelayStart =
+        (endpoint, upstream, log, token) => DohRelayRuntime.StartAsync(endpoint, upstream, log, token);
+
+    /// <summary>Остановка локального посредника DoH. Подменяется в тестах вместе с запуском.</summary>
+    internal static Func<DohRelaySession, Action<string>, Task> DohRelayStop =
+        (session, log) => DohRelayRuntime.StopAsync(session, log);
 
     private static ActiveConnection? _activeCache;
     private static DateTime _activeStamp;
@@ -181,6 +197,7 @@ public static class DnsSwitcher
             if (IPAddress.TryParse(v, out var a6) && a6.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 && !addrs.Contains(a6.ToString()))
                 addrs.Add(a6.ToString());
 
+        DohRelaySession? relay = null;
         string? doh = null;
         if (!string.IsNullOrWhiteSpace(s.DohUrl))
         {
@@ -194,8 +211,24 @@ public static class DnsSwitcher
                 var (capabilityCode, capability) = await Runner(
                     "if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) { 'DOH_AVAILABLE' } else { 'DOH_UNAVAILABLE' }", false);
                 if (capabilityCode != 0) throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
-                if (capability.Trim() == "DOH_UNAVAILABLE") throw new DohUnavailableException();
-                if (capability.Trim() != "DOH_AVAILABLE") throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
+                if (capability.Trim() == "DOH_UNAVAILABLE")
+                {
+                    // Windows 10 без системного DoH: DNS-ссылку обслуживает локальный посредник.
+                    // Прежний посредник не останавливаем: он на другом локальном адресе и продолжает работать,
+                    // пока новое подключение не подтверждено.
+                    var upstream = await RelayUpstreamAsync(settings, u, log);
+                    try
+                    {
+                        relay = await DohRelayStart(new Uri(doh.Replace("''", "'")), upstream, log, CancellationToken.None);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        throw new DohRelayFailedException("Не удалось запустить локальный посредник DoH: " + ex.Message);
+                    }
+                    addrs.Add(relay.ListenAddress);
+                    log($"Windows не поддерживает системный DoH. DNS работает через локальный посредник {relay.ListenAddress}:{relay.Port}");
+                }
+                else if (capability.Trim() != "DOH_AVAILABLE") throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
             }
 
             if (addrs.Count == 0)
@@ -206,8 +239,9 @@ public static class DnsSwitcher
                 log($"IP DoH-сервера {u.Host}: {string.Join(", ", addrs)}");
             }
 
-            // IPv6 DoH-сервера: с ним DNS ставится и для IPv6, и IPv6 на адаптере выключать не нужно
-            if (!addrs.Any(IsV6))
+            // IPv6 DoH-сервера: с ним DNS ставится и для IPv6, и IPv6 на адаптере выключать не нужно.
+            // Через посредник DNS ставится на локальный адрес, поэтому IPv6-адреса сервера не нужны.
+            if (relay == null && !addrs.Any(IsV6))
             {
                 try
                 {
@@ -250,9 +284,18 @@ public static class DnsSwitcher
         }
         bool touchAdapters = adapterAddrs.Count > 0;
 
-        await EnsureBackupAsync(log);
+        // Локальный посредник уже запущен: если исходные настройки не сохранятся, его нельзя оставить работать.
+        try { await EnsureBackupAsync(log); }
+        catch (Exception) when (relay != null)
+        {
+            await StopRelayQuietlyAsync(relay, log);
+            throw;
+        }
 
         var prev = GetActive();
+        // Прежнее подключение могло быть через посредник: новый посредник работает на другом локальном адресе,
+        // поэтому прежний останавливается только после успешной смены DNS (или отката).
+        var prevRelay = RelayOf(prev);
         bool hasV6 = adapterAddrs.Any(IsV6);
         var list = string.Join(",", adapterAddrs.Select(a => $"'{a}'"));
         var sb = new StringBuilder();
@@ -277,7 +320,8 @@ public static class DnsSwitcher
         // DoH: для адресов сервера (и в режиме «Два DNS» для адресов общего DNS). Windows знает эти адреса как DoH,
         // и запросы по правилам NRPT к ним тоже идут через DoH
         var dohPairs = new List<(string Ip, string Template)>();
-        if (doh != null) dohPairs.AddRange(primaryAddrs.Select(a => (a, doh)));
+        // Через посредник DoH в Windows не регистрируется: DNS стоит на локальном адресе посредника.
+        if (doh != null && relay == null) dohPairs.AddRange(primaryAddrs.Select(a => (a, doh)));
         if (split != null && adapterDoh != null) dohPairs.AddRange(adapterAddrs.Where(a => !addrs.Contains(a)).Select(a => (a, adapterDoh)));
         if (dohPairs.Count > 0)
         {
@@ -335,8 +379,15 @@ public static class DnsSwitcher
             Ipv6Disabled = prevV6,
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
             BackupId = backupAddrs.Count > 0 ? backup!.Id : null, BackupName = backupAddrs.Count > 0 ? backup!.Name : null, BackupAddresses = backupAddrs,
+            RelayChannel = relay?.Channel, RelayListen = relay?.ListenAddress,
         };
-        Storage.SaveRequired(ActiveFile, active);
+        try { Storage.SaveRequired(ActiveFile, active); }
+        catch (Exception) when (relay != null)
+        {
+            // Запись о подключении не сохранилась: отключить посредник будет нечем, поэтому не запускаем его напрасно.
+            await StopRelayQuietlyAsync(relay, log);
+            throw;
+        }
 
         try
         {
@@ -357,6 +408,8 @@ public static class DnsSwitcher
             // Права не выданы (UAC отклонен): скрипт не запускался, DNS не менялся. Если до этого было подключение,
             // его DNS по-прежнему стоит на адаптерах: возвращаем запись о нем, иначе отключить его будет нечем.
             NetHistory.Add($"Подключение к «{s.ShortName}» не выполнено", "Windows не получила права администратора, настройки сети не менялись");
+            // Новый посредник уже поднят, но DNS не менялся: прежнее подключение (и его посредник) остаются как были.
+            await StopRelayQuietlyAsync(relay, log);
             if (prev != null) Storage.Save(ActiveFile, prev);
             else
             {
@@ -372,17 +425,25 @@ public static class DnsSwitcher
             NetHistory.Add($"Подключение к «{s.ShortName}» не удалось", "исходные настройки DNS возвращаются");
             try { await RestoreAsync(log); }
             catch (Exception re) { log("Откат не удался, см. журнал: " + re.Message); }
+            // DNS уже исходный: прежний посредник (если был) больше не нужен.
+            await StopRelayQuietlyAsync(prevRelay, log);
             throw;
         }
+        // Новое подключение подтверждено: прежний посредник (если был) больше не нужен.
+        if (prevRelay != null && prevRelay.Channel != relay?.Channel)
+            await StopRelayQuietlyAsync(prevRelay, log);
         log(split != null
-            ? $"Подключено, два DNS: ИИ через {s.ShortName} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
-            : $"Подключено: {s.ShortName} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")})");
+            ? $"Подключено, два DNS: ИИ через {s.ShortName} ({string.Join(", ", primaryAddrs)}{(relay != null ? " + DoH через локальный посредник" : doh != null ? " + DoH" : "")}), остальное через «{split.GeneralName}»"
+            : relay != null
+                ? $"Подключено: {s.ShortName} (DoH через локальный посредник {relay.ListenAddress})"
+                : $"Подключено: {s.ShortName} ({string.Join(", ", primaryAddrs)}{(doh != null ? " + DoH" : "")})");
         if (split != null && SplitDns.GeneralIsSmart(split, primaryAddrs)) log("Внимание: " + SplitDns.GeneralIsSmartWarning);
         if (backupAddrs.Count > 0)
             log($"Запасной сервер: {backup!.Name} ({string.Join(", ", backupAddrs)}). Если основной перестанет отвечать, Windows перейдет на него сама");
         // История сетевых изменений: что именно поменялось в системе
         var changed = new List<string> { split != null ? $"два DNS: нейросети через Smart DNS, остальное через «{split.GeneralName}»" : "DNS адаптеров заменен на Smart DNS" };
-        if (doh != null) changed.Add("с шифрованием DoH");
+        if (doh != null && relay == null) changed.Add("с шифрованием DoH");
+        if (relay != null) changed.Add($"DoH через локальный посредник {relay.ListenAddress}");
         if (backupAddrs.Count > 0) changed.Add($"запасной сервер «{backup!.Name}»");
         if (active.Ipv6Disabled.Count > 0) changed.Add($"IPv6 выключен на {active.Ipv6Disabled.Count} адаптерах на время подключения");
         NetHistory.Add($"Подключено: {s.ShortName}", string.Join("; ", changed));
@@ -537,6 +598,9 @@ public static class DnsSwitcher
         if (code != 0) { NetHistory.Add("Отключение не удалось", "ошибка при возврате DNS, подробности в журнале"); throw new InvalidOperationException("Ошибка отключения, см. журнал"); }
         if (left) { NetHistory.Add("Отключение прошло не полностью", "на части адаптеров остались адреса CHIMERION, подробности в журнале"); throw new InvalidOperationException("DNS сброшен не на всех адаптерах, см. журнал"); }
 
+        // DNS уже возвращен: локальный посредник DoH больше не нужен. Ошибка остановки не должна мешать отключению.
+        await StopRelayQuietlyAsync(RelayOf(active), log);
+
         var v6path = Storage.PathOf(Ipv6OffFile);
         // Адаптеры, где IPv6 включить не удалось, остаются в файле: следующее отключение или подключение попробует снова
         if (v6failed.Count > 0) File.WriteAllLines(v6path, v6failed);
@@ -548,6 +612,7 @@ public static class DnsSwitcher
         log("Отключено: исходные настройки DNS восстановлены");
         var restored = new List<string> { "DNS адаптеров возвращен к исходному (из резервной копии или автоматический)" };
         if (active?.Split == true) restored.Add("правила «Двух DNS» сняты");
+        if (active?.RelayChannel != null) restored.Add("локальный посредник DoH остановлен");
         if (v6off.Count > 0) restored.Add(v6failed.Count == 0 ? $"IPv6 включен обратно на {v6off.Count} адаптерах" : $"IPv6 включен не везде: не вернулся на {v6failed.Count} из {v6off.Count}");
         NetHistory.Add("Отключено: исходные настройки DNS восстановлены", string.Join("; ", restored));
     }
@@ -768,5 +833,38 @@ public static class DnsSwitcher
             return "";
         }, S);
         return (string.Concat(errors).Trim() + "\n" + rest.Trim()).Trim();
+    }
+
+    /// <summary>Посредник DoH из записи о подключении, если подключение шло через него.</summary>
+    private static DohRelaySession? RelayOf(ActiveConnection? active) =>
+        active?.RelayChannel is { Length: > 0 } channel
+            ? new DohRelaySession(channel, string.IsNullOrWhiteSpace(active.RelayListen) ? "127.0.0.2" : active.RelayListen, 53)
+            : null;
+
+    /// <summary>Остановка посредника, когда DNS уже возвращен или еще не менялся: ошибка не должна мешать основному действию.</summary>
+    private static async Task StopRelayQuietlyAsync(DohRelaySession? relay, Action<string> log)
+    {
+        if (relay == null) return;
+        try { await DohRelayStop(relay, log); }
+        catch (Exception ex) { log("Не удалось остановить локальный посредник DoH: " + ex.Message); }
+    }
+
+    /// <summary>
+    /// IP-адреса DoH-сервера для локального посредника: только IPv4, через эталонный DoH. Адрес с токеном и имя
+    /// сервера в журнал не пишутся: журнал видят пользователь и поддержка.
+    /// </summary>
+    private static async Task<IReadOnlyList<IPAddress>> RelayUpstreamAsync(AppSettings settings, Uri endpoint, Action<string> log)
+    {
+        if (IPAddress.TryParse(endpoint.Host, out var literal))
+        {
+            if (literal.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+                throw new DohRelayFailedException("Локальный посредник DoH работает только по IPv4");
+            return new[] { literal };
+        }
+        var (ips, _) = await DnsWire.ResolveDohAsync(settings.ReferenceDoh, endpoint.Host, TimeSpan.FromSeconds(8), CancellationToken.None);
+        var v4 = ips.Where(i => i.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork).Take(2).ToArray();
+        if (v4.Length == 0) throw new DohRelayFailedException("Не удалось узнать IP адрес DoH сервера для локального посредника");
+        log($"IP DoH сервера для посредника: {string.Join(", ", v4.Select(ip => ip.ToString()))}");
+        return v4;
     }
 }

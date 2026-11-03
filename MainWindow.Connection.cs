@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -189,6 +189,14 @@ public partial class MainWindow
             if (!auto)
                 DnexDialog.Show("Не удалось подключить DoH", "Эта версия Windows не поддерживает системный DoH. Выберите сервер с обычным DNS или используйте Windows с поддержкой DoH. Настройки сети не изменены.",
                     DialogKind.Warn, "Подключение");
+        }
+        catch (DohRelayFailedException ex)
+        {
+            // Windows без системного DoH, а локальный посредник поднять не удалось: сеть не менялась.
+            Log(ex.Message);
+            if (!auto)
+                DnexDialog.Show("Не удалось подключить DoH", "Windows не поддерживает системный DoH, а локальный посредник DoH не запустился.\n\n" +
+                    ex.Message + "\n\nНастройки сети не изменены.", DialogKind.Warn, "Подключение");
         }
         catch (UacDeclinedException)
         {
@@ -395,6 +403,12 @@ public partial class MainWindow
     }
 
 
+    /// <summary>Сведения о локальном посреднике DoH из записи о подключении: канал и адрес, который стоит в DNS.</summary>
+    private static DohRelaySession? RelaySession(DnsSwitcher.ActiveConnection? active) =>
+        active?.RelayChannel is { Length: > 0 } channel
+            ? new DohRelaySession(channel, string.IsNullOrWhiteSpace(active.RelayListen) ? "127.0.0.2" : active.RelayListen, 53)
+            : null;
+
     /// <summary>
     /// После запуска: следы оборванного изменения сети. Устаревшая копия убирается сама, откат требует прав и идет из «Диагностики».
     /// </summary>
@@ -407,6 +421,9 @@ public partial class MainWindow
             if (issue == StartupIssue.StaleBackup) { DnsSwitcher.DropStaleBackup(); Log("Устаревшая копия настроек DNS убрана"); }
             else Log($"После запуска: {StartupCheck.Describe(issue)}");
         }
+        // Посредник DoH прошлого подключения без записи о подключении больше не нужен: убираем его задание и процесс.
+        // Если запись есть, работающий посредник проверит EnsureConnectionAfterStartAsync.
+        await DohRelayRuntime.CleanupStaleAsync(RelaySession(DnsSwitcher.GetActive()), Log);
         if (issues.Any(StartupCheck.NeedsRestore)) ShowToast("Прошлый запуск оборвался: верните настройки сети в «Диагностике»", "Warn");
     }
 
@@ -421,6 +438,16 @@ public partial class MainWindow
         if (DnsSwitcher.GetActive() is not { } active) return;
         // Копия данных для тестов и снимков: подключение в ней чужое, DNS этого компьютера не трогаем
         if (Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1") return;
+        // Подключение через локальный посредник DoH: пока он не работает, DNS системы никуда не идет.
+        // Задание Планировщика поднимает его и после перезагрузки; если не вышло, безопаснее вернуть исходный DNS.
+        if (RelaySession(active) is { } relay && !await DohRelayRuntime.EnsureRunningAsync(relay, Log, CancellationToken.None))
+        {
+            Log("Локальный посредник DoH не запустился. Возвращаю исходные настройки DNS");
+            try { await DnsSwitcher.RestoreAsync(Log); }
+            catch (Exception ex) { Log("Вернуть исходные настройки DNS не удалось: " + ex.Message); }
+            await RefreshConnectionAsync();
+            return;
+        }
         // Режим «Два DNS»: кроме адаптеров проверяем правила NRPT (их мог снять откат системы или другая программа)
         if (ConnectionMonitor.Mine(active).Count == 0 && !active.Split) return;
 
@@ -524,6 +551,9 @@ public partial class MainWindow
                 return;
             case ConnectionMonitor.Verdict.Failing:
                 Log($"Сторож: DNS не отвечает ({_monitor.Fails}/{ConnectionMonitor.FailsBeforeSwitch})");
+                // Локальный посредник DoH мог закрыться (перезагрузка, обновление, ошибка): пробуем поднять его снова.
+                if (RelaySession(active) is { } relay && await DohRelayRuntime.EnsureRunningAsync(relay, Log, CancellationToken.None))
+                    Log("Сторож: локальный посредник DoH перезапущен");
                 return;
             case ConnectionMonitor.Verdict.SwitchServer:
                 Log($"Сторож: DNS не отвечает ({ConnectionMonitor.FailsBeforeSwitch}/{ConnectionMonitor.FailsBeforeSwitch})");
