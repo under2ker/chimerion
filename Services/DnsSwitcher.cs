@@ -10,6 +10,9 @@ namespace Dnex.Services;
 /// <summary>Пользователь отказал в правах администратора (UAC). Наследует отмену: старый код, ловящий отмену, работает как раньше.</summary>
 public sealed class UacDeclinedException() : OperationCanceledException("Запрос прав администратора отклонен");
 
+/// <summary>Windows не умеет подключать сервер, доступный только через DoH.</summary>
+public sealed class DohUnavailableException() : InvalidOperationException("Windows не поддерживает подключение этого сервера через DoH");
+
 /// <summary>Смена DNS на активных адаптерах Windows через PowerShell (NetTCPIP / DnsClient).</summary>
 public static class DnsSwitcher
 {
@@ -184,6 +187,16 @@ public static class DnsSwitcher
             if (!Uri.TryCreate(s.DohUrl.Split('{')[0], UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
                 throw new ArgumentException("Некорректный DoH-адрес");
             doh = u.GetLeftPart(UriPartial.Path).Replace("'", "''");
+
+            if (addrs.Count == 0)
+            {
+                // Без системного DoH IP веб-сервера не обязательно принимает обычные DNS-запросы.
+                var (capabilityCode, capability) = await Runner(
+                    "if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) { 'DOH_AVAILABLE' } else { 'DOH_UNAVAILABLE' }", false);
+                if (capabilityCode != 0) throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
+                if (capability.Trim() == "DOH_UNAVAILABLE") throw new DohUnavailableException();
+                if (capability.Trim() != "DOH_AVAILABLE") throw new InvalidOperationException("Не удалось проверить поддержку DoH в Windows");
+            }
 
             if (addrs.Count == 0)
             {

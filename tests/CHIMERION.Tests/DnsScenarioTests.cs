@@ -239,6 +239,21 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Doh_only_server_on_windows_without_doh_leaves_network_untouched()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://dns.example.test:8443/dns-query/test" };
+        var (log, write) = NewLog();
+
+        await Assert.ThrowsAsync<DohUnavailableException>(() => DnsSwitcher.ApplyAsync(server, new AppSettings(), write));
+
+        Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Null(DnsSwitcher.GetActive());
+        Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
+        Assert.DoesNotContain(log, line => line.Contains("dns.example.test") || line.Contains("dns-query"));
+    }
+
+    [Fact]
     public async Task Windows_without_doh_commands_can_connect_and_disconnect()
     {
         // Журнал пользователя: на его Windows нет Remove-DnsClientDohServerAddress, и отключение падало
