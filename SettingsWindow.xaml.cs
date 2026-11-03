@@ -190,11 +190,17 @@ public partial class SettingsWindow : Window
         if (sender is FrameworkElement { Tag: string key } && TgTopics.TryGetValue(key, out var id)) AutoStart.OpenUrl(TgChatTopic + id);
     }
 
-    /// <summary>Без права менять сервер запасной сервер и автопереключение не действуют: их галочки неактивны.</summary>
+    /// <summary>Автопереключение недоступно без разрешения менять сервер; настройку запасного можно изменить заранее.</summary>
     private void AllowSwitch_Changed(object sender, RoutedEventArgs e)
     {
         if (AllowSwitchBox == null || BackupBox == null || AutoSwitchBox == null) return;
-        BackupBox.IsEnabled = AutoSwitchBox.IsEnabled = AllowSwitchBox.IsChecked == true;
+        UpdateSwitchOptions(AllowSwitchBox, BackupBox, AutoSwitchBox);
+    }
+
+    internal static void UpdateSwitchOptions(System.Windows.Controls.CheckBox allow, System.Windows.Controls.CheckBox backup, System.Windows.Controls.CheckBox autoSwitch)
+    {
+        backup.IsEnabled = true;
+        autoSwitch.IsEnabled = allow.IsChecked == true;
     }
 
     /// <summary>Два варианта скрытия данных взаимоисключающие: включили один, второй выключается.</summary>

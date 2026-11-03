@@ -54,6 +54,9 @@ public class DnsServer : INotifyPropertyChanged
     public string SourceHint => $"Открыть источник: {SourcePrettyShort}";
     public DateTime AddedAt { get; set; } = DateTime.Now;
 
+    [JsonIgnore]
+    public bool PinnedAfterManualAdd { get; set; }
+
     /// <summary>Найден за последние 7 дней — в таблице помечается «новый».</summary>
     [JsonIgnore]
     public bool IsNew => (DateTime.Now - AddedAt).TotalDays < 7;
@@ -431,6 +434,10 @@ public class DnsServer : INotifyPropertyChanged
         {
             var n = DisplayName;
             if (CatalogNames.Contains(n)) return Clip(n);
+            // При поиске по странице имя иногда является адресом источника, а не названием DNS.
+            if (!Manual && string.IsNullOrEmpty(DohUrl) && Uri.TryCreate(SourceUrl, UriKind.Absolute, out var source)
+                && string.Equals(n, source.Host, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(Country))
+                return Clip(CountryName + (string.IsNullOrEmpty(City) ? "" : ", " + GeoLocation.CityName(City)));
             if (Uri.TryCreate(n, UriKind.Absolute, out var uri) && (uri.Scheme == "https" || uri.Scheme == "http")) n = uri.Host;
             if (!string.IsNullOrWhiteSpace(n) && !System.Net.IPAddress.TryParse(n, out _)) return Clip(n);
             if (!string.IsNullOrEmpty(Country))

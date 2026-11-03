@@ -251,6 +251,7 @@ public partial class MainWindow
             ShowToast($"Такой сервер уже есть: {existing.DisplayName}", "Warn");
             Log($"Такой сервер уже есть: {existing.DisplayName}");
             existing.Manual = true;
+            PinManualServer(existing);
             SaveServers();
             AllTab.IsChecked = true;
             SearchBox.Clear();
@@ -265,6 +266,7 @@ public partial class MainWindow
         _known.Add(s.Key);
         s.JustAdded = true;
         _servers.Add(s);
+        PinManualServer(s);
         _ = ClearJustAddedLaterAsync(s);
         SaveServers();
         Log($"Добавлен сервер: {s.DisplayName}");
@@ -291,22 +293,29 @@ public partial class MainWindow
         _ = ResolveLocationsAsync();
     }
 
-    /// <summary>Подключенный сервер всегда первый в таблице, какой бы колонкой ни была отсортирована.</summary>
-    /// <summary>Сверху всегда подключенный сервер, под ним избранные (в порядке «лучшие для сервиса» избранные не поднимаются,
-    /// чтобы наверху были лучшие именно для него); дальше порядок выбранной колонки.</summary>
+    private void PinManualServer(DnsServer selected)
+    {
+        foreach (var server in _servers) server.PinnedAfterManualAdd = server == selected;
+    }
+
+    /// <summary>После ручного добавления сервер наверху, затем подключенный и избранные.</summary>
     private void PinConnectedFirst()
     {
-        if (_view == null) return;
-        var sd = _view.SortDescriptions;
-        bool favPinned = _rankFor == null;
-        bool ok = sd.Count > 0 && sd[0].PropertyName == nameof(DnsServer.IsConnected)
-                  && (favPinned ? sd.Count > 1 && sd[1].PropertyName == nameof(DnsServer.IsFavorite)
+        if (_view != null) EnsurePinnedSort(_view.SortDescriptions, _rankFor == null);
+    }
+
+    internal static void EnsurePinnedSort(SortDescriptionCollection sd, bool favPinned)
+    {
+        bool ok = sd.Count > 1 && sd[0].PropertyName == nameof(DnsServer.PinnedAfterManualAdd)
+                  && sd[1].PropertyName == nameof(DnsServer.IsConnected)
+                  && (favPinned ? sd.Count > 2 && sd[2].PropertyName == nameof(DnsServer.IsFavorite)
                                 : !sd.Any(d => d.PropertyName == nameof(DnsServer.IsFavorite)));
         if (ok) return;
         for (int i = sd.Count - 1; i >= 0; i--)
-            if (sd[i].PropertyName is nameof(DnsServer.IsConnected) or nameof(DnsServer.IsFavorite)) sd.RemoveAt(i);
+            if (sd[i].PropertyName is nameof(DnsServer.PinnedAfterManualAdd) or nameof(DnsServer.IsConnected) or nameof(DnsServer.IsFavorite)) sd.RemoveAt(i);
         if (favPinned) sd.Insert(0, new SortDescription(nameof(DnsServer.IsFavorite), ListSortDirection.Descending));
         sd.Insert(0, new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
+        sd.Insert(0, new SortDescription(nameof(DnsServer.PinnedAfterManualAdd), ListSortDirection.Descending));
     }
 
 
@@ -328,6 +337,7 @@ public partial class MainWindow
         {
             var sd = _view.SortDescriptions;
             sd.Clear();
+            sd.Add(new SortDescription(nameof(DnsServer.PinnedAfterManualAdd), ListSortDirection.Descending));
             sd.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
             if (service == null)
             {

@@ -310,7 +310,7 @@
                                 <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
                                 <TextBlock Text="Главный переключатель: без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется. От него зависят переключение выше и запасной сервер ниже" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="26,14,0,0"/>
-                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Доступен, когда включено «Программа может сама переходить»" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
+                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Работает, когда включено «Программа может сама переходить». Изменение вступит в силу после переподключения" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
                                 <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <DockPanel x:Name="CountryRow" Margin="26,14,0,0">

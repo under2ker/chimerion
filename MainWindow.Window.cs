@@ -366,9 +366,9 @@ public partial class MainWindow
         // ширинам из XAML. Раньше пороги считались по окну без левого меню, и колонки наезжали друг на друга.
         // Всегда видны: обновить 52, звезда 40, статус 128, сервер от 250, пинг 140 (610) и запас на прокрутку 30
         double table = Math.Max(0, ActualWidth - PanelSidebar.Width - 40);
-        double used = 640;
+        double used = 613;
         bool Fits(double width) { if (used + width > table) return false; used += width; return true; }
-        bool services = full && Fits(260), source = full && Fits(56), ai = full && Fits(84), stab = full && Fits(255), location = full && Fits(200);
+        bool services = full && Fits(320), source = full && Fits(56), ai = full && Fits(84), stab = full && Fits(250), location = full && Fits(200);
         ColServices.Visibility = services ? Visibility.Visible : Visibility.Collapsed;
         ColSource.Visibility = source ? Visibility.Visible : Visibility.Collapsed;
         ColAi.Visibility = ai ? Visibility.Visible : Visibility.Collapsed;

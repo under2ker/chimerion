@@ -84,6 +84,7 @@ public partial class MainWindow : Window
         // Рабочие серверы наверху. Сортировка НЕ живая: строки не переставляются при обновлении статуса и пинга.
         // Порядок пересчитывается после пакетной проверки, при смене фильтра и при добавлении сервера.
         // Подключенный сервер всегда первый, затем избранные, затем рабочие наверху
+        _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.PinnedAfterManualAdd), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsConnected), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.IsFavorite), ListSortDirection.Descending));
         _view.SortDescriptions.Add(new SortDescription(nameof(DnsServer.Rank), ListSortDirection.Ascending));

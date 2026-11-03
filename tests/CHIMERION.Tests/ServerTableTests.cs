@@ -16,6 +16,15 @@ public class ServerTableTests
     }
 
     [Fact]
+    public void Source_page_host_is_not_mistaken_for_dns_name()
+    {
+        var server = new DnsServer { Name = "raw.example.test", SourceUrl = "https://raw.example.test/list", Primary = "203.0.113.10", Country = "NL" };
+        Assert.Equal("Нидерланды", server.ShortName);
+        server.Manual = true;
+        Assert.Equal("raw.example.test", server.ShortName);
+    }
+
+    [Fact]
     public void Flags_use_only_each_services_measured_country_and_refresh()
     {
         var server = new DnsServer { Summary = "ChatGPT ✓ · Claude ✓ · Gemini ✓" };
