@@ -49,6 +49,27 @@ public class DohRelayHostTests
     }
 
     [Fact]
+    public async Task Control_channel_of_same_user_is_accepted_without_current_user_only()
+    {
+        // Программа с правами администратора и посредник без них — один пользователь, но разные владельцы токена
+        // по умолчанию. CurrentUserOnly на стороне клиента отказывал (Windows 10 у тестера), проверка теперь своя
+        var channel = Guid.NewGuid().ToString("N");
+        using var server = new System.IO.Pipes.NamedPipeServerStream("DNEX-doh-" + channel, System.IO.Pipes.PipeDirection.InOut, 1,
+            System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+        Assert.True(DohRelayHost.OwnedByCurrentUser(server));
+        var serve = Task.Run(async () =>
+        {
+            await server.WaitForConnectionAsync();
+            var cmd = new byte[5];
+            await server.ReadExactlyAsync(cmd);
+            await server.WriteAsync("ok\n"u8.ToArray());
+        });
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        Assert.True(await DohRelayHost.CommandAsync(channel, "ping", timeout.Token));
+        await serve.WaitAsync(timeout.Token);
+    }
+
+    [Fact]
     public async Task Invalid_control_command_is_rejected()
     {
         Assert.False(await DohRelayHost.CommandAsync("bad", "stop", CancellationToken.None));
