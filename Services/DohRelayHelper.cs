@@ -8,17 +8,14 @@ internal static class DohRelayHelper
 {
     internal static int Run(string? channel)
     {
-        DohRelayConfig? config = null;
-        // Отсутствующий файл не создаем: LoadOrCreate записал бы null, и следующий запуск
-        // не отличил бы пустые настройки от настоящих.
-        if (channel is not null && File.Exists(Storage.PathOf(DohRelayConfig.FileName)))
-        {
-            try { config = DohRelayConfig.Load(); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 1; }
-        }
         // Задание передает канал: процесс запускается только для своих настроек. Старое задание без канала
-        // не должно поднимать посредник с чужим адресом DoH.
-        if (config is null || !string.Equals(channel, config.Channel, StringComparison.Ordinal)) return 1;
+        // или с чужим каналом не должно поднимать посредник с чужим адресом DoH.
+        if (!DohRelayConfig.IsChannel(channel)) return 1;
+        DohRelayConfig? config;
+        // Отсутствующий файл не создаем: Load вернет null, и пустые настройки в папке данных не появятся.
+        try { config = DohRelayConfig.Load(channel!); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 1; }
+        if (config is null) return 1;
         try
         {
             var (_, _, upstream) = config.Decode();
@@ -29,7 +26,7 @@ internal static class DohRelayHelper
         catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException or ArgumentException or UnauthorizedAccessException or System.Net.Sockets.SocketException or OperationCanceledException)
         {
             // Сохраняем только класс ошибки: адрес сервера и содержимое запросов в файл не попадают.
-            try { Storage.SaveRequired("doh-relay-error.json", new { At = DateTime.UtcNow, Kind = ex.GetType().Name }); }
+            try { Storage.SaveRequired(DohRelayConfig.ErrorFileNameFor(channel!), new { At = DateTime.UtcNow, Kind = ex.GetType().Name }); }
             catch (Exception) { }
             return 1;
         }

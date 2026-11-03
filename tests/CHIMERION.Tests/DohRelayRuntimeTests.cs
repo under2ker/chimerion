@@ -19,13 +19,20 @@ public class DohRelayRuntimeTests
         return config;
     }
 
-    private static void WriteErrorFile() => Storage.SaveRequired("doh-relay-error.json", new { Kind = "test" });
+    private static void WriteErrorFile(string channel) => Storage.SaveRequired(DohRelayConfig.ErrorFileNameFor(channel), new { Kind = "test" });
+
+    private static bool ConfigExists(string channel) => File.Exists(Storage.PathOf(DohRelayConfig.FileNameFor(channel)));
+    private static bool ErrorExists(string channel) => File.Exists(Storage.PathOf(DohRelayConfig.ErrorFileNameFor(channel)));
+
+    /// <summary>Все служебные файлы посредников: и по каналам, и общий файл прежних сборок.</summary>
+    private static string[] RelayFiles() => Directory.Exists(Storage.Dir)
+        ? Directory.GetFiles(Storage.Dir, "doh-relay*.json") : Array.Empty<string>();
 
     private static void RemoveFiles()
     {
-        foreach (var name in new[] { DohRelayConfig.FileName, "doh-relay-error.json" })
+        foreach (var path in RelayFiles())
         {
-            try { File.Delete(Storage.PathOf(name)); }
+            try { File.Delete(path); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
@@ -45,8 +52,8 @@ public class DohRelayRuntimeTests
             DohRelayRuntime.StartHelper = (config, _) => { started = config; return Task.FromResult(true); };
             var session = await DohRelayRuntime.StartAsync(Endpoint, Upstream, _ => { }, CancellationToken.None);
             Assert.NotNull(started);
-            Assert.True(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            var saved = DohRelayConfig.Load()!;
+            Assert.True(ConfigExists(session.Channel));
+            var saved = DohRelayConfig.Load(session.Channel)!;
             Assert.Equal(saved.Channel, session.Channel);
             Assert.Equal(Endpoint, saved.Decode().Endpoint);
             Assert.Equal(DohRelayRuntime.CandidateAddresses[0], session.ListenAddress);
@@ -78,7 +85,7 @@ public class DohRelayRuntimeTests
             Assert.Contains("не запустился", error.Message);
             Assert.DoesNotContain("dns.example.test", error.Message);
             Assert.All(log, line => Assert.DoesNotContain("dns.example.test", line));
-            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
+            Assert.Empty(RelayFiles());
             // Каждый занятый адрес убирает свое задание: после отказа не должно остаться ни одного.
             Assert.Equal(DohRelayRuntime.CandidateAddresses.Length, stopped.Count);
         }
@@ -100,14 +107,14 @@ public class DohRelayRuntimeTests
         {
             RemoveFiles();
             var config = SaveConfig();
-            WriteErrorFile();
+            WriteErrorFile(config.Channel);
             var calls = new List<string>();
             DohRelayRuntime.StopCommand = (channel, _) => { calls.Add("command:" + channel); return Task.FromResult(true); };
             DohRelayRuntime.StopHelper = (channel, _) => { calls.Add("task:" + channel); return Task.FromResult(true); };
             await DohRelayRuntime.StopAsync(Session(config.Channel), _ => { });
             Assert.Equal(new[] { "command:" + config.Channel, "task:" + config.Channel }, calls);
-            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            Assert.False(File.Exists(Storage.PathOf("doh-relay-error.json")));
+            Assert.False(ConfigExists(config.Channel));
+            Assert.False(ErrorExists(config.Channel));
         }
         finally
         {
@@ -127,13 +134,13 @@ public class DohRelayRuntimeTests
         {
             RemoveFiles();
             var config = SaveConfig();
-            WriteErrorFile();
+            WriteErrorFile(config.Channel);
             DohRelayRuntime.StopCommand = (_, _) => throw new IOException("процесс уже закрыт");
             DohRelayRuntime.StopHelper = (_, _) => throw new InvalidOperationException("задание уже удалено");
             await DohRelayRuntime.StopAsync(Session(config.Channel), log.Add);
             Assert.NotEmpty(log);
-            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            Assert.False(File.Exists(Storage.PathOf("doh-relay-error.json")));
+            Assert.False(ConfigExists(config.Channel));
+            Assert.False(ErrorExists(config.Channel));
         }
         finally
         {
@@ -219,14 +226,14 @@ public class DohRelayRuntimeTests
         {
             RemoveFiles();
             var config = SaveConfig();
-            WriteErrorFile();
+            WriteErrorFile(config.Channel);
             DohRelayRuntime.StopCommand = (channel, _) => { calls.Add("command:" + channel); return Task.FromResult(true); };
             DohRelayRuntime.StopHelper = (channel, _) => { calls.Add("task:" + channel); return Task.FromResult(true); };
             await DohRelayRuntime.CleanupStaleAsync(null, log.Add);
             Assert.Equal(new[] { "command:" + config.Channel, "task:" + config.Channel }, calls);
             Assert.Contains(log, line => line.Contains("Убран прежний локальный посредник DoH"));
-            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            Assert.False(File.Exists(Storage.PathOf("doh-relay-error.json")));
+            Assert.False(ConfigExists(config.Channel));
+            Assert.False(ErrorExists(config.Channel));
         }
         finally
         {
@@ -250,7 +257,7 @@ public class DohRelayRuntimeTests
             DohRelayRuntime.StopHelper = (channel, _) => { calls.Add(channel); return Task.FromResult(true); };
             await DohRelayRuntime.CleanupStaleAsync(Session(config.Channel), _ => { });
             Assert.Empty(calls);
-            Assert.True(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
+            Assert.True(ConfigExists(config.Channel));
         }
         finally
         {
@@ -269,13 +276,14 @@ public class DohRelayRuntimeTests
         try
         {
             RemoveFiles();
-            WriteErrorFile();
+            // Файл ошибки без настроек (посредник уже убран) и общий файл ошибки прежних сборок.
+            WriteErrorFile(Channel);
+            Storage.SaveRequired(DohRelayConfig.LegacyErrorFileName, new { Kind = "test" });
             DohRelayRuntime.StopCommand = (channel, _) => { calls.Add(channel); return Task.FromResult(true); };
             DohRelayRuntime.StopHelper = (channel, _) => { calls.Add(channel); return Task.FromResult(true); };
             await DohRelayRuntime.CleanupStaleAsync(null, _ => { });
             Assert.Empty(calls);
-            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            Assert.False(File.Exists(Storage.PathOf("doh-relay-error.json")));
+            Assert.Empty(RelayFiles());
         }
         finally
         {
@@ -320,7 +328,7 @@ public class DohRelayRuntimeTests
             var session = await DohRelayRuntime.StartAsync(Endpoint, Upstream, _ => { }, CancellationToken.None);
             Assert.Equal(2, attempts.Count);
             Assert.Equal(DohRelayRuntime.CandidateAddresses[1], session.ListenAddress);
-            Assert.Equal(session.Channel, DohRelayConfig.Load()!.Channel);
+            Assert.Equal(session.Channel, DohRelayConfig.Load(session.Channel)!.Channel);
         }
         finally
         {
@@ -344,8 +352,8 @@ public class DohRelayRuntimeTests
             DohRelayRuntime.StopHelper = (_, _) => Task.FromResult(true);
             // Останавливаем прежний канал, а в файле уже лежат настройки нового: их удалять нельзя.
             await DohRelayRuntime.StopAsync(Session(Channel), _ => { });
-            Assert.True(File.Exists(Storage.PathOf(DohRelayConfig.FileName)));
-            Assert.Equal(config.Channel, DohRelayConfig.Load()!.Channel);
+            Assert.True(ConfigExists(config.Channel));
+            Assert.Equal(config.Channel, DohRelayConfig.Load(config.Channel)!.Channel);
         }
         finally
         {
@@ -378,7 +386,8 @@ public class DohRelayRuntimeTests
                 if (args[0] == "/Create")
                 {
                     creates++;
-                    Storage.SaveRequired("doh-relay-error.json", new { Kind = "SocketException" });
+                    // Имя задания: «CHIMERION DoH <канал>»; посредник пишет ошибку в файл своего канала.
+                    WriteErrorFile(args[2]["CHIMERION DoH ".Length..]);
                     return Task.FromResult(0);
                 }
                 return Task.FromResult(0);
@@ -398,6 +407,101 @@ public class DohRelayRuntimeTests
             DohRelayRuntime.ExecutablePath = oldExe;
             DohRelayRuntime.CurrentUserSid = oldSid;
             DohRelayRuntime.StartTimeout = oldTimeout;
+            RemoveFiles();
+        }
+    }
+
+    [Fact]
+    public async Task Failed_switch_keeps_the_configuration_of_the_running_relay()
+    {
+        var oldStart = DohRelayRuntime.StartHelper;
+        var oldStop = DohRelayRuntime.StopHelper;
+        var oldStopCommand = DohRelayRuntime.StopCommand;
+        try
+        {
+            RemoveFiles();
+            // Работает прежний посредник; новый на всех адресах не запускается (как при отказе смены сервера).
+            var running = SaveConfig();
+            DohRelayRuntime.StartHelper = (_, _) => Task.FromResult(false);
+            DohRelayRuntime.StopCommand = (_, _) => Task.FromResult(false);
+            DohRelayRuntime.StopHelper = (_, _) => Task.FromResult(true);
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => DohRelayRuntime.StartAsync(Endpoint, Upstream, _ => { }, CancellationToken.None));
+            // После перезагрузки задание прежнего посредника должно найти свои настройки.
+            var kept = DohRelayConfig.Load(running.Channel);
+            Assert.NotNull(kept);
+            Assert.Equal(running.ListenAddress, kept!.ListenAddress);
+            Assert.Single(RelayFiles());
+        }
+        finally
+        {
+            DohRelayRuntime.StartHelper = oldStart;
+            DohRelayRuntime.StopHelper = oldStop;
+            DohRelayRuntime.StopCommand = oldStopCommand;
+            RemoveFiles();
+        }
+    }
+
+    [Fact]
+    public async Task Error_of_another_relay_does_not_abort_a_new_start()
+    {
+        var oldPing = DohRelayRuntime.PingHelper;
+        var oldScheduler = DohRelayRuntime.Scheduler;
+        var oldExe = DohRelayRuntime.ExecutablePath;
+        var oldSid = DohRelayRuntime.CurrentUserSid;
+        var oldTimeout = DohRelayRuntime.StartTimeout;
+        var pings = 0;
+        try
+        {
+            RemoveFiles();
+            DohRelayRuntime.ExecutablePath = () => @"C:\Example\CHIMERION.exe";
+            DohRelayRuntime.CurrentUserSid = () => "S-1-5-21-100-200-300-1001";
+            DohRelayRuntime.StartTimeout = TimeSpan.FromSeconds(5);
+            // Прежний посредник (другой канал) записал ошибку, а новый отвечает со второго опроса.
+            WriteErrorFile(Channel);
+            Storage.SaveRequired(DohRelayConfig.LegacyErrorFileName, new { Kind = "test" });
+            DohRelayRuntime.PingHelper = (_, _) => Task.FromResult(++pings > 1);
+            DohRelayRuntime.Scheduler = () => new DohRelayScheduler((args, _) => Task.FromResult(args[0] == "/Query" ? 1 : 0));
+            var session = await DohRelayRuntime.StartAsync(Endpoint, Upstream, _ => { }, CancellationToken.None);
+            Assert.Equal(DohRelayRuntime.CandidateAddresses[0], session.ListenAddress);
+        }
+        finally
+        {
+            DohRelayRuntime.PingHelper = oldPing;
+            DohRelayRuntime.Scheduler = oldScheduler;
+            DohRelayRuntime.ExecutablePath = oldExe;
+            DohRelayRuntime.CurrentUserSid = oldSid;
+            DohRelayRuntime.StartTimeout = oldTimeout;
+            RemoveFiles();
+        }
+    }
+
+    [Fact]
+    public async Task Cleanup_stops_every_stale_relay_and_the_legacy_one_but_keeps_the_active()
+    {
+        var oldStop = DohRelayRuntime.StopHelper;
+        var oldStopCommand = DohRelayRuntime.StopCommand;
+        var stopped = new List<string>();
+        try
+        {
+            RemoveFiles();
+            var active = SaveConfig();
+            var stale = SaveConfig();
+            // Общий файл прежних сборок с третьим каналом.
+            var legacy = DohRelayConfig.Create(Endpoint, IPAddress.Parse(DohRelayRuntime.CandidateAddresses[1]), Upstream);
+            Storage.SaveRequired(DohRelayConfig.LegacyFileName, legacy);
+            DohRelayRuntime.StopCommand = (_, _) => Task.FromResult(true);
+            DohRelayRuntime.StopHelper = (channel, _) => { stopped.Add(channel); return Task.FromResult(true); };
+            await DohRelayRuntime.CleanupStaleAsync(Session(active.Channel), _ => { });
+            Assert.Equal(new[] { legacy.Channel, stale.Channel }.OrderBy(c => c), stopped.OrderBy(c => c));
+            Assert.True(ConfigExists(active.Channel));
+            Assert.False(ConfigExists(stale.Channel));
+            Assert.False(File.Exists(Storage.PathOf(DohRelayConfig.LegacyFileName)));
+        }
+        finally
+        {
+            DohRelayRuntime.StopHelper = oldStop;
+            DohRelayRuntime.StopCommand = oldStopCommand;
             RemoveFiles();
         }
     }

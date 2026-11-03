@@ -98,4 +98,54 @@ public class DohLocalListenerTests
         var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
         Assert.Throws<ArgumentException>(() => new DohLocalListener(IPAddress.Any, 0, transport));
     }
+
+    /// <summary>Первый запрос ждет разрешения, остальные отвечают сразу.</summary>
+    private sealed class GateHandler : HttpMessageHandler
+    {
+        public readonly TaskCompletionSource FirstStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly TaskCompletionSource ReleaseFirst = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                FirstStarted.TrySetResult();
+                await ReleaseFirst.Task.WaitAsync(token);
+            }
+            var body = await request.Content!.ReadAsByteArrayAsync(token);
+            body[2] |= 0x80;
+            var content = new ByteArrayContent(body);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }
+    }
+
+    [Fact]
+    public async Task Late_answer_to_a_closed_client_port_does_not_stop_udp()
+    {
+        // Клиент не дождался ответа и закрыл порт: Windows возвращает на следующем приеме ошибку 10054.
+        // Прием должен продолжиться, иначе посредник перестает отвечать всем.
+        var handler = new GateHandler();
+        using var http = new HttpClient(handler);
+        var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
+        await using var listener = new DohLocalListener(IPAddress.Loopback, 0, transport);
+        listener.Start();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var target = new IPEndPoint(IPAddress.Loopback, listener.Port);
+        var first = new byte[] { 0x11, 0x11, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
+        using (var gone = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+        {
+            await gone.SendAsync(first, target, timeout.Token);
+            await handler.FirstStarted.Task.WaitAsync(timeout.Token);
+        }
+        handler.ReleaseFirst.SetResult();
+        // Ответ уходит на закрытый порт и вызывает ICMP «порт недоступен».
+        await Task.Delay(300, timeout.Token);
+        using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var second = new byte[] { 0x22, 0x22, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
+        await client.SendAsync(second, target, timeout.Token);
+        var response = await client.ReceiveAsync(timeout.Token);
+        Assert.Equal(0x22, response.Buffer[0]);
+        Assert.False(listener.Completion.IsCompleted);
+    }
 }

@@ -13,10 +13,10 @@ public class DohRelayConfigTests
         var endpoint = new Uri("https://dns.example.test/dns-query/fake-secret");
         var config = DohRelayConfig.Create(endpoint, IPAddress.Parse("127.0.0.2"), new[] { IPAddress.Parse("203.0.113.10") });
         config.Save();
-        var file = File.ReadAllText(Storage.PathOf(DohRelayConfig.FileName));
+        var file = File.ReadAllText(Storage.PathOf(DohRelayConfig.FileNameFor(config.Channel)));
         Assert.DoesNotContain("fake-secret", file);
         Assert.DoesNotContain("dns.example.test", file);
-        var restored = DohRelayConfig.Load()!.Decode();
+        var restored = DohRelayConfig.Load(config.Channel)!.Decode();
         Assert.Equal(endpoint, restored.Endpoint);
         Assert.Equal(IPAddress.Parse("127.0.0.2"), restored.Listen);
         Assert.Equal(new[] { IPAddress.Parse("203.0.113.10") }, restored.Upstream);
