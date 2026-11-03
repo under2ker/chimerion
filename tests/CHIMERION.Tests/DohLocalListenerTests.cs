@@ -148,4 +148,41 @@ public class DohLocalListenerTests
         Assert.Equal(0x22, response.Buffer[0]);
         Assert.False(listener.Completion.IsCompleted);
     }
+
+    /// <summary>Ответ длиннее 512 байт: заголовок и вопрос запроса, затем заполнение.</summary>
+    private sealed class LargeAnswerHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            var body = await request.Content!.ReadAsByteArrayAsync(token);
+            body[2] |= 0x80;
+            var content = new ByteArrayContent(body.Concat(new byte[900]).ToArray());
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/dns-message");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        }
+    }
+
+    [Fact]
+    public async Task Long_answer_over_udp_is_truncated_and_complete_over_tcp()
+    {
+        using var http = new HttpClient(new LargeAnswerHandler());
+        var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
+        await using var listener = new DohLocalListener(IPAddress.Loopback, 0, transport);
+        listener.Start();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var query = new byte[] { 0x12, 0x34, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, (byte)'e', (byte)'x', (byte)'a', (byte)'m', (byte)'p', (byte)'l', (byte)'e', 3, (byte)'c', (byte)'o', (byte)'m', 0, 0, 1, 0, 1 };
+        using var udp = new UdpClient();
+        await udp.SendAsync(query, new IPEndPoint(IPAddress.Loopback, listener.Port), timeout.Token);
+        var cut = (await udp.ReceiveAsync(timeout.Token)).Buffer;
+        Assert.True(cut.Length <= 512);
+        Assert.Equal(0x02, cut[2] & 0x02);
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(IPAddress.Loopback, listener.Port, timeout.Token);
+        var stream = tcp.GetStream();
+        await stream.WriteAsync(new byte[] { 0, (byte)query.Length }, timeout.Token);
+        await stream.WriteAsync(query, timeout.Token);
+        var header = new byte[2];
+        await stream.ReadExactlyAsync(header, timeout.Token);
+        Assert.Equal(query.Length + 900, (header[0] << 8) | header[1]);
+    }
 }

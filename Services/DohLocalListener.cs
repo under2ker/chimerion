@@ -71,7 +71,8 @@ internal sealed class DohLocalListener : IAsyncDisposable
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
             timeout.CancelAfter(TimeSpan.FromSeconds(8));
             var answer = await _transport.ForwardAsync(packet.Buffer, timeout.Token).ConfigureAwait(false);
-            await _udp.SendAsync(answer, packet.RemoteEndPoint, timeout.Token).ConfigureAwait(false);
+            // Длинный ответ усекается с флагом TC: клиент повторит запрос по TCP и получит его целиком.
+            await _udp.SendAsync(DnsUdpLimit.Fit(packet.Buffer, answer), packet.RemoteEndPoint, timeout.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or HttpRequestException or OperationCanceledException or SocketException or ObjectDisposedException) { }
         finally { _slots.Release(); }
