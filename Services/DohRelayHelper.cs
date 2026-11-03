@@ -16,10 +16,20 @@ internal static class DohRelayHelper
         try { config = DohRelayConfig.Load(channel!); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 1; }
         if (config is null) return 1;
+        DohRelayConfig saved = config;
         try
         {
-            var (_, _, upstream) = config.Decode();
-            using HttpClient client = DohRelayHttp.Create(upstream);
+            var (endpoint, _, upstream) = config.Decode();
+            // Сервер мог сменить IP после подключения: новые адреса узнаются у эталона и сохраняются для следующего запуска.
+            var addresses = new DohRelayAddresses(upstream,
+                ct => DohRelayAddresses.ResolveAsync(endpoint.Host, async (reference, host, token) =>
+                    (await DnsWire.ResolveDohAsync(reference, host, TimeSpan.FromSeconds(6), token).ConfigureAwait(false)).Ips, ct),
+                fresh =>
+                {
+                    saved.BootstrapAddresses = fresh.Select(ip => ip.ToString()).ToList();
+                    saved.Save();
+                });
+            using HttpClient client = DohRelayHttp.Create(addresses);
             DohRelayHost.RunAsync(config, client, 53, CancellationToken.None).GetAwaiter().GetResult();
             return 0;
         }

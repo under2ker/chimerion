@@ -14,18 +14,23 @@ internal static class DohRelayHttp
     internal static HttpClient Create(IReadOnlyList<IPAddress> addresses, RemoteCertificateValidationCallback? testCertificateValidation = null)
     {
         if (addresses.Count == 0) throw new ArgumentException("Нет адресов DoH-сервера", nameof(addresses));
-        var endpoints = addresses.Distinct().ToArray();
+        return Create(new DohRelayAddresses(addresses), testCertificateValidation);
+    }
+
+    /// <summary>Клиент с обновляемыми адресами: если не ответил ни один, адреса спрашиваются заново и подключение повторяется.</summary>
+    internal static HttpClient Create(DohRelayAddresses addresses, RemoteCertificateValidationCallback? testCertificateValidation = null)
+    {
         int preferred = 0;
         var handler = new SocketsHttpHandler
         {
             UseProxy = false,
             AllowAutoRedirect = false,
             // Общий предел на все адреса; каждый адрес ограничен AttemptTimeout.
-            ConnectTimeout = TimeSpan.FromSeconds(Math.Min(8, AttemptTimeout.TotalSeconds * endpoints.Length)),
+            ConnectTimeout = TimeSpan.FromSeconds(8),
             SslOptions = new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = testCertificateValidation },
             ConnectCallback = async (context, token) =>
             {
-                var (socket, index) = await ConnectAnyAsync(endpoints, context.DnsEndPoint.Port, Volatile.Read(ref preferred), ConnectSocketAsync, AttemptTimeout, token).ConfigureAwait(false);
+                var (socket, index) = await ConnectWithRefreshAsync(addresses, context.DnsEndPoint.Port, Volatile.Read(ref preferred), ConnectSocketAsync, AttemptTimeout, token).ConfigureAwait(false);
                 // Следующие подключения начинаются с адреса, который ответил: недоступный не задерживает каждый запрос.
                 Volatile.Write(ref preferred, index);
                 return new NetworkStream(socket, ownsSocket: true);
@@ -43,6 +48,18 @@ internal static class DohRelayHttp
             return socket;
         }
         catch { socket.Dispose(); throw; }
+    }
+
+    /// <summary>Подключение по текущим адресам; если не ответил ни один, один повтор по обновленным адресам.</summary>
+    internal static async Task<(Socket Socket, int Index)> ConnectWithRefreshAsync(DohRelayAddresses addresses, int port, int preferred,
+        Func<IPEndPoint, CancellationToken, Task<Socket>> connect, TimeSpan attemptTimeout, CancellationToken token)
+    {
+        try { return await ConnectAnyAsync(addresses.Current, port, preferred, connect, attemptTimeout, token).ConfigureAwait(false); }
+        catch (HttpRequestException) when (!token.IsCancellationRequested)
+        {
+            if (!await addresses.RefreshAsync(token).ConfigureAwait(false)) throw;
+            return await ConnectAnyAsync(addresses.Current, port, 0, connect, attemptTimeout, token).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Перебирает адреса, начиная с предпочтительного; на каждый адрес отдельный предел ожидания.</summary>
