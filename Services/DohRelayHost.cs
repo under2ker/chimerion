@@ -55,13 +55,33 @@ internal static class DohRelayHost
         if (!Guid.TryParseExact(channel, "N", out _) || command is not ("ping" or "stop")) return false;
         try
         {
-            using var pipe = new NamedPipeClientStream(".", PipeName(channel), PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            // Без CurrentUserOnly: он сравнивает владельца канала с владельцем по умолчанию у токена, а у программы,
+            // запущенной с правами администратора, это группа Administrators, хотя посредник без прав того же
+            // пользователя. Связь не устанавливалась, и посредник считался не запущенным (Windows 10 у тестера).
+            // Пользователя проверяем сами сразу после подключения: чужой канал с тем же именем не пройдет.
+            using var pipe = new NamedPipeClientStream(".", PipeName(channel), PipeDirection.InOut, PipeOptions.Asynchronous);
             await pipe.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            if (!OwnedByCurrentUser(pipe)) return false;
             await pipe.WriteAsync(Encoding.ASCII.GetBytes(command + "\n"), cancellationToken).ConfigureAwait(false);
             var reply = new byte[3];
             await pipe.ReadExactlyAsync(reply, cancellationToken).ConfigureAwait(false);
             return reply.AsSpan().SequenceEqual("ok\n"u8);
         }
         catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException) { return false; }
+    }
+
+    /// <summary>Канал создан этим же пользователем: владелец — его SID или владелец по умолчанию его токена.</summary>
+    internal static bool OwnedByCurrentUser(PipeStream pipe)
+    {
+        try
+        {
+            var owner = pipe.GetAccessControl().GetOwner(typeof(System.Security.Principal.SecurityIdentifier));
+            using var me = System.Security.Principal.WindowsIdentity.GetCurrent();
+            return owner != null && (owner.Equals(me.User) || owner.Equals(me.Owner));
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or IOException or System.Security.Principal.IdentityNotMappedException)
+        {
+            return false;
+        }
     }
 }
