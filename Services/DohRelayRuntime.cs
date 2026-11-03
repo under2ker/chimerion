@@ -32,6 +32,7 @@ internal static class DohRelayRuntime
     // Планировщик подменяется целиком: так проверяется возврат прежнего задания без настоящего schtasks.
     internal static Func<DohRelayScheduler> Scheduler = DohRelayScheduler.SystemScheduler;
     internal static TimeSpan StartTimeout = TimeSpan.FromSeconds(10);
+    internal static TimeSpan SchedulerTimeout = TimeSpan.FromSeconds(15);
 
     private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
@@ -133,7 +134,13 @@ internal static class DohRelayRuntime
         var sid = CurrentUserSid();
         // Задание нельзя создать без полного пути к программе и идентификатора пользователя.
         if (string.IsNullOrEmpty(exe) || string.IsNullOrEmpty(sid)) return false;
-        if (!await Scheduler().CreateAndRunAsync(exe, sid, config.Channel, cancellationToken).ConfigureAwait(false)) return false;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(SchedulerTimeout);
+        try
+        {
+            if (!await Scheduler().CreateAndRunAsync(exe, sid, config.Channel, timeout.Token).ConfigureAwait(false)) return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
         // Процесс запускается заданием не мгновенно: готовность подтверждает ответ по каналу управления.
         return await WaitReadyAsync(config.Channel, cancellationToken).ConfigureAwait(false);
     }
@@ -191,7 +198,15 @@ internal static class DohRelayRuntime
 
     private static async Task<bool> PingAsync(string channel, CancellationToken cancellationToken)
     {
-        try { return await PingHelper(channel, cancellationToken).ConfigureAwait(false); }
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(1));
+        try
+        {
+            var ready = await PingHelper(channel, timeout.Token).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            return ready;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return false; }
         catch (Exception ex) when (ex is IOException or TimeoutException or UnauthorizedAccessException or InvalidOperationException) { return false; }
     }
 
