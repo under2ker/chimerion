@@ -334,11 +334,11 @@ public class DnsScenarioTests
         // Журнал пользователя: на его Windows нет Remove-DnsClientDohServerAddress, и отключение падало
         // «Имя ... не распознано как имя командлета», запись о подключении оставалась, сторож подключал снова
         using var sim = new NetSim(OneEthernet(a => { a.static4 = "127.0.0.1"; a.dns4 = new() { "127.0.0.1" }; })) { NoDoh = true };
-        var dohServer = new DnsServer { Name = "Zapret DNS", Primary = "83.217.211.149", DohUrl = "https://dns.zapret.moe/dns-query" };
+        var dohServer = new DnsServer { Name = "DoH", Primary = "203.0.113.7", DohUrl = "https://203.0.113.5/dns-query" };
         var (log, write) = NewLog();
         await DnsSwitcher.ApplyAsync(dohServer, new AppSettings(), write);
-        Assert.Equal(new[] { "83.217.211.149" }, sim["Sim-Ethernet"].dns4);
-        Assert.Contains(log, l => l.Contains("не поддерживает DoH"));
+        Assert.Equal(new[] { "127.0.0.2" }, sim["Sim-Ethernet"].dns4);
+        Assert.Contains(log, l => l.Contains("не поддерживает системный DoH"));
 
         await DnsSwitcher.RestoreAsync(write);
         Assert.Equal(new[] { "127.0.0.1" }, sim["Sim-Ethernet"].dns4);
