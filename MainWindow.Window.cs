@@ -167,6 +167,7 @@ public partial class MainWindow
     {
         base.OnStateChanged(e);
         if (MaxIcon != null) MaxIcon.Kind = WindowState == WindowState.Maximized ? "copy" : "square";
+        if (IsLoaded) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(ApplyResponsive));
     }
 
     private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);

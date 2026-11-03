@@ -31,6 +31,11 @@ public partial class MainWindow : Window
         InitializeComponent();
         SizeChanged += (_, _) => ApplyResponsive();
         ServerGrid.SizeChanged += (_, _) => { if (EmptyState.Visibility == Visibility.Visible) UpdateEmptyState(0); };
+        HookServerGridWidth();
+        ServerGrid.IsVisibleChanged += (_, _) =>
+        {
+            if (ServerGrid.IsVisible) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(ApplyResponsive));
+        };
 
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
         // Выключение или перезагрузка Windows: выходим без вопроса и без отключения, чтобы DNS остался после перезагрузки
