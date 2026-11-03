@@ -2211,5 +2211,6 @@
  "Готово, замер {0}": "Done, measured at {0}",
  "Smart DNS не подключен: его скорость не измерялась": "Smart DNS is not connected, its speed was not measured",
  "Ответов {0} из {1}, сервер {2}": "{0} of {1} answered, server {2}",
- "DNS": "DNS"
+ "DNS": "DNS",
+ "Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Работает, когда включено «Программа может сама переходить». Изменение вступит в силу после переподключения": "A second server with the same exit country. If the main server stops responding, Windows will switch to it within seconds. Works when automatic server switching is allowed. Changes take effect after reconnecting."
 }
