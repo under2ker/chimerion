@@ -102,6 +102,26 @@ public static class DnsSwitcher
     /// </summary>
     internal static Func<string, bool, Task<(int Code, string Output)>> Runner = RunPsAsync;
 
+    /// <summary>
+    /// Текст для строки PowerShell в одинарных кавычках. PowerShell считает одинарной кавычкой не только ',
+    /// но и типографские ‘ ’ ‚ ‛: замена одной лишь ' позволяла имени сервера из источника закрыть строку
+    /// и дописать команду в скрипт, который выполняется с правами администратора.
+    /// </summary>
+    internal static string PsEscape(string value)
+    {
+        var sb = new StringBuilder(value.Length + 8);
+        foreach (var c in value)
+        {
+            // \u0423\u0434\u0432\u0430\u0438\u0432\u0430\u0435\u0442\u0441\u044F \u0442\u0430 \u0436\u0435 \u043A\u0430\u0432\u044B\u0447\u043A\u0430: \u043F\u0430\u0440\u0430 \u2019\u2019 \u0434\u0430\u0435\u0442 \u0432 \u0441\u0442\u0440\u043E\u043A\u0435 \u2019, \u0438 \u0438\u043C\u044F \u0441\u0435\u0440\u0432\u0435\u0440\u0430 \u0432 \u0436\u0443\u0440\u043D\u0430\u043B\u0435 \u043D\u0435 \u0438\u0441\u043A\u0430\u0436\u0430\u0435\u0442\u0441\u044F
+            if (c is '\'' or '\u2018' or '\u2019' or '\u201A' or '\u201B') sb.Append(c).Append(c);
+            else sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Строка PowerShell в одинарных кавычках с безопасным содержимым.</summary>
+    internal static string PsQuote(string value) => "'" + PsEscape(value) + "'";
+
     /// <summary>Есть ли IPv6-интернет. Подменяется в тестах, в программе HasGlobalIpv6.</summary>
     internal static Func<bool> Ipv6Internet = HasGlobalIpv6;
 
@@ -224,7 +244,7 @@ public static class DnsSwitcher
             if (!Uri.TryCreate(s.DohUrl.Split('{')[0], UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
                 throw new ArgumentException("Некорректный DoH-адрес");
             var endpoint = new Uri(u.GetLeftPart(UriPartial.Query));
-            doh = endpoint.AbsoluteUri.Replace("'", "''");
+            doh = PsEscape(endpoint.AbsoluteUri);
 
             {
                 // Без системного DoH даже заданный IP не заменяет шифрованное подключение.
@@ -305,7 +325,7 @@ public static class DnsSwitcher
             adapterAddrs = split.GeneralAddresses.Where(a => IPAddress.TryParse(a, out _)).Select(a => IPAddress.Parse(a).ToString()).Distinct().ToList();
             if (adapterAddrs.Any(IsV6) && !Ipv6Internet()) adapterAddrs.RemoveAll(IsV6);
             adapterDoh = Uri.TryCreate(split.GeneralDoh?.Split('{')[0], UriKind.Absolute, out var gu) && gu.Scheme == Uri.UriSchemeHttps
-                ? gu.GetLeftPart(UriPartial.Query).Replace("'", "''") : null;
+                ? PsEscape(gu.GetLeftPart(UriPartial.Query)) : null;
         }
         bool touchAdapters = adapterAddrs.Count > 0;
 
@@ -332,7 +352,7 @@ public static class DnsSwitcher
         var prevV6 = (prev?.Ipv6Disabled ?? new()).Select(g => g.ToUpperInvariant()).Concat(Ipv6OffFromFile()).Distinct().ToList();
         if (hasV6 && prevV6.Count > 0)
         {
-            sb.AppendLine($"foreach ($g in @({string.Join(",", prevV6.Select(g => $"'{g.Replace("'", "")}'"))})) {{");
+            sb.AppendLine($"foreach ($g in @({string.Join(",", prevV6.Select(PsQuote))})) {{");
             sb.AppendLine("""
                   try {
                     Get-NetAdapter -IncludeHidden | Where-Object { ([string]$_.InterfaceGuid).ToUpper() -eq $g } | ForEach-Object {
@@ -366,8 +386,8 @@ public static class DnsSwitcher
         {
             var ns = SplitDns.Namespaces(settings);
             if (SplitDns.PolicyWarning(SplitDns.PolicyRuleCount()) is { } gpo) log("ВНИМАНИЕ: " + gpo);
-            sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(n => $"'{n.Replace("'", "")}'"))}) -NameServers @({string.Join(",", addrs.Select(a => $"'{a}'"))}) -Comment '{SplitDns.RuleComment}'");
-            sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) направлены в {s.Name.Replace("'", "")}'");
+            sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(PsQuote))}) -NameServers @({string.Join(",", addrs.Select(a => $"'{a}'"))}) -Comment '{SplitDns.RuleComment}'");
+            sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) направлены в {PsEscape(s.Name)}'");
         }
         if (touchAdapters)
             sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
@@ -376,7 +396,7 @@ public static class DnsSwitcher
         if (touchAdapters && !hasV6)
         {
             Directory.CreateDirectory(Storage.Dir);
-            sb.AppendLine($"$v6file = '{Storage.PathOf(Ipv6OffFile).Replace("'", "''")}'");
+            sb.AppendLine($"$v6file = {PsQuote(Storage.PathOf(Ipv6OffFile))}");
             // У сервера нет IPv6, а роутер раздает DNS по IPv6: Windows отправляла бы часть запросов туда, мимо сервера.
             // На время подключения выключаем IPv6 только на таких адаптерах и запоминаем их (строка V6OFF).
             sb.AppendLine("""
@@ -507,7 +527,7 @@ public static class DnsSwitcher
         var backup = File.Exists(path) ? Storage.LoadOrCreate(BackupFile, () => new List<AdapterBackup>()) : new();
         var active = GetActive();
 
-        static string Q(string v) => "'" + v.Replace("'", "''") + "'";
+        static string Q(string v) => PsQuote(v);
         static IEnumerable<string> Ips(string? v) => (v ?? "").Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
             .Where(x => IPAddress.TryParse(x, out _)).Select(x => IPAddress.Parse(x).ToString());
 
@@ -792,7 +812,7 @@ public static class DnsSwitcher
     public static string Launcher(string scriptFile, byte[] scriptBytes, string? outFile)
     {
         var hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(scriptBytes));
-        var sf = scriptFile.Replace("'", "''");
+        var sf = PsEscape(scriptFile);
         var check =
             $"  $b = [IO.File]::ReadAllBytes('{sf}')\n" +
             "  $h = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-', '')\n" +
@@ -804,7 +824,7 @@ public static class DnsSwitcher
                    "} catch { [Console]::Error.WriteLine('ОШИБКА: ' + $_.Exception.Message); exit 1 }";
         // Файл вывода повышенный процесс создает сам и только новым (CreateNew): если на его месте заранее подложили
         // файл или жесткую ссылку на системный файл, запись не пойдет туда с правами администратора
-        var of = outFile.Replace("'", "''");
+        var of = PsEscape(outFile);
         return "$ProgressPreference = 'SilentlyContinue'\n$w = $null\ntry {\n" +
                $"  $w = New-Object IO.StreamWriter([IO.File]::Open('{of}', [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::Read), (New-Object Text.UTF8Encoding $false))\n" +
                "  $w.AutoFlush = $true\n" + check +

@@ -100,7 +100,7 @@ public static class ZapretTask
         try
         {
             var schtasks = Path.Combine(Environment.SystemDirectory, "schtasks.exe");
-            static string Q(string v) => "'" + v.Replace("'", "''") + "'";
+            static string Q(string v) => DnsSwitcher.PsQuote(v);
             // Копии делаются в том же запросе прав: папка в Program Files, запись только у администраторов
             var copy = new StringBuilder();
             copy.Append($"$h = {Q(HelperDir)}; New-Item -ItemType Directory -Force -Path $h | Out-Null; ");
@@ -108,8 +108,9 @@ public static class ZapretTask
                 copy.Append($"Copy-Item -LiteralPath {Q(f)} -Destination (Join-Path $h {Q(Path.GetFileName(f) == Path.GetFileName(exe) ? "CHIMERION.exe" : Path.GetFileName(f))}) -Force; ");
             copy.Append($"Remove-Item -LiteralPath {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force -ErrorAction SilentlyContinue; ");
             copy.Append($"Copy-Item -LiteralPath {Q(ZapretTool.BinDir.TrimEnd(Path.DirectorySeparatorChar))} -Destination {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force; ");
-            var script = copy + $"& '{schtasks}' /Create /TN '{StartName}' /XML '{start}' /F | Out-Null; " +
-                         $"& '{schtasks}' /Create /TN '{StopName}' /XML '{stop}' /F | Out-Null";
+            // Пути из папки пользователя: имя с апострофом не должно ломать или менять команду
+            var script = copy + $"& {Q(schtasks)} /Create /TN {Q(StartName)} /XML {Q(start)} /F | Out-Null; " +
+                         $"& {Q(schtasks)} /Create /TN {Q(StopName)} /XML {Q(stop)} /F | Out-Null";
             await DnsSwitcher.RunPsAsync(script, elevated: true);
         }
         finally
