@@ -277,13 +277,13 @@ public partial class MainWindow
         ColStatus.Width = new DataGridLength(136);
         ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
         ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
-        ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(140);
+        ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(105);
         // Колонка «Сервер» тянется по ширине. После широкого окна она запоминала рассчитанную ширину и в компактном
         // виде выталкивала пинг за край: растяжение ставим заново, в узком окне без нижнего предела ширины
         ColServer.MinWidth = compact ? 120 : 250;
         ColServer.Width = new DataGridLength(2, DataGridLengthUnitType.Star);
         // При сужении таблица сжимала пинг до 20 px и обратно не растягивала: нижний предел ширины не дает его спрятать
-        ColPing.MinWidth = 110;
+        ColPing.MinWidth = compact ? 110 : 105;
         HookServerGridWidth();
         // Растяжение «Сервера» таблица пересчитывает только при смене значения ширины: то же значение ничего не меняет,
         // и колонка оставалась на минимуме с пустым местом справа. После раскладки окна сначала точная ширина, потом растяжение
@@ -353,7 +353,20 @@ public partial class MainWindow
     {
         if (_serverGridHooked) return;
         _serverGridHooked = true;
-        ServerGrid.SizeChanged += (_, e) => { if (_compact && e.WidthChanged) RestretchServerColumn(); };
+        ServerGrid.SizeChanged += (_, e) =>
+        {
+            if (!e.WidthChanged) return;
+            if (_compact) RestretchServerColumn();
+            else ApplyResponsive();
+        };
+    }
+
+    internal static (bool Services, bool Source, bool Ai, bool Stability, bool Location) ServerColumnVisibility(double width, bool full)
+    {
+        if (!full) return (false, false, false, false, false);
+        double used = 613;
+        bool Fits(double column) { if (used + column > width) return false; used += column; return true; }
+        return (Fits(320), Fits(56), Fits(84), Fits(250), Fits(200));
     }
 
     private void ApplyResponsive()
@@ -365,10 +378,9 @@ public partial class MainWindow
         // Таблица: колонки добавляются, пока хватает ширины самой таблицы (окно минус левое меню и поля), по их
         // ширинам из XAML. Раньше пороги считались по окну без левого меню, и колонки наезжали друг на друга.
         // Всегда видны: обновить 52, звезда 40, статус 128, сервер от 250, пинг 140 (610) и запас на прокрутку 30
-        double table = Math.Max(0, ActualWidth - PanelSidebar.Width - 40);
-        double used = 613;
-        bool Fits(double width) { if (used + width > table) return false; used += width; return true; }
-        bool services = full && Fits(320), source = full && Fits(56), ai = full && Fits(84), stab = full && Fits(250), location = full && Fits(200);
+        double table = ServerGrid.IsVisible && ServerGrid.ActualWidth > 0
+            ? ServerGrid.ActualWidth : Math.Max(0, ActualWidth - PanelSidebar.Width - 40);
+        var (services, source, ai, stab, location) = ServerColumnVisibility(table, full);
         ColServices.Visibility = services ? Visibility.Visible : Visibility.Collapsed;
         ColSource.Visibility = source ? Visibility.Visible : Visibility.Collapsed;
         ColAi.Visibility = ai ? Visibility.Visible : Visibility.Collapsed;
