@@ -42,4 +42,36 @@ public class DohRelaySchedulerTests
         var scheduler = new DohRelayScheduler((args, _) => Task.FromResult(args[0] == "/Create" ? 0 : 1));
         await Assert.ThrowsAsync<InvalidOperationException>(() => scheduler.CreateAndRunAsync(Exe, Sid, Channel, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Delete_removes_only_the_named_task()
+    {
+        var calls = new List<string[]>();
+        var scheduler = new DohRelayScheduler((args, _) => { calls.Add(args); return Task.FromResult(0); });
+        Assert.True(await scheduler.DeleteAsync(Channel, CancellationToken.None));
+        Assert.Equal(new[] { "/Delete", "/TN", "CHIMERION DoH " + Channel, "/F" }, Assert.Single(calls));
+    }
+
+    [Fact]
+    public async Task Run_existing_starts_the_named_task_and_reports_the_result()
+    {
+        var calls = new List<string[]>();
+        var scheduler = new DohRelayScheduler((args, _) => { calls.Add(args); return Task.FromResult(0); });
+        Assert.True(await scheduler.RunExistingAsync(Channel, CancellationToken.None));
+        Assert.Equal(new[] { "/Run", "/TN", "CHIMERION DoH " + Channel }, Assert.Single(calls));
+
+        var failing = new DohRelayScheduler((_, _) => Task.FromResult(1));
+        Assert.False(await failing.RunExistingAsync(Channel, CancellationToken.None));
+        Assert.False(await failing.DeleteAsync(Channel, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Invalid_channel_is_rejected_before_the_scheduler()
+    {
+        var calls = 0;
+        var scheduler = new DohRelayScheduler((_, _) => { calls++; return Task.FromResult(0); });
+        await Assert.ThrowsAsync<ArgumentException>(() => scheduler.DeleteAsync("bad", CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => scheduler.RunExistingAsync("bad", CancellationToken.None));
+        Assert.Equal(0, calls);
+    }
 }

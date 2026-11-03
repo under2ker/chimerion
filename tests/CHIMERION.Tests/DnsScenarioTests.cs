@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Text.Json;
 using Dnex.Models;
 using Dnex.Services;
@@ -61,9 +61,18 @@ public sealed class NetSim : IDisposable
     private readonly string _file = Path.Combine(TestSetup.DataDir, $"netsim-{Guid.NewGuid():N}.json");
     private readonly Func<string, bool, Task<(int, string)>> _prevRunner = DnsSwitcher.Runner;
     private readonly Func<bool> _prevV6 = DnsSwitcher.Ipv6Internet;
+    private readonly Func<Uri, IReadOnlyList<IPAddress>, Action<string>, CancellationToken, Task<DohRelaySession>> _prevRelayStart = DnsSwitcher.DohRelayStart;
+    private readonly Func<DohRelaySession, Action<string>, Task> _prevRelayStop = DnsSwitcher.DohRelayStop;
 
     /// <summary>Скрипты, которые программа запускала, по порядку: резервная копия, подключение, отключение.</summary>
     public List<string> Scripts { get; } = new();
+
+    /// <summary>Запуски локального посредника DoH по порядку: настоящие Планировщик и процесс не нужны.</summary>
+    internal List<DohRelaySession> RelaysStarted { get; } = new();
+    /// <summary>Остановки посредника: каналы, для которых программа отправила остановку.</summary>
+    internal List<string> RelaysStopped { get; } = new();
+    /// <summary>Отказ запуска посредника: так выглядит недоступный Планировщик.</summary>
+    public bool RelayFails { get; set; }
 
     /// <summary>Перехват перед выполнением скрипта: можно бросить исключение (процесс не запустился) или зависнуть.</summary>
     public Func<string, Task>? Before { get; set; }
@@ -74,6 +83,22 @@ public sealed class NetSim : IDisposable
             File.Delete(Path.Combine(TestSetup.DataDir, f));
         Save(state);
         DnsSwitcher.Ipv6Internet = () => false;
+        // Посредник DoH: сценарная замена настоящего DohRelayRuntime, который создает задание Планировщика.
+        DnsSwitcher.DohRelayStart = (endpoint, upstream, _, _) =>
+        {
+            if (RelayFails) throw new InvalidOperationException("сценарный отказ посредника");
+            // Адреса как у настоящего посредника: 127.0.0.2, затем следующие свободные.
+            var session = new DohRelaySession(Guid.NewGuid().ToString("N"), $"127.0.0.{2 + RelaysStarted.Count}", 53);
+            RelaysStarted.Add(session);
+            _ = endpoint;
+            _ = upstream;
+            return Task.FromResult(session);
+        };
+        DnsSwitcher.DohRelayStop = (session, _) =>
+        {
+            RelaysStopped.Add(session.Channel);
+            return Task.CompletedTask;
+        };
         DnsSwitcher.Runner = async (script, _) =>
         {
             Scripts.Add(script);
@@ -238,19 +263,69 @@ public class DnsScenarioTests
         Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
     }
 
+    // DoH-ссылка без IP на Windows без системного DoH: DNS обслуживает локальный посредник,
+    // поэтому сервер подключается, а не отвергается с ошибкой.
     [Fact]
-    public async Task Doh_only_server_on_windows_without_doh_leaves_network_untouched()
+    public async Task Doh_only_server_on_windows_without_doh_uses_local_relay()
     {
         using var sim = new NetSim(OneEthernet()) { NoDoh = true };
-        var server = new DnsServer { Name = "DoH", DohUrl = "https://dns.example.test:8443/dns-query/test" };
+        // Адрес DoH с токеном: посредник получает его целиком, а в журнал он попадать не должен.
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5:8443/dns-query/secret-token" };
         var (log, write) = NewLog();
 
-        await Assert.ThrowsAsync<DohUnavailableException>(() => DnsSwitcher.ApplyAsync(server, new AppSettings(), write));
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
 
+        var relay = Assert.Single(sim.RelaysStarted);
+        Assert.Equal(new[] { relay.ListenAddress }, sim["Sim-Ethernet"].dns4);
+        var active = DnsSwitcher.GetActive();
+        Assert.NotNull(active);
+        Assert.Equal(relay.Channel, active!.RelayChannel);
+        Assert.Equal(relay.ListenAddress, active.RelayListen);
+        Assert.Contains(log, line => line.Contains("локальный посредник"));
+        Assert.DoesNotContain(log, line => line.Contains("secret-token") || line.Contains("dns-query"));
+
+        await DnsSwitcher.RestoreAsync(write);
         Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Contains(relay.Channel, sim.RelaysStopped);
         Assert.Null(DnsSwitcher.GetActive());
         Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
-        Assert.DoesNotContain(log, line => line.Contains("dns.example.test") || line.Contains("dns-query"));
+    }
+
+    [Fact]
+    public async Task Relay_that_did_not_start_leaves_network_untouched()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true, RelayFails = true };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
+        var (log, write) = NewLog();
+
+        await Assert.ThrowsAsync<DohRelayFailedException>(() => DnsSwitcher.ApplyAsync(server, new AppSettings(), write));
+
+        Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Empty(sim.RelaysStarted);
+        Assert.Null(DnsSwitcher.GetActive());
+        Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
+        Assert.DoesNotContain(log, line => line.Contains("secret-token"));
+    }
+
+    [Fact]
+    public async Task Switching_between_doh_links_starts_new_relay_and_stops_old()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var (log, write) = NewLog();
+        var first = new DnsServer { Name = "Первый", DohUrl = "https://203.0.113.5/dns-query/one" };
+        var second = new DnsServer { Name = "Второй", DohUrl = "https://203.0.113.6/dns-query/two" };
+
+        await DnsSwitcher.ApplyAsync(first, new AppSettings(), write);
+        var relayOne = Assert.Single(sim.RelaysStarted);
+        await DnsSwitcher.ApplyAsync(second, new AppSettings(), write);
+
+        Assert.Equal(2, sim.RelaysStarted.Count);
+        var relayTwo = sim.RelaysStarted[1];
+        Assert.NotEqual(relayOne.ListenAddress, relayTwo.ListenAddress);
+        Assert.Contains(relayOne.Channel, sim.RelaysStopped);
+        Assert.Equal(new[] { relayTwo.ListenAddress }, sim["Sim-Ethernet"].dns4);
+        Assert.Equal(relayTwo.Channel, DnsSwitcher.GetActive()!.RelayChannel);
+        Assert.DoesNotContain(log, line => line.Contains("dns-query"));
     }
 
     [Fact]

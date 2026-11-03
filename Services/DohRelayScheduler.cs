@@ -19,7 +19,7 @@ internal sealed class DohRelayScheduler(Func<string[], CancellationToken, Task<i
         bool createAttempted = false, running = false;
         try
         {
-            var xml = "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" + DohRelayTask.Xml(executable, userSid);
+            var xml = "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\r\n" + DohRelayTask.Xml(executable, userSid, channel);
             await File.WriteAllTextAsync(path, xml, Encoding.Unicode, cancellationToken).ConfigureAwait(false);
             createAttempted = true;
             if (await run(new[] { "/Create", "/TN", name, "/XML", path }, cancellationToken).ConfigureAwait(false) != 0) return false;
@@ -39,6 +39,20 @@ internal sealed class DohRelayScheduler(Func<string[], CancellationToken, Task<i
             }
             finally { try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
         }
+    }
+
+    internal async Task<bool> DeleteAsync(string channel, CancellationToken cancellationToken)
+    {
+        // Имя задания строится только из проверенного канала: чужое задание по шаблону не удалим.
+        var name = DohRelayTask.TaskName(channel);
+        return await run(new[] { "/Delete", "/TN", name, "/F" }, cancellationToken).ConfigureAwait(false) == 0;
+    }
+
+    internal async Task<bool> RunExistingAsync(string channel, CancellationToken cancellationToken)
+    {
+        // Возврат уже созданного задания: нового не появляется, настройки посредника остаются прежними.
+        var name = DohRelayTask.TaskName(channel);
+        return await run(new[] { "/Run", "/TN", name }, cancellationToken).ConfigureAwait(false) == 0;
     }
 
     private static async Task<int> RunSchtasksAsync(string[] arguments, CancellationToken cancellationToken)

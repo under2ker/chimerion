@@ -11,10 +11,13 @@ internal static class DohRelayTask
     internal const string HelperArgument = "--doh-relay-helper";
     private static readonly XNamespace Ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
 
-    internal static string Xml(string exePath, string userSid)
+    internal static string Xml(string exePath, string userSid, string channel)
     {
         if (!Path.IsPathFullyQualified(exePath) || !string.Equals(Path.GetExtension(exePath), ".exe", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("Нужен полный путь к программе", nameof(exePath));
+        // Канал проверяем здесь же: задание с чужим каналом не сможет найти настройки посредника.
+        if (!Guid.TryParseExact(channel, "N", out _))
+            throw new ArgumentException("Некорректный канал посредника", nameof(channel));
         string user;
         try { user = new System.Security.Principal.SecurityIdentifier(userSid).Value; }
         catch (ArgumentException) { throw new ArgumentException("Некорректный идентификатор пользователя", nameof(userSid)); }
@@ -29,7 +32,8 @@ internal static class DohRelayTask
                 new XElement(Ns + "ExecutionTimeLimit", "PT0S"),
                 new XElement(Ns + "RestartOnFailure", new XElement(Ns + "Interval", "PT1M"), new XElement(Ns + "Count", 3))),
             new XElement(Ns + "Actions", new XAttribute("Context", "User"), new XElement(Ns + "Exec",
-                new XElement(Ns + "Command", exePath), new XElement(Ns + "Arguments", HelperArgument))));
+                // Канал передается заданию, чтобы процесс взял настройки именно этого подключения.
+                new XElement(Ns + "Command", exePath), new XElement(Ns + "Arguments", HelperArgument + " " + channel))));
         return task.ToString(SaveOptions.DisableFormatting);
     }
 }
