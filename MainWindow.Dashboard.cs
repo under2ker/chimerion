@@ -21,6 +21,7 @@ public partial class MainWindow
     private string? _dashboardEventsSignature;
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
     private Button _dashboardProbe = null!, _dashboardSiteProbe = null!;
+    private ProgressBar _dashboardProbeProgress = null!, _dashboardSiteProgress = null!;
     private bool _dashboardToolBusy, _dashboardChecking, _dashboardSitesChecking;
     private string? _dashboardMessageText;
     private bool _dashboardMessageError;
@@ -143,6 +144,8 @@ public partial class MainWindow
         var ai = new StackPanel();
         _dashboardChecked = Ui.Hint("", 0);
         ai.Children.Add(DashboardPanelHeader("ИИ-сервисы", _dashboardChecked, _dashboardProbe));
+        _dashboardProbeProgress = DashboardCheckProgress();
+        ai.Children.Add(_dashboardProbeProgress);
         foreach (var (name, logo, url, domain) in new[] { ("ChatGPT", "LogoOpenAI", "https://chatgpt.com/", "chatgpt.com"), ("Claude", "LogoClaude", "https://claude.ai/", "claude.ai"), ("Gemini", "LogoGemini", "https://gemini.google.com/", "gemini.google.com") })
         {
             var dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -161,6 +164,8 @@ public partial class MainWindow
         _dashboardSiteProbe = DashboardHeaderButton("Проверить сайты", () => _ = DashboardSitesAsync());
         var extra = new StackPanel();
         extra.Children.Add(DashboardPanelHeader("Дополнительные сервисы", null, _dashboardSiteProbe));
+        _dashboardSiteProgress = DashboardCheckProgress();
+        extra.Children.Add(_dashboardSiteProgress);
         _dashboardSiteYoutube = Ui.Hint("", 1); _dashboardSiteDiscord = Ui.Hint("", 1); _dashboardSiteTelegram = Ui.Hint("", 1);
         foreach (var (name, kind, sub, tool, site) in new (string, string, string, Func<Tool>, TextBlock)[]
                  {
@@ -558,11 +563,13 @@ public partial class MainWindow
             row.Action.ToolTip = why ? "Проверить по шагам, почему не открывается" : row.Url;
         }
         _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Проверено в {snap.Taken:HH:mm}" + (DateTime.Now - snap.Taken > TimeSpan.FromMinutes(30) ? ", данные могли устареть" : "");
-        _dashboardProbe.IsEnabled = !_dashboardChecking && !_busyConn;
+        DashboardCheckProgressState(_dashboardProbeProgress, _dashboardChecking);
+        _dashboardProbe.IsHitTestVisible = !_dashboardChecking && !_busyConn;
         _dashboardProbe.Content = _dashboardChecking ? "Проверяю…" : "Проверить все";
 
         // Обход и Telegram
-        _dashboardSiteProbe.IsEnabled = !_dashboardSitesChecking;
+        DashboardCheckProgressState(_dashboardSiteProgress, _dashboardSitesChecking);
+        _dashboardSiteProbe.IsHitTestVisible = !_dashboardSitesChecking;
         _dashboardSiteProbe.Content = _dashboardSitesChecking ? "Проверяю…" : "Проверить сайты";
         _dashboardSiteYoutube.Text = DashboardSiteStatus("youtube.com");
         _dashboardSiteDiscord.Text = DashboardSiteStatus("discord.com");
@@ -772,6 +779,18 @@ public partial class MainWindow
     {
         SiteWatch.Verdict.Ok => "открывается", SiteWatch.Verdict.Unknown => "без результата", _ => "не открывается"
     };
+
+    private static ProgressBar DashboardCheckProgress() => new()
+    {
+        Height = 4, Margin = new Thickness(0, 0, 0, 8), Visibility = Visibility.Collapsed,
+        IsHitTestVisible = false, Value = 50
+    };
+
+    private static void DashboardCheckProgressState(ProgressBar bar, bool checking)
+    {
+        bar.Visibility = checking ? Visibility.Visible : Visibility.Collapsed;
+        bar.IsIndeterminate = checking && SystemParameters.ClientAreaAnimation;
+    }
 
     private void DashboardMessage(string? message, bool error = false)
     {
