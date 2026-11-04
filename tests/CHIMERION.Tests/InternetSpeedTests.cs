@@ -47,6 +47,17 @@ public class InternetSpeedTests
         Assert.Equal(mbit, InternetSpeed.Mbit(bytes, seconds));
 
     [Fact]
+    public void No_data_after_warm_up_still_counts_what_was_transferred()
+    {
+        // Все 2 МБ пришли до конца разгона, после него ничего: раньше получалось 0 Мбит/с (тест падал на медленной машине CI)
+        Assert.True(InternetSpeed.WarmSpeed(2_000_000, 0.25, atWarm: 2_000_000, warmAt: 0.15) > 0);
+        Assert.Equal(InternetSpeed.Mbit(2_000_000, 0.25), InternetSpeed.WarmSpeed(2_000_000, 0.25, 2_000_000, 0.15));
+        // Обычный случай: считается только то, что пришло после разгона
+        Assert.Equal(InternetSpeed.Mbit(1_000_000, 0.1), InternetSpeed.WarmSpeed(3_000_000, 0.25, 2_000_000, 0.15), 6);
+        Assert.Equal(InternetSpeed.Mbit(500, 1), InternetSpeed.WarmSpeed(500, 1, -1, 0)); // до разгона
+    }
+
+    [Fact]
     public void Ping_median_and_jitter()
     {
         var (median, jitter) = InternetSpeed.PingStats(new long[] { 20, 30, 20, 40 });
