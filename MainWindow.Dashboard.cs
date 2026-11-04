@@ -393,6 +393,7 @@ public partial class MainWindow
         // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
         links.Children.Add(SideNav("Главная", "shield-check", () => { }, true));
         links.Children.Add(SideNav("Панель управления", "layout-dashboard", ShowControlPanel));
+        links.Children.Add(SideNav("CHIMERION DNS", "star", ChimerionDnsWindow.Show));
         links.Children.Add(SideNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
