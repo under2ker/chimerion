@@ -37,6 +37,13 @@ public static class InternetSpeed
 
     public static double Mbit(long bytes, double seconds) => seconds <= 0 ? 0 : bytes * 8 / 1_000_000.0 / seconds;
 
+    /// <summary>
+    /// Скорость после разгона. Если после разгона данных не пришло (пауза в сети, медленный компьютер), считается по всему
+    /// замеру: иначе выходило 0 Мбит/с, хотя данные передавались.
+    /// </summary>
+    internal static double WarmSpeed(long bytes, double seconds, long atWarm, double warmAt) =>
+        atWarm >= 0 && seconds > warmAt && bytes > atWarm ? Mbit(bytes - atWarm, seconds - warmAt) : Mbit(bytes, seconds);
+
     /// <summary>Медиана времени ответа и джиттер: среднее отличие соседних замеров.</summary>
     public static (long Median, long Jitter) PingStats(IReadOnlyList<long> samples)
     {
@@ -132,7 +139,7 @@ public static class InternetSpeed
         limit.CancelAfter(time);
         var sw = Stopwatch.StartNew();
         double warmAt = 0;
-        double Speed(double t, long bytes) => atWarm >= 0 && t > warmAt ? Mbit(bytes - atWarm, t - warmAt) : Mbit(bytes, t);
+        double Speed(double t, long bytes) => WarmSpeed(bytes, t, atWarm, warmAt);
         var workers = Enumerable.Range(0, streams).Select(_ => Task.Run(async () =>
         {
             while (!limit.IsCancellationRequested)
