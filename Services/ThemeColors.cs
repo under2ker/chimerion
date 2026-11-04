@@ -94,6 +94,7 @@ public static class ThemeColors
         ["OkSoft"] = "#13281E", ["WarnSoft"] = "#3A2D12", ["BadSoft"] = "#3A171C", ["Chrome"] = "#0B0C0D",
         ["ScrollThumb"] = "#3A3E44", ["ScrollThumbHover"] = "#4C5158", ["ChipOk"] = "#173A2A", ["ChipWarn"] = "#3A2F17", ["ChipBad"] = "#3A1C20",
         ["GridLine"] = "#212428", ["ControlBorder"] = "#70767E", ["BadButton"] = "#C23B47", ["HoverOverlay"] = "#FFFFFF",
+        ["Promo"] = "#F5BF4A", ["PromoChip"] = "#3A2E12", ["PromoButton"] = "#F5BF4A", ["OnPromoButton"] = "#17120A",
     };
     private static readonly Dictionary<string, string> LightBase = new()
     {
@@ -102,6 +103,7 @@ public static class ThemeColors
         ["OkSoft"] = "#E2F3E9", ["WarnSoft"] = "#FAF0DA", ["BadSoft"] = "#FBE3E5", ["Chrome"] = "#E8EAE5",
         ["ScrollThumb"] = "#C3C7C0", ["ScrollThumbHover"] = "#A6ABA3", ["ChipOk"] = "#DCF1E4", ["ChipWarn"] = "#F8ECD2", ["ChipBad"] = "#F9DEE1",
         ["GridLine"] = "#EAEBE7", ["ControlBorder"] = "#80857D", ["BadButton"] = "#C23B47", ["HoverOverlay"] = "#000000",
+        ["Promo"] = "#7A5100", ["PromoChip"] = "#F7E7BF", ["PromoButton"] = "#F0B323", ["OnPromoButton"] = "#17120A",
     };
 
     /// <summary>Цвет того же тона, затемненный до нужного контраста с фоном (для текста акцента на светлой теме).</summary>
@@ -217,7 +219,9 @@ public static class ThemeColors
         res["ConnectedRow"] = Gradient(A(accentHue, dark ? (byte)0x55 : (byte)0x40), A(accentHue, 0));
         res["ConnectedRowSelected"] = Gradient(A(accentHue, dark ? (byte)0x80 : (byte)0x66), sel);
         // Строка платного CHIMERION DNS: мягкий градиент от акцента, заметнее обычной строки, но не такой яркий, как у подключенной
-        res["PromoRow"] = Gradient(A(accentHue, dark ? (byte)0x3A : (byte)0x30), A(accentHue, dark ? (byte)0x0A : (byte)0x10));
+        // Золото, а не акцент темы: «премиум» читается сразу и не сливается с выделением строки у любого набора цветов
+        var gold = dark ? Color.FromRgb(0xF5, 0xBF, 0x4A) : Color.FromRgb(0xD9, 0x9A, 0x00);
+        res["PromoRow"] = Gradient(A(gold, dark ? (byte)0x34 : (byte)0x3A), A(gold, dark ? (byte)0x0A : (byte)0x12));
         Set("MenuBg", menu);
         Set("MenuHover", dark ? Mix(menu, White, 0.07) : Mix(menu, Dark, 0.06));
         Set("Lime", lime);

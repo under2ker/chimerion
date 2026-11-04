@@ -261,6 +261,26 @@ public class UiDesignTests
         });
     }
 
+    [Theory]
+    [InlineData("dark")]
+    [InlineData("light")]
+    public void PromoGoldIsReadable(string theme)
+    {
+        Wpf.Run(() =>
+        {
+            Theme(theme);
+            // Золото строки CHIMERION DNS как текст на фоне окна, на плашке и на градиенте строки; текст на золотой кнопке
+            foreach (var bg in new[] { "Bg", "Surface", "PromoChip" })
+                Assert.True(ThemeColors.Contrast(Res("Promo"), Res(bg)) >= 4.5, $"{theme} Promo на {bg}: {ThemeColors.Contrast(Res("Promo"), Res(bg)):0.00}:1");
+            Assert.True(ThemeColors.Contrast(Res("OnPromoButton"), Res("PromoButton")) >= 4.5);
+            var row = (LinearGradientBrush)Application.Current.Resources["PromoRow"];
+            var start = row.GradientStops[0].Color; // самое насыщенное место градиента поверх фона окна
+            var bgc = Res("Bg"); float a = start.A / 255f;
+            var over = Color.FromRgb((byte)(bgc.R + (start.R - bgc.R) * a), (byte)(bgc.G + (start.G - bgc.G) * a), (byte)(bgc.B + (start.B - bgc.B) * a));
+            Assert.True(ThemeColors.Contrast(Res("Promo"), over) >= 4.5, $"{theme} Promo на градиенте: {ThemeColors.Contrast(Res("Promo"), over):0.00}:1");
+        });
+    }
+
     [Fact]
     public void WorkAreaIsNotEmpty()
     {

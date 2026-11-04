@@ -48,10 +48,15 @@
             <GradientStop Color="#80C5F23A" Offset="0"/>
             <GradientStop Color="#FF2B3816" Offset="1"/>
         </LinearGradientBrush>
+        <!-- Платный CHIMERION DNS: золото «Премиум», не зависит от цвета акцента (ThemeColors задает светлый вариант) -->
         <LinearGradientBrush x:Key="PromoRow" StartPoint="0,0" EndPoint="1,0">
-            <GradientStop Color="#3AC5F23A" Offset="0"/>
-            <GradientStop Color="#0AC5F23A" Offset="1"/>
+            <GradientStop Color="#34F5BF4A" Offset="0"/>
+            <GradientStop Color="#0AF5BF4A" Offset="1"/>
         </LinearGradientBrush>
+        <SolidColorBrush x:Key="Promo" Color="#F5BF4A"/>
+        <SolidColorBrush x:Key="PromoChip" Color="#3A2E12"/>
+        <SolidColorBrush x:Key="PromoButton" Color="#F5BF4A"/>
+        <SolidColorBrush x:Key="OnPromoButton" Color="#17120A"/>
         <SolidColorBrush x:Key="SelectionInactive" Color="#252F15"/>
         <SolidColorBrush x:Key="GridLine" Color="#212428"/>
         <SolidColorBrush x:Key="AccentBorder" Color="#86A231"/>
