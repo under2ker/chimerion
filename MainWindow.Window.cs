@@ -243,6 +243,8 @@ public partial class MainWindow
         // а ее иконка совпадала с иконкой «Полного вида»
         PanelCollapseButton.Visibility = v;
         StatsText.Visibility = v;
+        AddServerButton.Visibility = v;
+        ChimerionDnsButton.Visibility = v;
         SettingsButton.Visibility = v;
         DataButton.Visibility = v;
         PrivateButton.Visibility = v;

@@ -224,6 +224,8 @@ public partial class MainWindow
         if (AddServerWindow.Ask() is { } server) AddServer(server);
     }
 
+    private void ChimerionDns_Click(object sender, RoutedEventArgs e) => ChimerionDnsWindow.Show();
+
     private void AddServer(DnsServer s)
     {
         if (_servers.FirstOrDefault(x => x.Key == s.Key) is { } existing)
