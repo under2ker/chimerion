@@ -95,7 +95,7 @@ internal sealed class LogWindow
         _log = log; _stored = stored; _clear = clear;
         _w = DnexDialog.CreateWindow("Журнал", 1000);
         _w.SizeToContent = SizeToContent.Manual;
-        _w.Height = Math.Min(720, Ui.WorkAreaOf(null).Height - 60);
+        _w.Height = Math.Min(720, SystemParameters.WorkArea.Height - 60);
         _w.ResizeMode = ResizeMode.CanResize;
         _w.MinWidth = 760; _w.MinHeight = 480;
         _w.ShowInTaskbar = true; // окно держат открытым рядом с другими: его должно быть видно в панели задач

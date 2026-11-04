@@ -82,7 +82,7 @@ internal sealed class DiagnosticsWindow
         _w = DnexDialog.CreateWindow("Диагностика", 860);
         _w.Closed += (_, _) => _open = null;
         // Кнопки внизу закреплены, прокручивается только список: на маленьком экране они не уезжают
-        _w.MaxHeight = Math.Min(960, Ui.WorkAreaOf(null).Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
+        _w.MaxHeight = Math.Min(960, SystemParameters.WorkArea.Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
 
         var root = new Grid { Margin = new Thickness(24, 22, 24, 20) };
         foreach (var h in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
