@@ -119,7 +119,7 @@ internal sealed class SplitDnsWindow
         DockPanel.SetDock(footer, Dock.Bottom);
         dock.Children.Add(footer);
         var scroll = Ui.WindowContent(root);
-        scroll.MaxHeight = SystemParameters.WorkArea.Height - 160;
+        scroll.MaxHeight = Ui.WorkAreaOf(null).Height - 160;
         dock.Children.Add(scroll);
         _w.Content = dock;
         RenderPresets();

@@ -41,7 +41,7 @@ internal sealed class HelpWindow
         _w = DnexDialog.CreateWindow("Помощь", 860);
         // Высота по вкладке: короткая вкладка без пустоты снизу, длинная целиком, пока помещается на экран
         _w.SizeToContent = SizeToContent.Height;
-        _w.MaxHeight = Math.Min(980, SystemParameters.WorkArea.Height - 40); // длинный список сайтов прокручивается, а не растягивает окно на весь экран
+        _w.MaxHeight = Math.Min(980, Ui.WorkAreaOf(null).Height - 40); // длинный список сайтов прокручивается, а не растягивает окно на весь экран
         _w.ResizeMode = ResizeMode.CanMinimize;
         _w.SizeChanged += (_, e) => KeepCenter(e);
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; }
@@ -102,7 +102,7 @@ internal sealed class HelpWindow
     private void KeepCenter(SizeChangedEventArgs e)
     {
         if (!_w.IsLoaded || !e.HeightChanged || e.PreviousSize.Height <= 0) return;
-        var area = SystemParameters.WorkArea;
+        var area = Ui.WorkAreaOf(_w);
         var top = _w.Top - (e.NewSize.Height - e.PreviousSize.Height) / 2;
         _w.Top = Math.Clamp(top, area.Top + 10, Math.Max(area.Top + 10, area.Bottom - 10 - e.NewSize.Height));
     }

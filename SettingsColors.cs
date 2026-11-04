@@ -22,12 +22,20 @@ public partial class SettingsWindow
     private static readonly string[] HueSlots = { "Accent", "AccentButton", "ToggleOn", "Lime", "Progress" };
     private string K(string slot) => ThemeColors.CustomKey(slot, Dark);
 
-    /// <summary>Палитра быстрого выбора: спокойные цвета, которые читаются на темном фоне.</summary>
+    /// <summary>Палитра быстрого выбора для темной темы: спокойные цвета, которые читаются на темном фоне, и темные подложки.</summary>
     private static readonly string[] Swatches =
     {
         "#4C8DFF", "#2A66C9", "#38BDF8", "#2DD4BF", "#34D399", "#0F8F63", "#A3E635", "#FACC15",
         "#F5B03C", "#FB923C", "#F87171", "#F472B6", "#BE2F72", "#A78BFA", "#6D4BD8", "#B4BCCB",
         "#1E3156", "#263F66", "#2C3446", "#242832", "#123B2E", "#2E2452", "#3D2E12", "#41203A",
+    };
+
+    /// <summary>Палитра для светлой темы: те же оттенки, но подложки светлые (темные на белом меню были бы пятнами).</summary>
+    private static readonly string[] SwatchesLight =
+    {
+        "#2F6FE0", "#1D4FA8", "#0E8FC2", "#0F9F8E", "#168A5B", "#0F6E4B", "#6C9A0C", "#B8900A",
+        "#B8730B", "#C8591A", "#C23B47", "#C23B84", "#9E2468", "#7A55E0", "#5A38BB", "#5C6676",
+        "#DCE8FB", "#E4EEFF", "#E6EAF2", "#EEF0F4", "#DAF1E6", "#E6DFF8", "#FAEFD2", "#F6DEEC",
     };
 
     private void BuildColors()
@@ -154,8 +162,9 @@ public partial class SettingsWindow
         {
             Width = 34, Height = 34, MinHeight = 0, Padding = new Thickness(0), Margin = new Thickness(0, 0, 8, 0),
             ToolTip = "Выбрать из палитры",
-            Content = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(color),
-                                   BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)), BorderThickness = new Thickness(1) },
+            // Рамка образца из палитры: белая прозрачная рамка на светлой теме не была видна
+            Content = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(color), BorderThickness = new Thickness(1) }
+                .Ref(Border.BorderBrushProperty, "ControlBorder"),
         };
         var hex = new TextBox { Text = ThemeColors.Hex(color), Width = 112, MaxLength = 7, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Tag = "#RRGGBB" };
         void Set(Color c)
@@ -186,14 +195,15 @@ public partial class SettingsWindow
     {
         var popup = new Popup { PlacementTarget = anchor, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true, PopupAnimation = PopupAnimation.Fade };
         var grid = new UniformGrid { Columns = 8 };
-        foreach (var h in Swatches)
+        foreach (var h in Dark ? Swatches : SwatchesLight)
         {
             ThemeColors.TryParse(h, out var c);
             var b = new Button
             {
                 Width = 26, Height = 26, MinHeight = 0, Padding = new Thickness(0), Margin = new Thickness(3), ToolTip = h,
+                // Выбранный цвет обведен цветом текста темы: белая обводка пропадала на белом меню светлой темы
                 Content = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(c),
-                                       BorderBrush = Brushes.White, BorderThickness = new Thickness(c == current ? 2 : 0) },
+                                       BorderThickness = new Thickness(c == current ? 2 : 0) }.Ref(Border.BorderBrushProperty, c == current ? "Text" : "ControlBorder"),
             };
             b.Click += (_, _) => { popup.IsOpen = false; pick(c); };
             grid.Children.Add(b);

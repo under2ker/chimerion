@@ -15,17 +15,40 @@ internal static class Ui
     public const double Wide = 600, Narrow = 480;
 
     private static ResourceDictionary Res => Application.Current.Resources;
+
+    /// <summary>
+    /// Рабочая область (без панели задач) экрана, где находится окно, в единицах WPF. SystemParameters.WorkArea описывает
+    /// только основной экран: окно на втором мониторе из-за этого сдвигалось на основной. Окно без дескриптора (еще не
+    /// показано) или null: экран видимого главного окна, иначе основной.
+    /// </summary>
+    public static Rect WorkAreaOf(Window? w)
+    {
+        try
+        {
+            var owner = w;
+            var h = w != null ? new System.Windows.Interop.WindowInteropHelper(w).Handle : IntPtr.Zero;
+            if (h == IntPtr.Zero && Application.Current?.MainWindow is { IsVisible: true } m) { owner = m; h = new System.Windows.Interop.WindowInteropHelper(m).Handle; }
+            if (h != IntPtr.Zero && owner != null)
+            {
+                var r = System.Windows.Forms.Screen.FromHandle(h).WorkingArea;
+                var dpi = VisualTreeHelper.GetDpi(owner);
+                return new Rect(r.X / dpi.DpiScaleX, r.Y / dpi.DpiScaleY, r.Width / dpi.DpiScaleX, r.Height / dpi.DpiScaleY);
+            }
+        }
+        catch (Exception) { /* не вышло узнать экран: основной */ }
+        return SystemParameters.WorkArea;
+    }
     public static Brush B(string key) => (Brush)Res[key];
 
     /// <summary>Корневая колонка окна: одинаковые поля во всех окнах.</summary>
     public static StackPanel Root() => new() { Margin = new Thickness(24, 22, 24, 20) };
 
     /// <summary>Заголовок раздела, как в настройках: капс, 11 пт, приглушенный.</summary>
-    public static TextBlock Section(string text, bool first = false) => new()
+    public static TextBlock Section(string text, bool first = false) => new TextBlock
     {
-        Text = text.ToUpperInvariant(), Foreground = B("Muted"), FontSize = 11, FontWeight = FontWeights.SemiBold,
+        Text = text.ToUpperInvariant(), FontSize = 11, FontWeight = FontWeights.SemiBold,
         Margin = new Thickness(2, first ? 4 : 20, 0, 8),
-    };
+    }.Ref(TextBlock.ForegroundProperty, "Muted");
 
     /// <summary>Свойство по ссылке на ресурс палитры: при смене цвета в настройках обновится само.</summary>
     public static T Ref<T>(this T el, DependencyProperty dp, string key) where T : FrameworkElement { el.SetResourceReference(dp, key); return el; }
@@ -52,12 +75,12 @@ internal static class Ui
     }
 
     /// <summary>Строка состояния: ход работы или ошибка.</summary>
-    public static TextBlock Status() => new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = B("Muted"), Margin = new Thickness(0, 10, 0, 0) };
+    public static TextBlock Status() => new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) }.Ref(TextBlock.ForegroundProperty, "Muted");
 
     public static void SetStatus(TextBlock t, string text, bool error = false)
     {
         t.Text = text;
-        t.Foreground = B(error ? "Bad" : "Muted");
+        t.SetResourceReference(TextBlock.ForegroundProperty, error ? "Bad" : "Muted");
         t.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -74,7 +97,7 @@ internal static class Ui
         var d = new DockPanel();
         if (pill != null)
         {
-            var p = new TextBlock { Text = pill, Foreground = B(pillBrush), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            var p = new TextBlock { Text = pill, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, pillBrush);
             DockPanel.SetDock(p, Dock.Right);
             d.Children.Add(p);
         }
@@ -145,6 +168,30 @@ internal static class Ui
     public static TextBlock Steps(string text, double top = 8) => Hint(text, top, "Accent");
 
     /// <summary>
+    /// Если в Windows выключены «Эффекты анимации», длительности переходов из App.xaml (наведение, вкладки, строки таблицы)
+    /// становятся нулевыми. Вызывать до создания окон: стили читают их при первом показе. Бегущие индикаторы загрузки
+    /// остаются: это сигнал «идет работа».
+    /// </summary>
+    public static void ApplyMotionPreference()
+    {
+        if (SystemParameters.ClientAreaAnimation) return;
+        foreach (var key in new[] { "MotionFast", "MotionTab", "MotionOut", "MotionFade", "MotionRow" })
+            if (Res.Contains(key)) Res[key] = new Duration(TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Кнопка только со значком (крестик, свернуть, обновить) без имени для экранного диктора: берем текст ее подсказки.
+    /// Один обработчик на все кнопки программы.
+    /// </summary>
+    public static void NameIconButtons() =>
+        EventManager.RegisterClassHandler(typeof(System.Windows.Controls.Primitives.ButtonBase), FrameworkElement.LoadedEvent, new RoutedEventHandler((s, _) =>
+        {
+            if (s is not System.Windows.Controls.Primitives.ButtonBase b || b.Content is not (Viewbox or Image or System.Windows.Shapes.Shape)) return;
+            if (!string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetName(b))) return;
+            if (b.ToolTip is string tip && tip.Length > 0) System.Windows.Automation.AutomationProperties.SetName(b, Services.Loc.T(tip));
+        }));
+
+    /// <summary>
     /// Длительность анимации с учетом Windows: если в «Специальных возможностях» выключены эффекты анимации,
     /// все переходы мгновенные. Логика не зависит от окончания анимаций, поэтому ничего не зависает.
     /// </summary>
@@ -177,7 +224,8 @@ internal static class Ui
     /// <summary>Окно программы для владения буфером: без владельца Windows может не принять данные после EmptyClipboard.</summary>
     private static IntPtr OwnerWindow()
     {
-        if (Application.Current is not { } app) return IntPtr.Zero;
+        // Не из потока окон (например, из фоновой задачи): окна трогать нельзя, копируем без владельца
+        if (Application.Current is not { } app || !app.Dispatcher.CheckAccess()) return IntPtr.Zero;
         foreach (var w in new[] { app.MainWindow }.Concat(app.Windows.OfType<Window>()))
             if (w != null && new System.Windows.Interop.WindowInteropHelper(w).Handle is var h && h != IntPtr.Zero) return h;
         return IntPtr.Zero;
@@ -292,7 +340,7 @@ internal static class Ui
     }
 
     /// <summary>Тонкая линия между строками внутри карточки.</summary>
-    public static Border Separator() => new() { Height = 1, Background = B("Border"), Margin = new Thickness(0, 10, 0, 10) };
+    public static Border Separator() => new Border { Height = 1, Margin = new Thickness(0, 10, 0, 10) }.Ref(Border.BackgroundProperty, "Border");
 
     /// <summary>Строка настройки: название и пояснение слева, элемент управления справа.</summary>
     public static Grid Row(string label, string? hint, UIElement control)
@@ -301,10 +349,13 @@ internal static class Ui
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
-        left.Children.Add(new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap });
-        if (!string.IsNullOrEmpty(hint)) left.Children.Add(Hint(hint, 2).With(t => t.FontSize = 11));
+        var name = new TextBlock { Text = label, TextWrapping = TextWrapping.Wrap };
+        left.Children.Add(name);
+        if (!string.IsNullOrEmpty(hint)) left.Children.Add(Hint(hint, 2));
         g.Children.Add(left);
         if (control is FrameworkElement fe) fe.VerticalAlignment = VerticalAlignment.Center;
+        // Название строки как имя элемента для экранного диктора: у галочки и переключателя собственного текста нет
+        if (control is DependencyObject dep) System.Windows.Automation.AutomationProperties.SetLabeledBy(dep, name);
         Grid.SetColumn(control, 1);
         g.Children.Add(control);
         return g;
@@ -340,7 +391,13 @@ internal static class Ui
         [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(text))] string expression = "")
     {
         var b = DnexDialog.MakeButton(text, style == "Danger" ? "Primary" : style, click);
-        if (style == "Danger") { b.Background = B("BadButton"); b.BorderBrush = b.Background; }
+        if (style == "Danger")
+        {
+            // Заливка красная, текст подбирается по контрасту (у Primary он темный под салатовый акцент: на красном 3,6:1)
+            b.SetResourceReference(Control.BackgroundProperty, "BadButton");
+            b.SetResourceReference(Control.BorderBrushProperty, "BadButton");
+            b.Foreground = new SolidColorBrush(Services.ThemeColors.OnFill(((SolidColorBrush)B("BadButton")).Color));
+        }
         b.MinWidth = 0;
         b.Margin = new Thickness(0, 0, 8, 0);
         SupportTraceUi.Identify(b, member, line, expression);
@@ -368,8 +425,11 @@ internal static class Ui
             DockPanel.SetDock(b, Dock.Right);
             d.Children.Add(b);
         }
-        if (left != null) d.Children.Add(left);
-        return new Border { BorderBrush = B("Border"), BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d };
+        // Последний элемент DockPanel занимает все свободное место. Без левой части им оказывалась крайняя левая кнопка
+        // и растягивалась (в диалогах «Понятно» выходила на всю ширину): пустой заполнитель забирает место вместо нее
+        d.Children.Add(left ?? new Border());
+        return new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d }
+            .Ref(Border.BorderBrushProperty, "Border");
     }
 
     /// <summary>Многострочное поле: текст сверху, а не по центру (общий стиль полей центрирует однострочные).</summary>
@@ -401,6 +461,6 @@ internal static class Ui
     /// <summary>Содержимое окна с прокруткой, если оно выше экрана.</summary>
     public static ScrollViewer WindowContent(UIElement root) => new()
     {
-        Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = SystemParameters.WorkArea.Height - 80,
+        Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = WorkAreaOf(null).Height - 80,
     };
 }

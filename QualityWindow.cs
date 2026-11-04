@@ -52,7 +52,7 @@ internal sealed class QualityWindow
         _w = DnexDialog.CreateWindow("График качества", 920);
         _w.Closed += (_, _) => _open = null;
         _w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _w.Close(); };
-        _w.MaxHeight = SystemParameters.WorkArea.Height - 40;
+        _w.MaxHeight = Ui.WorkAreaOf(null).Height - 40;
 
         // Кандидаты: выбранный сервер, подключенный, избранные, затем с самой длинной историей
         void Add(DnsServer? s) { if (s != null && !s.IsJunk && !_candidates.Contains(s)) _candidates.Add(s); }

@@ -57,6 +57,8 @@ public partial class App : Application
         }
         Dnex.Services.SupportTrace.Start();
         SupportTraceUi.Install();
+        Ui.ApplyMotionPreference(); // до первого окна: стили читают длительности при показе
+        Ui.NameIconButtons();
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception error)

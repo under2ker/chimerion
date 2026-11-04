@@ -54,18 +54,52 @@ public sealed class Switch : ToggleButton
         Template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = new FrameworkElementFactory(typeof(ContentPresenter)) };
         Content = root;
         SizeChanged += (_, _) => Geometry(focus);
-        Loaded += (_, _) => { Geometry(focus); Snap(); };
+        Loaded += (_, _) => { Geometry(focus); Snap(); NameForScreenReader(); };
         Unloaded += (_, _) => Stop();
         Checked += (_, _) => Changed();
         Unchecked += (_, _) => Changed();
         // Рамка фокуса только при работе с клавиатуры (Tab): при открытии окна или щелчке мышью она не нужна
         IsKeyboardFocusedChanged += (_, _) => focus.Visibility = IsKeyboardFocused && InputManager.Current.MostRecentInputDevice is KeyboardDevice ? Visibility.Visible : Visibility.Collapsed;
-        IsEnabledChanged += (_, _) => { Opacity = IsEnabled ? 1 : 0.5; Cursor = IsEnabled ? Cursors.Hand : Cursors.No; };
+        IsEnabledChanged += (_, _) => { Opacity = IsEnabled ? 1 : 0.4; Cursor = IsEnabled ? Cursors.Hand : Cursors.No; };
         MouseEnter += (_, _) => { _swellTo = IsEnabled ? HoverScale : 1; Start(); };
         MouseLeave += (_, _) => { _swellTo = 1; Start(); };
     }
 
     private static bool Animate => SystemParameters.ClientAreaAnimation;
+
+    /// <summary>
+    /// У переключателя нет своего текста (внутри рисунок), экранный диктор называл бы его просто «переключатель».
+    /// Имя не задано снаружи: берем подсказку, иначе ближайший текст рядом (название строки или карточки).
+    /// </summary>
+    private void NameForScreenReader()
+    {
+        if (!string.IsNullOrEmpty(System.Windows.Automation.AutomationProperties.GetName(this))
+            || System.Windows.Automation.AutomationProperties.GetLabeledBy(this) != null) return;
+        if (ToolTip is string tip && tip.Length > 0) { System.Windows.Automation.AutomationProperties.SetName(this, Dnex.Services.Loc.T(tip)); return; }
+        DependencyObject node = this;
+        for (int level = 0; level < 3; level++)
+        {
+            var parent = VisualTreeHelper.GetParent(node);
+            if (parent == null) return;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var sibling = VisualTreeHelper.GetChild(parent, i);
+                if (ReferenceEquals(sibling, node) || FirstText(sibling, 2) is not { } label) continue;
+                System.Windows.Automation.AutomationProperties.SetLabeledBy(this, label);
+                return;
+            }
+            node = parent;
+        }
+    }
+
+    private static TextBlock? FirstText(DependencyObject root, int depth)
+    {
+        if (root is TextBlock tb) return tb.Text.Length > 0 ? tb : null;
+        if (depth == 0 || root is ButtonBase) return null;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FirstText(VisualTreeHelper.GetChild(root, i), depth - 1) is { } found) return found;
+        return null;
+    }
     private double Target => IsChecked == true ? _max : _min;
 
     private void Geometry(Border focus)

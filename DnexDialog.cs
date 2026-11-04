@@ -62,7 +62,7 @@ internal static class DnexDialog
         // Окно целиком на экране: по центру владельца высокое окно могло уйти верхом или низом за край
         w.SizeChanged += (_, _) =>
         {
-            var area = SystemParameters.WorkArea;
+            var area = Ui.WorkAreaOf(w); // экран самого окна, а не основной: на втором мониторе окно не прыгает на первый
             if (w.Top + w.ActualHeight > area.Bottom) w.Top = Math.Max(area.Top, area.Bottom - w.ActualHeight);
             if (w.Top < area.Top) w.Top = area.Top;
             if (w.Left + w.ActualWidth > area.Right) w.Left = Math.Max(area.Left, area.Right - w.ActualWidth);

@@ -27,7 +27,7 @@ internal sealed class NetHistoryWindow
     private NetHistoryWindow()
     {
         _w = DnexDialog.CreateWindow("История изменений сети", 760);
-        _w.MaxHeight = Math.Min(900, SystemParameters.WorkArea.Height - 40);
+        _w.MaxHeight = Math.Min(900, Ui.WorkAreaOf(null).Height - 40);
         _w.Closed += (_, _) => _open = null;
         _w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _w.Close(); };
 
