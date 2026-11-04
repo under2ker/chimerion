@@ -610,7 +610,7 @@ public partial class MainWindow
     private void FitToScreen()
     {
         if (WindowState != WindowState.Normal) return;
-        var area = Ui.WorkAreaOf(this); // экран окна, а не основной: окно на втором мониторе не уезжает на первый
+        var area = SystemParameters.WorkArea;
         double w = Math.Min(Width, area.Width), h = Math.Min(Height, area.Height);
         if (w < MinWidth) MinWidth = w;
         if (h < MinHeight) MinHeight = h;
@@ -621,7 +621,7 @@ public partial class MainWindow
 
     private void ResizeTo(double w, double h, bool animate)
     {
-        var area = Ui.WorkAreaOf(this); // экран окна, а не основной: окно на втором мониторе не уезжает на первый
+        var area = SystemParameters.WorkArea;
         w = Math.Min(w, area.Width);
         h = Math.Min(h, area.Height);
         if (!animate || !IsLoaded) { Width = w; Height = h; FitToScreen(); return; }
