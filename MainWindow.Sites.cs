@@ -148,7 +148,7 @@ public partial class MainWindow
     {
         () => HelpWizard.Create(_settings, () => _servers.ToList(), DiagFixAsync, SiteAction),
         () => SitesWindow.Create(_sites, async force => await SitesRoundAsync(force), SiteAction, SiteHandled),
-        () => PhoneWindow.Create(_servers.ToList(), Log),
+        () => PhoneWindow.Create(DnsServer.ForSaving(_servers), Log),
     });
 
     private void OpenHelpWizard() => OpenHelp(HelpWindow.Tab.NotOpening);

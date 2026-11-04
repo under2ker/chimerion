@@ -25,6 +25,9 @@ public partial class MainWindow
     private bool _locating, _locatingAgain; // идет определение локаций серверов
 
 
+    /// <summary>Других строк в таблице нет: рекламная скрыта, чтобы была видна подсказка пустого списка.</summary>
+    private bool _hidePromo;
+
     private bool FilterServer(object o)
     {
         if (o is not DnsServer s) return false;
@@ -35,6 +38,8 @@ public partial class MainWindow
             if (!(Has(s.Name) || Has(s.Primary) || Has(s.Secondary) || Has(s.DohUrl) || Has(s.Source) || Has(s.Summary)))
                 return false;
         }
+        // Рекламная строка видна во всех вкладках, но не закрывает подсказку, когда других строк нет
+        if (s.IsPromo) return !_hidePromo;
         return _filterIndex switch
         {
             1 => s.Status == ServerStatus.Ok,
@@ -159,7 +164,7 @@ public partial class MainWindow
     /// <summary>Звездочка в строке: добавить сервер в избранное или убрать.</summary>
     private void Fav_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: DnsServer s }) ToggleFavorite(new[] { s });
+        if (sender is FrameworkElement { DataContext: DnsServer { IsPromo: false } s }) ToggleFavorite(new[] { s });
         e.Handled = true;
     }
 
@@ -167,7 +172,7 @@ public partial class MainWindow
         list.Count <= 3 ? string.Join(", ", list.Select(s => s.DisplayName)) : $"{list.Count} серверов";
 
     private void MenuFav_Click(object sender, RoutedEventArgs e) =>
-        ToggleFavorite(ServerGrid.SelectedItems.Cast<DnsServer>().ToList());
+        ToggleFavorite(ServerGrid.SelectedItems.Cast<DnsServer>().Where(s => !s.IsPromo).ToList());
 
     /// <summary>Если среди выбранных есть не избранные — все добавляются, иначе все убираются.</summary>
     private void ToggleFavorite(IReadOnlyList<DnsServer> list)
@@ -193,11 +198,11 @@ public partial class MainWindow
 
     private void RowMenu_Opened(object sender, RoutedEventArgs e)
     {
-        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
+        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().Where(x => !x.IsPromo).ToList();
         MenuFav.Header = picked.Count > 0 && picked.All(s => s.IsFavorite) ? "Убрать из избранного" : "В избранное";
         var s = ServerGrid.SelectedItem as DnsServer;
         bool isActive = s != null && DnsSwitcher.GetActive()?.ServerId == s.Id;
-        MenuConnect.Header = DnsSwitcher.GetActive() == null ? "Подключить" : "Переключить сюда";
+        MenuConnect.Header = s?.IsPromo == true ? "Подробнее" : DnsSwitcher.GetActive() == null ? "Подключить" : "Переключить сюда";
         MenuConnect.IsEnabled = s != null && !isActive;
         MenuSource.IsEnabled = s?.HasSourceUrl == true;
     }
@@ -212,7 +217,7 @@ public partial class MainWindow
 
     private void MenuCopy_Click(object sender, RoutedEventArgs e)
     {
-        var text = string.Join(Environment.NewLine, ServerGrid.SelectedItems.Cast<DnsServer>()
+        var text = string.Join(Environment.NewLine, ServerGrid.SelectedItems.Cast<DnsServer>().Where(s => !s.IsPromo)
             .Select(s => string.Join(" ", new[] { s.Primary, s.Secondary, s.DohUrl }.Where(x => !string.IsNullOrWhiteSpace(x)))));
         if (text.Length > 0) { if (Ui.CopyText(text)) Log("Адрес скопирован"); else ShowToast("Не удалось скопировать: буфер обмена занят другой программой", "Warn"); }
     }
@@ -373,9 +378,24 @@ public partial class MainWindow
         ServerGrid.Focus();
     }
 
+    /// <summary>Подсветка рекламной строки. Строки таблицы используются повторно, поэтому у обычных она снимается.</summary>
+    private void ServerGrid_LoadingRow(object? sender, DataGridRowEventArgs e)
+    {
+        if (e.Row.Item is DnsServer { IsPromo: true })
+        {
+            e.Row.SetResourceReference(BackgroundProperty, "AccentSoft");
+            e.Row.SetResourceReference(BorderBrushProperty, "Accent");
+        }
+        else
+        {
+            e.Row.ClearValue(BackgroundProperty);
+            e.Row.ClearValue(BorderBrushProperty);
+        }
+    }
+
     private void Delete_Click(object sender, RoutedEventArgs e)
     {
-        var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
+        var sel = ServerGrid.SelectedItems.Cast<DnsServer>().Where(x => !x.IsPromo).ToList();
         // Подключенный сервер не удаляется: DNS на нем работает, а без строки в списке сторож и проверка сервисов
         // его не находили, и после перезапуска программа сама переключалась на другой
         var activeId = DnsSwitcher.GetActive()?.ServerId;
@@ -575,7 +595,7 @@ public partial class MainWindow
         // Сериализация в UI-потоке: серверы меняются только в нем, поэтому фоновый поток получает готовую строку,
         // а не живые объекты, которые в этот момент могут меняться (иначе «Collection was modified»)
         string json;
-        try { json = System.Text.Json.JsonSerializer.Serialize(_servers.ToList(), Storage.Options); }
+        try { json = System.Text.Json.JsonSerializer.Serialize(DnsServer.ForSaving(_servers), Storage.Options); }
         catch (Exception ex) { Log("Не удалось сохранить список: " + ex.Message); return; }
         // ConfigureAwait(false): продолжение не ждет UI-поток. Иначе SaveServersNow при закрытии окна
         // держит UI-поток в Wait() на замке, который отпускается только в этом продолжении — взаимная блокировка.
@@ -597,7 +617,7 @@ public partial class MainWindow
         _saveLock.Wait();
         try
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(_servers.ToList(), Storage.Options);
+            var json = System.Text.Json.JsonSerializer.Serialize(DnsServer.ForSaving(_servers), Storage.Options);
             if (json != _lastServersJson) { Storage.SaveJson(ServersFile, json); _lastServersJson = json; }
         }
         catch (Exception) { }

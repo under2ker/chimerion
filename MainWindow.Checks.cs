@@ -272,7 +272,7 @@ public partial class MainWindow
         SpeedWindow.Show(_settings, _servers.FirstOrDefault(s => s.Id == DnsSwitcher.GetActive()?.ServerId), _after ?? _before, Log);
 
     private void Quality_Click(object sender, RoutedEventArgs e) =>
-        QualityWindow.Show(this, _servers, ServerGrid.SelectedItem as DnsServer);
+        QualityWindow.Show(this, _servers.Where(s => !s.IsPromo).ToList(), ServerGrid.SelectedItem is DnsServer { IsPromo: false } picked ? picked : null);
 
     private bool _speedBusy;
 
@@ -282,7 +282,7 @@ public partial class MainWindow
     /// </summary>
     private async void MeasureSpeed_Click(object sender, RoutedEventArgs e)
     {
-        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().Where(s => s.Status != ServerStatus.Checking).Take(10).ToList();
+        var picked = ServerGrid.SelectedItems.Cast<DnsServer>().Where(s => !s.IsPromo && s.Status != ServerStatus.Checking).Take(10).ToList();
         if (picked.Count == 0) { ShowToast("Выберите сервер в таблице", "Warn"); return; }
         if (_speedBusy) { ShowToast("Измерение уже идет", "Warn"); return; }
         _speedBusy = true;
@@ -357,6 +357,7 @@ public partial class MainWindow
     private async Task RunChecksAsync(List<DnsServer> list, ServerChecker.CheckOptions? options = null)
     {
         var opt = options ?? ServerChecker.CheckOptions.Full;
+        list = list.Where(s => !s.IsPromo).ToList(); // у рекламной строки нет адресов: проверять нечего
         if (list.Count == 0) { Log("Нечего проверять"); return; }
         if (CurrentDns.Text.Contains("127.0.0.1") || CurrentDns.Text.Contains("::1"))
             Log("ВНИМАНИЕ: системный DNS указывает на 127.0.0.1, похоже, включен VPN или прокси-клиент. " +
@@ -482,7 +483,7 @@ public partial class MainWindow
     /// <summary>Кнопка в строке: полная проверка этого сервера (сервисы и пинг).</summary>
     private async void RowRefresh_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is DnsServer s) await CheckOneAsync(s, null);
+        if (((FrameworkElement)sender).DataContext is DnsServer { IsPromo: false } s) await CheckOneAsync(s, null);
     }
 
     /// <summary>Обновить подключенный сервер: кнопка в шапке, значок крутится, пока идет проверка.</summary>
@@ -533,7 +534,7 @@ public partial class MainWindow
     private async Task RefreshPingsAsync()
     {
         if (_pinging) return;
-        var list = _servers.Where(s => s.Status != ServerStatus.Checking).ToList();
+        var list = _servers.Where(s => !s.IsPromo && s.Status != ServerStatus.Checking).ToList();
         if (list.Count == 0) return;
         _pinging = true;
         var checker = new ServerChecker(_settings);

@@ -19,7 +19,7 @@ public partial class MainWindow
     /// Сервер можно предлагать и подключать сам: выход в выбранной стране (если она выбрана) и адрес выхода не в черном
     /// списке. Вручную пользователь может подключиться к любому, программа только предупредит.
     /// </summary>
-    private static bool Usable(DnsServer s) => AccountSafety.Fits(s) && !IpReputation.IsBad(s);
+    private static bool Usable(DnsServer s) => !s.IsPromo && AccountSafety.Fits(s) && !IpReputation.IsBad(s);
 
     /// <summary>Выбранная страна из настроек вступает в силу (при выключенной защите аккаунтов страна не закреплена).</summary>
     private void ApplyCountryPin() => AccountSafety.Pinned = _settings.AccountSafetyGuard && _settings.EgressCountry is { Length: 2 } c ? c.ToUpperInvariant() : null;

@@ -84,6 +84,12 @@ public partial class MainWindow
 
     private async Task<bool> ConnectToAsync(DnsServer s, bool auto = false)
     {
+        // К рекламной строке подключиться нельзя: вместо этого описание и где купить. Автоматика ее не выбирает
+        if (s.IsPromo)
+        {
+            if (!auto) ChimerionDnsWindow.Show();
+            return false;
+        }
         // Сторож, замена сервера и автоподключение в копии данных не трогают настоящий DNS
         if (auto && NoAutoDns) return false;
         if (_busyConn)

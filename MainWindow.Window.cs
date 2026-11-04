@@ -81,10 +81,12 @@ public partial class MainWindow
     {
         _statsTimer.Stop();
         if (_view == null) return;
-        int shown = _view.Cast<object>().Count();
+        int shown = _view.Cast<DnsServer>().Count(s => !s.IsPromo);
+        // Других строк нет: прячем рекламную, иначе она перекрывалась бы с подсказкой пустого списка
+        if (_hidePromo != (shown == 0)) { _hidePromo = shown == 0; _view.Refresh(); }
         StatsText.Text = $"{_servers.Count(s => s.Status == ServerStatus.Ok)} работают   ·   " +
                          $"{_servers.Count(s => s.Status == ServerStatus.Partial)} частично   ·   " +
-                         $"показано {shown} из {_servers.Count}";
+                         $"показано {shown} из {_servers.Count(s => !s.IsPromo)}";
         UpdateEmptyState(shown);
         UpdateTopList();
     }
@@ -111,7 +113,7 @@ public partial class MainWindow
         }
         var search = SearchBox.Text.Trim();
         bool checking = _working || _servers.Any(s => s.Status == ServerStatus.Checking); // серверы в очереди еще без статуса «проверка»
-        if (_servers.Count == 0)
+        if (!_servers.Any(s => !s.IsPromo))
         {
             (EmptyIcon.Kind, EmptyTitle.Text, EmptyText.Text) = ("globe", "Список серверов пуст", "CHIMERION найдет Smart DNS по источникам и в интернете и сразу их проверит");
             Act("Найти новые серверы", "Primary", () => Fetch_Click(this, new RoutedEventArgs()));
