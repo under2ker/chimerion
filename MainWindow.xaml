@@ -712,7 +712,7 @@
                                             </TextBlock>
                                         </StackPanel>
                                         <Button x:Name="promoBtn" Content="Подробнее" Click="ChimerionDns_Click" Style="{StaticResource Primary}" Visibility="Collapsed"
-                                                Padding="8,5" MinHeight="30" MinWidth="0" Margin="0" FontSize="12.5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                Padding="10,5" MinHeight="30" MinWidth="0" Margin="0,0,-40,0" FontSize="12.5" HorizontalAlignment="Left" VerticalAlignment="Center" ClipToBounds="False"
                                                 ToolTip="Что входит, сколько стоит и где купить" AutomationProperties.Name="Подробнее о CHIMERION DNS"/>
                                     </Grid>
                                     <DataTemplate.Triggers>
