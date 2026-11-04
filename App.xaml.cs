@@ -13,13 +13,13 @@ public partial class App : Application
     /// <summary>Только один экземпляр: две копии CHIMERION, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
-        int dohHelper = Array.IndexOf(e.Args, Dnex.Services.DohRelayTask.HelperArgument);
+        int dohHelper = Array.IndexOf(e.Args, Dnex.Services.LegacyRelayCleanup.HelperArgument);
         if (dohHelper >= 0)
         {
-            // Задание передает канал: он связывает процесс с настройками этого подключения.
-            // Без канала посредник не запускается, поэтому задание без аргумента тоже ничего не меняет.
+            // Запуск заданием прежнего посредника DoH (0.1.120–0.1.125, запуск при входе в Windows). Посредник заменен
+            // прокси внутри программы: убираем это задание и закрываемся, ничего не запуская
             string? channel = dohHelper + 1 < e.Args.Length ? e.Args[dohHelper + 1] : null;
-            Shutdown(Dnex.Services.DohRelayHelper.Run(channel));
+            Shutdown(Dnex.Services.LegacyRelayCleanup.RunAsLegacyHelper(channel));
             return;
         }
         // Запуск заданием Планировщика: только включить или выключить обход zapret и закрыться (см. ZapretTask).

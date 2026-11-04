@@ -17,7 +17,8 @@ internal static class ClosePrompt
 
     /// <param name="connectionName">Активное подключение DNS или null.</param>
     /// <param name="tools">Работающие инструменты CHIMERION («обход zapret», «ускорение Telegram»).</param>
-    public static MessageBoxResult Ask(string? connectionName, IReadOnlyList<string> tools)
+    /// <param name="viaProxy">DoH дает прокси внутри программы (Windows 10): без программы он не работает.</param>
+    public static MessageBoxResult Ask(string? connectionName, IReadOnlyList<string> tools, bool viaProxy = false)
     {
         var result = MessageBoxResult.Cancel;
         var w = DnexDialog.CreateWindow("Выход", Ui.Narrow + 40);
@@ -30,7 +31,9 @@ internal static class ClosePrompt
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Что сделать при выходе?", "Сейчас работает: " + string.Join(", ", parts), glyph: "shield-check"));
 
         bool dns = connectionName != null;
-        var keepHint = dns
+        var keepHint = dns && viaProxy
+            ? "В этой Windows шифрование DNS дает сама CHIMERION. Пока она закрыта, сайты откроются через DNS вашей сети, а нейросети нет. При следующем запуске подключение вернется"
+            : dns
             ? "Нейросети продолжат открываться. При следующем запуске CHIMERION продолжит с этим подключением и снова будет за ним следить"
             : "Все продолжит работать. При следующем запуске CHIMERION снова будет за этим следить";
         var keep = Option("circle-check", "Выйти и оставить работать", keepHint, "Ok", recommended: true, () => { result = MessageBoxResult.No; w.Close(); });

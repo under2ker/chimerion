@@ -6,10 +6,10 @@ namespace Dnex.Tests;
 public class DohRelayProcessTests
 {
     [Theory]
-    // Старое задание без канала и задание с чужим каналом не должны ничего запускать.
+    // Задание прежнего посредника DoH запускает новую версию при входе в Windows: она должна просто закрыться.
     [InlineData("--doh-relay-helper")]
     [InlineData("--doh-relay-helper f15d22cb599d4cd1b7c0098fd088b6e1")]
-    public async Task Helper_without_matching_configuration_exits_without_starting_the_application_or_touching_dns(string arguments)
+    public async Task Start_by_old_relay_task_exits_without_starting_the_application_or_touching_dns(string arguments)
     {
         var data = Path.Combine(Path.GetTempPath(), "doh-relay-process-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(data);
@@ -23,10 +23,9 @@ public class DohRelayProcessTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             try { await process.WaitForExitAsync(timeout.Token); }
             finally { if (!process.HasExited) process.Kill(); }
-            Assert.Equal(1, process.ExitCode);
+            Assert.Equal(0, process.ExitCode);
             Assert.False(File.Exists(Path.Combine(data, "active.json")));
             Assert.False(File.Exists(Path.Combine(data, "dns-backup.json")));
-            // Настроек нет: посредник не должен создавать пустой файл, по которому его запустят в следующий раз.
             Assert.Empty(Directory.GetFiles(data, "doh-relay*.json"));
         }
         finally { Directory.Delete(data, true); }

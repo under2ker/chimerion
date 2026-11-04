@@ -51,9 +51,9 @@ public class DohWindowsScenarioTests
     }
 
     [Fact]
-    public async Task Relay_failure_with_ip_does_not_change_network()
+    public async Task Proxy_failure_with_ip_does_not_change_network()
     {
-        using var sim = new NetSim(new NetSim.State { adapters = { new NetSim.Adapter() } }) { NoDoh = true, RelayFails = true };
+        using var sim = new NetSim(new NetSim.State { adapters = { new NetSim.Adapter() } }) { NoDoh = true, ProxyFails = true };
         var server = new DnsServer { Name = "DoH", Primary = "203.0.113.7", DohUrl = "https://203.0.113.5/dns-query" };
         await Assert.ThrowsAsync<DohRelayFailedException>(() => DnsSwitcher.ApplyAsync(server, new AppSettings(), _ => { }));
         Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
@@ -63,21 +63,21 @@ public class DohWindowsScenarioTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Windows_without_native_doh_uses_relay_preserves_query_and_hides_token(bool withIp)
+    public async Task Windows_without_native_doh_uses_proxy_preserves_query_and_hides_token(bool withIp)
     {
         using var sim = new NetSim(new NetSim.State { adapters = { new NetSim.Adapter() } }) { NoDoh = true };
         Uri? endpoint = null;
-        DnsSwitcher.DohRelayStart = (uri, _, _, _) =>
+        DnsSwitcher.DohProxyStart = (uri, _, _, _) =>
         {
             endpoint = uri;
-            var relay = new DohRelaySession(Guid.NewGuid().ToString("N"), "127.0.0.2", 53);
-            sim.RelaysStarted.Add(relay);
-            return Task.FromResult(relay);
+            var proxy = new DohProxySession("127.0.0.2", 53);
+            sim.ProxiesStarted.Add(proxy);
+            return Task.FromResult(proxy);
         };
         var server = new DnsServer { Name = "DoH", Primary = withIp ? "203.0.113.7" : "", DohUrl = "https://203.0.113.5/dns-query/secret-path?token=secret-query" };
         await DnsSwitcher.ApplyAsync(server, new AppSettings(), _ => { });
         Assert.Equal("?token=secret-query", endpoint?.Query);
-        Assert.Single(sim.RelaysStarted);
+        Assert.Single(sim.ProxiesStarted);
         Assert.Equal(new[] { "127.0.0.2" }, sim["Sim-Ethernet"].dns4);
         var saved = File.ReadAllText(Path.Combine(TestSetup.DataDir, "active.json"));
         Assert.DoesNotContain("secret-path", saved);
