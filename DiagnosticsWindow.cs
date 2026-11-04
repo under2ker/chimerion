@@ -82,7 +82,7 @@ internal sealed class DiagnosticsWindow
         _w = DnexDialog.CreateWindow("Диагностика", 860);
         _w.Closed += (_, _) => _open = null;
         // Кнопки внизу закреплены, прокручивается только список: на маленьком экране они не уезжают
-        _w.MaxHeight = Math.Min(960, SystemParameters.WorkArea.Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
+        _w.MaxHeight = Math.Min(960, Ui.WorkAreaOf(null).Height - 40); // на большом экране не во всю высоту: длинный список прокручивается внутри
 
         var root = new Grid { Margin = new Thickness(24, 22, 24, 20) };
         foreach (var h in new[] { GridLength.Auto, GridLength.Auto, GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
@@ -242,7 +242,7 @@ internal sealed class DiagnosticsWindow
         g.Children.Add(new Controls.Icon { Kind = kind, Size = 16, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0), ToolTip = word }
             .Ref(Controls.Icon.ForegroundProperty, color));
         var text = new StackPanel();
-        if (showGroup && i.Group.Length > 0) text.Children.Add(Ui.Hint(i.Group, 0).With(t => t.FontSize = 11.5));
+        if (showGroup && i.Group.Length > 0) text.Children.Add(Ui.Hint(i.Group, 0).With(t => t.FontSize = 12));
         text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Title), FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         if (i.Detail.Length > 0)
             text.Children.Add(new TextBlock { Text = PrivacyGuard.Mask(i.Detail), Foreground = (Brush)Res["Text"], Opacity = 0.72, FontSize = 12.5, LineHeight = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) }); // ярче и крупнее серого: подробности на темном фоне читались с трудом

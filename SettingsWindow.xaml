@@ -58,14 +58,14 @@
                                 <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                                 <Trigger.EnterActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
-                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource MotionFast}"/>
+                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource MotionFast}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
-                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionFast}"/>
+                                        <DoubleAnimation Storyboard.TargetName="bar" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionFast}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.ExitActions>
                             </Trigger>

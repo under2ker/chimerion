@@ -46,7 +46,7 @@ public partial class SettingsWindow : Window
         double width = BodyScroll.ViewportWidth > 0 ? BodyScroll.ViewportWidth : BodyScroll.ActualWidth;
         if (width <= 0) return;
         page.Measure(new Size(width, double.PositiveInfinity));
-        var area = SystemParameters.WorkArea;
+        var area = Ui.WorkAreaOf(this);
         double height = Math.Clamp(ActualHeight + page.DesiredSize.Height - BodyScroll.ViewportHeight, MinHeight, area.Height - 40);
         if (Math.Abs(height - ActualHeight) < 2) return;
         double top = Top - (height - ActualHeight) / 2;
@@ -61,8 +61,8 @@ public partial class SettingsWindow : Window
         SourceInitialized += (_, _) => Services.DarkTitle.Apply(this);
         Icon = Controls.Brand.WindowIcon;
         // Широкое окно с вкладками; на маленьком экране оно не больше рабочей области, вкладка прокручивается
-        Width = Math.Min(Width, SystemParameters.WorkArea.Width - 40);
-        Height = Math.Min(Height, SystemParameters.WorkArea.Height - 40);
+        Width = Math.Min(Width, Ui.WorkAreaOf(null).Width - 40);
+        Height = Math.Min(Height, Ui.WorkAreaOf(null).Height - 40);
         Loaded += (_, _) => Dispatcher.BeginInvoke(FitPage, System.Windows.Threading.DispatcherPriority.Loaded);
         _settings = settings;
         ShowSplitStatus();

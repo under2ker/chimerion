@@ -58,7 +58,7 @@ internal sealed class BypassSitesWindow
         _w.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         _w.ShowInTaskbar = false;
         _w.SizeToContent = SizeToContent.Manual;
-        _w.Height = Math.Min(820, SystemParameters.WorkArea.Height - 40);
+        _w.Height = Math.Min(820, Ui.WorkAreaOf(null).Height - 40);
         _w.ResizeMode = ResizeMode.CanResize;
         _w.MinWidth = 760; _w.MinHeight = 560;
         _w.PreviewKeyDown += (_, e) =>

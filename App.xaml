@@ -20,7 +20,7 @@
         <SolidColorBrush x:Key="Ok" Color="#3DD68C"/>
         <SolidColorBrush x:Key="Warn" Color="#F5B941"/>
         <SolidColorBrush x:Key="Bad" Color="#F2626E"/>
-        <SolidColorBrush x:Key="Idle" Color="#5C6373"/>
+        <SolidColorBrush x:Key="Idle" Color="#6F7788"/>
         <SolidColorBrush x:Key="Focus" Color="#DCF781"/>
         <SolidColorBrush x:Key="OkSoft" Color="#13281E"/>
         <SolidColorBrush x:Key="Lime" Color="#C5F23A"/>
@@ -51,7 +51,7 @@
         <SolidColorBrush x:Key="SelectionInactive" Color="#252F15"/>
         <SolidColorBrush x:Key="GridLine" Color="#212428"/>
         <SolidColorBrush x:Key="AccentBorder" Color="#86A231"/>
-        <SolidColorBrush x:Key="ControlBorder" Color="#4C5158"/>
+        <SolidColorBrush x:Key="ControlBorder" Color="#70767E"/>
         <!-- Настраиваемые в «Настройки» → «Цвета» (ThemeColors). Ссылки на них только DynamicResource, чтобы смена
              цвета сразу доходила до всех окон. On* — текст поверх заливки, подбирается по контрасту -->
         <SolidColorBrush x:Key="OnAccentButton" Color="#111214"/>
@@ -71,7 +71,36 @@
         <SolidColorBrush x:Key="BadButton" Color="#C23B47"/>
         <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
 
+        <!-- Длительности переходов. Если в Windows выключены «Эффекты анимации», App.OnStartup заменяет их на ноль
+             (Ui.ApplyMotionPreference); StaticResource читается при первом показе стиля, уже после замены.
+             Бегущие индикаторы загрузки не трогаем: это сигнал «идет работа», а не украшение -->
+        <Duration x:Key="MotionFast">0:0:0.15</Duration>
+        <Duration x:Key="MotionTab">0:0:0.2</Duration>
+        <Duration x:Key="MotionOut">0:0:0.25</Duration>
+        <Duration x:Key="MotionFade">0:0:0.3</Duration>
+        <Duration x:Key="MotionRow">0:0:0.45</Duration>
+
         <!-- Кольцо фокуса для навигации с клавиатуры: без него фокус на кнопках не виден -->
+        <!-- Малое кольцо фокуса для галочек, ссылок и круглых кнопок: у них нет своего вида фокуса, а системная пунктирная
+             рамка на темной теме почти не видна -->
+        <Style x:Key="FocusRingSmall">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border CornerRadius="6" BorderThickness="2" BorderBrush="{DynamicResource Focus}" Margin="-3"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="FocusRingRound">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border CornerRadius="17" BorderThickness="2" BorderBrush="{DynamicResource Focus}" Margin="-2"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="FocusRing">
             <Setter Property="Control.Template">
                 <Setter.Value>
@@ -123,12 +152,12 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0.08" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0.08" Duration="{StaticResource MotionFast}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.25"/>
+                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionOut}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.ExitActions>
                             </Trigger>
@@ -170,14 +199,17 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0.1" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0.1" Duration="{StaticResource MotionFast}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.25"/>
+                                        <DoubleAnimation Storyboard.TargetName="hov" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionOut}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4"/>
@@ -211,11 +243,13 @@
         <Style TargetType="TextBox">
             <Setter Property="Foreground" Value="{DynamicResource Text}"/>
             <Setter Property="Background" Value="{DynamicResource Surface2}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+            <!-- Граница поля: ControlBorder (не меньше 3:1 к фону), обычная Border почти сливается с окном -->
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorder}"/>
             <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
             <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="MinHeight" Value="36"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -223,11 +257,14 @@
                         <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1" CornerRadius="8">
                             <Grid>
+                                <!-- Padding поля WPF применяет к тексту сам. Раньше он стоял еще и Margin у PART_ContentHost: отступ
+                                     удваивался, курсор и вводимый текст уезжали на 12 px правее подсказки, а поле было выше кнопок.
+                                     Подсказка стоит там же, где первый символ и курсор: Padding поля плюс 2 px внутреннего отступа
+                                     текста; по вертикали выравнивание как у текста (у многострочных сверху, а не по центру) -->
                                 <TextBlock x:Name="hint" Text="{TemplateBinding Tag}" Foreground="{DynamicResource Muted}"
-                                           Margin="{TemplateBinding Padding}" Padding="2,0,0,0" VerticalAlignment="Center"
-                                           IsHitTestVisible="False" Visibility="Collapsed"/>
-                                <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                                           Margin="{TemplateBinding Padding}" Padding="2,0,0,0" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                           TextTrimming="CharacterEllipsis" IsHitTestVisible="False" Visibility="Collapsed"/>
+                                <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -236,6 +273,9 @@
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -297,6 +337,7 @@
 
         <!-- ===== Обновление сервера в строке таблицы: круглая кнопка с круговой стрелкой ===== -->
         <Style x:Key="RowRefresh" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingRound}"/>
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -362,12 +403,12 @@
                             <Trigger Property="IsChecked" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="1" Duration="{StaticResource MotionTab}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.EnterActions>
                                 <Trigger.ExitActions>
                                     <BeginStoryboard><Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/>
+                                        <DoubleAnimation Storyboard.TargetName="sel" Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionTab}"/>
                                     </Storyboard></BeginStoryboard>
                                 </Trigger.ExitActions>
                                 <Setter Property="Foreground" Value="{DynamicResource Text}"/>
@@ -380,6 +421,7 @@
 
         <!-- Галочка в темной теме -->
         <Style TargetType="CheckBox">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingSmall}"/>
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
@@ -406,6 +448,9 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource Text}"/>
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -414,6 +459,7 @@
 
         <!-- Тумблер-ссылка («Журнал ▸») -->
         <Style x:Key="LinkToggle" TargetType="ToggleButton">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingSmall}"/>
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -454,6 +500,9 @@
                         <Grid>
                             <Border x:Name="bd" Background="Transparent" CornerRadius="5" Padding="12,7" MinWidth="200">
                                 <DockPanel>
+                                    <!-- Галочка отмеченного пункта (IsCheckable); у пунктов с IsCheckable место под нее занято всегда, чтобы текст не прыгал -->
+                                    <controls:Icon x:Name="check" DockPanel.Dock="Left" Kind="check" Size="14" Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource Accent}" Visibility="Collapsed"/>
                                     <controls:Icon x:Name="arrow" DockPanel.Dock="Right" Kind="chevron-down" Size="12" Margin="16,0,0,0"
                                                    Foreground="{DynamicResource Muted}" Visibility="Collapsed">
                                         <controls:Icon.LayoutTransform><RotateTransform Angle="-90"/></controls:Icon.LayoutTransform>
@@ -475,6 +524,12 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="Role" Value="SubmenuHeader">
                                 <Setter TargetName="arrow" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsCheckable" Value="True">
+                                <Setter TargetName="check" Property="Visibility" Value="Hidden"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="check" Property="Visibility" Value="Visible"/>
                             </Trigger>
                             <Trigger Property="IsHighlighted" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="{DynamicResource MenuHover}"/>
@@ -505,7 +560,7 @@
             <Setter Property="CornerRadius" Value="5"/>
             <Setter Property="Padding" Value="7,2"/>
             <Setter Property="Margin" Value="0,0,5,0"/>
-            <Setter Property="Background" Value="#2A2F3A"/>
+            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
         </Style>
 
         <!-- ===== Полоса прогресса =====
@@ -692,9 +747,9 @@
                     <DataTrigger.EnterActions>
                         <BeginStoryboard>
                             <Storyboard>
-                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.45"/>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="{StaticResource MotionRow}"/>
                                 <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                 From="14" To="0" Duration="0:0:0.45">
+                                                 From="14" To="0" Duration="{StaticResource MotionRow}">
                                     <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                 </DoubleAnimation>
                             </Storyboard>
@@ -706,7 +761,7 @@
                     <DataTrigger.EnterActions>
                         <BeginStoryboard>
                             <Storyboard>
-                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.3"/>
+                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="{StaticResource MotionFade}"/>
                             </Storyboard>
                         </BeginStoryboard>
                     </DataTrigger.EnterActions>
@@ -783,7 +838,7 @@
                     <ControlTemplate TargetType="Expander">
                         <StackPanel>
                             <ToggleButton x:Name="head" IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                          Cursor="Hand" Focusable="True" HorizontalAlignment="Left">
+                                          Cursor="Hand" Focusable="True" HorizontalAlignment="Left" FocusVisualStyle="{StaticResource FocusRingSmall}">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
                                         <Border x:Name="bg" Background="Transparent" CornerRadius="8" Padding="2,6,10,6">
@@ -811,6 +866,9 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsExpanded" Value="True">
                                 <Setter TargetName="body" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

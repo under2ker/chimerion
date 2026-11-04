@@ -116,7 +116,7 @@ public partial class MainWindow
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
 
         // Подключено, но не все нейросети открываются: заметно и с переходом к проверке причины
-        _dashboardWarnText = new TextBlock { FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn");
+        _dashboardWarnText = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn");
         var why = Ui.Action("Почему?", "Strong", () => OpenHelp(HelpWindow.Tab.NotOpening)).With(b => { b.Margin = new Thickness(12, 0, 0, 0); b.Padding = new Thickness(12, 4, 12, 5); b.VerticalAlignment = VerticalAlignment.Center; });
         var warnRow = new DockPanel();
         DockPanel.SetDock(why, Dock.Right); warnRow.Children.Add(why);

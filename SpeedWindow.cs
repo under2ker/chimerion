@@ -63,7 +63,7 @@ internal sealed class SpeedWindow
     {
         _settings = settings; _server = server; _snap = snapshot; _log = log;
         _w = DnexDialog.CreateWindow("Тест скорости", 900);
-        _w.MaxHeight = SystemParameters.WorkArea.Height - 40;
+        _w.MaxHeight = Ui.WorkAreaOf(null).Height - 40;
         _w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _w.Close(); };
         _w.Closed += (_, _) => { _cts?.Cancel(); _down.Stop(); _up.Stop(); _open = null; };
 
