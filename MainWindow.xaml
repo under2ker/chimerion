@@ -373,6 +373,7 @@
                           HorizontalScrollBarVisibility="Disabled" CanUserResizeRows="False"
                           SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_DoubleClick"
                           PreviewMouseLeftButtonDown="ServerGrid_PreviewMouseLeftButtonDown"
+                          LoadingRow="ServerGrid_LoadingRow"
                           PreviewKeyDown="Grid_KeyDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu Opened="RowMenu_Opened">
@@ -405,7 +406,7 @@
                         <DataGridTemplateColumn x:Name="ColRefresh" Width="52" MinWidth="52" CanUserResize="False" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Style="{StaticResource RowRefresh}" Click="RowRefresh_Click"
+                                    <Button Style="{StaticResource RowRefresh}" Click="RowRefresh_Click" Visibility="{Binding IsNotPromo, Converter={StaticResource BoolToVis}}"
                                             ToolTip="Обновить этот сервер: проверка ИИ-сервисов и пинг"
                                             AutomationProperties.Name="Обновить сервер">
                                         <Path x:Name="icon" Style="{StaticResource RefreshGlyph}" RenderTransformOrigin="0.5,0.5">
@@ -437,7 +438,7 @@
                         <DataGridTemplateColumn x:Name="ColFav" Width="40" MinWidth="40" CanUserResize="False" SortMemberPath="IsFavorite">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Button Click="Fav_Click" Cursor="Hand" Background="Transparent" BorderThickness="0" Padding="0" Margin="0"
+                                    <Button Click="Fav_Click" Cursor="Hand" Background="Transparent" BorderThickness="0" Padding="0" Margin="0" Visibility="{Binding IsNotPromo, Converter={StaticResource BoolToVis}}"
                                             MinHeight="0" Focusable="False" ToolTip="Добавить в избранное или убрать"
                                             AutomationProperties.Name="Избранное">
                                         <Button.Template>
@@ -552,6 +553,10 @@
                                         <!-- Метки сразу за названием, а не у края колонки: так видно, к чему они относятся -->
                                         <WrapPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                            <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipLime}" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsPromo, Converter={StaticResource BoolToVis}}" ToolTip="Платный сервер от создателей программы. Подробности: двойной щелчок">
+                                                <TextBlock Text="от CHIMERION" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Lime}"/>
+                                            </Border>
                                             <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipOk}"
                                                     VerticalAlignment="Center" Visibility="Collapsed">
                                                 <TextBlock Text="новый" FontSize="11" FontWeight="Normal" Foreground="{DynamicResource Ok}"/>

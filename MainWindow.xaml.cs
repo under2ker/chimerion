@@ -82,6 +82,8 @@ public partial class MainWindow : Window
         foreach (var c in Catalog.Servers())
             if (!_junk.ContainsKey(c.Key) && _known.Add(c.Key)) _servers.Add(c);
         AutoPurge(silent: true);
+        // Платный CHIMERION DNS: строка сверху таблицы, добавляется при каждом запуске и на диск не пишется
+        _servers.Insert(0, ChimerionDnsInfo.PromoRow());
 
         _view = CollectionViewSource.GetDefaultView(_servers);
         _view.Filter = FilterServer;

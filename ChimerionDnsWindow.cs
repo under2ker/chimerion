@@ -8,11 +8,26 @@ namespace Dnex;
 internal static class ChimerionDnsInfo
 {
     public const string Region = "Нидерланды";
+    public const string ContactName = "@dev_under2ker";
+    public const string ContactUrl = "https://t.me/dev_under2ker";
     public const string BotName = "@CHIMERIONDNS_BOT";
     public const string BotUrl = "https://t.me/CHIMERIONDNS_BOT";
     public const string ChannelName = "@chimeriondns";
     public const string ChannelUrl = "https://t.me/chimeriondns";
     public const string ShopUrl = "https://chimerion.dev/buy";
+
+    /// <summary>Строка в таблице серверов: страна для флага, без адресов. Проверено «сейчас», чтобы фон ее не трогал.</summary>
+    public static Models.DnsServer PromoRow() => new()
+    {
+        Id = new Guid("c41f7a6e-2b0d-4e58-9a13-6d0e5b7f2c11"),
+        IsPromo = true,
+        Name = "CHIMERION DNS",
+        Manual = true,
+        Country = "NL",
+        AddedAt = DateTime.MinValue, // не «новый»
+        GeoCheckedAt = DateTime.Now,
+        LastChecked = DateTime.Now,
+    };
 
     public static readonly (string Title, int Days, int Rub, int Stars)[] Plans =
     {
@@ -55,17 +70,17 @@ internal static class ChimerionDnsWindow
             body.Children.Add(Ui.Card(Ui.Row(plan.Title, null, new TextBlock { Text = $"{plan.Rub} ₽ · {plan.Stars} ⭐", FontWeight = FontWeights.SemiBold }), bottom: 6));
 
         body.Children.Add(Ui.Section("Где купить"));
-        body.Children.Add(new TextBlock { Text = $"В Telegram-боте {ChimerionDnsInfo.BotName}, оплата звездами. Доступ приходит в чат сразу после оплаты", TextWrapping = TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text = $"В Telegram-боте {ChimerionDnsInfo.BotName}, оплата звездами. Доступ приходит в чат сразу после оплаты. Другой способ оплаты: напишите {ChimerionDnsInfo.ContactName}", TextWrapping = TextWrapping.Wrap });
 
         body.Children.Add(Ui.Section("Связь"));
-        body.Children.Add(new TextBlock { Text = $"Вопросы и покупка: {ChimerionDnsInfo.BotName}. Новости: канал {ChimerionDnsInfo.ChannelName}", TextWrapping = TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text = $"Вопросы и покупка: {ChimerionDnsInfo.ContactName}. Новости: канал {ChimerionDnsInfo.ChannelName}", TextWrapping = TextWrapping.Wrap });
         // Шапка и кнопки занимают около 230: на небольшом экране прокручивается середина, а кнопки остаются видны
         root.Children.Add(Ui.Scroll(body, Math.Min(600, SystemParameters.WorkArea.Height - 230)));
 
         var buy = Ui.Action("Открыть бота", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl));
         var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
-        var channel = Ui.Action("Канал", "Ghost", () => AutoStart.OpenUrl(ChimerionDnsInfo.ChannelUrl));
-        var footer = Ui.Footer(channel, buy, close);
+        var contact = Ui.Action("Написать", "Strong", () => AutoStart.OpenUrl(ChimerionDnsInfo.ContactUrl));
+        var footer = Ui.Footer(contact, buy, close);
         footer.Margin = new Thickness(0, 14, 0, 0);
         root.Children.Add(footer);
         w.Content = root;

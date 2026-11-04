@@ -2271,5 +2271,12 @@
  "Собираю отчет…": "Building the report…",
  "Собираю журнал…": "Building the log…",
  "Не удалось собрать отчет: {0}": "Could not build the report: {0}",
- "Не удалось прочитать журнал: {0}": "Could not read the log: {0}"
+ "Не удалось прочитать журнал: {0}": "Could not read the log: {0}",
+ "Написать": "Message",
+ "Премиум": "Premium",
+ "от CHIMERION": "by CHIMERION",
+ "Личный Smart DNS по подписке": "Personal Smart DNS, paid access",
+ "Платный сервер от создателей программы. Подробности: двойной щелчок": "A paid server from the makers of the program. Double-click for details",
+ "В Telegram-боте @CHIMERIONDNS_BOT, оплата звездами. Доступ приходит в чат сразу после оплаты. Другой способ оплаты: напишите @dev_under2ker": "In the Telegram bot @CHIMERIONDNS_BOT, paid with Stars. Access arrives in the chat right after payment. For another payment method, message @dev_under2ker",
+ "Вопросы и покупка: @dev_under2ker. Новости: канал @chimeriondns": "Questions and purchase: @dev_under2ker. News: channel @chimeriondns"
 }

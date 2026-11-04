@@ -36,7 +36,7 @@ public static class ServerListGuard
 
     /// <summary>Сервер, который нельзя убирать: работает, в избранном или к нему подключено.</summary>
     private static bool Keep(DnsServer s, Guid? connected) =>
-        s.IsFavorite || s.Id == connected || s.Status is ServerStatus.Ok or ServerStatus.Partial;
+        s.IsPromo || s.IsFavorite || s.Id == connected || s.Status is ServerStatus.Ok or ServerStatus.Partial;
 
     /// <summary>
     /// Убирает серверы, набранные с общих каталогов, а если список все равно раздут, лишние нерабочие (новые первыми).

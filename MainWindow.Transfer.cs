@@ -19,7 +19,7 @@ public partial class MainWindow
         try
         {
             var favorites = _servers.Count(s => s.IsFavorite);
-            File.WriteAllText(dlg.FileName, SettingsTransfer.Export(_settings, _servers), new System.Text.UTF8Encoding(false));
+            File.WriteAllText(dlg.FileName, SettingsTransfer.Export(_settings, DnsServer.ForSaving(_servers)), new System.Text.UTF8Encoding(false));
             Log($"Настройки экспортированы: избранных серверов {favorites}");
             ShowToast($"Настройки сохранены: {Path.GetFileName(dlg.FileName)}, избранных серверов {favorites}");
         }

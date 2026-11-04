@@ -54,8 +54,23 @@ public class DnsServer : INotifyPropertyChanged
     public string SourceHint => $"Открыть источник: {SourcePrettyShort}";
     public DateTime AddedAt { get; set; } = DateTime.Now;
 
+    private bool _pinnedAfterManualAdd;
     [JsonIgnore]
-    public bool PinnedAfterManualAdd { get; set; }
+    public bool PinnedAfterManualAdd { get => _pinnedAfterManualAdd || IsPromo; set => _pinnedAfterManualAdd = value; }
+
+    /// <summary>
+    /// Рекламная строка платного CHIMERION DNS в таблице: без адресов, к ней нельзя подключиться, она не проверяется,
+    /// не сохраняется и не участвует в подборе сервера. Щелчок по подключению открывает окно с описанием.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsPromo { get; init; }
+
+    /// <summary>Для привязок в таблице: кнопки обновления и избранного у рекламной строки скрыты.</summary>
+    [JsonIgnore]
+    public bool IsNotPromo => !IsPromo;
+
+    /// <summary>Что пишется в servers.json: рекламная строка добавляется при запуске и на диск не попадает.</summary>
+    public static List<DnsServer> ForSaving(IEnumerable<DnsServer> servers) => servers.Where(s => !s.IsPromo).ToList();
 
     /// <summary>Найден за последние 7 дней — в таблице помечается «новый».</summary>
     [JsonIgnore]
@@ -138,6 +153,7 @@ public class DnsServer : INotifyPropertyChanged
     {
         get
         {
+            if (IsPromo) return "Личный Smart DNS по подписке";
             if (!string.IsNullOrEmpty(Primary))
                 return (string.IsNullOrEmpty(Secondary) ? Primary : $"{Primary}, {Secondary}") + (Ipv6.Count > 0 ? " · IPv6" : "");
             return Uri.TryCreate(DohUrl, UriKind.Absolute, out var u) ? $"DoH · {u.Host}" : "—";
@@ -457,7 +473,7 @@ public class DnsServer : INotifyPropertyChanged
 
     /// <summary>Порядок сортировки: рабочие сверху, нерабочие внизу.</summary>
     [JsonIgnore]
-    public int Rank => Status switch
+    public int Rank => IsPromo ? -1 : Status switch
     {
         ServerStatus.Ok or ServerStatus.Partial => 100 - Score, // лучшие сверху
         ServerStatus.Checking => 200,
@@ -466,7 +482,7 @@ public class DnsServer : INotifyPropertyChanged
     };
 
     [JsonIgnore]
-    public string StatusText => Status switch
+    public string StatusText => IsPromo ? "Премиум" : Status switch
     {
         ServerStatus.Ok => "Работает",
         ServerStatus.Partial => "Частично",
@@ -503,7 +519,7 @@ public class DnsServer : INotifyPropertyChanged
 
     /// <summary>Ключ для дедупликации.</summary>
     [JsonIgnore]
-    public string Key => !string.IsNullOrEmpty(Primary) ? Primary : (DohUrl ?? Name).ToLowerInvariant();
+    public string Key => IsPromo ? "promo:chimerion-dns" : !string.IsNullOrEmpty(Primary) ? Primary : (DohUrl ?? Name).ToLowerInvariant();
 
     public void NotifyStability()
     {
