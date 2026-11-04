@@ -17,7 +17,7 @@ internal sealed class DiagnosticsWindow
     private readonly Window _w;
     private readonly AppSettings _settings;
     private readonly IReadOnlyList<Tool> _tools;
-    private readonly Func<IEnumerable<string>> _logTail;
+    private readonly Func<Task<IEnumerable<string>>> _logTail;
     private readonly Action<string> _log;
     private readonly StackPanel _list = new();
     private TextBlock _state = new();
@@ -62,7 +62,7 @@ internal sealed class DiagnosticsWindow
 
     private static DiagnosticsWindow? _open;
 
-    public static void Show(AppSettings settings, IReadOnlyList<Tool> tools, Func<IEnumerable<string>> logTail, Action<string> log,
+    public static void Show(AppSettings settings, IReadOnlyList<Tool> tools, Func<Task<IEnumerable<string>>> logTail, Action<string> log,
                             Func<string, Task>? fix = null)
     {
         if (_open != null) { _open._w.Activate(); return; }
@@ -73,7 +73,7 @@ internal sealed class DiagnosticsWindow
 
     private static ResourceDictionary Res => Application.Current.Resources;
 
-    private DiagnosticsWindow(AppSettings settings, IReadOnlyList<Tool> tools, Func<IEnumerable<string>> logTail, Action<string> log)
+    private DiagnosticsWindow(AppSettings settings, IReadOnlyList<Tool> tools, Func<Task<IEnumerable<string>>> logTail, Action<string> log)
     {
         _settings = settings;
         _tools = tools;
@@ -121,12 +121,12 @@ internal sealed class DiagnosticsWindow
 
         Button Add(string text, string style, Action click) { var b = Ui.Action(text, style, click); _buttons.Add(b); return b; }
         var left = new StackPanel { Orientation = Orientation.Horizontal };
-        left.Children.Add(Add("Скопировать отчет", "Strong", Copy).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
-        left.Children.Add(Add("Отчет в один клик", "Strong", () => _ = OneClickAsync()).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Проверить, собрать отчет, сохранить его на рабочий стол, скопировать и показать файл"; }));
+        left.Children.Add(Add("Скопировать отчет", "Strong", () => _ = BusyAsync(CopyAsync)).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
+        left.Children.Add(Add("Отчет в один клик", "Strong", () => _ = BusyAsync(OneClickAsync)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Проверить, собрать отчет, сохранить его на рабочий стол, скопировать и показать файл"; }));
         left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(_w)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
-        var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", Report), close);
+        var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", () => _ = BusyAsync(ReportAsync)), close);
         Grid.SetRow(footer, 4); root.Children.Add(footer);
         _w.Content = root;
     }
@@ -276,11 +276,33 @@ internal sealed class DiagnosticsWindow
         return g;
     }
 
-    private string? ReportText() => _report == null ? null : Diagnostics.ToText(_report, _logTail(), Diagnostics.RecentErrors());
-
-    private void Copy()
+    /// <summary>
+    /// Текст отчета собирается вне потока окна: журнал за 3 дня бывает десятками мегабайт, его чтение занимало
+    /// секунды, и программа замирала. Само копирование в буфер занимает миллисекунды.
+    /// </summary>
+    private async Task<string?> ReportTextAsync()
     {
-        if (ReportText() is not { } text) return;
+        if (_report is not { } report) return null;
+        _state.Text = "Собираю отчет…";
+        var tail = await _logTail();
+        return await Task.Run(() => Diagnostics.ToText(report, tail, Diagnostics.RecentErrors()));
+    }
+
+    /// <summary>Действие с отчетом: на это время кнопки выключены, чтобы отчет не собирался дважды. Закрыть окно можно.</summary>
+    private async Task BusyAsync(Func<Task> action)
+    {
+        foreach (var b in _buttons) b.IsEnabled = b.IsCancel;
+        try { await action(); }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _state.Text = "Не удалось собрать отчет: " + e.Message;
+        }
+        finally { foreach (var b in _buttons) b.IsEnabled = true; }
+    }
+
+    private async Task CopyAsync()
+    {
+        if (await ReportTextAsync() is not { } text) return;
         _state.Text = Ui.CopyText(text)
             ? "Отчет скопирован. Ваш IP, локальные адреса, имя пользователя и почта из него убраны"
             : "Буфер обмена занят другой программой. Сохраните отчет в файл кнопкой «Сохранить отчет»";
@@ -293,7 +315,7 @@ internal sealed class DiagnosticsWindow
     private async Task OneClickAsync()
     {
         if (_report == null) await RunAsync();
-        if (ReportText() is not { } text) return;
+        if (await ReportTextAsync() is not { } text) return;
         var dir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         var path = System.IO.Path.Combine(dir, $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}.txt");
         try
@@ -305,7 +327,7 @@ internal sealed class DiagnosticsWindow
         catch (Exception e)
         {
             SupportTrace.Write($"Отчет в один клик: рабочий стол недоступен ({e.GetType().Name})");
-            Save();
+            await SaveAsync();
             return;
         }
         bool copied = Ui.CopyText(text);
@@ -318,9 +340,9 @@ internal sealed class DiagnosticsWindow
     }
 
     /// <summary>Отчет файлом: когда буфер обмена занят или отчет нужно приложить к сообщению.</summary>
-    private void Save()
+    private async Task SaveAsync()
     {
-        if (ReportText() is not { } text) return;
+        if (await ReportTextAsync() is not { } text) return;
         var dlg = new Microsoft.Win32.SaveFileDialog
         {
             FileName = $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}.txt", Filter = "Текст (*.txt)|*.txt", DefaultExt = ".txt",
@@ -336,9 +358,9 @@ internal sealed class DiagnosticsWindow
         catch (Exception e) { _state.Text = "Не удалось сохранить отчет: " + e.Message; }
     }
 
-    private void Report()
+    private async Task ReportAsync()
     {
-        if (ReportText() is not { } text) return;
+        if (await ReportTextAsync() is not { } text) return;
         if (!DnexDialog.Ask("Открыть черновик на GitHub?",
                 "Отчет будет виден всем на GitHub. Ваш внешний IP, адреса локальной сети, имя пользователя Windows и почта из него убраны, " +
                 "адреса DNS-серверов остаются. Перед отправкой отчет можно поправить. Нужен аккаунт GitHub.",

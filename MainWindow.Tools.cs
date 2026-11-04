@@ -248,7 +248,7 @@ public partial class MainWindow
     private void DiagToggle_Click(object sender, RoutedEventArgs e)
     {
         DiagToggle.IsChecked = false;
-        DiagnosticsWindow.Show(_settings, _tools, LogForReport, Log, DiagFixAsync);
+        DiagnosticsWindow.Show(_settings, _tools, LogForReportAsync, Log, DiagFixAsync);
     }
 
     private void ToolsToggle_Click(object sender, RoutedEventArgs e)
