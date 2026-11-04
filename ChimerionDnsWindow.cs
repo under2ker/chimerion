@@ -59,7 +59,8 @@ internal static class ChimerionDnsWindow
 
         body.Children.Add(Ui.Section("Связь"));
         body.Children.Add(new TextBlock { Text = $"Вопросы и покупка: {ChimerionDnsInfo.BotName}. Новости: канал {ChimerionDnsInfo.ChannelName}", TextWrapping = TextWrapping.Wrap });
-        root.Children.Add(Ui.Scroll(body, 600));
+        // Шапка и кнопки занимают около 230: на небольшом экране прокручивается середина, а кнопки остаются видны
+        root.Children.Add(Ui.Scroll(body, Math.Min(600, SystemParameters.WorkArea.Height - 230)));
 
         var buy = Ui.Action("Открыть бота", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl));
         var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
