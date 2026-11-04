@@ -57,6 +57,39 @@ public partial class MainWindow
     private bool? _dashboardShownOn;
     private bool _dashboardSpinning;
 
+    /// <summary>Плашка CHIMERION DNS на главной: те же золотые цвета, что у строки в таблице серверов, цена из тарифов окна описания.</summary>
+    private static Border DashboardPromo()
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var star = new Controls.Icon { Kind = "star", Solid = true, Size = 22, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "Promo");
+        g.Children.Add(star);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
+        var title = new TextBlock { FontSize = 14.5, FontWeight = FontWeights.SemiBold };
+        title.Inlines.Add(new System.Windows.Documents.Run("CHIMERION DNS"));
+        title.Inlines.Add(new System.Windows.Documents.Run("  Премиум") { FontSize = 12 }.With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Promo")));
+        text.Children.Add(title);
+        text.Children.Add(Ui.Hint($"Личный Smart DNS · от {ChimerionDnsInfo.Plans[0].Rub} ₽ за {ChimerionDnsInfo.Plans[0].Days} дней", 2));
+        Grid.SetColumn(text, 1);
+        g.Children.Add(text);
+        var more = Ui.Action("Подробнее", "Primary", ChimerionDnsWindow.Show).With(b =>
+        {
+            b.Margin = new Thickness(0); b.Padding = new Thickness(14, 6, 14, 6); b.MinHeight = 32; b.VerticalAlignment = VerticalAlignment.Center;
+            b.SetResourceReference(Control.BackgroundProperty, "PromoButton");
+            b.SetResourceReference(Control.BorderBrushProperty, "PromoButton");
+            b.SetResourceReference(Control.ForegroundProperty, "OnPromoButton");
+            b.ToolTip = "Что входит, сколько стоит и где купить";
+        });
+        Grid.SetColumn(more, 2);
+        g.Children.Add(more);
+        return new Border { Child = g, Padding = new Thickness(14, 10, 10, 10), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1),
+                            Margin = new Thickness(24, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 460 }
+            .Ref(Border.BackgroundProperty, "PromoChip").Ref(Border.BorderBrushProperty, "Promo");
+    }
+
     private void SetupDashboard()
     {
         var page = new StackPanel { Margin = new Thickness(24, 20, 24, 24), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -78,6 +111,11 @@ public partial class MainWindow
         _dashboardPowerText = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 104 };
         power.Children.Add(_dashboardPower); power.Children.Add(_dashboardPowerText);
         DockPanel.SetDock(power, Dock.Right); heroTop.Children.Add(power);
+        // Платный CHIMERION DNS: золотая плашка в свободной середине карточки, между заголовком и переключателем
+        var promo = DashboardPromo();
+        DockPanel.SetDock(promo, Dock.Right); heroTop.Children.Add(promo);
+        // На узком окне плашка не теснит заголовок и описание: прячется, пока места меньше, чем нужно всем трем частям
+        heroTop.SizeChanged += (_, _) => promo.Visibility = heroTop.ActualWidth >= 1000 ? Visibility.Visible : Visibility.Collapsed;
         _dashboardHeroMark = new Controls.Icon { Kind = "circle-check", Size = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _dashboardHeroIcon = new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Child = _dashboardHeroMark,
                                           HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
