@@ -375,7 +375,7 @@
                           HorizontalScrollBarVisibility="Disabled" CanUserResizeRows="False"
                           SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_DoubleClick"
                           PreviewMouseLeftButtonDown="ServerGrid_PreviewMouseLeftButtonDown"
-                          LoadingRow="ServerGrid_LoadingRow"
+                          LoadingRow="ServerGrid_LoadingRow" ContextMenuOpening="ServerGrid_ContextMenuOpening"
                           PreviewKeyDown="Grid_KeyDown">
                     <DataGrid.ContextMenu>
                         <ContextMenu Opened="RowMenu_Opened">
