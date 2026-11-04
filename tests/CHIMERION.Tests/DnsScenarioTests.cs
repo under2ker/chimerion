@@ -61,18 +61,26 @@ public sealed class NetSim : IDisposable
     private readonly string _file = Path.Combine(TestSetup.DataDir, $"netsim-{Guid.NewGuid():N}.json");
     private readonly Func<string, bool, Task<(int, string)>> _prevRunner = DnsSwitcher.Runner;
     private readonly Func<bool> _prevV6 = DnsSwitcher.Ipv6Internet;
-    private readonly Func<Uri, IReadOnlyList<IPAddress>, Action<string>, CancellationToken, Task<DohRelaySession>> _prevRelayStart = DnsSwitcher.DohRelayStart;
-    private readonly Func<DohRelaySession, Action<string>, Task> _prevRelayStop = DnsSwitcher.DohRelayStop;
+    private readonly Func<Uri, IReadOnlyList<IPAddress>, string?, Action<string>, Task<DohProxySession>> _prevProxyStart = DnsSwitcher.DohProxyStart;
+    private readonly Func<string, Action<string>, Task> _prevProxyStop = DnsSwitcher.DohProxyStop;
+    private readonly Func<string, bool> _prevProxyRunning = DnsSwitcher.DohProxyRunning;
+    private readonly Func<IReadOnlyCollection<string>, List<string>> _prevFallback = DnsSwitcher.NetworkFallbackDns;
 
     /// <summary>Скрипты, которые программа запускала, по порядку: резервная копия, подключение, отключение.</summary>
     public List<string> Scripts { get; } = new();
 
-    /// <summary>Запуски локального посредника DoH по порядку: настоящие Планировщик и процесс не нужны.</summary>
-    internal List<DohRelaySession> RelaysStarted { get; } = new();
-    /// <summary>Остановки посредника: каналы, для которых программа отправила остановку.</summary>
-    internal List<string> RelaysStopped { get; } = new();
-    /// <summary>Отказ запуска посредника: так выглядит недоступный Планировщик.</summary>
-    public bool RelayFails { get; set; }
+    /// <summary>Запуски DoH-прокси по порядку: настоящий порт 53 не нужен.</summary>
+    internal List<DohProxySession> ProxiesStarted { get; } = new();
+    /// <summary>Нужный адрес при каждом запуске: null у нового подключения, адрес записи при подъеме после перезапуска.</summary>
+    internal List<string?> ProxyPreferred { get; } = new();
+    /// <summary>Остановки прокси: локальные адреса.</summary>
+    internal List<string> ProxiesStopped { get; } = new();
+    /// <summary>Отказ запуска прокси: DoH-сервер не ответил или адрес занят.</summary>
+    public bool ProxyFails { get; set; }
+    /// <summary>Работающие прокси с точки зрения программы.</summary>
+    internal HashSet<string> ProxiesRunning { get; } = new();
+    /// <summary>Прежний DNS сети, который программа найдет для работы без нее.</summary>
+    public List<string> Fallback { get; set; } = new();
 
     /// <summary>Перехват перед выполнением скрипта: можно бросить исключение (процесс не запустился) или зависнуть.</summary>
     public Func<string, Task>? Before { get; set; }
@@ -83,22 +91,25 @@ public sealed class NetSim : IDisposable
             File.Delete(Path.Combine(TestSetup.DataDir, f));
         Save(state);
         DnsSwitcher.Ipv6Internet = () => false;
-        // Посредник DoH: сценарная замена настоящего DohRelayRuntime, который создает задание Планировщика.
-        DnsSwitcher.DohRelayStart = (endpoint, upstream, _, _) =>
+        // DoH-прокси: сценарная замена настоящего DohLocalProxy, который занимает порт 53.
+        DnsSwitcher.DohProxyStart = (_, _, preferred, _) =>
         {
-            if (RelayFails) throw new InvalidOperationException("сценарный отказ посредника");
-            // Адреса как у настоящего посредника: 127.0.0.2, затем следующие свободные.
-            var session = new DohRelaySession(Guid.NewGuid().ToString("N"), $"127.0.0.{2 + RelaysStarted.Count}", 53);
-            RelaysStarted.Add(session);
-            _ = endpoint;
-            _ = upstream;
+            if (ProxyFails) throw new DohRelayFailedException("сценарный отказ прокси");
+            // Адреса как у настоящего прокси: 127.0.0.2, затем следующие свободные.
+            var session = new DohProxySession(preferred ?? $"127.0.0.{2 + ProxiesStarted.Count}", 53);
+            ProxiesStarted.Add(session);
+            ProxyPreferred.Add(preferred);
+            ProxiesRunning.Add(session.ListenAddress);
             return Task.FromResult(session);
         };
-        DnsSwitcher.DohRelayStop = (session, _) =>
+        DnsSwitcher.DohProxyStop = (address, _) =>
         {
-            RelaysStopped.Add(session.Channel);
+            ProxiesStopped.Add(address);
+            ProxiesRunning.Remove(address);
             return Task.CompletedTask;
         };
+        DnsSwitcher.DohProxyRunning = address => ProxiesRunning.Contains(address);
+        DnsSwitcher.NetworkFallbackDns = _ => Fallback.ToList();
         DnsSwitcher.Runner = async (script, _) =>
         {
             Scripts.Add(script);
@@ -140,6 +151,10 @@ public sealed class NetSim : IDisposable
     {
         DnsSwitcher.Runner = _prevRunner;
         DnsSwitcher.Ipv6Internet = _prevV6;
+        DnsSwitcher.DohProxyStart = _prevProxyStart;
+        DnsSwitcher.DohProxyStop = _prevProxyStop;
+        DnsSwitcher.DohProxyRunning = _prevProxyRunning;
+        DnsSwitcher.NetworkFallbackDns = _prevFallback;
         File.Delete(_file);
         foreach (var f in new[] { "active.json", "dns-backup.json", "ipv6-disabled.txt" })
             File.Delete(Path.Combine(TestSetup.DataDir, f));
@@ -263,69 +278,161 @@ public class DnsScenarioTests
         Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
     }
 
-    // DoH-ссылка без IP на Windows без системного DoH: DNS обслуживает локальный посредник,
+    // DoH-ссылка без IP на Windows без системного DoH: DNS обслуживает прокси внутри программы,
     // поэтому сервер подключается, а не отвергается с ошибкой.
     [Fact]
-    public async Task Doh_only_server_on_windows_without_doh_uses_local_relay()
+    public async Task Doh_only_server_on_windows_without_doh_uses_local_proxy()
     {
         using var sim = new NetSim(OneEthernet()) { NoDoh = true };
-        // Адрес DoH с токеном: посредник получает его целиком, а в журнал он попадать не должен.
+        // Адрес DoH с токеном: прокси получает его целиком, а в журнал он попадать не должен.
         var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5:8443/dns-query/secret-token" };
         var (log, write) = NewLog();
 
         await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
 
-        var relay = Assert.Single(sim.RelaysStarted);
-        Assert.Equal(new[] { relay.ListenAddress }, sim["Sim-Ethernet"].dns4);
+        var proxy = Assert.Single(sim.ProxiesStarted);
+        Assert.Equal(new[] { proxy.ListenAddress }, sim["Sim-Ethernet"].dns4);
         var active = DnsSwitcher.GetActive();
         Assert.NotNull(active);
-        Assert.Equal(relay.Channel, active!.RelayChannel);
-        Assert.Equal(relay.ListenAddress, active.RelayListen);
-        Assert.Contains(log, line => line.Contains("локальный посредник"));
+        Assert.Equal(proxy.ListenAddress, active!.ProxyListen);
+        Assert.Equal(new[] { "203.0.113.5" }, active.ProxyBootstrap);
+        Assert.Contains(log, line => line.Contains("DoH-прокси программы"));
         Assert.DoesNotContain(log, line => line.Contains("secret-token") || line.Contains("dns-query"));
 
         await DnsSwitcher.RestoreAsync(write);
         Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
-        Assert.Contains(relay.Channel, sim.RelaysStopped);
+        Assert.Contains(proxy.ListenAddress, sim.ProxiesStopped);
         Assert.Null(DnsSwitcher.GetActive());
         Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
     }
 
     [Fact]
-    public async Task Relay_that_did_not_start_leaves_network_untouched()
+    public async Task Proxy_keeps_network_dns_behind_it_for_when_the_program_is_closed()
     {
-        using var sim = new NetSim(OneEthernet()) { NoDoh = true, RelayFails = true };
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true, Fallback = new() { "192.168.1.1" } };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
+        var (log, write) = NewLog();
+
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+
+        var proxy = Assert.Single(sim.ProxiesStarted);
+        Assert.Equal(new[] { proxy.ListenAddress, "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        // Сторож считает своими оба адреса, а отключение не считает прежний DNS сети нашим
+        Assert.Equal(new[] { proxy.ListenAddress, "192.168.1.1" }, DnsSwitcher.GetActive()!.OnAdapters);
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Equal("", sim["Sim-Ethernet"].static4);
+    }
+
+    [Fact]
+    public async Task Proxy_that_did_not_start_leaves_network_untouched()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true, ProxyFails = true };
         var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
         var (log, write) = NewLog();
 
         await Assert.ThrowsAsync<DohRelayFailedException>(() => DnsSwitcher.ApplyAsync(server, new AppSettings(), write));
 
         Assert.Equal(new[] { "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
-        Assert.Empty(sim.RelaysStarted);
+        Assert.Empty(sim.ProxiesStarted);
         Assert.Null(DnsSwitcher.GetActive());
         Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
         Assert.DoesNotContain(log, line => line.Contains("secret-token"));
     }
 
     [Fact]
-    public async Task Switching_between_doh_links_starts_new_relay_and_stops_old()
+    public async Task Switching_between_doh_links_starts_new_proxy_and_stops_old()
     {
-        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true, Fallback = new() { "192.168.1.1" } };
         var (log, write) = NewLog();
         var first = new DnsServer { Name = "Первый", DohUrl = "https://203.0.113.5/dns-query/one" };
         var second = new DnsServer { Name = "Второй", DohUrl = "https://203.0.113.6/dns-query/two" };
 
         await DnsSwitcher.ApplyAsync(first, new AppSettings(), write);
-        var relayOne = Assert.Single(sim.RelaysStarted);
+        var proxyOne = Assert.Single(sim.ProxiesStarted);
         await DnsSwitcher.ApplyAsync(second, new AppSettings(), write);
 
-        Assert.Equal(2, sim.RelaysStarted.Count);
-        var relayTwo = sim.RelaysStarted[1];
-        Assert.NotEqual(relayOne.ListenAddress, relayTwo.ListenAddress);
-        Assert.Contains(relayOne.Channel, sim.RelaysStopped);
-        Assert.Equal(new[] { relayTwo.ListenAddress }, sim["Sim-Ethernet"].dns4);
-        Assert.Equal(relayTwo.Channel, DnsSwitcher.GetActive()!.RelayChannel);
+        Assert.Equal(2, sim.ProxiesStarted.Count);
+        var proxyTwo = sim.ProxiesStarted[1];
+        Assert.NotEqual(proxyOne.ListenAddress, proxyTwo.ListenAddress);
+        Assert.Contains(proxyOne.ListenAddress, sim.ProxiesStopped);
+        Assert.Equal(new[] { proxyTwo.ListenAddress, "192.168.1.1" }, sim["Sim-Ethernet"].dns4);
+        Assert.Equal(proxyTwo.ListenAddress, DnsSwitcher.GetActive()!.ProxyListen);
         Assert.DoesNotContain(log, line => line.Contains("dns-query"));
+    }
+
+    [Fact]
+    public async Task Reconnect_with_the_same_doh_link_keeps_the_running_proxy()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        DnsSwitcher.DohProxyStart = (_, _, _, _) =>
+        {
+            sim.ProxiesRunning.Add("127.0.0.2");
+            return Task.FromResult(new DohProxySession("127.0.0.2", 53));
+        };
+        var (_, write) = NewLog();
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/one" };
+
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+
+        Assert.Empty(sim.ProxiesStopped);
+        Assert.Contains("127.0.0.2", sim.ProxiesRunning);
+    }
+
+    [Fact]
+    public async Task Declined_uac_stops_only_the_new_proxy_and_keeps_previous_connection()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var (_, write) = NewLog();
+        await DnsSwitcher.ApplyAsync(new DnsServer { Name = "Первый", DohUrl = "https://203.0.113.5/dns-query/one" }, new AppSettings(), write);
+        var first = Assert.Single(sim.ProxiesStarted).ListenAddress;
+
+        sim.Before = script => script.Contains("Set-DnsClientServerAddress") ? throw new UacDeclinedException() : Task.CompletedTask;
+        await Assert.ThrowsAsync<UacDeclinedException>(() => DnsSwitcher.ApplyAsync(
+            new DnsServer { Name = "Второй", DohUrl = "https://203.0.113.6/dns-query/two" }, new AppSettings(), write));
+
+        var second = sim.ProxiesStarted[1].ListenAddress;
+        Assert.Equal(new[] { second }, sim.ProxiesStopped);
+        Assert.Contains(first, sim.ProxiesRunning);
+        Assert.Equal(first, DnsSwitcher.GetActive()!.ProxyListen);
+    }
+
+    [Fact]
+    public async Task Proxy_comes_back_on_its_address_after_program_restart()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var (_, write) = NewLog();
+        await DnsSwitcher.ApplyAsync(new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" }, new AppSettings(), write);
+        var active = DnsSwitcher.GetActive()!;
+        Assert.DoesNotContain("secret-token", File.ReadAllText(Path.Combine(TestSetup.DataDir, "active.json")));
+
+        // Работает: второй раз не запускается
+        Assert.True(await DnsSwitcher.EnsureProxyAsync(active, write));
+        Assert.Single(sim.ProxiesStarted);
+
+        // Программу перезапустили: прокси поднимается на том же адресе
+        sim.ProxiesRunning.Clear();
+        Assert.True(await DnsSwitcher.EnsureProxyAsync(active, write));
+        Assert.Equal(2, sim.ProxiesStarted.Count);
+        Assert.Equal(active.ProxyListen, sim.ProxyPreferred[1]);
+
+        // Адрес занят другой программой: подключение нужно поставить заново
+        sim.ProxiesRunning.Clear();
+        sim.ProxyFails = true;
+        Assert.False(await DnsSwitcher.EnsureProxyAsync(active, write));
+
+        // Обычное подключение прокси не касается
+        Assert.True(await DnsSwitcher.EnsureProxyAsync(new DnsSwitcher.ActiveConnection { Addresses = new() { "203.0.113.5" } }, write));
+    }
+
+    [Fact]
+    public async Task Proxy_record_without_endpoint_asks_to_reconnect()
+    {
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var active = new DnsSwitcher.ActiveConnection { Addresses = new() { "127.0.0.2" }, ProxyListen = "127.0.0.2", ProxyBootstrap = new() { "203.0.113.5" } };
+        Assert.False(await DnsSwitcher.EnsureProxyAsync(active, _ => { }));
+        Assert.Empty(sim.ProxiesStarted);
     }
 
     [Fact]

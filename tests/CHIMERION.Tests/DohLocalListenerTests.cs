@@ -124,7 +124,7 @@ public class DohLocalListenerTests
     public async Task Late_answer_to_a_closed_client_port_does_not_stop_udp()
     {
         // Клиент не дождался ответа и закрыл порт: Windows возвращает на следующем приеме ошибку 10054.
-        // Прием должен продолжиться, иначе посредник перестает отвечать всем.
+        // Прием должен продолжиться, иначе прокси перестает отвечать всем.
         var handler = new GateHandler();
         using var http = new HttpClient(handler);
         var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));

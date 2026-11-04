@@ -4,9 +4,9 @@ using System.Net.Sockets;
 namespace Dnex.Services;
 
 /// <summary>
-/// Адреса DoH-сервера для посредника. Они узнаются при подключении, но сервер может сменить IP: тогда посредник
-/// переставал работать до переподключения. Если не ответил ни один адрес, посредник заново спрашивает их у эталонного
-/// DoH по IP-адресу (системный DNS сейчас указывает на сам посредник), не чаще раза в минуту.
+/// Адреса DoH-сервера для прокси. Они узнаются при подключении, но сервер может сменить IP: тогда прокси
+/// переставал работать до переподключения. Если не ответил ни один адрес, прокси заново спрашивает их у эталонного
+/// DoH по IP-адресу (системный DNS сейчас указывает на сам прокси), не чаще раза в минуту.
 /// </summary>
 internal sealed class DohRelayAddresses
 {
@@ -59,7 +59,7 @@ internal sealed class DohRelayAddresses
         .Where(ip => ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip) && !ip.Equals(IPAddress.Any))
         .Distinct().Take(4).ToArray();
 
-    /// <summary>Эталоны с IP в адресе: имя вроде dns.google пришлось бы разрешать через сам посредник.</summary>
+    /// <summary>Эталоны с IP в адресе: имя вроде dns.google пришлось бы разрешать через сам прокси.</summary>
     internal static readonly string[] References = { new Models.AppSettings().ReferenceDoh, "https://8.8.8.8/dns-query", "https://1.1.1.1/dns-query" };
 
     /// <summary>Адреса имени через первый ответивший эталон, только IPv4 (как при подключении).</summary>

@@ -47,11 +47,24 @@ public class HangTests
                     var ok = Ui.CopyText("проверка буфера " + i);
                     // Раньше каждый щелчок по ID стоил до 4 с, а при занятом буфере до 11 с
                     Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), $"копирование заняло {sw.Elapsed}");
-                    if (ok) Assert.Equal("проверка буфера " + i, System.Windows.Clipboard.GetText());
+                    if (ok) Assert.Equal("проверка буфера " + i, ReadClipboard());
                 }
             }
             finally { if (saved != null) Ui.CopyText(saved); }
         });
+    }
+
+    /// <summary>
+    /// Чтение буфера с повтором: сразу после записи его на миллисекунды открывают программы, которые за ним следят
+    /// (общий буфер VirtualBox, RDP, менеджеры буфера), и чтение падает с CLIPBRD_E_CANT_OPEN.
+    /// </summary>
+    internal static string ReadClipboard()
+    {
+        for (int i = 0; ; i++)
+        {
+            try { return System.Windows.Clipboard.GetText(); }
+            catch (System.Runtime.InteropServices.COMException) when (i < 20) { Thread.Sleep(50); }
+        }
     }
 
     private static Task OnSta(Action action)

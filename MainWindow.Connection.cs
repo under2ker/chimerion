@@ -192,10 +192,10 @@ public partial class MainWindow
         }
         catch (DohRelayFailedException ex)
         {
-            // Windows без системного DoH, а локальный посредник поднять не удалось: сеть не менялась.
+            // Windows без системного DoH, а DoH-прокси программы поднять не удалось: сеть не менялась.
             Log(ex.Message);
             if (!auto)
-                DnexDialog.Show("Не удалось подключить DoH", "Windows не поддерживает системный DoH, а локальный посредник DoH не запустился.\n\n" +
+                DnexDialog.Show("Не удалось подключить DoH", "В этой Windows нет своего DoH, а DoH-прокси программы не запустился.\n\n" +
                     ex.Message + "\n\nНастройки сети не изменены.", DialogKind.Warn, "Подключение");
         }
         catch (UacDeclinedException)
@@ -403,12 +403,6 @@ public partial class MainWindow
     }
 
 
-    /// <summary>Сведения о локальном посреднике DoH из записи о подключении: канал и адрес, который стоит в DNS.</summary>
-    private static DohRelaySession? RelaySession(DnsSwitcher.ActiveConnection? active) =>
-        active?.RelayChannel is { Length: > 0 } channel
-            ? new DohRelaySession(channel, string.IsNullOrWhiteSpace(active.RelayListen) ? "127.0.0.2" : active.RelayListen, 53)
-            : null;
-
     /// <summary>
     /// После запуска: следы оборванного изменения сети. Устаревшая копия убирается сама, откат требует прав и идет из «Диагностики».
     /// </summary>
@@ -421,9 +415,9 @@ public partial class MainWindow
             if (issue == StartupIssue.StaleBackup) { DnsSwitcher.DropStaleBackup(); Log("Устаревшая копия настроек DNS убрана"); }
             else Log($"После запуска: {StartupCheck.Describe(issue)}");
         }
-        // Посредник DoH прошлого подключения без записи о подключении больше не нужен: убираем его задание и процесс.
-        // Если запись есть, работающий посредник проверит EnsureConnectionAfterStartAsync.
-        await DohRelayRuntime.CleanupStaleAsync(RelaySession(DnsSwitcher.GetActive()), Log);
+        // Прежний посредник DoH (отдельный процесс через Планировщик) заменен прокси внутри программы: его задания,
+        // процессы и файлы больше не нужны. Подключение через него переводит на прокси EnsureConnectionAfterStartAsync
+        await LegacyRelayCleanup.RunAsync(Log);
         if (issues.Any(StartupCheck.NeedsRestore)) ShowToast("Прошлый запуск оборвался: верните настройки сети в «Диагностике»", "Warn");
     }
 
@@ -438,16 +432,11 @@ public partial class MainWindow
         if (DnsSwitcher.GetActive() is not { } active) return;
         // Копия данных для тестов и снимков: подключение в ней чужое, DNS этого компьютера не трогаем
         if (Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1") return;
-        // Подключение через локальный посредник DoH: пока он не работает, DNS системы никуда не идет.
-        // Задание Планировщика поднимает его и после перезагрузки; если не вышло, безопаснее вернуть исходный DNS.
-        if (RelaySession(active) is { } relay && !await DohRelayRuntime.EnsureRunningAsync(relay, Log, CancellationToken.None))
-        {
-            Log("Локальный посредник DoH не запустился. Возвращаю исходные настройки DNS");
-            try { await DnsSwitcher.RestoreAsync(Log); }
-            catch (Exception ex) { Log("Вернуть исходные настройки DNS не удалось: " + ex.Message); }
-            await RefreshConnectionAsync();
-            return;
-        }
+        // Подключение через DoH-прокси программы: прокси живет в программе, поднимаем его сразу, до ожидания сети.
+        // До этого DNS шел через прежний DNS сети, который стоит на адаптерах после прокси
+        bool proxyOk = await DnsSwitcher.EnsureProxyAsync(active, Log);
+        // Подключение через прежний посредник (0.1.120–0.1.125) и прокси, который не встал на свой адрес: ставим заново
+        bool reconnect = active.RelayChannel != null || !proxyOk;
         // Режим «Два DNS»: кроме адаптеров проверяем правила NRPT (их мог снять откат системы или другая программа)
         if (ConnectionMonitor.Mine(active).Count == 0 && !active.Split) return;
 
@@ -467,6 +456,17 @@ public partial class MainWindow
 
         var current = await DnsSwitcher.GetCurrentAddressesAsync();
         var adapters = await DnsSwitcher.GetCurrentAdapterAddressesAsync();
+        if (reconnect)
+        {
+            Log(active.RelayChannel != null ? "Подключение шло через прежний посредник DoH. Перевожу его на DoH-прокси программы"
+                                            : "DoH-прокси программы не встал на прежний адрес. Ставлю подключение заново");
+            if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is { } again && await ConnectToAsync(again, auto: true)) return;
+            Log("Поставить подключение заново не вышло. Возвращаю исходные настройки DNS");
+            try { await DnsSwitcher.RestoreAsync(Log); }
+            catch (Exception ex) { Log("Вернуть исходные настройки DNS не удалось: " + ex.Message); }
+            await RefreshConnectionAsync();
+            return;
+        }
         if (!ConnectionMonitor.NeedsRestore(active, current, SplitDns.RulesPresent(), out bool rulesLost, adapters))
         {
             Log($"DNS «{active.Name}» на месте");
@@ -551,9 +551,9 @@ public partial class MainWindow
                 return;
             case ConnectionMonitor.Verdict.Failing:
                 Log($"Сторож: DNS не отвечает ({_monitor.Fails}/{ConnectionMonitor.FailsBeforeSwitch})");
-                // Локальный посредник DoH мог закрыться (перезагрузка, обновление, ошибка): пробуем поднять его снова.
-                if (RelaySession(active) is { } relay && await DohRelayRuntime.EnsureRunningAsync(relay, Log, CancellationToken.None))
-                    Log("Сторож: локальный посредник DoH перезапущен");
+                // DoH-прокси программы мог остановиться (ошибка приема): пробуем поднять его снова.
+                if (active.ProxyListen != null && !DnsSwitcher.DohProxyRunning(active.ProxyListen) && await DnsSwitcher.EnsureProxyAsync(active, Log))
+                    Log("Сторож: DoH-прокси программы перезапущен");
                 return;
             case ConnectionMonitor.Verdict.SwitchServer:
                 Log($"Сторож: DNS не отвечает ({ConnectionMonitor.FailsBeforeSwitch}/{ConnectionMonitor.FailsBeforeSwitch})");

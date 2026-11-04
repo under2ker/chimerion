@@ -243,7 +243,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                var r = ClosePrompt.Ask(a == null ? null : Loc.T(a.Name), running);
+                var r = ClosePrompt.Ask(a == null ? null : Loc.T(a.Name), running, a?.ProxyListen != null);
                 if (r == MessageBoxResult.Cancel) { _exitRequested = false; return; }
                 _cts?.Cancel();
                 if (r == MessageBoxResult.No) _keepToolsOnExit = true;

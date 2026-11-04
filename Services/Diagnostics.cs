@@ -66,10 +66,16 @@ public static class Diagnostics
             items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {activeName} с {active.Since:dd.MM HH:mm}",
                 !onAdapters ? $"DNS системы не совпадает с подключением ({string.Join(", ", current)}) или пропали правила для ИИ: их сбросила другая программа или Windows"
                 : active.Split ? $"Два DNS: домены ИИ через {activeName} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"
-                : $"DNS системы: {string.Join(", ", current)}" + (active.ReadDohTemplate() != null || active.RelayChannel != null ? ", DoH" : ""),
+                : $"DNS системы: {string.Join(", ", current)}" + (active.ReadDohTemplate() != null || active.ProxyListen != null ? ", DoH" : ""),
                 onAdapters ? null : "reconnect", "Переподключить"));
             if (active.Split && SplitDns.GeneralIsSmart(st.SplitDns, active.Addresses))
                 items.Add(new DiagItem(DiagLevel.Warn, "Общий DNS совпадает со Smart DNS", SplitDns.GeneralIsSmartWarning, "split", "Открыть «Два DNS»"));
+            if (active.ProxyListen is { } proxyListen)
+                items.Add(DohLocalProxy.IsRunning(proxyListen)
+                    ? new DiagItem(DiagLevel.Ok, $"DoH-прокси программы: {proxyListen}", "В этой Windows нет своего DoH, шифрует CHIMERION. Пока она закрыта, DNS идет через прежний DNS сети")
+                    : new DiagItem(DiagLevel.Bad, "DoH-прокси программы не работает", "Запросы идут через прежний DNS сети. Переподключитесь к серверу"));
+            else if (active.RelayChannel != null)
+                items.Add(new DiagItem(DiagLevel.Warn, "Подключение через прежний посредник DoH", "Он заменен прокси внутри программы. Переподключитесь к серверу"));
             items.Add(active.BackupName != null
                 ? new DiagItem(DiagLevel.Ok, $"Запасной сервер: {active.BackupName}", $"{string.Join(", ", active.BackupAddresses)}. Если основной перестанет отвечать, Windows перейдет на него сама")
                 : new DiagItem(DiagLevel.Info, "Запасного сервера нет", st.UseBackupServer

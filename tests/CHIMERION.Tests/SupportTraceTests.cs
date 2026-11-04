@@ -125,7 +125,7 @@ public sealed class SupportTraceTests : IDisposable
         {
             var text = string.Concat(Enumerable.Repeat("report line for clipboard check\n", 30000));
             if (!Dnex.Ui.CopyText(text)) return; // буфер может держать чужая программа: тест не должен падать
-            Assert.Equal(text, System.Windows.Clipboard.GetText());
+            Assert.Equal(text, HangTests.ReadClipboard());
         });
     }
 
