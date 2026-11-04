@@ -59,7 +59,7 @@ internal sealed class LogWindow
 
     private readonly Window _w;
     private readonly ObservableCollection<LogEntry> _log;
-    private readonly Func<List<LogEntry>> _stored;
+    private readonly Func<Task<List<LogEntry>>> _stored;
     private readonly Action _clear;
     private readonly ObservableCollection<LogRow> _rows = new();
     private readonly ListCollectionView _view;
@@ -72,7 +72,7 @@ internal sealed class LogWindow
     private readonly System.Windows.Threading.DispatcherTimer _doneTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private int _filter; // 0 все, 1 успех, 2 предупреждения, 3 ошибки
 
-    public static void Show(Window? owner, ObservableCollection<LogEntry> log, Func<List<LogEntry>> stored, Action clear)
+    public static void Show(Window? owner, ObservableCollection<LogEntry> log, Func<Task<List<LogEntry>>> stored, Action clear)
     {
         if (_open != null)
         {
@@ -90,7 +90,7 @@ internal sealed class LogWindow
         PrivacyGuard.ForExport(string.Join(Environment.NewLine,
             items.Select(x => $"[{(withDate ? x.Time.ToString("dd.MM HH:mm:ss") : x.TimeText)}] {x.Text}")));
 
-    private LogWindow(Window? owner, ObservableCollection<LogEntry> log, Func<List<LogEntry>> stored, Action clear)
+    private LogWindow(Window? owner, ObservableCollection<LogEntry> log, Func<Task<List<LogEntry>>> stored, Action clear)
     {
         _log = log; _stored = stored; _clear = clear;
         _w = DnexDialog.CreateWindow("Журнал", 1000);
@@ -169,12 +169,12 @@ internal sealed class LogWindow
         _copySelected = Ui.Action("Скопировать выбранные", "Strong", CopySelected);
         var actions = new DockPanel { Margin = new Thickness(0, 12, 0, 0) };
         var right = new StackPanel { Orientation = Orientation.Horizontal };
-        right.Children.Add(IconButton("Сохранить в файл", "download", "Ghost", SaveToFile));
+        right.Children.Add(IconButton("Сохранить в файл", "download", "Ghost", () => _ = SaveToFileAsync()));
         right.Children.Add(IconButton("Папка журналов", "external-link", "Ghost", () => AutoStart.OpenUrl(LogStore.Dir)));
         right.Children.Add(IconButton("Очистить", "x", "Ghost", () => { _clear(); Done("Журнал очищен, вернуть можно в главном окне"); }).With(b => b.Margin = new Thickness(0)));
         DockPanel.SetDock(right, Dock.Right); actions.Children.Add(right);
         var left = new StackPanel { Orientation = Orientation.Horizontal };
-        left.Children.Add(IconButton("Скопировать журнал за 3 дня", "copy", "Primary", CopyAll)
+        left.Children.Add(IconButton("Скопировать журнал за 3 дня", "copy", "Primary", () => _ = CopyAllAsync())
             .With(b => b.ToolTip = "Все записи за 3 дня из всех запусков программы, с учетом фильтра и поиска. Повторы не схлопываются"));
         left.Children.Add(_copySelected);
         _done.VerticalAlignment = VerticalAlignment.Center; _done.Opacity = 0;
@@ -366,7 +366,7 @@ internal sealed class LogWindow
     {
         bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control), shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         if (ctrl && e.Key == Key.F) { _search.Focus(); _search.SelectAll(); e.Handled = true; }
-        else if (ctrl && shift && e.Key == Key.C) { CopyAll(); e.Handled = true; }
+        else if (ctrl && shift && e.Key == Key.C) { _ = CopyAllAsync(); e.Handled = true; }
         else if (ctrl && e.Key == Key.C && !_search.IsKeyboardFocused) { CopySelected(); e.Handled = true; }
         else if (ctrl && e.Key == Key.A && !_search.IsKeyboardFocused) { _list.SelectAll(); _list.Focus(); e.Handled = true; }
         else if (e.Key == Key.Escape && !_search.IsKeyboardFocused) _w.Close();
@@ -381,15 +381,29 @@ internal sealed class LogWindow
     }
 
     /// <summary>Весь журнал с диска за 3 дня (все запуски программы), с учетом фильтра и поиска.</summary>
-    private void CopyAll()
+    private async Task CopyAllAsync()
     {
-        var all = AllForExport();
-        Copy(all, true, $"Журнал за 3 дня скопирован: {all.Count} строк");
+        if (_exporting) return;
+        _exporting = true;
+        try
+        {
+            Done("Собираю журнал…");
+            var all = await AllForExportAsync();
+            var text = await Task.Run(() => Format(all, true));
+            if (text.Length == 0) Done("Копировать нечего", warn: true);
+            else if (Ui.CopyText(text)) Done($"Журнал за 3 дня скопирован: {all.Count} строк");
+            else Done("Буфер обмена занят другой программой: сохраните журнал в файл", warn: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Done("Не удалось прочитать журнал: " + ex.Message, warn: true); }
+        finally { _exporting = false; }
     }
 
-    private List<LogEntry> AllForExport()
+    /// <summary>Журнал уже собирается: повторное нажатие не запускает второе чтение.</summary>
+    private bool _exporting;
+
+    private async Task<List<LogEntry>> AllForExportAsync()
     {
-        var all = _stored();
+        var all = await _stored();
         if (all.Count == 0) all = _log.ToList();
         return all.Where(x => Matches(x.Level, x.Text)).ToList();
     }
@@ -402,7 +416,7 @@ internal sealed class LogWindow
         else Done("Буфер обмена занят другой программой: сохраните журнал в файл", warn: true);
     }
 
-    private void SaveToFile()
+    private async Task SaveToFileAsync()
     {
         var dlg = new Microsoft.Win32.SaveFileDialog
         {
@@ -411,8 +425,8 @@ internal sealed class LogWindow
         if (dlg.ShowDialog(_w) != true) return;
         try
         {
-            var all = AllForExport();
-            File.WriteAllText(dlg.FileName, Format(all, true));
+            var all = await AllForExportAsync();
+            await Task.Run(() => File.WriteAllText(dlg.FileName, Format(all, true)));
             Done($"Сохранено строк: {all.Count}");
         }
         catch (Exception ex) { Done("Не удалось сохранить: " + ex.Message, warn: true); }

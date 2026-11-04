@@ -22,7 +22,7 @@ public partial class MainWindow
     /// <summary>Журнал открывается отдельным окном (его держат рядом, пока что-то делают в программе).</summary>
     private void LogToggle_Click(object sender, RoutedEventArgs e) { LogToggle.IsChecked = false; OpenLog(); }
 
-    private void OpenLog() => LogWindow.Show(this, _log, StoredLog, () => ClearLog_Click(this, new RoutedEventArgs()));
+    private void OpenLog() => LogWindow.Show(this, _log, StoredLogAsync, () => ClearLog_Click(this, new RoutedEventArgs()));
 
 
     private readonly System.Collections.Concurrent.ConcurrentQueue<LogEntry> _logQueue = new();
@@ -103,12 +103,16 @@ public partial class MainWindow
     }
 
     /// <summary>Весь журнал с диска за 3 дня (все запуски).</summary>
-    private List<LogEntry> StoredLog()
+    private async Task<List<LogEntry>> StoredLogAsync()
     {
         FlushLog();
         SupportTrace.Write("Подготовка полного журнала для копирования или отчета");
-        SupportTrace.Flush();
-        return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).ToList();
+        // Журнал за 3 дня бывает десятками мегабайт: чтение занимало секунды и в потоке окна подвешивало программу
+        return await Task.Run(() =>
+        {
+            SupportTrace.Flush();
+            return LogStore.ReadAll().Select(x => new LogEntry(x.Time, x.Text)).ToList();
+        });
     }
 
     /// <summary>Журнал для отчета диагностики: все записи за 3 дня с датой.</summary>
@@ -119,10 +123,15 @@ public partial class MainWindow
     private static readonly string[] ActionMarks = { "] Нажатие", "] Выбор:", "] Окно ", "] Видимость окна", "] Состояние окна", "] Запрошено закрытие", "] Команда клавиатуры", "] Трей" };
     internal static bool IsUserAction(string line) => ActionMarks.Any(m => line.Contains(m, StringComparison.Ordinal));
 
-    private IEnumerable<string> LogForReport()
+    private async Task<IEnumerable<string>> LogForReportAsync()
     {
-        var all = StoredLog();
+        var all = await StoredLogAsync();
         if (all.Count == 0) all = _log.ToList();
+        return await Task.Run(() => ReportLines(all));
+    }
+
+    private static IEnumerable<string> ReportLines(List<LogEntry> all)
+    {
         var lines = all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}").ToList();
         // Действия пользователя и состояние окон выносятся отдельно: иначе их вытесняют тысячи строк проверок серверов
         var actions = lines.Where(IsUserAction).ToList();
