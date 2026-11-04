@@ -383,13 +383,16 @@ public partial class MainWindow
     {
         if (e.Row.Item is DnsServer { IsPromo: true })
         {
-            e.Row.SetResourceReference(BackgroundProperty, "AccentSoft");
+            // Плавный градиент от акцента и более высокая строка: это предложение, а не ряд в списке
+            e.Row.SetResourceReference(BackgroundProperty, "PromoRow");
             e.Row.SetResourceReference(BorderBrushProperty, "Accent");
+            e.Row.MinHeight = 68;
         }
         else
         {
             e.Row.ClearValue(BackgroundProperty);
             e.Row.ClearValue(BorderBrushProperty);
+            e.Row.ClearValue(MinHeightProperty);
         }
     }
 

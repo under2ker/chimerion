@@ -30,6 +30,9 @@ public partial class App : Application
             Shutdown(Dnex.Services.Tools.ZapretTool.RunHelper(helper + 1 < e.Args.Length ? e.Args[helper + 1] : ""));
             return;
         }
+        // Тестовый процесс создает App только ради ресурсов стилей: без запуска программы (окно, трей, проверка второй
+        // копии, которая будила бы настоящую CHIMERION пользователя). Режимы помощников выше работают как обычно
+        if (Environment.GetEnvironmentVariable("DNEX_TEST_HOST") == "1" && Application.Current == this && e.Args.Length == 0) { base.OnStartup(e); return; }
         bool first;
         try
         {

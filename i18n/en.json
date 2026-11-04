@@ -2330,5 +2330,9 @@
  "Оплата звездами. Доступ приходит в чат сразу после оплаты": "Pay with Stars. Access arrives in the chat right after payment",
  "Другой способ оплаты и вопросы": "Other payment methods and questions",
  "Новости": "News",
- "Оплата звездами Telegram": "Pay with Telegram Stars"
+ "Оплата звездами Telegram": "Pay with Telegram Stars",
+ "Доступ работает с ChatGPT, Claude и Gemini без VPN": "The access works with ChatGPT, Claude and Gemini without a VPN",
+ "Что входит, сколько стоит и где купить": "What is included, the price and where to buy",
+ "от {0} ₽ за {1} дней": "from {0} ₽ for {1} days",
+ "личный сервер": "private server"
 }
