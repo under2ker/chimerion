@@ -385,7 +385,7 @@ public partial class MainWindow
         {
             // Плавный градиент от акцента и более высокая строка: это предложение, а не ряд в списке
             e.Row.SetResourceReference(BackgroundProperty, "PromoRow");
-            e.Row.SetResourceReference(BorderBrushProperty, "Accent");
+            e.Row.SetResourceReference(BorderBrushProperty, "Promo");
             e.Row.MinHeight = 68;
         }
         else

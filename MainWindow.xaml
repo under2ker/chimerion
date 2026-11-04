@@ -475,7 +475,7 @@
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
                                             <Ellipse x:Name="dot" Width="8" Height="8" Fill="{DynamicResource Idle}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                                            <controls:Icon x:Name="promoStar" Kind="star" Size="14" Solid="True" Foreground="{DynamicResource Accent}"
+                                            <controls:Icon x:Name="promoStar" Kind="star" Size="14" Solid="True" Foreground="{DynamicResource Promo}"
                                                            HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed"/>
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                 <TextBlock x:Name="st" Text="{Binding StatusText}" Foreground="{DynamicResource Muted}"/>
@@ -505,7 +505,7 @@
                                         <DataTrigger Binding="{Binding IsPromo}" Value="True">
                                             <Setter TargetName="dot" Property="Visibility" Value="Collapsed"/>
                                             <Setter TargetName="promoStar" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="st" Property="Foreground" Value="{DynamicResource Accent}"/>
+                                            <Setter TargetName="st" Property="Foreground" Value="{DynamicResource Promo}"/>
                                             <Setter TargetName="st" Property="FontWeight" Value="SemiBold"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsConnected}" Value="True">
@@ -564,9 +564,9 @@
                                         <!-- Метки сразу за названием, а не у края колонки: так видно, к чему они относятся -->
                                         <WrapPanel Orientation="Horizontal">
                                             <TextBlock x:Name="nm" Text="{Binding ShortName}" ToolTip="{Binding Name}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
-                                            <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipLime}" VerticalAlignment="Center"
+                                            <Border Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource PromoChip}" VerticalAlignment="Center"
                                                     Visibility="{Binding IsPromo, Converter={StaticResource BoolToVis}}" ToolTip="Платный сервер от создателей программы. Подробности: двойной щелчок">
-                                                <TextBlock Text="от CHIMERION" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Lime}"/>
+                                                <TextBlock Text="от CHIMERION" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Promo}"/>
                                             </Border>
                                             <Border x:Name="newBadge" Margin="8,0,0,0" Padding="5,0" CornerRadius="4" Background="{DynamicResource ChipOk}"
                                                     VerticalAlignment="Center" Visibility="Collapsed">
@@ -630,26 +630,26 @@
                                     <StackPanel x:Name="promoOffer" VerticalAlignment="Center" Visibility="Collapsed"
                                                 ToolTip="Доступ работает с ChatGPT, Claude и Gemini без VPN">
                                         <WrapPanel Orientation="Horizontal">
-                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource ChipLime}">
+                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource PromoChip}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <Image Source="{DynamicResource LogoOpenAI}" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="ChatGPT" FontSize="12" Foreground="{DynamicResource Lime}"/>
+                                                    <TextBlock Text="ChatGPT" FontSize="12" Foreground="{DynamicResource Promo}"/>
                                                 </StackPanel>
                                             </Border>
-                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource ChipLime}">
+                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource PromoChip}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <Image Source="{DynamicResource LogoClaude}" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Claude" FontSize="12" Foreground="{DynamicResource Lime}"/>
+                                                    <TextBlock Text="Claude" FontSize="12" Foreground="{DynamicResource Promo}"/>
                                                 </StackPanel>
                                             </Border>
-                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource ChipLime}">
+                                            <Border Style="{StaticResource Chip}" Background="{DynamicResource PromoChip}">
                                                 <StackPanel Orientation="Horizontal">
                                                     <Image Source="{DynamicResource LogoGemini}" Width="12" Height="12" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Gemini" FontSize="12" Foreground="{DynamicResource Lime}"/>
+                                                    <TextBlock Text="Gemini" FontSize="12" Foreground="{DynamicResource Promo}"/>
                                                 </StackPanel>
                                             </Border>
                                         </WrapPanel>
-                                        <TextBlock Text="{Binding PromoTeaser}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,5,0,0"/>
+                                        <TextBlock Text="{Binding PromoTeaser}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Promo}" Margin="0,5,0,0"/>
                                     </StackPanel>
                                     <ItemsControl x:Name="svcChips" ItemsSource="{Binding Chips}" ToolTip="{Binding Summary}" VerticalAlignment="Center">
                                         <ItemsControl.ItemsPanel>
@@ -712,6 +712,7 @@
                                             </TextBlock>
                                         </StackPanel>
                                         <Button x:Name="promoBtn" Content="Подробнее" Click="ChimerionDns_Click" Style="{StaticResource Primary}" Visibility="Collapsed"
+                                                Background="{DynamicResource PromoButton}" BorderBrush="{DynamicResource PromoButton}" Foreground="{DynamicResource OnPromoButton}"
                                                 Padding="10,5" MinHeight="30" MinWidth="0" Margin="0,0,-40,0" FontSize="12.5" HorizontalAlignment="Left" VerticalAlignment="Center" ClipToBounds="False"
                                                 ToolTip="Что входит, сколько стоит и где купить" AutomationProperties.Name="Подробнее о CHIMERION DNS"/>
                                     </Grid>
