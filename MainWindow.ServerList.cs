@@ -68,6 +68,8 @@ public partial class MainWindow
 
     private void Grid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Рекламная строка не выбирается ничем: ни стрелками, ни «Выделить все». Снятие выбора вызовет событие еще раз
+        if (ServerGrid.SelectedItems.Cast<DnsServer>().FirstOrDefault(x => x.IsPromo) is { } promo) { ServerGrid.SelectedItems.Remove(promo); return; }
         UpdateSwitchButton();
         var sel = ServerGrid.SelectedItems.Cast<DnsServer>().ToList();
         Brush B(string k) => (Brush)FindResource(k);
@@ -149,7 +151,7 @@ public partial class MainWindow
         // Двойной клик по нередактируемой колонке (статус, сервисы и т.п.) = применить.
         // Только по строке (не по заголовку и не по кнопке «Открыть»).
         if (e.OriginalSource is DependencyObject d &&
-            ItemsControl.ContainerFromElement(ServerGrid, d) is DataGridRow { Item: DnsServer } &&
+            ItemsControl.ContainerFromElement(ServerGrid, d) is DataGridRow { Item: DnsServer { IsPromo: false } } && // у рекламной только кнопка
             FindParent<Button>(d) == null)
             Connect_Click(sender, e);
     }
@@ -194,6 +196,12 @@ public partial class MainWindow
         SaveServers();
         _view?.Refresh(); // избранные сразу поднимаются наверх
         UpdateStats();
+    }
+
+    /// <summary>Меню по правой кнопке не открывается над рекламной строкой: у нее нет действий, кроме «Подробнее».</summary>
+    private void ServerGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (ItemsControl.ContainerFromElement(ServerGrid, e.OriginalSource as DependencyObject) is DataGridRow { Item: DnsServer { IsPromo: true } }) e.Handled = true;
     }
 
     private void RowMenu_Opened(object sender, RoutedEventArgs e)
@@ -368,9 +376,11 @@ public partial class MainWindow
     /// </summary>
     private void ServerGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.None || e.ClickCount > 1) return;
         if (FindParent<Button>(e.OriginalSource as DependencyObject) != null) return;
         var row = FindParent<DataGridRow>(e.OriginalSource as DependencyObject);
+        // Рекламная строка не выбирается: работает только ее кнопка «Подробнее» (она обработана выше)
+        if (row?.Item is DnsServer { IsPromo: true }) { e.Handled = true; return; }
+        if (Keyboard.Modifiers != ModifierKeys.None || e.ClickCount > 1) return;
         if (row?.Item is not DnsServer s) return;
         e.Handled = true;
         ServerGrid.SelectedItems.Clear();
@@ -387,9 +397,13 @@ public partial class MainWindow
             e.Row.SetResourceReference(BackgroundProperty, "PromoRow");
             e.Row.SetResourceReference(BorderBrushProperty, "Promo");
             e.Row.MinHeight = 68;
+            e.Row.Focusable = false;      // стрелки и Tab ее пропускают
+            e.Row.Cursor = Cursors.Arrow; // не «рука»: сама строка не нажимается
         }
         else
         {
+            e.Row.ClearValue(FocusableProperty);
+            e.Row.ClearValue(CursorProperty);
             e.Row.ClearValue(BackgroundProperty);
             e.Row.ClearValue(BorderBrushProperty);
             e.Row.ClearValue(MinHeightProperty);
