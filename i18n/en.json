@@ -2244,5 +2244,9 @@
  "IP DoH-сервера для прокси: {0}": "DoH server IP for the proxy: {0}",
  "Не удалось узнать IP адрес DoH-сервера для прокси": "Could not find the DoH server IP for the proxy",
  "DoH-прокси программы работает только по IPv4": "The CHIMERION DoH proxy works over IPv4 only",
- "Не известен IP DoH-сервера": "DoH server IP is unknown"
+ "Не известен IP DoH-сервера": "DoH server IP is unknown",
+ "Нужен IP, адрес DoH или оба. Название можно не указывать": "An IP, a DoH address, or both are required. The name is optional",
+ "Например, мой DNS": "For example, my DNS",
+ "Необязательно": "Optional",
+ "Адрес DoH": "DoH address"
 }

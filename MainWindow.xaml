@@ -131,8 +131,7 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="PanelNavItems">
                 <Button Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
-                <ToggleButton x:Name="AddToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"
-                              Checked="AddToggle_Changed" Unchecked="AddToggle_Changed"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></ToggleButton>
+                <Button x:Name="AddServerButton" Click="AddServer_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></Button>
                 <ToggleButton x:Name="ModeToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="ToolsToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
@@ -737,19 +736,6 @@
             </DockPanel>
         </Border>
 
-        <!-- ================= НИЗ ================= -->
-        <StackPanel x:Name="BottomPanel" Grid.Row="4" Margin="0,12,0,0">
-            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="AddPanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed" KeyDown="AddPanel_KeyDown">
-                <TextBox x:Name="AddName" Width="170" Tag="Название"/>
-                <TextBox x:Name="AddPrimary" Width="140" Margin="8,0,0,0" Tag="Основной IP"/>
-                <TextBox x:Name="AddSecondary" Width="140" Margin="8,0,0,0" Tag="Резервный IP"/>
-                <TextBox x:Name="AddDoh" Width="280" Margin="8,0,0,0" Tag="DoH: https://…/dns-query"/>
-                <Button Content="Добавить" Click="Add_Click" Style="{StaticResource Primary}" Margin="8,0,0,0"/>
-            </StackPanel>
-            </ScrollViewer>
-
-        </StackPanel>
 
         <!-- ================= УВЕДОМЛЕНИЕ В УГЛУ ================= -->
         <!-- Отмена последнего действия и короткое пояснение к нему. Пока панель видна, уведомление справа внизу не появляется:
