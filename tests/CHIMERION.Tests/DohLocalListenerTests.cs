@@ -51,8 +51,21 @@ public class DohLocalListenerTests
     [Fact]
     public void Occupied_udp_port_does_not_leave_tcp_port_open()
     {
-        using var occupied = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        int port = ((IPEndPoint)occupied.Client.LocalEndPoint!).Port;
+        // Номер, свободный и для TCP: случайный UDP-порт мог попасть в диапазон TCP, зарезервированный Windows
+        // (на машине сборки GitHub так и было: «доступ запрещен», хотя программа порт не держала)
+        UdpClient? taken = null;
+        int port = 0;
+        for (int i = 0; i < 20 && taken == null; i++)
+        {
+            var probe = new TcpListener(IPAddress.Loopback, 0);
+            probe.Start();
+            port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+            try { taken = new UdpClient(new IPEndPoint(IPAddress.Loopback, port)); }
+            catch (SocketException) { }
+        }
+        Assert.NotNull(taken);
+        using var occupied = taken;
         using var http = new HttpClient(new AnswerHandler());
         var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
         Assert.Throws<SocketException>(() => new DohLocalListener(IPAddress.Loopback, port, transport));
