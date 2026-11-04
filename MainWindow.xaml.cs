@@ -40,7 +40,6 @@ public partial class MainWindow : Window
         // Завершение Windows (выключение, выход из сеанса) не должно прятать программу в трей
         // Выключение или перезагрузка Windows: выходим без вопроса и без отключения, чтобы DNS остался после перезагрузки
         Application.Current.SessionEnding += (_, _) => { _sessionEnding = true; _exitRequested = true; };
-        AddPanel.RenderTransform = new TranslateTransform();
         _toastTimer.Tick += (_, _) =>
         {
             _toastTimer.Stop();

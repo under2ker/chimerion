@@ -218,33 +218,14 @@ public partial class MainWindow
     }
 
 
-    private void Add_Click(object sender, RoutedEventArgs e)
+    /// <summary>Кнопка «Добавить сервер»: окно с полями, затем добавление в список и проверка.</summary>
+    private void AddServer_Click(object sender, RoutedEventArgs e)
     {
-        var primary = AddPrimary.Text.Trim();
-        var secondary = AddSecondary.Text.Trim();
-        var doh = AddDoh.Text.Trim();
+        if (AddServerWindow.Ask() is { } server) AddServer(server);
+    }
 
-        bool hasIp = IPAddress.TryParse(primary, out _);
-        bool hasDoh = Uri.TryCreate(doh, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
-        // Ошибки ввода видны сразу (всплывающее сообщение), а не только в журнале
-        void Fail(string text, Control field) { Log(text); ShowToast(text, "Warn"); field.Focus(); }
-        if (!hasIp && !hasDoh)
-        {
-            Fail(primary.Length == 0 && doh.Length == 0 ? "Укажите основной IP (например 203.0.113.10) или адрес DoH"
-                 : primary.Length > 0 ? $"«{primary}» не похож на IP-адрес: нужен вид 203.0.113.10, без порта и запятых"
-                 : "Адрес DoH должен начинаться с https://", primary.Length > 0 || doh.Length == 0 ? AddPrimary : AddDoh);
-            return;
-        }
-        if (secondary.Length > 0 && !IPAddress.TryParse(secondary, out _)) { Fail($"«{secondary}» не похож на IP-адрес", AddSecondary); return; }
-
-        var s = new DnsServer
-        {
-            Name = string.IsNullOrWhiteSpace(AddName.Text) ? (hasIp ? primary : u!.Host) : AddName.Text.Trim(),
-            Primary = hasIp ? primary : "",
-            Secondary = secondary.Length > 0 ? secondary : null,
-            DohUrl = hasDoh ? doh : null,
-            Manual = true,
-        };
+    private void AddServer(DnsServer s)
+    {
         if (_servers.FirstOrDefault(x => x.Key == s.Key) is { } existing)
         {
             // Уже в списке: показываем его, а не молчим
@@ -280,7 +261,6 @@ public partial class MainWindow
             Log($"Добавление отменено: {s.DisplayName}");
             return Task.CompletedTask;
         });
-        AddName.Clear(); AddPrimary.Clear(); AddSecondary.Clear(); AddDoh.Clear();
         // Новый сервер еще не проверен, фильтр «Рабочие» его скрыл бы: показываем все и выбираем добавленный
         AllTab.IsChecked = true;
         SearchBox.Clear();
@@ -552,28 +532,6 @@ public partial class MainWindow
         catch (Exception) { return null; }
     }
 
-    private void AddToggle_Changed(object sender, RoutedEventArgs e) => Reveal(AddPanel, AddToggle.IsChecked == true);
-
-    /// <summary>Раскрытие блока: появляется с легким сдвигом; при сворачивании гаснет и выпадает из верстки.</summary>
-    private static void Reveal(FrameworkElement el, bool show)
-    {
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        if (show)
-        {
-            el.Visibility = Visibility.Visible;
-            el.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Motion(220)) { EasingFunction = ease });
-            if (el.RenderTransform is TranslateTransform tt)
-                tt.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(-8, 0, Motion(220)) { EasingFunction = ease });
-        }
-        else
-        {
-            // Если блок снова открыли до конца анимации, Completed не сработает — блок останется видимым.
-            var fade = new DoubleAnimation(1, 0, Motion(160)) { EasingFunction = ease };
-            fade.Completed += (_, _) => el.Visibility = Visibility.Collapsed;
-            el.BeginAnimation(UIElement.OpacityProperty, fade);
-        }
-    }
-
     /// <summary>Новая строка проявляется один раз. Через секунду флаг сбрасывается, чтобы при пересортировке строки не мигали.</summary>
     private static async Task ClearJustAddedLaterAsync(DnsServer s)
     {
@@ -642,13 +600,5 @@ public partial class MainWindow
         }
         catch (Exception) { }
         finally { _saveLock.Release(); }
-    }
-
-    /// <summary>Enter в полях ручного добавления равен кнопке «Добавить».</summary>
-    private void AddPanel_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Enter) return;
-        e.Handled = true;
-        Add_Click(sender, e);
     }
 }

@@ -242,7 +242,6 @@ public partial class MainWindow
         // В компактном виде узкое меню: только «Главная» и «Полный вид». Кнопка сворачивания меню там не нужна,
         // а ее иконка совпадала с иконкой «Полного вида»
         PanelCollapseButton.Visibility = v;
-        BottomPanel.Visibility = v;
         StatsText.Visibility = v;
         SettingsButton.Visibility = v;
         DataButton.Visibility = v;
