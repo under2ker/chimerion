@@ -176,7 +176,8 @@ public class HistoryThreadSafetyTests
     {
         var s = new DnsServer { Name = "Тест", Primary = "203.0.113.10" };
         var stop = DateTime.Now.AddMilliseconds(600);
-        var writer = Task.Run(() => { int i = 0; while (DateTime.Now < stop) s.AddHistory(i++ % 3 != 0, 40); });
+        // Хотя бы одна запись: на медленной машине сборки поток мог стартовать уже после конца окна, и история оставалась пустой
+        var writer = Task.Run(() => { int i = 0; do s.AddHistory(i++ % 3 != 0, 40); while (DateTime.Now < stop); });
         var reader = Task.Run(() =>
         {
             while (DateTime.Now < stop)
