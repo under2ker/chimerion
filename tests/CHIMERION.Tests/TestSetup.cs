@@ -21,5 +21,6 @@ internal static class TestSetup
         Directory.CreateDirectory(DataDir);
         Environment.SetEnvironmentVariable("DNEX_DATA_DIR", DataDir);
         Environment.SetEnvironmentVariable("DNEX_NO_AUTORESTORE", "1");
+        Environment.SetEnvironmentVariable("DNEX_TEST_HOST", "1"); // App.OnStartup в тестах не запускает программу
     }
 }

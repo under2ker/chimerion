@@ -48,6 +48,10 @@
             <GradientStop Color="#80C5F23A" Offset="0"/>
             <GradientStop Color="#FF2B3816" Offset="1"/>
         </LinearGradientBrush>
+        <LinearGradientBrush x:Key="PromoRow" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#3AC5F23A" Offset="0"/>
+            <GradientStop Color="#0AC5F23A" Offset="1"/>
+        </LinearGradientBrush>
         <SolidColorBrush x:Key="SelectionInactive" Color="#252F15"/>
         <SolidColorBrush x:Key="GridLine" Color="#212428"/>
         <SolidColorBrush x:Key="AccentBorder" Color="#86A231"/>

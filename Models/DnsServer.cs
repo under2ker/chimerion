@@ -147,6 +147,10 @@ public class DnsServer : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Цена «от» в строке платного CHIMERION DNS (из тех же тарифов, что окно с описанием).</summary>
+    [JsonIgnore]
+    public string PromoTeaser => IsPromo ? $"от {ChimerionDnsInfo.Plans[0].Rub} ₽ за {ChimerionDnsInfo.Plans[0].Days} дней" : "";
+
     /// <summary>Адрес одной строкой: IP (и резервный) или хост DoH.</summary>
     [JsonIgnore]
     public string Address
@@ -239,6 +243,7 @@ public class DnsServer : INotifyPropertyChanged
     {
         get
         {
+            if (IsPromo) return $"{CountryName} · личный сервер"; // без «подмены» и «ИИ видят»: у платного доступа это не проверка
             var server = string.IsNullOrEmpty(Country) ? "—" : CountryName;
             var proxy = !string.IsNullOrEmpty(ProxyCountry) ? ProxyCountryName
                       : string.IsNullOrEmpty(ProxyIp) ? "нет подмены" : "…";

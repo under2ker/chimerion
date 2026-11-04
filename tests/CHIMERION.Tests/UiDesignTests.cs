@@ -221,6 +221,46 @@ public class UiDesignTests
         }
     }
 
+    private static string? ProjectFile(string name)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "CHIMERION.csproj"))) dir = dir.Parent;
+        return dir == null ? null : Path.Combine(dir.FullName, name);
+    }
+
+    [Fact]
+    public void SwitchButtonDoesNotWidenTheHeader()
+    {
+        // «Переключить сюда» стояла в правой колонке шапки: она росла на 170 px, статистика сужалась и кнопка обновления уезжала вниз
+        var path = ProjectFile("MainWindow.xaml");
+        if (path == null) return;
+        var xaml = File.ReadAllText(path);
+        int button = xaml.IndexOf("x:Name=\"SwitchButton\"", StringComparison.Ordinal);
+        int bar = xaml.IndexOf("x:Name=\"SelectionBar\"", StringComparison.Ordinal);
+        int actions = xaml.IndexOf("x:Name=\"ApplyActions\"", StringComparison.Ordinal);
+        int connect = xaml.IndexOf("x:Name=\"ConnectButton\"", StringComparison.Ordinal);
+        Assert.True(button > bar, "кнопка должна быть в полосе выбранного сервера");
+        Assert.False(button > actions && button < connect, "кнопка не должна стоять в правой колонке шапки");
+    }
+
+    [Fact]
+    public void PromoRowSellsInsteadOfShowingEmptyCheckResults()
+    {
+        var promo = ChimerionDnsInfo.PromoRow();
+        Assert.StartsWith("от ", promo.PromoTeaser);
+        Assert.Contains(ChimerionDnsInfo.Plans[0].Rub.ToString(), promo.PromoTeaser);
+        Assert.DoesNotContain("Сервер:", promo.LocationCell); // не «без подмены»: у платного доступа нет такой проверки
+        Assert.Equal("", new Dnex.Models.DnsServer { Name = "x" }.PromoTeaser);
+        Wpf.Run(() =>
+        {
+            foreach (var theme in new[] { "dark", "light" })
+            {
+                Theme(theme);
+                Assert.True(Application.Current.Resources["PromoRow"] is LinearGradientBrush);
+            }
+        });
+    }
+
     [Fact]
     public void WorkAreaIsNotEmpty()
     {

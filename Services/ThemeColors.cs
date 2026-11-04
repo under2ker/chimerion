@@ -216,6 +216,8 @@ public static class ThemeColors
         }
         res["ConnectedRow"] = Gradient(A(accentHue, dark ? (byte)0x55 : (byte)0x40), A(accentHue, 0));
         res["ConnectedRowSelected"] = Gradient(A(accentHue, dark ? (byte)0x80 : (byte)0x66), sel);
+        // Строка платного CHIMERION DNS: мягкий градиент от акцента, заметнее обычной строки, но не такой яркий, как у подключенной
+        res["PromoRow"] = Gradient(A(accentHue, dark ? (byte)0x3A : (byte)0x30), A(accentHue, dark ? (byte)0x0A : (byte)0x10));
         Set("MenuBg", menu);
         Set("MenuHover", dark ? Mix(menu, White, 0.07) : Mix(menu, Dark, 0.06));
         Set("Lime", lime);
