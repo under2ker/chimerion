@@ -89,6 +89,14 @@ public static class DnsSwitcher
         public DateTime Since { get; set; } = DateTime.Now;
         /// <summary>Режим «Два DNS»: Addresses — Smart DNS для ИИ (через NRPT), AdapterAddresses — общий DNS на адаптерах.</summary>
         public bool Split { get; set; }
+        /// <summary>
+        /// DoH-прокси с прежним DNS сети за ним: домены ИИ закреплены за прокси правилами NRPT. Иначе Windows, не дождавшись
+        /// прокси, переключалась на DNS роутера минут на пятнадцать, и нейросети получали настоящие адреса мимо сервера.
+        /// </summary>
+        public bool ProxyNrpt { get; set; }
+        /// <summary>Подключение держится и на правилах NRPT: их пропажу сторож считает сбросом.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool UsesNrpt => Split || ProxyNrpt;
         public List<string> AdapterAddresses { get; set; } = new();
         public string? GeneralName { get; set; }
         /// <summary>
@@ -413,6 +421,17 @@ public static class DnsSwitcher
             sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(PsQuote))}) -NameServers @({string.Join(",", addrs.Select(a => $"'{a}'"))}) -Comment '{SplitDns.RuleComment}'");
             sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) направлены в {PsEscape(s.Name)}'");
         }
+        // За DoH-прокси на адаптерах стоит прежний DNS сети. Windows шлет запрос второму адресу, если первый ответил
+        // дольше секунды, и потом держится за ответивший сервер: домены ИИ надолго уходили на DNS роутера. Правило
+        // NRPT отдает домены ИИ только прокси, а прочие сайты по-прежнему могут уйти на прежний DNS
+        bool proxyNrpt = proxy != null && split == null && proxyFallback.Count > 0;
+        if (proxyNrpt)
+        {
+            var ns = SplitDns.Namespaces(settings);
+            if (SplitDns.PolicyWarning(SplitDns.PolicyRuleCount()) is { } gpo) log("ВНИМАНИЕ: " + gpo);
+            sb.AppendLine($"Add-DnsClientNrptRule -Namespace @({string.Join(",", ns.Select(PsQuote))}) -NameServers @('{proxy!.ListenAddress}') -Comment '{SplitDns.RuleComment}'");
+            sb.AppendLine($"Write-Output 'Домены ИИ ({ns.Count} правил) закреплены за DoH-прокси {proxy.ListenAddress}'");
+        }
         if (touchAdapters)
             sb.AppendLine($"foreach ($i in $ifs) {{ Set-DnsClientServerAddress -InterfaceIndex $i.ifIndex -ServerAddresses @({list}); Write-Output ('Адаптер: ' + $i.Name) }}");
         else
@@ -450,7 +469,7 @@ public static class DnsSwitcher
             Split = split != null, AdapterAddresses = split != null ? adapterAddrs : new(), GeneralName = split?.GeneralName,
             BackupId = backupAddrs.Count > 0 ? backup!.Id : null, BackupName = backupAddrs.Count > 0 ? backup!.Name : null, BackupAddresses = backupAddrs,
             ProxyListen = proxy?.ListenAddress, ProtectedProxyEndpoint = proxyEndpoint != null ? Storage.Protect(proxyEndpoint) : null,
-            ProxyBootstrap = proxyBootstrap, ProxyFallback = proxyFallback,
+            ProxyBootstrap = proxyBootstrap, ProxyFallback = proxyFallback, ProxyNrpt = proxyNrpt,
         };
         try { Storage.SaveRequired(ActiveFile, active); }
         catch (Exception) when (newProxy != null)
