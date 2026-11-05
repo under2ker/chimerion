@@ -478,7 +478,9 @@ public partial class MainWindow
             Log($"DNS «{active.Name}» на месте");
             return;
         }
-        Log(rulesLost ? $"После запуска правила для доменов ИИ пропали. Возвращаю «{active.Name}»"
+        Log(rulesLost && active.NeedsProxyNrpt && !active.ProxyNrpt
+                ? $"Подключение сделано до обновления: закрепляю домены ИИ за DoH-прокси и ставлю «{active.Name}» заново"
+            : rulesLost ? $"После запуска правила для доменов ИИ пропали. Возвращаю «{active.Name}»"
                       : $"После запуска DNS системы другой ({string.Join(", ", current)}). Возвращаю «{active.Name}»");
         if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } server)
         {
