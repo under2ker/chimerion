@@ -359,6 +359,31 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public void Connection_made_before_the_rules_existed_is_reconnected()
+    {
+        // Подключились на 0.1.130 и обновились, не переподключаясь: в записи нет ProxyNrpt, правил нет.
+        // Запись сама говорит, что правила нужны, и проверка при запуске и сторож ставят подключение заново
+        var old = new DnsSwitcher.ActiveConnection
+        {
+            ServerId = Guid.NewGuid(), Name = "CHIMERION DNS", Addresses = { "127.0.0.2", "192.168.1.254" },
+            ProxyListen = "127.0.0.2", ProxyFallback = { "192.168.1.254" },
+        };
+        Assert.False(old.ProxyNrpt);
+        Assert.True(old.NeedsProxyNrpt);
+        Assert.True(old.UsesNrpt);
+        var current = new List<IPAddress> { IPAddress.Parse("127.0.0.2"), IPAddress.Parse("192.168.1.254") };
+        Assert.True(ConnectionMonitor.NeedsRestore(old, current, rulesPresent: false, out var lost));
+        Assert.True(lost);
+        Assert.False(ConnectionMonitor.NeedsRestore(old, current, rulesPresent: true, out _));
+        // Прокси без прежнего DNS сети и обычное подключение правил не требуют
+        var plainProxy = new DnsSwitcher.ActiveConnection { ServerId = Guid.NewGuid(), Name = "x", Addresses = { "127.0.0.2" }, ProxyListen = "127.0.0.2" };
+        Assert.False(plainProxy.UsesNrpt);
+        var plain = new DnsSwitcher.ActiveConnection { ServerId = Guid.NewGuid(), Name = "y", Addresses = { "203.0.113.10" } };
+        Assert.False(plain.UsesNrpt);
+        Assert.False(ConnectionMonitor.NeedsRestore(plain, new List<IPAddress> { IPAddress.Parse("203.0.113.10") }, rulesPresent: false, out _));
+    }
+
+    [Fact]
     public async Task Proxy_without_network_dns_needs_no_rules()
     {
         // Прежнего DNS сети нет: на адаптере только прокси, переключаться Windows некуда

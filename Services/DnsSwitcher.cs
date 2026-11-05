@@ -94,9 +94,17 @@ public static class DnsSwitcher
         /// прокси, переключалась на DNS роутера минут на пятнадцать, и нейросети получали настоящие адреса мимо сервера.
         /// </summary>
         public bool ProxyNrpt { get; set; }
-        /// <summary>Подключение держится и на правилах NRPT: их пропажу сторож считает сбросом.</summary>
+        /// <summary>
+        /// Подключение держится и на правилах NRPT: их пропажу сторож считает сбросом. Для прокси с прежним DNS сети
+        /// признак выводится из самой записи: у подключений, сделанных до 0.1.131 (обновились, не переподключаясь),
+        /// флага ProxyNrpt нет, и правила ставились бы только после ручного переподключения
+        /// </summary>
         [System.Text.Json.Serialization.JsonIgnore]
-        public bool UsesNrpt => Split || ProxyNrpt;
+        public bool UsesNrpt => Split || ProxyNrpt || NeedsProxyNrpt;
+
+        /// <summary>DoH-прокси, за которым на адаптерах стоит прежний DNS сети: домены ИИ нужно закрепить за прокси.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool NeedsProxyNrpt => !Split && !string.IsNullOrEmpty(ProxyListen) && ProxyFallback.Count > 0;
         public List<string> AdapterAddresses { get; set; } = new();
         public string? GeneralName { get; set; }
         /// <summary>
