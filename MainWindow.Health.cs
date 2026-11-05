@@ -50,6 +50,17 @@ public partial class MainWindow
                 ReportDown(active, name, $"{name} не отвечает на DNS-запросы. Windows перешла на запасной DNS, ИИ-сервисы через Smart DNS не работают");
         }
         var down = changes.Where(x => x.Down).ToList();
+        // «Без подмены», а сервер сам подменяет: запросы Windows шли мимо него, через DNS сети. Это не падение
+        // сервера: ставим подключение заново, а не меняем сервер (замена ушла бы с выбранного человеком сервера зря)
+        var notProxied = down.Where(x => x.Problem == ServiceHealth.Problem.NotProxied).ToList();
+        if (notProxied.Count > 0 && server != null && serverChange != true && await BypassedAsync(server, snap, notProxied))
+        {
+            if (DnsSwitcher.GetActive()?.ServerId != active.ServerId) return;
+            var who = string.Join(", ", notProxied.Select(x => x.Service));
+            if (!await RepairBypassAsync(active, who))
+                Notify($"{who}: запросы снова идут мимо сервера {name}, через DNS сети. Сервер работает. Так бывает, если DNS меняет VPN, антивирус или другая программа", "Warn");
+            down = down.Except(notProxied).ToList();
+        }
         if (down.Count > 0 && serverChange != true)
         {
             // Сбой у самого сервиса (страница статуса): сервер ни при чем, менять его бесполезно. Сообщаем и не переключаем
@@ -66,6 +77,43 @@ public partial class MainWindow
         var normal = TimeSpan.FromMinutes(Math.Clamp(_settings.TrayCheckMinutes, 1, 60));
         var next = _health.Suspicious ? TimeSpan.FromMinutes(1) : normal;
         if (_trayTimer.Interval != next) { _trayTimer.Stop(); _trayTimer.Interval = next; _trayTimer.Start(); }
+    }
+
+    /// <summary>Сервер на прямой запрос подменяет адрес сервиса, который Windows получила без подмены.</summary>
+    private async Task<bool> BypassedAsync(DnsServer server, NetSnapshot snap, IReadOnlyList<ServiceHealth.Change> notProxied)
+    {
+        foreach (var c in notProxied)
+        {
+            if (snap.Services.FirstOrDefault(x => x.Name == c.Service) is not { } st) continue;
+            try
+            {
+                var ips = (await new ServerChecker(_settings).ResolveViaAsync(server, st.Host, CancellationToken.None)).Ips;
+                if (ConnectionMonitor.Bypassed(st.ResolvedIp, ips)) return true;
+            }
+            catch (Exception) { }
+        }
+        return false;
+    }
+
+    private DateTime _bypassRepaired = DateTime.MinValue;
+
+    /// <summary>
+    /// Запросы шли мимо сервера: ставим то же подключение заново (адаптеры, правила NRPT, прокси). Не чаще раза в
+    /// 10 минут: если DNS снова и снова уводит другая программа, повторы ничего не дадут. False — повтор пропущен.
+    /// </summary>
+    private async Task<bool> RepairBypassAsync(DnsSwitcher.ActiveConnection active, string who)
+    {
+        if (DateTime.Now - _bypassRepaired < TimeSpan.FromMinutes(10)) return false;
+        if (_busyConn || _uacDeclined || _disconnectFailed || NoAutoDns) return false;
+        if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } same) return false;
+        _bypassRepaired = DateTime.Now;
+        Log($"Проверка сервисов: запросы к {who} шли мимо сервера «{same.DisplayName}», через DNS сети. Сам сервер отвечает и подменяет адреса. Ставлю подключение заново");
+        HideUndo();
+        bool ok = await ConnectToAsync(same, auto: true);
+        Notify(ok ? $"{who}: запросы шли мимо сервера {same.ShortName}, подключение поставлено заново"
+                  : $"{who}: запросы идут мимо сервера {same.ShortName}, поставить подключение заново не удалось. Подробности в журнале",
+               ok ? "Warn" : "Bad", logLine: null, feature: FeatureWatchdog);
+        return true;
     }
 
     /// <summary>Сервисы или сервер упали: журнал, уведомление и, если включено, переключение на лучший рабочий сервер.</summary>

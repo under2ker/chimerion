@@ -359,6 +359,36 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public void Watchdog_returns_to_the_chosen_server_only_after_it_answers_in_a_row()
+    {
+        // Сторож ушел с выбранного сервера на замену. Возврат только после PreferredChecks ответов подряд:
+        // одна неудача начинает счет заново, чтобы не прыгать на сервер, который отвечает через раз
+        var m = new ConnectionMonitor();
+        for (int i = 0; i < ConnectionMonitor.PreferredChecks - 1; i++) Assert.False(m.PreferredAnswers(true));
+        Assert.False(m.PreferredAnswers(false));
+        for (int i = 0; i < ConnectionMonitor.PreferredChecks - 1; i++) Assert.False(m.PreferredAnswers(true));
+        Assert.True(m.PreferredAnswers(true));
+        // После возврата счет сброшен
+        Assert.False(m.PreferredAnswers(true));
+        m.ForgetPreferred();
+        for (int i = 0; i < ConnectionMonitor.PreferredChecks - 1; i++) Assert.False(m.PreferredAnswers(true));
+        Assert.True(m.PreferredAnswers(true));
+    }
+
+    [Fact]
+    public void Address_without_substitution_while_server_substitutes_is_a_bypass_not_a_dead_server()
+    {
+        var proxy = new[] { IPAddress.Parse("31.58.234.173") };
+        // Windows получила настоящий адрес, а сервер напрямую отвечает адресом прокси: запрос ушел мимо сервера
+        Assert.True(ConnectionMonitor.Bypassed("104.18.33.45", proxy));
+        // Сервер сам отвечает тем же настоящим адресом: подмену перестал делать сервер
+        Assert.False(ConnectionMonitor.Bypassed("104.18.33.45", new[] { IPAddress.Parse("104.18.33.45") }));
+        // Сервер не ответил или адреса нет: обходом это не считаем
+        Assert.False(ConnectionMonitor.Bypassed("104.18.33.45", Array.Empty<IPAddress>()));
+        Assert.False(ConnectionMonitor.Bypassed("не резолвится", proxy));
+    }
+
+    [Fact]
     public void Connection_made_before_the_rules_existed_is_reconnected()
     {
         // Подключились на 0.1.130 и обновились, не переподключаясь: в записи нет ProxyNrpt, правил нет.
