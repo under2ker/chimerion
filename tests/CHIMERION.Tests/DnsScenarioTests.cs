@@ -325,6 +325,55 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Proxy_with_network_dns_behind_it_pins_ai_domains_to_the_proxy()
+    {
+        // Windows шлет запрос второму DNS, если прокси ответил дольше секунды, и потом держится за роутер: домены ИИ
+        // получали настоящие адреса мимо сервера («DNS сменился, но адреса ИИ не подменяются»). Правило NRPT это закрывает
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true, Fallback = new() { "192.168.1.254" } };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
+        var (log, write) = NewLog();
+
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+
+        var proxy = Assert.Single(sim.ProxiesStarted);
+        var rule = Assert.Single(sim.Load().nrpt);
+        Assert.Equal(SplitDns.RuleComment, rule.comment);
+        Assert.Equal(new[] { proxy.ListenAddress }, rule.servers);       // только прокси, не роутер
+        Assert.Contains("chatgpt.com", rule.ns);
+        Assert.Contains(".claude.ai", rule.ns);
+        Assert.Contains("gemini.google.com", rule.ns.Concat(rule.ns.Select(n => n.TrimStart('.'))));
+        Assert.Contains("geminiweb-pa.clients6.google.com", rule.ns);           // сеанс веб-чата Gemini
+        var active = DnsSwitcher.GetActive()!;
+        Assert.True(active.ProxyNrpt);
+        Assert.True(active.UsesNrpt);
+        Assert.False(active.Split);
+        // Адреса на адаптерах те же, что и раньше: прокси и прежний DNS для сайтов, пока программа закрыта
+        Assert.Equal(new[] { proxy.ListenAddress, "192.168.1.254" }, sim["Sim-Ethernet"].dns4);
+        // Правило пропало (его сняла другая программа): сторож считает это сбросом
+        Assert.True(ConnectionMonitor.NeedsRestore(active, sim.CurrentDns(), rulesPresent: false, out var lost));
+        Assert.True(lost);
+        Assert.False(ConnectionMonitor.NeedsRestore(active, sim.CurrentDns(), rulesPresent: true, out _));
+
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.Empty(sim.Load().nrpt);                                    // отключение снимает правило
+    }
+
+    [Fact]
+    public async Task Proxy_without_network_dns_needs_no_rules()
+    {
+        // Прежнего DNS сети нет: на адаптере только прокси, переключаться Windows некуда
+        using var sim = new NetSim(OneEthernet()) { NoDoh = true };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
+        var (_, write) = NewLog();
+
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+
+        Assert.Empty(sim.Load().nrpt);
+        Assert.False(DnsSwitcher.GetActive()!.ProxyNrpt);
+        await DnsSwitcher.RestoreAsync(write);
+    }
+
+    [Fact]
     public async Task Proxy_that_did_not_start_leaves_network_untouched()
     {
         using var sim = new NetSim(OneEthernet()) { NoDoh = true, ProxyFails = true };

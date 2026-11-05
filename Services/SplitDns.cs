@@ -64,6 +64,9 @@ public static class SplitDns
     {
         "gemini.google.com", "aistudio.google.com", "makersuite.google.com", "notebooklm.google.com", "bard.google.com",
         "generativelanguage.googleapis.com", "alkalimakersuite-pa.clients6.google.com", "ai.google.dev",
+        // Веб-чат Gemini: сеанс чата (processSession) и генеративный сервер. Без них страница открывалась через сервер, а чат шел
+        // мимо него и отвечал «что-то пошло не так». Те же домены проведены на сервере CHIMERION DNS
+        "geminiweb-pa.clients6.google.com", "appsgenaiserver-pa.clients6.google.com",
     };
 
     /// <summary>

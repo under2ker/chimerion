@@ -62,7 +62,7 @@ public static class Diagnostics
         else
         {
             var adapters = await DnsSwitcher.GetCurrentAdapterAddressesAsync();
-            var onAdapters = !ConnectionMonitor.NeedsRestore(active, current, !active.Split || SplitDns.RulesPresent(), out _, adapters);
+            var onAdapters = !ConnectionMonitor.NeedsRestore(active, current, !active.UsesNrpt || SplitDns.RulesPresent(), out _, adapters);
             items.Add(new DiagItem(onAdapters ? DiagLevel.Ok : DiagLevel.Bad, $"Подключено: {activeName} с {active.Since:dd.MM HH:mm}",
                 !onAdapters ? $"DNS системы не совпадает с подключением ({string.Join(", ", current)}) или пропали правила для ИИ: их сбросила другая программа или Windows"
                 : active.Split ? $"Два DNS: домены ИИ через {activeName} ({string.Join(", ", active.Addresses)}), остальное через «{active.GeneralName}» ({(current.Count == 0 ? "автоматически" : string.Join(", ", current))})"

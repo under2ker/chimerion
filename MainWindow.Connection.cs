@@ -516,7 +516,7 @@ public partial class MainWindow
         bool up = await SystemCheck.NetworkUpAsync();
         var current = up ? await DnsSwitcher.GetCurrentAddressesAsync() : new List<IPAddress>();
         var adapters = up ? await DnsSwitcher.GetCurrentAdapterAddressesAsync() : new();
-        bool rulesPresent = !active.Split || SplitDns.RulesPresent();
+        bool rulesPresent = !active.UsesNrpt || SplitDns.RulesPresent();
         var vpns = up ? SystemCheck.ActiveVpns() : new List<string>();
         var verdict = await _monitor.TickAsync(active, up, current, rulesPresent,
             () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)), vpns.Count > 0, adapters);

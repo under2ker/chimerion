@@ -63,13 +63,13 @@ public sealed class ConnectionMonitor
     public void ForgetRestores() => _restores.Clear();
 
     /// <summary>
-    /// Адреса подключения пропали с адаптеров или пропали правила NRPT режима «Два DNS». Подключение,
+    /// Адреса подключения пропали с адаптеров или пропали правила NRPT («Два DNS» или домены ИИ за DoH-прокси). Подключение,
     /// которое адаптеры не меняло (в «Двух DNS» общий DNS не задан), проверяется только по правилам.
     /// </summary>
     public static bool NeedsRestore(DnsSwitcher.ActiveConnection active, IEnumerable<IPAddress> current, bool rulesPresent, out bool rulesLost, IReadOnlyCollection<IReadOnlyCollection<IPAddress>>? adapters = null)
     {
         var mine = Mine(active);
-        rulesLost = active.Split && !rulesPresent;
+        rulesLost = active.UsesNrpt && !rulesPresent;
         return rulesLost || (mine.Count > 0 && (adapters is { Count: > 0 }
             ? adapters.Any(adapter => !mine.Any(adapter.Contains)) : !mine.Any(current.Contains)));
     }
