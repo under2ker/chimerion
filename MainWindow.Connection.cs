@@ -222,6 +222,13 @@ public partial class MainWindow
         if (connected) ReportSystemIssues(auto);
         if (connected && !auto)
         {
+            // Сервер выбран пользователем: после автоматической замены сторож вернется на него
+            _monitor.ForgetPreferred();
+            if (_settings.PreferredServerId != s.Id)
+            {
+                _settings.PreferredServerId = s.Id;
+                try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+            }
             var target = s;
             if (prevServer != null && prevServer != s)
                 OfferUndo($"Переключено на {s.DisplayName}", hint: RestartHint, undo: async () =>
@@ -521,12 +528,15 @@ public partial class MainWindow
         bool rulesPresent = !active.UsesNrpt || SplitDns.RulesPresent();
         var vpns = up ? SystemCheck.ActiveVpns() : new List<string>();
         var verdict = await _monitor.TickAsync(active, up, current, rulesPresent,
-            () => DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8)), vpns.Count > 0, adapters);
+            () => ConnectionAnswersAsync(active), vpns.Count > 0, adapters);
         // Проверки шли несколько секунд: за это время пользователь мог начать подключение или отключиться.
         // Тогда решение сторожа устарело: чинить чужое действие нельзя, иначе он сообщил бы о ложном сбое
         if (WatchdogStale(active)) return;
         switch (verdict)
         {
+            case ConnectionMonitor.Verdict.Ok:
+                await TryReturnToPreferredAsync(active);
+                return;
             case ConnectionMonitor.Verdict.WaitNetwork:
                 if (_monitor.FirstNoNetwork) Log("Сторож: нет сети, жду. Подключение не трогаю");
                 return;
@@ -568,6 +578,38 @@ public partial class MainWindow
                 await SwitchToNextBestAsync(active);
                 return;
         }
+    }
+
+    /// <summary>
+    /// Отвечает ли сервер подключения. Спрашиваем его напрямую, а не DNS системы: за DoH-прокси на Windows 10 и за
+    /// запасным сервером стоит другой DNS, и через него сайты открываются, даже когда сервер давно молчит. Сервера
+    /// нет в списке (удален) — остается проверка DNS системы.
+    /// </summary>
+    private async Task<bool> ConnectionAnswersAsync(DnsSwitcher.ActiveConnection active)
+    {
+        if (_servers.FirstOrDefault(x => x.Id == active.ServerId) is not { } server)
+            return await DnsSwitcher.SystemDnsWorksAsync(ProbeHosts, TimeSpan.FromSeconds(8));
+        return await new ServerChecker(_settings).MeasurePingAsync(server, CancellationToken.None) != null;
+    }
+
+    /// <summary>
+    /// Сторож перевел подключение на замену, а сервер, выбранный пользователем, снова отвечает несколько проверок
+    /// подряд: возвращаемся на него. Без этого человек оставался на случайном сервере после минутного сбоя своего.
+    /// </summary>
+    private async Task TryReturnToPreferredAsync(DnsSwitcher.ActiveConnection active)
+    {
+        if (_settings.PreferredServerId is not { } pid || pid == active.ServerId || !_settings.AllowServerSwitch
+            || _servers.FirstOrDefault(x => x.Id == pid) is not { } pref || pref.IsPromo)
+        {
+            _monitor.ForgetPreferred();
+            return;
+        }
+        bool answers = await new ServerChecker(_settings).MeasurePingAsync(pref, CancellationToken.None) != null;
+        if (WatchdogStale(active) || !_monitor.PreferredAnswers(answers)) return;
+        Log($"Сторож: «{pref.DisplayName}», выбранный вами, снова отвечает ({ConnectionMonitor.PreferredChecks} проверки подряд). Возвращаю его вместо «{active.Name}»");
+        HideUndo();
+        if (await ConnectToAsync(pref, auto: true))
+            Notify($"«{pref.DisplayName}» снова отвечает: подключение возвращено на него", "Ok", logLine: null, feature: FeatureWatchdog);
     }
 
     /// <summary>Подключение сменилось или занято другим действием, пока сторож проверял сеть.</summary>
@@ -752,7 +794,9 @@ public partial class MainWindow
         var active = DnsSwitcher.GetActive();
         var changes = _egressWatch.Update(active?.ServerId.ToString(), snap.Services.Select(s => (s.Name, s.Egress?.Country)));
         if (changes.Count == 0 || active == null) return;
-        foreach (var g in changes.GroupBy(c => (c.From, c.To, c.ToClosed)))
+        // Сервис без подмены адреса: запрос ушел мимо сервера, через DNS сети, и сервис видит реальную страну
+        var leaked = snap.Services.Where(s => !s.Proxied).Select(s => s.Name).ToHashSet();
+        foreach (var g in changes.GroupBy(c => (c.From, c.To, c.ToClosed, Leak: leaked.Contains(c.Service))))
         {
             var names = g.Select(c => c.Service).ToList();
             var who = names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " и " + names[^1];
@@ -765,6 +809,12 @@ public partial class MainWindow
                 ? $"{who} сейчас {verb} вас из страны {to}, а не {from}: основной сервер не ответил вовремя, и Windows пошла через запасной {backup!.ShortName}. Чтобы страна не менялась, выключите запасной сервер в настройках («Сторож и трей»)"
                 : $"Прокси сервера {DnsServer.Clip(active.Name)} сменил страну выхода: {who} теперь {verb} вас из страны {to}, раньше {from}. Если важно сохранить прежнюю страну, переключитесь на сервер с выходом в стране {from}";
             if (g.Key.ToClosed) text = $"{who} {verb} вас из страны {to}, там сервис не работает. Переключитесь на другой сервер";
+            if (g.Key.Leak)
+            {
+                // Сервер тут ни при чем: менять его бесполезно, нужно вернуть запросы на него
+                text = $"{who} {verb} вас из страны {to}, а не {from}: запросы прошли мимо сервера {DnsServer.Clip(active.Name)}, через DNS сети. Ставлю подключение заново";
+                _ = RepairBypassAsync(active, who);
+            }
             Log("Смена страны выхода: " + text);
             ShowToast(text, g.Key.ToClosed ? "Bad" : "Warn"); // при спрятанном окне ShowToast сам покажет уведомление Windows
         }

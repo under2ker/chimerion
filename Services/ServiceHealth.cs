@@ -52,7 +52,7 @@ public sealed class ServiceHealth
     {
         Problem.NoDns => "DNS не отвечает на адрес сервиса",
         Problem.NotProxied => "сервер перестал подменять адреса",
-        Problem.Closed => "доступ закрыт, прокси сервера попал под блокировку",
+        Problem.Closed => "сервис не пускает из страны или с адреса выхода сервера",
         Problem.NoResponse => "прокси сервера не отвечает",
         _ => "работает",
     };

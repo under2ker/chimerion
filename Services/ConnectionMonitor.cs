@@ -62,6 +62,32 @@ public sealed class ConnectionMonitor
     /// <summary>Пользователь подключился сам: прежние возвраты DNS больше не считаются спором.</summary>
     public void ForgetRestores() => _restores.Clear();
 
+    /// <summary>Сколько проверок подряд выбранный пользователем сервер должен ответить, чтобы сторож вернулся на него.</summary>
+    public const int PreferredChecks = 3;
+    private int _preferredOk;
+
+    /// <summary>
+    /// Выбранный пользователем сервер ответил (или нет) на очередной проверке сторожа. True — ответил
+    /// PreferredChecks раз подряд: пора возвращаться. Одна неудача начинает счет заново, чтобы не прыгать
+    /// на сервер, который отвечает через раз.
+    /// </summary>
+    public bool PreferredAnswers(bool answers)
+    {
+        _preferredOk = answers ? _preferredOk + 1 : 0;
+        if (_preferredOk < PreferredChecks) return false;
+        _preferredOk = 0;
+        return true;
+    }
+
+    public void ForgetPreferred() => _preferredOk = 0;
+
+    /// <summary>
+    /// Сервис показал адрес без подмены, а сам сервер на прямой запрос подменяет его (отвечает другим адресом):
+    /// запрос Windows прошел мимо сервера, через DNS сети. Это не поломка сервера, и смена сервера не поможет.
+    /// </summary>
+    public static bool Bypassed(string systemIp, IReadOnlyCollection<IPAddress> serverIps) =>
+        serverIps.Count > 0 && IPAddress.TryParse(systemIp, out var ip) && !serverIps.Contains(ip);
+
     /// <summary>
     /// Адреса подключения пропали с адаптеров или пропали правила NRPT («Два DNS» или домены ИИ за DoH-прокси). Подключение,
     /// которое адаптеры не меняло (в «Двух DNS» общий DNS не задан), проверяется только по правилам.

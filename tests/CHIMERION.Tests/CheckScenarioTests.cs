@@ -577,7 +577,7 @@ public class ServiceHealthTests
             new ServiceHealth.Change("Gemini", true, ServiceHealth.Problem.Closed),
         };
         var t = ServiceHealth.DownText("kayonedns", down);
-        Assert.Equal("kayonedns: ChatGPT и Claude перестали открываться (сервер перестал подменять адреса); Gemini перестал открываться (доступ закрыт, прокси сервера попал под блокировку)", t);
+        Assert.Equal("kayonedns: ChatGPT и Claude перестали открываться (сервер перестал подменять адреса); Gemini перестал открываться (сервис не пускает из страны или с адреса выхода сервера)", t);
         Assert.Equal("kayonedns: ChatGPT снова открывается", ServiceHealth.UpText("kayonedns", new[] { new ServiceHealth.Change("ChatGPT", false, ServiceHealth.Problem.None) }));
     }
 }
