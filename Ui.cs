@@ -43,10 +43,10 @@ internal static class Ui
     /// <summary>Корневая колонка окна: одинаковые поля во всех окнах.</summary>
     public static StackPanel Root() => new() { Margin = new Thickness(24, 22, 24, 20) };
 
-    /// <summary>Заголовок раздела, как в настройках: капс, 11 пт, приглушенный.</summary>
+    /// <summary>Заголовок раздела, как в настройках: обычными буквами, 12 пт, приглушенный.</summary>
     public static TextBlock Section(string text, bool first = false) => new TextBlock
     {
-        Text = text.ToUpperInvariant(), FontSize = 11, FontWeight = FontWeights.SemiBold,
+        Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold,
         Margin = new Thickness(2, first ? 4 : 20, 0, 8),
     }.Ref(TextBlock.ForegroundProperty, "Muted");
 

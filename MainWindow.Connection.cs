@@ -396,7 +396,7 @@ public partial class MainWindow
         ConnectButton.Content = connText;
         CompactConnect.Content = connText;
         ConnectButton.ToolTip = on ? "Вернуть исходные настройки DNS" : "Подключиться к выбранному серверу. По умолчанию выбирается лучший";
-        AnimateConnectColor(on ? "BadButton" : "AccentButton");
+        AnimateConnectColor(on ? "BadSoft" : "AccentButton");
         UpdateSwitchButton();
         var activeName = on ? (_servers.FirstOrDefault(x => x.Id == active!.ServerId)?.ShortName ?? DnsServer.Clip(active!.Name)) : null;
         ConnText.Text = on ? $"Подключено · {activeName}" : "Не подключено: нажмите «Подключить»";
@@ -877,8 +877,16 @@ public partial class MainWindow
     private void AnimateConnectColor(string key)
     {
         var target = ((SolidColorBrush)FindResource(key)).Color;
-        // Текст по контрасту с заливкой: свой цвет кнопок может быть светлым
-        ConnectButton.Foreground = CompactConnect.Foreground = new SolidColorBrush(ThemeColors.OnFill(target));
+        // Текст по контрасту с заливкой: свой цвет кнопок может быть светлым. «Отключить» — спокойная кнопка
+        // с красным текстом: из двух красных берется тот, что контрастнее на фоне темы
+        var fg = ThemeColors.OnFill(target);
+        if (key == "BadSoft")
+        {
+            var bad = ((SolidColorBrush)FindResource("Bad")).Color;
+            var badButton = ((SolidColorBrush)FindResource("BadButton")).Color;
+            fg = ThemeColors.Contrast(bad, target) >= ThemeColors.Contrast(badButton, target) ? bad : badButton;
+        }
+        ConnectButton.Foreground = CompactConnect.Foreground = new SolidColorBrush(fg);
         if (_connBrush == null)
         {
             _connBrush = new SolidColorBrush(target);

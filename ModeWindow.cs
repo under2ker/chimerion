@@ -138,9 +138,9 @@ internal sealed class ModeWindow
         DockPanel.SetDock(glyph, Dock.Left); row.Children.Add(glyph);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(Ui.Hint(title, 0).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
-        var state = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+        var state = new DockPanel { Margin = new Thickness(0, 3, 0, 0), LastChildFill = true };
         state.Children.Add(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center }
-            .Ref(System.Windows.Shapes.Shape.FillProperty, on ? "Ok" : "Muted"));
+            .Ref(System.Windows.Shapes.Shape.FillProperty, on ? "Ok" : "Muted").With(e => DockPanel.SetDock(e, Dock.Left)));
         state.Children.Add(new TextBlock { Text = value, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }
             .Ref(TextBlock.ForegroundProperty, on ? "Ok" : "Text"));
         text.Children.Add(state);
@@ -203,8 +203,11 @@ internal sealed class ModeWindow
         row.Children.Add(new Controls.Icon { Kind = kind, Size = 14, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, color));
         row.Children.Add(new TextBlock { Text = part + ": ", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
         row.Children.Add(new TextBlock { Text = text, FontSize = 12.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color));
-        if (note != null) row.Children.Add(new TextBlock { Text = " · " + note, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Warn"));
-        return row;
+        if (note == null) return row;
+        var block = new StackPanel();
+        block.Children.Add(row);
+        block.Children.Add(new TextBlock { Text = note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(22, 0, 0, 2) }.Ref(TextBlock.ForegroundProperty, "Warn"));
+        return block;
     }
 
     private async Task ApplyAsync(ModeInfo m)

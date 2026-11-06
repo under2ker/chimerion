@@ -280,7 +280,7 @@ public partial class MainWindow
         RootGrid.Margin = compact ? new Thickness(12) : new Thickness(20, 16, 20, 16);
         ColStatus.Width = new DataGridLength(136);
         ColStatus.Visibility = v; // в узкой колонке точка обрезалась; рабочие и так видны по цвету пинга
-        ColStatus.Header = compact ? "" : "СТАТУС"; // в узкой колонке заголовок обрезается, точка и так понятна
+        ColStatus.Header = compact ? "" : "Статус"; // в узкой колонке заголовок обрезается, точка и так понятна
         ColPing.Width = compact ? new DataGridLength(130) : new DataGridLength(105);
         // Колонка «Сервер» тянется по ширине. После широкого окна она запоминала рассчитанную ширину и в компактном
         // виде выталкивала пинг за край: растяжение ставим заново, в узком окне без нижнего предела ширины
@@ -515,7 +515,7 @@ public partial class MainWindow
         if (!IsLoaded) return; // при запуске цвета ставятся до загрузки списка: перерисовывать еще нечего
         RefreshUpdateCards(); // карточка обновления в меню: в светлой теме оставалась темной, надпись не была видна
         RefreshDashboard();
-        if (_connBrush != null) AnimateConnectColor(DnsSwitcher.GetActive() != null ? "BadButton" : "AccentButton");
+        if (_connBrush != null) AnimateConnectColor(DnsSwitcher.GetActive() != null ? "BadSoft" : "AccentButton");
         _compareSig = null; // карточки перерисовываются, даже если данные те же: поменялись цвета
         if (_before != null || _after != null) ShowCompare(DnsSwitcher.GetActive() == null && _after == null);
         _topSig = null;

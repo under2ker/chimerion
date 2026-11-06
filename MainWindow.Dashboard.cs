@@ -138,13 +138,17 @@ public partial class MainWindow
         var heroFacts = new Grid { Margin = new Thickness(0, 18, 0, 0) };
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
-        var smartValue = new StackPanel { Orientation = Orientation.Horizontal };
-        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 210 };
+        var smartValue = new Grid();
+        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
+        Grid.SetColumn(_dashboardSmartFlag, 1); Grid.SetColumn(_dashboardSmartChipBox, 2);
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
-        _dashboardSmartHint = Ui.Hint("", 2).With(t => { t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+        _dashboardSmartHint = Ui.Hint("", 2); // страна сервера и страна для ИИ переносятся на вторую строку, а не обрезаются
         DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, _dashboardSmartHint);
         _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
         _dashboardPlainHint = Ui.Hint("", 2);
@@ -188,7 +192,7 @@ public partial class MainWindow
         {
             var dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
             var status = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-            var note = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+            var note = Ui.Hint("", 1).With(t => t.FontSize = 12);
             // Одинаково заметная кнопка в каждой строке: «Открыть», а если сервис не открывается, «Подробнее»
             var open = Ui.Action("Открыть", "Strong", () => { }); open.Padding = new Thickness(12, 5, 12, 6); open.Margin = new Thickness(10, 0, 0, 0); open.MinWidth = 104;
             var target = name;
@@ -324,7 +328,7 @@ public partial class MainWindow
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12.5; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
+        text.Children.Add(Ui.Hint(sub, 1).With(t => t.FontSize = 12.5));
         Grid.SetColumn(text, 1); g.Children.Add(text);
         var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
@@ -449,7 +453,7 @@ public partial class MainWindow
         var button = Ui.Action(title, "Ghost", click);
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(MenuGlyph(icon, 17).With(e => e.VerticalAlignment = VerticalAlignment.Center));
-        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center, TextDecorations = soon ? TextDecorations.Strikethrough : null });
+        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center }); // раздел в разработке приглушен, без зачеркивания
         button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
         button.HorizontalContentAlignment = HorizontalAlignment.Left;
         button.Template = DashboardNavTemplate();
@@ -592,9 +596,10 @@ public partial class MainWindow
             Ui.SwapText(row.Status, probing ? "Проверяю…" : s == null ? "Не проверялся" : ok ? "Доступен" : Cap(s.Access.TrimStart('✓', '✗', ' ')), 4);
             Ui.FadeBrush(row.Status, TextBlock.ForegroundProperty, color);
             Ui.FadeBrush(row.Dot, Shape.FillProperty, color);
-            row.Note.Text = s == null ? "" : ok ? (s.Egress is { } eg ? "ИИ видят вас из страны: " + GeoLocation.CountryName(eg.Country) : "")
+            // В узкой колонке только страна: полная фраза переносилась в три строки и уходит в подсказку
+            row.Note.Text = s == null ? "" : ok ? (s.Egress is { } eg ? GeoLocation.CountryName(eg.Country) : "")
                 : ShortReason(s.Note);
-            row.Note.ToolTip = s?.Note;
+            row.Note.ToolTip = ok && s?.Egress is { } egress ? "ИИ видят вас из страны: " + GeoLocation.CountryName(egress.Country) : s?.Note;
             row.Status.ToolTip = s?.Note;
             bool why = s != null && !ok;
             row.Action.Content = why ? "Подробнее" : "Открыть";

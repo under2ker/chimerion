@@ -94,6 +94,8 @@ public partial class SettingsWindow : Window
 
         var v = Assembly.GetExecutingAssembly().GetName().Version;
         VersionText.Text = $"Версия {v?.Major}.{v?.Minor}.{v?.Build} · Windows 10 и 11 · .NET 8";
+        // ID устройства раньше стоял в заголовке главного окна. Тот же ID, что уходит в счетчик пользователей
+        DeviceIdValue.Text = Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1" ? "a1b2c3d4e5f60718293a4b5c6d7e8f90" : UsageCounter.DeviceId(_settings);
         SideVersion.Text = $"CHIMERION {v?.Major}.{v?.Minor}.{v?.Build}";
         // В режиме скрытия данных путь без имени пользователя Windows
         DataPathText.Text = PrivacyGuard.Enabled ? Storage.Dir.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "%USERPROFILE%", StringComparison.OrdinalIgnoreCase) : Storage.Dir;
@@ -174,6 +176,9 @@ public partial class SettingsWindow : Window
         });
     }
     private void Site_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(SiteUrl);
+
+    private void DeviceId_Click(object sender, System.Windows.Input.MouseButtonEventArgs e) =>
+        DeviceIdLabel.Text = Ui.CopyText(DeviceIdValue.Text) ? "ID скопирован" : "Не удалось скопировать: буфер обмена занят";
     private void Repo_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}");
     private void License_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/LICENSE");
     private void Changelog_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/CHANGELOG.md");

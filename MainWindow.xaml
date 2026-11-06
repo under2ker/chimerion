@@ -103,7 +103,7 @@
                 <TextBlock x:Name="TitleVersion" Margin="6,0,0,0" FontSize="12" Foreground="{DynamicResource Muted}" Opacity="0.7" VerticalAlignment="Center"/>
             </StackPanel>
             <!-- ID устройства, который уходит в счетчик: виден всегда, щелчок копирует -->
-            <TextBlock x:Name="TitleId" Grid.Column="1" Margin="0,0,12,0" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Muted}" Opacity="0.7"
+            <TextBlock x:Name="TitleId" Grid.Column="1" Visibility="Collapsed" Margin="0,0,12,0" FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource Muted}" Opacity="0.7"
                        VerticalAlignment="Center" Cursor="Hand" Background="Transparent" WindowChrome.IsHitTestVisibleInChrome="True" MouseLeftButtonUp="TitleId_Click"/>
             <Button Grid.Column="2" Style="{StaticResource CaptionButton}" Click="Minimize_Click"
                     WindowChrome.IsHitTestVisibleInChrome="True" ToolTip="Свернуть"><controls:Icon Kind="minus" Size="14" StrokeWidth="1.6"/></Button>
@@ -146,7 +146,7 @@
                 <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
                               Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></ToggleButton>
                 <Button x:Name="PrivateButton" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" TextDecorations="Strikethrough" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
+                        ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
                 <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="folder" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
                 <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource PanelNavButton}"
@@ -463,7 +463,7 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <DataGridTemplateColumn x:Name="ColStatus" Header="СТАТУС" Width="136" MinWidth="136" SortMemberPath="Rank">
+                        <DataGridTemplateColumn x:Name="ColStatus" Header="Статус" Width="136" MinWidth="136" SortMemberPath="Rank">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid x:Name="stRoot" ClipToBounds="True" Margin="0,0,12,0">
@@ -556,7 +556,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервер: имя + адрес второй строкой -->
-                        <DataGridTemplateColumn x:Name="ColServer" Header="СЕРВЕР" Width="2*" MinWidth="250" SortMemberPath="DisplayName">
+                        <DataGridTemplateColumn x:Name="ColServer" Header="Сервер" Width="2*" MinWidth="250" SortMemberPath="DisplayName">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center" ToolTip="{Binding DohUrl}">
@@ -606,7 +606,7 @@
 
                         <!-- Локация DNS-сервера: флаг страны и название места -->
                         <!-- Тянется вместе с колонкой «Сервер»: место, освобожденное колонкой источника, идет под текст -->
-                        <DataGridTemplateColumn x:Name="ColLocation" Header="ЛОКАЦИЯ" Width="3*" MinWidth="200" SortMemberPath="Country">
+                        <DataGridTemplateColumn x:Name="ColLocation" Header="Локация" Width="3*" MinWidth="200" SortMemberPath="Country">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <!-- Флаг слева, значок предупреждения справа, текст между ними на всю ширину колонки -->
@@ -622,7 +622,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Сервисы: плашки -->
-                        <DataGridTemplateColumn x:Name="ColServices" Header="СЕРВИСЫ" Width="320" MinWidth="320" SortMemberPath="Summary">
+                        <DataGridTemplateColumn x:Name="ColServices" Header="Сервисы" Width="320" MinWidth="320" SortMemberPath="Summary">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                   <Grid>
@@ -700,7 +700,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Пинг -->
-                        <DataGridTemplateColumn x:Name="ColPing" Header="ПИНГ" Width="105" MinWidth="105" SortMemberPath="LatencyMs">
+                        <DataGridTemplateColumn x:Name="ColPing" Header="Пинг" Width="105" MinWidth="105" SortMemberPath="LatencyMs">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Grid>
@@ -745,7 +745,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Оценка -->
-                        <DataGridTemplateColumn x:Name="ColScore" Header="ОЦЕНКА" Width="105" MinWidth="105" SortMemberPath="Score">
+                        <DataGridTemplateColumn x:Name="ColScore" Header="Оценка" Width="105" MinWidth="105" SortMemberPath="Score">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel x:Name="scoreRoot" Orientation="Horizontal" VerticalAlignment="Center">
@@ -765,7 +765,7 @@
 
                         <!-- Стабильность -->
                         <!-- Стабильность: в подсказке история проверок за 7 дней и график -->
-                        <DataGridTemplateColumn x:Name="ColStab" Header="СТАБИЛЬНОСТЬ" Width="145" MinWidth="145" SortMemberPath="StabilityShown">
+                        <DataGridTemplateColumn x:Name="ColStab" Header="Стабильность" Width="145" MinWidth="145" SortMemberPath="StabilityShown">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock x:Name="stabRoot" Text="{Binding StabilityShown}" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"

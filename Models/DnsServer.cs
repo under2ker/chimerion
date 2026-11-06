@@ -72,9 +72,9 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Что пишется в servers.json: рекламная строка добавляется при запуске и на диск не попадает.</summary>
     public static List<DnsServer> ForSaving(IEnumerable<DnsServer> servers) => servers.Where(s => !s.IsPromo).ToList();
 
-    /// <summary>Найден за последние 7 дней — в таблице помечается «новый».</summary>
+    /// <summary>Найден за последние сутки — в таблице помечается «новый». За неделю метка стояла почти у всех и ничего не выделяла.</summary>
     [JsonIgnore]
-    public bool IsNew => (DateTime.Now - AddedAt).TotalDays < 7;
+    public bool IsNew => (DateTime.Now - AddedAt).TotalDays < 1;
 
     /// <summary>Строка плавно гаснет перед удалением из списка (автоочистка). Не сохраняется.</summary>
     private bool _fading;

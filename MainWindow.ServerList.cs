@@ -344,7 +344,7 @@ public partial class MainWindow
         }
 
         RankChip.Visibility = service == null ? Visibility.Collapsed : Visibility.Visible;
-        ColStab.Header = service == null ? "СТАБИЛЬНОСТЬ" : $"СТАБ. {service.ToUpperInvariant()}"; // колонка показывает стабильность по сервису
+        ColStab.Header = service == null ? "Стабильность" : $"Стаб. {service}"; // колонка показывает стабильность по сервису
         if (service != null)
         {
             RankChipText.Text = $"Сначала лучшие для {service}";

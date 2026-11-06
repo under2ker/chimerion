@@ -244,7 +244,7 @@ internal static class UpdateWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.Children.Add(mark);
         var col = new StackPanel { Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        col.Children.Add(new TextBlock { Text = caption.ToUpperInvariant(), FontSize = 11, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Accent"));
+        col.Children.Add(new TextBlock { Text = caption, FontSize = 12, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Accent"));
         col.Children.Add(new TextBlock { Text = title, FontSize = 21, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap });
         if (extra != null) col.Children.Add(extra);
         Grid.SetColumn(col, 1);
@@ -419,7 +419,7 @@ internal static class UpdateWindow
             if (t == "under2ker" || t.StartsWith("Полный список в")) continue;
             FrameworkElement el;
             if (t.StartsWith("###"))
-                el = new TextBlock { Text = t.TrimStart('#', ' ').ToUpperInvariant(), FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, first ? 0 : 14, 0, 6) }
+                el = new TextBlock { Text = t.TrimStart('#', ' '), FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, first ? 0 : 14, 0, 6) }
                     .Ref(TextBlock.ForegroundProperty, "Accent");
             else if (t.StartsWith('#'))
                 el = new TextBlock { Text = t.TrimStart('#', ' '), FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, first ? 0 : 14, 0, 6) };
