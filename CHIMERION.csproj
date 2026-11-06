@@ -14,7 +14,7 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.132</Version>
+    <Version>0.1.133</Version>
     <!-- Сбой сети при загрузке базы уязвимостей (NU1900) не должен ронять сборку: уязвимости проверяет отдельный шаг CI -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
   </PropertyGroup>
@@ -35,6 +35,8 @@
     <EmbeddedResource Include="catalog/bypass.json.sig" LogicalName="bypass.json.sig" />
     <EmbeddedResource Include="i18n/en.json" LogicalName="i18n.en.json" />
     <EmbeddedResource Include="Assets/animated-icons.json.gz" LogicalName="animated-icons.json.gz" />
+    <!-- Расширение Google Flow Geo Bypass (MIT): распаковывается в папку и подключается в браузере кнопкой «Загрузить распакованное» -->
+    <EmbeddedResource Include="Assets/google-flow/*" LogicalName="google-flow/%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

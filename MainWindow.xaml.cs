@@ -191,6 +191,7 @@ public partial class MainWindow : Window
             await CheckStartupStateAsync();
             await EnsureConnectionAfterStartAsync();
             _ = StartToolsAsync();
+            _ = RefreshFlowExtensionAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
             StartCrowd();
             StartSiteWatch();

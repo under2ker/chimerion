@@ -137,6 +137,8 @@
                               Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></ToggleButton>
                 <ToggleButton x:Name="ToolsToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></ToggleButton>
+                <Button x:Name="FlowButton" Click="GoogleFlow_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Расширение для браузера, с которым Google Flow открывается из России"><StackPanel Orientation="Horizontal"><controls:Icon Kind="film" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelFlowText" Text="Google Flow"/></StackPanel></Button>
                 <ToggleButton x:Name="DiagToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
                               Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></ToggleButton>
                 <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"

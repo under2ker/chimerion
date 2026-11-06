@@ -1,0 +1,4 @@
+Google Flow Geo Bypass 1.0.1
+https://github.com/LZTD1/google-flow-geobypass
+Commit 265c7d47fbeaf9c897a7c5eab92dc212cb0df366, MIT License (LICENSE).
+Files are unchanged; icon.png is resized to 128x128.

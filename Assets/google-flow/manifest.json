@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Google Flow Geo Bypass",
+  "version": "1.0.1",
+  "minimum_chrome_version": "111",
+  "description": "Google Flow Geo Bypass",
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "permissions": [
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://flow.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Google Flow Geo Bypass",
+    "default_icon": {
+      "16": "icon.png",
+      "32": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://flow.google.com/*"
+      ],
+      "js": [
+        "status.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

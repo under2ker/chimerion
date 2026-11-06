@@ -437,6 +437,7 @@ public partial class MainWindow
         links.Children.Add(SideNav("Панель управления", "layout-dashboard", ShowControlPanel));
         links.Children.Add(SideNav("CHIMERION DNS", "star", ChimerionDnsWindow.Show));
         links.Children.Add(SideNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Google Flow", "film", () => GoogleFlow_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
