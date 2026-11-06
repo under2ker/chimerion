@@ -83,8 +83,8 @@ a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; 
   transition: background .15s, border-color .15s, box-shadow .2s; }
 .btn:hover { border-color: #41454c; background: var(--panel2); }
 .btn.go { background: var(--lime); border-color: var(--lime); color: #12150a;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 10px 30px -10px rgba(197,242,58,.45); }
-.btn.go:hover { background: #d6fa6a; box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 14px 36px -10px rgba(197,242,58,.6); }
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45); }
+.btn.go:hover { background: #d6fa6a; }
 .btn svg { width: 20px; height: 20px; flex: none; }
 .btn small { font-weight: 500; opacity: .65; font-size: 14px; }
 
@@ -92,8 +92,6 @@ a { color: inherit; text-underline-offset: 3px; text-decoration-thickness: 1px; 
 .hero { position: relative; padding: clamp(48px, 7vw, 104px) 0 clamp(64px, 8vw, 120px); overflow: hidden; isolation: isolate; }
 .hero::before { content: ""; position: absolute; inset: 0; z-index: -2; background: var(--stripes);
   -webkit-mask-image: radial-gradient(70% 90% at 78% 40%, #000 0%, transparent 75%); mask-image: radial-gradient(70% 90% at 78% 40%, #000 0%, transparent 75%); }
-.hero::after { content: ""; position: absolute; z-index: -1; width: 760px; height: 760px; right: -120px; top: -140px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(197,242,58,.10), rgba(181,178,156,.05) 55%, transparent); pointer-events: none; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(36px, 5vw, 80px); align-items: center; }
 h1 { font: 650 clamp(32px, 4vw, 54px)/1.06 var(--display); letter-spacing: -.04em; margin: 0 0 26px; text-wrap: balance; }
 .lead { font-size: clamp(18px, 1.6vw, 20px); color: var(--soft); margin: 0 0 34px; max-width: 33em; }
@@ -197,9 +195,9 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 
 /* Три шага: настоящая последовательность */
 .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: s; }
-.steps li { counter-increment: s; padding: 30px 28px 30px; background: var(--panel); border-radius: 18px; box-shadow: var(--edge); border: 1px solid var(--line-soft); }
-.steps li::before { content: counter(s); font: 700 48px/1 var(--text); color: var(--stone);
-  display: block; margin-bottom: 22px; letter-spacing: -.04em; }
+.steps li { counter-increment: s; padding: 28px; background: var(--panel); border-radius: 18px; box-shadow: var(--edge); border: 1px solid var(--line-soft); }
+.steps li::before { content: counter(s); font: 500 32px/1 var(--display); color: var(--stone);
+  display: block; margin-bottom: 20px; font-variant-numeric: tabular-nums; }
 .steps b { display: block; font-size: 18px; margin-bottom: 8px; }
 .steps span { color: var(--soft); font-size: 16px; }
 
@@ -264,14 +262,14 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 /* ---------- Движение ---------- */
 /* Полоса прочитанного над шапкой */
 .progress { position: absolute; left: 0; top: 0; height: 2px; width: 100%; background: var(--lime); transform-origin: 0 50%;
-  transform: scaleX(var(--read, 0)); box-shadow: 0 0 12px rgba(197,242,58,.6); }
+  transform: scaleX(var(--read, 0)); }
 .top.scrolled .wrap { height: 60px; }
 .top .wrap { transition: height .3s ease; }
 
 /* Появление при прокрутке */
-.js .reveal { opacity: 0; transform: translateY(26px); transition: opacity .9s cubic-bezier(.2,.7,.2,1) var(--d, 0s), transform .9s cubic-bezier(.2,.7,.2,1) var(--d, 0s); }
+.js .reveal { opacity: 0; transform: translateY(12px); transition: opacity .6s cubic-bezier(.2,.7,.2,1) var(--d, 0s), transform .6s cubic-bezier(.2,.7,.2,1) var(--d, 0s); }
 .js .reveal.in { opacity: 1; transform: none; }
-.js .reveal.soft { transform: translateY(14px) scale(.985); }
+.js .reveal.soft { transform: translateY(12px); }
 .js .reveal.soft.in { transform: none; }
 
 /* Первый экран: свет и узор чуть отстают от прокрутки */
@@ -303,13 +301,13 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
   will-change: transform; }
 
 /* Метки на скриншоте: по одной, наведение на пункт подсвечивает метку */
-.js .pin { opacity: 0; transform: scale(.4); transition: opacity .5s, transform .6s cubic-bezier(.3,1.6,.5,1), box-shadow .3s; }
+.js .pin { opacity: 0; transform: scale(.4); transition: opacity .5s, transform .5s cubic-bezier(.2,.7,.2,1), box-shadow .3s; }
 .screen.in .pin { opacity: 1; transform: none; }
 .screen.in .pin:nth-of-type(1) { transition-delay: .3s; }
 .screen.in .pin:nth-of-type(2) { transition-delay: .5s; }
 .screen.in .pin:nth-of-type(3) { transition-delay: .7s; }
 .screen.in .pin:nth-of-type(4) { transition-delay: .9s; }
-.pin.hot { transform: scale(1.25) !important; box-shadow: 0 0 0 10px rgba(197,242,58,.22), 0 6px 18px rgba(0,0,0,.5); transition-delay: 0s !important; }
+.pin.hot { transform: scale(1.15) !important; box-shadow: 0 0 0 8px rgba(197,242,58,.18), 0 6px 18px rgba(0,0,0,.5); transition-delay: 0s !important; }
 .legend li { cursor: default; transition: color .2s; }
 .legend li:hover b { color: var(--lime); }
 .legend li:hover::before { background: var(--lime); border-color: var(--lime); color: #12150a; }
@@ -322,14 +320,14 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 .js .cases li:not(.lit) p { opacity: .78; }
 .js .cases li:not(.lit) p::before { background: #4b5320; box-shadow: none; }
 .js .cases li.lit q::before { background: #5a2a2f; box-shadow: none; transform: scale(.8); }
-.js .cases li.lit p::before { box-shadow: 0 0 0 5px var(--lime-deep), 0 0 18px rgba(197,242,58,.55); }
+.js .cases li.lit p::before { box-shadow: 0 0 0 5px var(--lime-deep); }
 
 /* Ответы раскрываются плавно */
 .faq details .answer { overflow: hidden; }
 .faq details p { transition: opacity .35s; }
 
 /* Финал: логотип выезжает */
-.js .final .mark { transform: translate(60px, 40px) rotate(-8deg); opacity: 0; transition: transform 1.4s cubic-bezier(.2,.7,.2,1), opacity 1.4s; }
+.js .final .mark { transform: translate(60px, 40px) rotate(-8deg); opacity: 0; transition: transform .9s cubic-bezier(.2,.7,.2,1), opacity .9s; }
 .js .final .card.in .mark { transform: none; opacity: .07; }
 
 /* Кнопки чуть приподнимаются */
@@ -391,14 +389,13 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 }
 
 /* Обзор инструментов: тот же ритм и палитра, что у основных разделов. */
-.eyebrow { margin: 0 0 18px; color: var(--lime); font-size: 12px; font-weight: 650; letter-spacing: .12em; }
-.eyebrow span { display: block; margin-top: 7px; color: var(--fog); font-size: 11px; letter-spacing: .08em; }
+.eyebrow { margin: 0 0 16px; color: var(--stone); font-size: 15px; font-weight: 500; }
 .demo-note { margin: 12px 10px 4px; color: var(--fog); font-size: 12px; line-height: 1.5; }
 .section-heading { display: grid; grid-template-columns: 1.2fr 1fr; align-items: end; gap: 40px; margin-bottom: 30px; }
 .section-heading h2, .section-heading .intro { margin-bottom: 0; }
 .tool-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
 .tool { display:flex; flex-direction:column; padding:28px; border:1px solid var(--line); border-radius:18px; background:linear-gradient(145deg,var(--panel),var(--graphite)); }
-.tool-index { color:var(--lime); font-size:12px; letter-spacing:.1em; }
+.tool-index { color:var(--stone); font-size:14px; font-weight:500; font-variant-numeric:tabular-nums; }
 .tool h3 { font:600 20px/1.4 var(--text); margin:20px 0 12px; }
 .tool p { color:var(--soft); font-size:15px; margin:0 0 25px; }
 .tool-tags { display:flex; flex-wrap:wrap; gap:7px; margin-top:auto; }
@@ -435,18 +432,17 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
   <section class="hero">
     <div class="wrap">
       <div>
-        <p class="eyebrow">WINDOWS 10 И 11 <span>SMART DNS · ZAPRET · TELEGRAM</span></p>
+        <p class="eyebrow">Windows 10 и 11 · Smart DNS, zapret и Telegram</p>
         <h1>Нейросети, YouTube и Telegram в одной программе</h1>
-        <p class="lead">CHIMERION помогает подобрать сервер и включить нужные инструменты. Для Windows 10 и 11. Результат зависит от вашей сети и выбранного сервера.</p>
+        <p class="lead">CHIMERION помогает подобрать сервер и включить нужные инструменты. Результат зависит от вашей сети и выбранного сервера.</p>
         <div class="actions">
           <a class="btn go dl" href="https://github.com/under2ker/chimerion/releases/download/v0.1.130/CHIMERION-0.1.130-win-x64.zip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M5 21h14"/></svg>
             <span class="dl-text">Скачать 0.1.130 <small>1,1 МБ</small></span>
           </a>
-          <a class="btn" href="https://github.com/under2ker/chimerion/releases/latest">Релиз на GitHub</a>
           <a class="btn" href="#start">Как начать <span aria-hidden="true">↘</span></a>
         </div>
-        <p class="fine"><span>Бесплатно и с открытым кодом.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
+        <p class="fine"><span>Бесплатно и с открытым кодом, <a href="https://github.com/under2ker/chimerion/releases/latest">релиз на GitHub</a>.</span> Windows 10 и 11, нужен <a href="https://dotnet.microsoft.com/download/dotnet/8.0">.NET 8 Desktop Runtime</a>.</p>
       </div>
 
       <div class="demo" data-on="0" role="region" aria-label="Что открывается без программы и с ней">
@@ -537,11 +533,11 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
 
   <section class="band toolkit" aria-labelledby="toolkit-h">
     <div class="wrap">
-      <div class="section-heading"><div><p class="eyebrow">ЧТО ВНУТРИ</p><h2 id="toolkit-h">Нужные инструменты в одном окне</h2></div><p class="intro">Включите только то, чем пользуетесь. На главном экране видно, что запущено и что удалось проверить.</p></div>
+      <div class="section-heading"><div><p class="eyebrow">Что внутри</p><h2 id="toolkit-h">Нужные инструменты в одном окне</h2></div><p class="intro">Включите только то, чем пользуетесь. На главном экране видно, что запущено и что удалось проверить.</p></div>
       <div class="tool-grid">
-        <article class="tool"><span class="tool-index">01 / SMART DNS</span><h3>Нейросети для работы</h3><p>Подбор серверов для ChatGPT, Claude и Gemini, проверка доступа и контроль страны выхода.</p><div class="tool-tags"><span>ChatGPT</span><span>Claude</span><span>Gemini</span></div></article>
-        <article class="tool"><span class="tool-index">02 / ZAPRET</span><h3>Видео и общение</h3><p>Отдельный обход для YouTube и Discord. Готовые наборы сайтов и подбор стратегии под вашу сеть.</p><div class="tool-tags"><span>YouTube</span><span>Discord</span><span>Свои сайты</span></div></article>
-        <article class="tool"><span class="tool-index">03 / TELEGRAM</span><h3>Telegram через прокси</h3><p>Запуск TG WS Proxy и состояние его работы в программе. Управление рядом с остальными инструментами.</p><div class="tool-tags"><span>TG WS Proxy</span><span>Один переключатель</span></div></article>
+        <article class="tool"><span class="tool-index">01 · Smart DNS</span><h3>Нейросети для работы</h3><p>Подбор серверов для ChatGPT, Claude и Gemini, проверка доступа и контроль страны выхода.</p><div class="tool-tags"><span>ChatGPT</span><span>Claude</span><span>Gemini</span></div></article>
+        <article class="tool"><span class="tool-index">02 · zapret</span><h3>Видео и общение</h3><p>Отдельный обход для YouTube и Discord. Готовые наборы сайтов и подбор стратегии под вашу сеть.</p><div class="tool-tags"><span>YouTube</span><span>Discord</span><span>Свои сайты</span></div></article>
+        <article class="tool"><span class="tool-index">03 · Telegram</span><h3>Telegram через прокси</h3><p>Запуск TG WS Proxy и состояние его работы в программе. Управление рядом с остальными инструментами.</p><div class="tool-tags"><span>TG WS Proxy</span><span>Один переключатель</span></div></article>
       </div>
       <p class="tool-note">CHIMERION не заменяет VPN для всего трафика и не скрывает вашу личность в интернете. <a href="#compare">Сравнить способы подключения</a></p>
     </div>
@@ -798,7 +794,6 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
     if (!e.isIntersecting) return;
     e.target.classList.add("in");
     io.unobserve(e.target);
-    if (e.target.matches(".facts li")) count(e.target.querySelector(".num"));
   }), { rootMargin: "0px 0px -12% 0px", threshold: .12 });
   groups.forEach(([sel, now]) => {
     document.querySelectorAll(sel).forEach((el, i, all) => {
@@ -811,19 +806,6 @@ h2 { font: 650 clamp(27px, 3.3vw, 42px)/1.1 var(--display); letter-spacing: -.03
       now ? requestAnimationFrame(() => setTimeout(() => el.classList.add("in"), 60)) : io.observe(el);
     });
   });
-
-  // Счетчики в полосе фактов
-  function count(el) {
-    if (!el || !motion) return;
-    const to = +el.dataset.to, t0 = performance.now(), dur = 1100;
-    const step = now => {
-      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
-      el.textContent = Math.round(to * e);
-      if (k < 1) requestAnimationFrame(step);
-    };
-    el.textContent = "0";
-    requestAnimationFrame(step);
-  }
 
   // Наведение на пункт расшифровки подсвечивает его метку на скриншоте
   const pins = document.querySelectorAll(".pin");
