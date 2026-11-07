@@ -1,5 +1,14 @@
 # История изменений
 
+## 0.1.137
+
+Сайты для обхода
+- Новый набор «ИИ-агенты и инструменты»: n8n, LangChain, Pinecone, Qdrant, LM Studio, Open WebUI и другие, 37 сайтов.
+- В набор «ИИ для видео, голоса и текста» добавлены редакторы и улучшатели: VEED, Kapwing, InVideo, Topaz Labs, Clipdrop и другие.
+- Новый набор «Сайты VPN»: NordVPN, ExpressVPN, Mullvad, Psiphon, Amnezia и другие.
+- В набор «Новости» добавлены независимые издания: Медиазона, The Insider, Новая газета Европа, The Bell, Проект, OVD-Info, Bellingcat и другие.
+- Новый набор «Strava и Ticketmaster» для сервисов, которые не работают в России.
+
 ## 0.1.136
 
 Сайты для обхода

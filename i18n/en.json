@@ -2403,5 +2403,12 @@
  "ИИ для видео, голоса и текста: HeyGen, Kling, DeepL, Grammarly": "AI for video, voice and text: HeyGen, Kling, DeepL, Grammarly",
  "Snapchat и Bluesky": "Snapchat and Bluesky",
  "Новости: BBC, DW, Meduza, Радио Свобода, Moscow Times, Голос Америки": "News: BBC, DW, Meduza, Radio Svoboda, Moscow Times, Voice of America",
- "Netflix ушел из России: нужен Smart DNS": "Netflix left Russia: you need a Smart DNS"
+ "Netflix ушел из России: нужен Smart DNS": "Netflix left Russia: you need a Smart DNS",
+ "ИИ-агенты и инструменты: n8n, LangChain, Pinecone, LM Studio": "AI agents and tools: n8n, LangChain, Pinecone, LM Studio",
+ "Сайты VPN: NordVPN, ExpressVPN, Mullvad, Psiphon, Amnezia": "VPN sites: NordVPN, ExpressVPN, Mullvad, Psiphon, Amnezia",
+ "Сайты VPN закрыты в России почти у всех провайдеров: без обхода не скачать приложение": "VPN sites are blocked in Russia by almost every provider: without a bypass you cannot download the app",
+ "VPN и приватность": "VPN and privacy",
+ "Strava и Ticketmaster": "Strava and Ticketmaster",
+ "Другие сервисы": "Other services",
+ "Сервисы не работают в России: нужен Smart DNS": "These services do not work in Russia: you need a Smart DNS"
 }

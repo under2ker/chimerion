@@ -81,14 +81,23 @@
       "extra": ["copilot.microsoft.com", "githubcopilot.com", "lovable.dev", "bolt.new", "v0.dev", "v0.app", "tabnine.com", "sourcegraph.com", "continue.dev", "cline.bot", "aider.chat", "base44.com", "devin.ai", "emergent.sh", "kilo.ai", "kilocode.ai", "opencode.ai", "qoder.com", "roocode.com", "rork.com", "trae.ai", "antigravity.google", "studio.firebase.google.com", "copilotstudio.microsoft.com"],
       "note": "" },
     { "id": "ai-media", "recommend": "smartdns", "category": "ИИ и LLM", "title": "ИИ для видео, голоса и текста: HeyGen, Kling, DeepL, Grammarly", "lists": [],
-      "extra": ["bfl.ai", "d-id.com", "deepl.com", "descript.com", "fireflies.ai", "fish.audio", "gamma.app", "grammarly.com", "hailuoai.video", "hailuoai.com", "haiper.ai", "heygen.com", "higgsfield.ai", "jasper.ai", "kits.ai", "kling.ai", "ltx.studio", "lightricks.com", "murf.ai", "otter.ai", "pixverse.ai", "rask.ai", "resemble.ai", "scenario.com", "seaart.ai", "speechify.com", "synthesia.io", "tensor.art", "vidu.com"],
+      "extra": ["bfl.ai", "d-id.com", "deepl.com", "descript.com", "fireflies.ai", "fish.audio", "gamma.app", "grammarly.com", "hailuoai.video", "hailuoai.com", "haiper.ai", "heygen.com", "higgsfield.ai", "jasper.ai", "kits.ai", "kling.ai", "ltx.studio", "lightricks.com", "murf.ai", "otter.ai", "pixverse.ai", "rask.ai", "resemble.ai", "scenario.com", "seaart.ai", "speechify.com", "synthesia.io", "tensor.art", "vidu.com", "captions.ai", "veed.io", "kapwing.com", "invideo.io", "opus.pro", "clipchamp.com", "topazlabs.com", "cleanup.pictures", "clipdrop.co", "nightcafe.studio", "getimg.ai", "openart.ai", "stableaudio.com", "designer.microsoft.com"],
+      "note": "" },
+    { "id": "ai-agents", "recommend": "smartdns", "category": "ИИ и LLM", "title": "ИИ-агенты и инструменты: n8n, LangChain, Pinecone, LM Studio", "lists": [],
+      "extra": ["n8n.io", "zapier.com", "make.com", "lindy.ai", "relevanceai.com", "crewai.com", "langchain.com", "smith.langchain.com", "langfuse.com", "dify.ai", "flowiseai.com", "agentops.ai", "composio.dev", "pipedream.com", "browser-use.com", "stagehand.dev", "agentql.com", "firecrawl.dev", "scrapegraphai.com", "pinecone.io", "weaviate.io", "qdrant.tech", "cloud.qdrant.io", "trychroma.com", "zilliz.com", "wandb.ai", "comet.com", "humanloop.com", "arize.com", "helicone.ai", "portkey.ai", "litellm.ai", "unsloth.ai", "lmstudio.ai", "jan.ai", "openwebui.com", "anythingllm.com"],
       "note": "" },
 
     { "id": "knowledge", "category": "Знания и чтение", "title": "Internet Archive, arXiv, Proton, Speedtest", "lists": ["archive", "protonmail", "speedtest"], "extra": ["arxiv.org", "export.arxiv.org", "scholar.archive.org", "torproject.org"], "note": "" },
     { "id": "notion", "recommend": "smartdns", "category": "Знания и чтение", "title": "Notion и заметки", "lists": ["notion"], "extra": ["obsidian.md", "craft.do", "coda.io", "evernote.com", "todoist.com"], "note": "Notion ушел из России: нужен Smart DNS" },
     { "id": "torrents", "recommend": "zapret", "category": "Знания и чтение", "title": "RuTracker и HDRezka", "lists": ["rutracker", "hdrezka"], "note": "" },
     { "id": "news", "recommend": "zapret", "category": "Новости", "title": "Новости: BBC, DW, Meduza, Радио Свобода, Moscow Times, Голос Америки", "lists": [],
-      "extra": ["bbc.com", "bbc.co.uk", "bbci.co.uk", "bbcrussian.com", "dw.com", "dwcdn.net", "meduza.io", "meduza.global", "svoboda.org", "currenttime.tv", "radiofreeeurope.com", "rferl.org", "themoscowtimes.com", "voanews.com", "golosameriki.com", "golos-ameriki.ru"],
-      "note": "" }
+      "extra": ["bbc.com", "bbc.co.uk", "bbci.co.uk", "bbcrussian.com", "dw.com", "dwcdn.net", "meduza.io", "meduza.global", "svoboda.org", "currenttime.tv", "radiofreeeurope.com", "rferl.org", "themoscowtimes.com", "voanews.com", "golosameriki.com", "golos-ameriki.ru", "bellingcat.com", "zona.media", "istories.media", "theins.ru", "novayagazeta.eu", "thebell.io", "sotaproject.com", "ovd.info", "proekt.media", "euronews.com", "france24.com", "aljazeera.com"],
+      "note": "" },
+    { "id": "vpn", "recommend": "zapret", "category": "VPN и приватность", "title": "Сайты VPN: NordVPN, ExpressVPN, Mullvad, Psiphon, Amnezia", "lists": [],
+      "extra": ["nordvpn.com", "expressvpn.com", "surfshark.com", "cyberghostvpn.com", "privateinternetaccess.com", "mullvad.net", "windscribe.com", "tunnelbear.com", "ivpn.net", "adguard-vpn.com", "psiphon.ca", "lantern.io", "getoutline.org", "amnezia.org", "orbot.app", "browsec.com", "zenmate.com", "hide.me", "purevpn.com", "hotspotshield.com", "openvpn.net", "wireguard.com"],
+      "note": "Сайты VPN закрыты в России почти у всех провайдеров: без обхода не скачать приложение" },
+    { "id": "other-geo", "recommend": "smartdns", "category": "Другие сервисы", "title": "Strava и Ticketmaster", "lists": [],
+      "extra": ["strava.com", "ticketmaster.com"],
+      "note": "Сервисы не работают в России: нужен Smart DNS" }
   ]
 }
