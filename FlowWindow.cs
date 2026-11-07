@@ -31,8 +31,8 @@ internal static class FlowWindow
 
         var open = Ui.Action("Открыть Flow", "Primary", () =>
         {
-            if (current == null) AutoStart.OpenUrl(FlowExtension.FlowUrl);
-            else FlowExtension.Launch(current, FlowExtension.FlowUrl); // в выбранном браузере, а не в браузере по умолчанию
+            // В выбранном браузере, а не в браузере по умолчанию; не получилось, тогда в браузере по умолчанию
+            if (current == null || !FlowExtension.Launch(current, FlowExtension.FlowUrl)) AutoStart.OpenUrl(FlowExtension.FlowUrl);
         });
         Button remove = null!;
         remove = Ui.Action("Убрать", "Ghost", () => RemoveExtension(current, status, log, Render));

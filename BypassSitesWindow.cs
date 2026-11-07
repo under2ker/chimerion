@@ -294,6 +294,9 @@ internal sealed class BypassSitesWindow
         _ = CheckAsync(added.Take(8).ToList());
     }
 
+    /// <summary>Строки не виртуализированы и перерисовываются после каждой проверки, поэтому их число ограничено.</summary>
+    private const int OwnShown = 200;
+
     private void RenderOwn()
     {
         _ownList.Children.Clear();
@@ -303,7 +306,10 @@ internal sealed class BypassSitesWindow
                 .With(t => { t.Margin = new Thickness(12, 14, 12, 14); t.HorizontalAlignment = HorizontalAlignment.Center; }));
             return;
         }
-        foreach (var host in _own) _ownList.Children.Add(OwnRow(host));
+        foreach (var host in _own.Take(OwnShown)) _ownList.Children.Add(OwnRow(host));
+        if (_own.Count > OwnShown)
+            _ownList.Children.Add(Ui.Hint($"Показаны первые {OwnShown} из {_own.Count}. Остальные тоже в обходе", 0)
+                .With(t => { t.Margin = new Thickness(12, 14, 12, 14); t.HorizontalAlignment = HorizontalAlignment.Center; }));
     }
 
     /// <summary>Свой сайт: адрес, итог проверки цветной плашкой с советом, «В Smart DNS» для закрытых и удаление.</summary>

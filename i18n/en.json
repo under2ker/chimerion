@@ -2398,5 +2398,6 @@
  "Папка расширения будет удалена. В браузере на странице расширений нажмите «Удалить» у Google Flow Geo Bypass: адрес страницы скопирую.": "The extension folder will be deleted. In the browser, click “Remove” on Google Flow Geo Bypass on the extensions page: I will copy the page address.",
  "Папка занята, закройте браузер и попробуйте еще раз": "The folder is in use, close the browser and try again",
  "Папка удалена. Адрес {0} скопирован: удалите расширение и в браузере": "Folder deleted. Address {0} copied: remove the extension in the browser too",
- "Папка удалена. Удалите расширение и в браузере, на странице расширений": "Folder deleted. Remove the extension in the browser too, on the extensions page"
+ "Папка удалена. Удалите расширение и в браузере, на странице расширений": "Folder deleted. Remove the extension in the browser too, on the extensions page",
+ "Показаны первые {0} из {1}. Остальные тоже в обходе": "Showing the first {0} of {1}. The rest are bypassed too"
 }

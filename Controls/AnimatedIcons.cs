@@ -44,7 +44,8 @@ public static class AnimatedIcons
         return _raw;
     }
 
-    /// <summary>Анимация иконки или null, если для нее анимации нет.</summary>
+    /// <summary>Анимация иконки или null, если для нее анимации нет. Загрузка и кэш общие, поэтому вызовы идут по одному.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.Synchronized)]
     public static Anim? Get(string kind)
     {
         if (string.IsNullOrEmpty(kind)) return null;

@@ -124,6 +124,7 @@ public sealed class ZapretTool : Tool
 
     private const string UserList = "list-general-user.txt";
     private const string Placeholder = "domain.example.abc";
+    private const string BuiltMark = "# Собрано CHIMERION";
 
     /// <summary>
     /// Свои сайты для обхода. Хранятся в настройках CHIMERION отдельно от наборов; в первый раз переносятся из файла
@@ -134,7 +135,40 @@ public sealed class ZapretTool : Tool
         if (State.OwnSites != null) return State.OwnSites;
         var p = Path.Combine(Lists, UserList);
         if (!File.Exists(p)) return Array.Empty<string>();
-        return File.ReadAllLines(p).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#') && l != Placeholder).ToList();
+        return OwnFromList(File.ReadAllLines(p));
+    }
+
+    /// <summary>
+    /// Свои сайты из файла списка. Файл, собранный CHIMERION, идет в порядке BuildList: сначала свои сайты, затем адреса
+    /// обновлений, наборы и большие списки. Считать своим можно только то, что стоит до адресов обновлений: иначе наборы
+    /// и большие списки навсегда становятся «своими» и окно строит по строке на десятки тысяч доменов.
+    /// </summary>
+    internal static List<string> OwnFromList(IEnumerable<string> lines)
+    {
+        var all = lines.Select(l => l.Trim()).ToList();
+        var sites = all.Where(l => l.Length > 0 && !l.StartsWith('#') && l != Placeholder).ToList();
+        if (all.Any(l => l.StartsWith(BuiltMark, StringComparison.Ordinal)))
+        {
+            var end = sites.IndexOf(UpdateHosts[0]);
+            if (end >= 0) sites.RemoveRange(end, sites.Count - end);
+        }
+        return sites;
+    }
+
+    /// <summary>
+    /// Перед первой перезаписью свои сайты переносятся из файла в настройки: дальше файл только собирается и обратно не
+    /// читается. Прежний файл остается копией рядом, потому что в новый список попадет только выбранное в настройках.
+    /// </summary>
+    private void MoveOwnSitesToState()
+    {
+        if (State.OwnSites != null) return;
+        var own = UserDomains().ToList();
+        var path = Path.Combine(Lists, UserList);
+        try { if (File.Exists(path) && !File.Exists(path + ".backup")) File.Copy(path, path + ".backup"); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        State.OwnSites = own;
+        SaveState();
     }
 
     /// <summary>Сколько доменов уйдет в обход: свои плюс домены выбранных наборов (без повторов).</summary>
@@ -177,9 +211,10 @@ public sealed class ZapretTool : Tool
     /// </summary>
     private void WriteUserList(Dnex.Services.BypassCatalog.Data? catalog)
     {
+        MoveOwnSitesToState();
         var list = BuildList(catalog);
         Directory.CreateDirectory(Lists);
-        var text = "# Never leave this file empty\r\n# Собрано CHIMERION: свои сайты и готовые наборы. Правьте в CHIMERION, ручные правки перезапишутся\r\n" +
+        var text = "# Never leave this file empty\r\n" + BuiltMark + ": свои сайты и готовые наборы. Правьте в CHIMERION, ручные правки перезапишутся\r\n" +
                    string.Join("\r\n", list.Count > 0 ? list : new List<string> { Placeholder }) + "\r\n";
         try { File.WriteAllText(Path.Combine(Lists, UserList), text); }
         catch (UnauthorizedAccessException) { throw new ToolException($"Нет прав на папку {Dir}: запустите CHIMERION с правами администратора"); }

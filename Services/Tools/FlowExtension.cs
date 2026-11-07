@@ -172,21 +172,46 @@ internal static class FlowExtension
 
     /// <summary>
     /// Запускает браузер, с адресом или без. Если CHIMERION работает с правами администратора, браузер запускается через
-    /// проводник, как обычная программа (иначе он тоже получил бы права администратора), и адрес тогда не передается.
+    /// проводник, как обычная программа (иначе он тоже получил бы права администратора). Проводник не передает аргументы
+    /// программе, поэтому адрес идет через ярлык. Возвращает false, если запустить не удалось.
     /// </summary>
-    public static void Launch(Browser b, string? url = null)
+    public static bool Launch(Browser b, string? url = null)
     {
         try
         {
             if (DnsSwitcher.IsAdmin())
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{b.Exe}\"") { UseShellExecute = true });
-                return;
+                var target = url == null ? b.Exe : WriteShortcut(b, url);
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{target}\"") { UseShellExecute = true });
+                return true;
             }
             var psi = new ProcessStartInfo(b.Exe) { UseShellExecute = false };
             if (url != null) psi.ArgumentList.Add(url);
             Process.Start(psi);
+            return true;
         }
-        catch (Exception) { }
+        catch (Exception) { return false; }
+    }
+
+    /// <summary>Ярлык «браузер + адрес» рядом с папкой расширения. Перезаписывается при каждом запуске.</summary>
+    internal static string WriteShortcut(Browser b, string url)
+    {
+        var path = Path.Combine(Path.GetDirectoryName(Folder.TrimEnd('\\', '/'))!, "open-in-browser.lnk");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+        try
+        {
+            dynamic link = shell.CreateShortcut(path);
+            try
+            {
+                link.TargetPath = b.Exe;
+                link.Arguments = "\"" + url + "\"";
+                link.WorkingDirectory = Path.GetDirectoryName(b.Exe) ?? "";
+                link.Save();
+            }
+            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(link); }
+        }
+        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+        return path;
     }
 }

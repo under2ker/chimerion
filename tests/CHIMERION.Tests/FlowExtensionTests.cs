@@ -98,6 +98,18 @@ public class FlowExtensionTests : IDisposable
     }
 
     [Fact]
+    public void ShortcutCarriesBrowserAndAddress()
+    {
+        var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "notepad.exe");
+        var lnk = FlowExtension.WriteShortcut(new FlowExtension.Browser("Chrome", exe, _dir, "chrome://extensions", "справа вверху"), FlowExtension.FlowUrl);
+        Assert.Equal(_dir, Path.GetDirectoryName(lnk));
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+        dynamic link = shell.CreateShortcut(lnk);
+        Assert.Equal(exe, (string)link.TargetPath, ignoreCase: true);
+        Assert.Equal("\"" + FlowExtension.FlowUrl + "\"", (string)link.Arguments);
+    }
+
+    [Fact]
     public void WindowBuildsWithAndWithoutBrowser()
     {
         var userData = Path.Combine(_dir, "User Data");
@@ -122,5 +134,86 @@ public class FlowExtensionTests : IDisposable
                 w.Close();
             });
         }
+    }
+}
+
+public class BypassSitesHugeListTests
+{
+    [Fact]
+    public void OwnSitesEndWhereBuiltPartStarts()
+    {
+        var own = ZapretTool.OwnFromList(new[]
+        {
+            "# Never leave this file empty", "# Собрано CHIMERION: свои сайты и готовые наборы",
+            "t.me", "flow.google.com", "r2.dev", "github.com", "githubusercontent.com", "aboutfacebook.com", "zzztube.tv",
+        });
+        Assert.Equal(new[] { "t.me", "flow.google.com" }, own);
+    }
+
+    [Fact]
+    public void HandWrittenFileIsKeptWhole()
+    {
+        var own = ZapretTool.OwnFromList(new[] { "# Never leave this file empty", "a.example", "r2.dev", "b.example", "domain.example.abc" });
+        Assert.Equal(new[] { "a.example", "r2.dev", "b.example" }, own);
+    }
+
+    [Fact]
+    public void BuiltListNoLongerFeedsItself()
+    {
+        var z = new ZapretTool();
+        var lists = Path.Combine(ZapretTool.Dir, "lists");
+        var file = Path.Combine(lists, "list-general-user.txt");
+        Directory.CreateDirectory(lists);
+        var (ownBefore, groupsBefore, bigBefore) = (z.State.OwnSites, z.State.Groups, z.State.BigLists);
+        var textBefore = File.Exists(file) ? File.ReadAllText(file) : null;
+        File.Delete(file + ".backup");
+        try
+        {
+            z.State.OwnSites = null;
+            z.State.Groups = new();
+            z.State.BigLists = new();
+            var old = string.Join("\r\n", "# Never leave this file empty", "# Собрано CHIMERION: старый список", "t.me", "r2.dev", "github.com", "githubusercontent.com", "old-big-list.example", "");
+            File.WriteAllText(file, old);
+            var write = typeof(ZapretTool).GetMethod("WriteUserList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            write.Invoke(z, new object?[] { null });
+
+            Assert.Equal(new[] { "t.me" }, z.State.OwnSites);
+            Assert.Equal(old, File.ReadAllText(file + ".backup")); // прежний файл не потерян
+            var built = File.ReadAllText(file);
+            Assert.Contains("t.me", built);
+            Assert.Contains("r2.dev", built);
+            Assert.DoesNotContain("old-big-list.example", built);
+
+            write.Invoke(z, new object?[] { null }); // повторная сборка копию не трогает и список не меняет
+            Assert.Equal(old, File.ReadAllText(file + ".backup"));
+            Assert.Equal(built, File.ReadAllText(file));
+        }
+        finally
+        {
+            (z.State.OwnSites, z.State.Groups, z.State.BigLists) = (ownBefore, groupsBefore, bigBefore);
+            File.Delete(file + ".backup");
+            if (textBefore != null) File.WriteAllText(file, textBefore); else File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void WindowDrawsLimitedRowsForHugeList()
+    {
+        // 84 973 строки вешали окно намертво: на каждый домен строилась своя строка с кнопкой, значками и плашкой
+        Wpf.Run(() =>
+        {
+            const System.Reflection.BindingFlags Any = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var ctor = typeof(BypassSitesWindow).GetConstructors(Any).Single();
+            var w = ctor.Invoke(new object?[] { null, new ZapretTool(), null, (Func<bool>)(() => false), null });
+            var own = (List<string>)typeof(BypassSitesWindow).GetField("_own", Any)!.GetValue(w)!;
+            own.Clear();
+            own.AddRange(Enumerable.Range(0, 85_000).Select(i => $"site{i}.example"));
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            typeof(BypassSitesWindow).GetMethod("Refresh", Any)!.Invoke(w, null);
+            timer.Stop();
+            var list = (System.Windows.Controls.Panel)typeof(BypassSitesWindow).GetField("_ownList", Any)!.GetValue(w)!;
+            Assert.Equal(201, list.Children.Count); // 200 строк и подсказка
+            Assert.InRange(timer.Elapsed.TotalSeconds, 0, 10);
+        });
     }
 }
