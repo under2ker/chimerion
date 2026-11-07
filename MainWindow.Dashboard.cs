@@ -418,6 +418,17 @@ public partial class MainWindow
         return b;
     }
 
+    /// <summary>
+    /// Пункт платного CHIMERION DNS в меню: золотая звезда, как у строки в таблице серверов и плашки на главной. Текст и фон
+    /// как у остальных пунктов, чтобы выделение было заметным, но не кричащим. В светлой теме цвет темнее (ресурс «Promo»).
+    /// </summary>
+    internal static Button MarkPromo(Button nav)
+    {
+        if (nav.Content is StackPanel { Children.Count: > 0 } row && row.Children[0] is Controls.Icon star)
+            star.SetResourceReference(Controls.Icon.ForegroundProperty, "Promo");
+        return nav;
+    }
+
     private FrameworkElement DashboardSidebar()
     {
         var content = _dashSidebarContent = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
@@ -435,7 +446,7 @@ public partial class MainWindow
         // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
         links.Children.Add(SideNav("Главная", "shield-check", () => { }, true));
         links.Children.Add(SideNav("Панель управления", "layout-dashboard", ShowControlPanel));
-        links.Children.Add(SideNav("CHIMERION DNS", "star", ChimerionDnsWindow.Show));
+        links.Children.Add(MarkPromo(SideNav("CHIMERION DNS", "star", ChimerionDnsWindow.Show)));
         links.Children.Add(SideNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Google Flow", "film", () => GoogleFlow_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));

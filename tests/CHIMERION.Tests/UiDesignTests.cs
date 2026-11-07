@@ -46,6 +46,34 @@ public class UiDesignTests
     private static void Theme(string theme) => ThemeColors.Apply(null, theme);
 
     [Fact]
+    public void MenuItemOfPaidDnsHasGoldStarInBothThemes()
+    {
+        Wpf.Run(() =>
+        {
+            foreach (var theme in new[] { "dark", "light" })
+            {
+                Theme(theme);
+                var star = new Dnex.Controls.Icon { Kind = "star", Size = 16 };
+                var plain = new Dnex.Controls.Icon { Kind = "shield-check", Size = 16 };
+                var nav = new Button { Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { star, new TextBlock { Text = "CHIMERION DNS" } } } };
+                var other = new Button { Content = new StackPanel { Orientation = Orientation.Horizontal, Children = { plain, new TextBlock { Text = "Главная" } } } };
+                MainWindow.MarkPromo(nav);
+                var w = new Window { Content = new StackPanel { Children = { nav, other } }, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -3000 };
+                w.Show();
+                try
+                {
+                    // Звезда берет «Promo» из темы (в светлой темной золотой), остальные значки остаются обычного цвета
+                    Assert.Equal(Res("Promo"), ((SolidColorBrush)star.Foreground).Color);
+                    Assert.NotEqual(Res("Promo"), (plain.Foreground as SolidColorBrush)?.Color);
+                    Assert.Equal(Orientation.Horizontal, ((StackPanel)nav.Content).Orientation); // текст и разметка пункта не тронуты
+                    Assert.Equal("CHIMERION DNS", ((TextBlock)((StackPanel)nav.Content).Children[1]).Text);
+                }
+                finally { w.Close(); }
+            }
+        });
+    }
+
+    [Fact]
     public void TextBoxHintStandsWhereCaretAndTextStart()
     {
         Wpf.Run(() =>
