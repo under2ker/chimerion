@@ -1,5 +1,11 @@
 # История изменений
 
+## 0.1.135
+
+Сайты для обхода
+- В наборах «ИИ и LLM» 80 новых доменов. В наборе моделей и чатов появились Cerebras, Kimi, MiniMax, Z.ai, Qwen, Manus, Genspark, fal.ai, в наборе для разработки Devin, Trae, Roo Code, Kilo Code, OpenCode.
+- Новый набор «ИИ для видео, голоса и текста»: HeyGen, Kling, Synthesia, DeepL, Grammarly, Gamma, Otter и другие.
+
 ## 0.1.134
 
 Обход

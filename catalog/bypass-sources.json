@@ -69,10 +69,13 @@
 
     { "id": "llm", "recommend": "smartdns", "category": "ИИ и LLM", "title": "Hugging Face, Perplexity, DeepSeek, Groq, Poe, Kaggle", "lists": ["huggingface", "perplexity", "deepseek", "groq", "poe", "kaggle"],
       "extra": ["mistral.ai", "chat.mistral.ai", "cohere.com", "openrouter.ai", "together.ai", "fireworks.ai", "replicate.com", "lmarena.ai", "character.ai",
-                "x.ai", "grok.com", "meta.ai", "pi.ai", "you.com", "phind.com", "deepinfra.com"],
+                "x.ai", "grok.com", "meta.ai", "pi.ai", "you.com", "phind.com", "deepinfra.com", "ai21.com", "cerebras.ai", "sambanova.ai", "hyperbolic.xyz", "novita.ai", "siliconflow.cn", "siliconflow.com", "nebius.com", "nebius.ai", "jina.ai", "exa.ai", "tavily.com", "serper.dev", "search.brave.com", "moonshot.ai", "kimi.com", "minimax.io", "minimaxi.com", "z.ai", "bigmodel.cn", "qwen.ai", "dashscope.aliyuncs.com", "together.xyz", "ydc-index.io", "fal.ai", "fal.run", "consensus.app", "elicit.com", "felo.ai", "genspark.ai", "manus.im", "labs.google", "deepmind.google", "ai.azure.com", "oaistatsig.com", "workos.com", "workoscdn.com", "cdn.openaimerge.com"],
       "note": "ChatGPT, Claude и Gemini CHIMERION и так ведет через Smart DNS. Многие из этих сервисов сами закрыты для России" },
     { "id": "ai-code", "recommend": "smartdns", "category": "ИИ и LLM", "title": "ИИ для разработки: Copilot, Lovable, Bolt, v0, Replit Agent", "lists": [],
-      "extra": ["copilot.microsoft.com", "githubcopilot.com", "lovable.dev", "bolt.new", "v0.dev", "v0.app", "tabnine.com", "sourcegraph.com", "continue.dev", "cline.bot", "aider.chat"],
+      "extra": ["copilot.microsoft.com", "githubcopilot.com", "lovable.dev", "bolt.new", "v0.dev", "v0.app", "tabnine.com", "sourcegraph.com", "continue.dev", "cline.bot", "aider.chat", "base44.com", "devin.ai", "emergent.sh", "kilo.ai", "kilocode.ai", "opencode.ai", "qoder.com", "roocode.com", "rork.com", "trae.ai", "antigravity.google", "studio.firebase.google.com", "copilotstudio.microsoft.com"],
+      "note": "" },
+    { "id": "ai-media", "recommend": "smartdns", "category": "ИИ и LLM", "title": "ИИ для видео, голоса и текста: HeyGen, Kling, DeepL, Grammarly", "lists": [],
+      "extra": ["bfl.ai", "d-id.com", "deepl.com", "descript.com", "fireflies.ai", "fish.audio", "gamma.app", "grammarly.com", "hailuoai.video", "hailuoai.com", "haiper.ai", "heygen.com", "higgsfield.ai", "jasper.ai", "kits.ai", "kling.ai", "ltx.studio", "lightricks.com", "murf.ai", "otter.ai", "pixverse.ai", "rask.ai", "resemble.ai", "scenario.com", "seaart.ai", "speechify.com", "synthesia.io", "tensor.art", "vidu.com"],
       "note": "" },
 
     { "id": "knowledge", "category": "Знания и чтение", "title": "Internet Archive, arXiv, Proton, Speedtest", "lists": ["archive", "protonmail", "speedtest"], "extra": ["arxiv.org", "export.arxiv.org", "scholar.archive.org"], "note": "" },
