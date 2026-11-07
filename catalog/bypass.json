@@ -702,7 +702,8 @@
         "viber.co",
         "viber.com",
         "viber.me",
-        "whispersystems.org"
+        "whispersystems.org",
+        "vb.me"
       ]
     },
     {
@@ -775,6 +776,20 @@
         "redditstatic.com",
         "redditstatus.com",
         "www.quora.com.cdn.cloudflare.net"
+      ]
+    },
+    {
+      "id": "social-more",
+      "title": "Snapchat и Bluesky",
+      "category": "Соцсети и общение",
+      "recommend": "zapret",
+      "note": "",
+      "domains": [
+        "snapchat.com",
+        "sc-cdn.net",
+        "snapkit.com",
+        "bsky.app",
+        "bsky.social"
       ]
     },
     {
@@ -1072,6 +1087,19 @@
       ]
     },
     {
+      "id": "netflix",
+      "title": "Netflix",
+      "category": "Видео и музыка",
+      "recommend": "smartdns",
+      "note": "Netflix ушел из России: нужен Smart DNS",
+      "domains": [
+        "netflix.com",
+        "nflxvideo.net",
+        "nflximg.net",
+        "nflxext.com"
+      ]
+    },
+    {
       "id": "music-create",
       "title": "Splice, Ableton, Native Instruments, FL Studio и другие",
       "category": "Создание музыки",
@@ -1145,7 +1173,8 @@
         "sketch.com",
         "spline.design",
         "webflow.com",
-        "zeplin.io"
+        "zeplin.io",
+        "canva.dev"
       ]
     },
     {
@@ -2410,7 +2439,8 @@
         "robloxcorp.s.llnwi.net",
         "robloxlabs.com",
         "rowblocks.com",
-        "rowblox.com"
+        "rowblox.com",
+        "robloxcdn.com"
       ]
     },
     {
@@ -3476,7 +3506,8 @@
         "speedtestcustom.com",
         "webcitation.org",
         "webtest.net",
-        "www.speedtest.net.cdn.cloudflare.net"
+        "www.speedtest.net.cdn.cloudflare.net",
+        "torproject.org"
       ]
     },
     {
@@ -3532,6 +3563,31 @@
         "stream.voidboost.cc",
         "stream.voidboost.one",
         "voidslam.org"
+      ]
+    },
+    {
+      "id": "news",
+      "title": "Новости: BBC, DW, Meduza, Радио Свобода, Moscow Times, Голос Америки",
+      "category": "Новости",
+      "recommend": "zapret",
+      "note": "",
+      "domains": [
+        "bbc.com",
+        "bbc.co.uk",
+        "bbci.co.uk",
+        "bbcrussian.com",
+        "dw.com",
+        "dwcdn.net",
+        "meduza.io",
+        "meduza.global",
+        "svoboda.org",
+        "currenttime.tv",
+        "radiofreeeurope.com",
+        "rferl.org",
+        "themoscowtimes.com",
+        "voanews.com",
+        "golosameriki.com",
+        "golos-ameriki.ru"
       ]
     }
   ]

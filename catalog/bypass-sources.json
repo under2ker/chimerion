@@ -6,15 +6,21 @@
     { "id": "discord", "recommend": "zapret", "category": "Соцсети и общение", "title": "Discord", "lists": ["discord"], "note": "Сайт, приложение и вложения" },
     { "id": "telegram", "recommend": "zapret", "category": "Соцсети и общение", "title": "Telegram", "lists": ["telegram"], "note": "Сайт, веб-версия и загрузка файлов. Для Telegram Desktop лучше TG WS Proxy" },
     { "id": "linkedin", "recommend": "zapret", "category": "Соцсети и общение", "title": "LinkedIn", "lists": ["linkedin"], "note": "" },
-    { "id": "messengers", "recommend": "zapret", "category": "Соцсети и общение", "title": "Viber и Signal", "lists": ["viber", "signal"], "note": "" },
+    { "id": "messengers", "recommend": "zapret", "category": "Соцсети и общение", "title": "Viber и Signal", "lists": ["viber", "signal"], "extra": ["vb.me"], "note": "" },
     { "id": "tiktok", "recommend": "zapret", "category": "Соцсети и общение", "title": "TikTok", "lists": ["tiktok"], "note": "" },
     { "id": "reddit", "category": "Соцсети и общение", "title": "Reddit и Quora", "lists": ["reddit", "quora"], "note": "" },
+    { "id": "social-more", "recommend": "zapret", "category": "Соцсети и общение", "title": "Snapchat и Bluesky", "lists": [],
+      "extra": ["snapchat.com", "sc-cdn.net", "snapkit.com", "bsky.app", "bsky.social"],
+      "note": "" },
 
     { "id": "youtube", "recommend": "zapret", "category": "Видео и музыка", "title": "YouTube и YouTube Music", "lists": ["youtube"], "note": "Основная сборка zapret уже обходит YouTube, набор добавляет редкие адреса" },
     { "id": "twitch", "category": "Видео и музыка", "title": "Twitch", "lists": ["twitch"], "note": "" },
     { "id": "music-listen", "category": "Видео и музыка", "title": "Spotify, SoundCloud, Deezer, Tidal, Bandcamp", "lists": ["spotify", "soundcloud", "deezer", "tidal", "bandcamp"],
       "extra": ["music.apple.com", "last.fm", "mixcloud.com", "audiomack.com"], "note": "Spotify, Deezer и Tidal сами закрыты для России: им нужен Smart DNS или VPN, а не обход" },
     { "id": "media", "recommend": "zapret", "category": "Видео и музыка", "title": "Patreon, Medium, Substack", "lists": ["patreon", "medium"], "extra": ["substack.com", "substackcdn.com"], "note": "" },
+    { "id": "netflix", "recommend": "smartdns", "category": "Видео и музыка", "title": "Netflix", "lists": [],
+      "extra": ["netflix.com", "nflxvideo.net", "nflximg.net", "nflxext.com"],
+      "note": "Netflix ушел из России: нужен Smart DNS" },
 
     { "id": "music-create", "recommend": "smartdns", "category": "Создание музыки", "title": "Splice, Ableton, Native Instruments, FL Studio и другие", "lists": [],
       "extra": ["splice.com", "ableton.com", "native-instruments.com", "image-line.com", "flstudio.com", "bandlab.com", "landr.com", "arturia.com",
@@ -23,7 +29,7 @@
     { "id": "music-ai", "recommend": "smartdns", "category": "Создание музыки", "title": "Suno, Udio, ElevenLabs", "lists": ["elevenlabs"], "extra": ["suno.com", "suno.ai", "udio.com", "aiva.ai", "soundraw.io", "mubert.com"], "note": "Музыка и голос нейросетями. Обычно сами закрыты для России" },
 
     { "id": "design", "recommend": "smartdns", "category": "Графика и дизайн", "title": "Figma, Canva, Framer, Miro, Webflow, Spline", "lists": ["figma", "canva", "framer"],
-      "extra": ["miro.com", "webflow.com", "spline.design", "penpot.app", "affinity.serif.com", "serif.com", "sketch.com", "zeplin.io", "lottiefiles.com", "rive.app"],
+      "extra": ["miro.com", "webflow.com", "spline.design", "penpot.app", "affinity.serif.com", "serif.com", "sketch.com", "zeplin.io", "lottiefiles.com", "rive.app", "canva.dev"],
       "note": "Figma, Canva и Miro ограничивают аккаунты из России: им нужен Smart DNS" },
     { "id": "adobe", "recommend": "smartdns", "category": "Графика и дизайн", "title": "Adobe: Photoshop, Illustrator, Behance, Fonts, Mixamo", "lists": ["adobe"], "extra": ["behance.net", "mixamo.com"], "note": "Adobe ушел из России: загрузки и вход работают через Smart DNS или VPN" },
     { "id": "art", "recommend": "zapret", "category": "Графика и дизайн", "title": "ArtStation, Dribbble, Pinterest, DeviantArt", "lists": ["artstation", "dribbble", "pinterest", "deviantart"], "note": "" },
@@ -45,7 +51,7 @@
     { "id": "stores", "category": "Игры", "title": "Steam, Epic Games, GOG", "lists": ["steam", "epicgames", "gog"], "note": "" },
     { "id": "publishers", "recommend": "smartdns", "category": "Игры", "title": "EA, Ubisoft, Blizzard, Riot Games", "lists": ["ea", "ubisoft", "blizzard"],
       "extra": ["riotgames.com", "leagueoflegends.com", "playvalorant.com", "riotcdn.net"], "note": "Часть сервисов сама закрыта для России: нужен Smart DNS или VPN" },
-    { "id": "roblox", "recommend": "zapret", "category": "Игры", "title": "Roblox", "lists": ["roblox"], "note": "Для самой игры может понадобиться еще «Обход и для игр»" },
+    { "id": "roblox", "recommend": "zapret", "category": "Игры", "title": "Roblox", "lists": ["roblox"], "extra": ["robloxcdn.com"], "note": "Для самой игры может понадобиться еще «Обход и для игр»" },
     { "id": "gpu", "recommend": "smartdns", "category": "Игры", "title": "NVIDIA, AMD, Intel: драйверы и GeForce Now", "lists": ["nvidia", "amd", "intel"], "note": "Загрузка драйверов из России бывает закрыта: нужен Smart DNS" },
 
     { "id": "code", "category": "Программирование", "title": "GitHub, GitLab, Bitbucket, Stack Overflow", "lists": ["github", "gitlab", "stackexchange"], "extra": ["bitbucket.org", "atlassian.com", "codeberg.org", "sourceforge.net"], "note": "" },
@@ -78,8 +84,11 @@
       "extra": ["bfl.ai", "d-id.com", "deepl.com", "descript.com", "fireflies.ai", "fish.audio", "gamma.app", "grammarly.com", "hailuoai.video", "hailuoai.com", "haiper.ai", "heygen.com", "higgsfield.ai", "jasper.ai", "kits.ai", "kling.ai", "ltx.studio", "lightricks.com", "murf.ai", "otter.ai", "pixverse.ai", "rask.ai", "resemble.ai", "scenario.com", "seaart.ai", "speechify.com", "synthesia.io", "tensor.art", "vidu.com"],
       "note": "" },
 
-    { "id": "knowledge", "category": "Знания и чтение", "title": "Internet Archive, arXiv, Proton, Speedtest", "lists": ["archive", "protonmail", "speedtest"], "extra": ["arxiv.org", "export.arxiv.org", "scholar.archive.org"], "note": "" },
+    { "id": "knowledge", "category": "Знания и чтение", "title": "Internet Archive, arXiv, Proton, Speedtest", "lists": ["archive", "protonmail", "speedtest"], "extra": ["arxiv.org", "export.arxiv.org", "scholar.archive.org", "torproject.org"], "note": "" },
     { "id": "notion", "recommend": "smartdns", "category": "Знания и чтение", "title": "Notion и заметки", "lists": ["notion"], "extra": ["obsidian.md", "craft.do", "coda.io", "evernote.com", "todoist.com"], "note": "Notion ушел из России: нужен Smart DNS" },
-    { "id": "torrents", "recommend": "zapret", "category": "Знания и чтение", "title": "RuTracker и HDRezka", "lists": ["rutracker", "hdrezka"], "note": "" }
+    { "id": "torrents", "recommend": "zapret", "category": "Знания и чтение", "title": "RuTracker и HDRezka", "lists": ["rutracker", "hdrezka"], "note": "" },
+    { "id": "news", "recommend": "zapret", "category": "Новости", "title": "Новости: BBC, DW, Meduza, Радио Свобода, Moscow Times, Голос Америки", "lists": [],
+      "extra": ["bbc.com", "bbc.co.uk", "bbci.co.uk", "bbcrussian.com", "dw.com", "dwcdn.net", "meduza.io", "meduza.global", "svoboda.org", "currenttime.tv", "radiofreeeurope.com", "rferl.org", "themoscowtimes.com", "voanews.com", "golosameriki.com", "golos-ameriki.ru"],
+      "note": "" }
   ]
 }

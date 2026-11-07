@@ -2399,5 +2399,9 @@
  "Папка занята, закройте браузер и попробуйте еще раз": "The folder is in use, close the browser and try again",
  "Папка удалена. Адрес {0} скопирован: удалите расширение и в браузере": "Folder deleted. Address {0} copied: remove the extension in the browser too",
  "Папка удалена. Удалите расширение и в браузере, на странице расширений": "Folder deleted. Remove the extension in the browser too, on the extensions page",
- "Показаны первые {0} из {1}. Остальные тоже в обходе": "Showing the first {0} of {1}. The rest are bypassed too"
+ "Показаны первые {0} из {1}. Остальные тоже в обходе": "Showing the first {0} of {1}. The rest are bypassed too",
+ "ИИ для видео, голоса и текста: HeyGen, Kling, DeepL, Grammarly": "AI for video, voice and text: HeyGen, Kling, DeepL, Grammarly",
+ "Snapchat и Bluesky": "Snapchat and Bluesky",
+ "Новости: BBC, DW, Meduza, Радио Свобода, Moscow Times, Голос Америки": "News: BBC, DW, Meduza, Radio Svoboda, Moscow Times, Voice of America",
+ "Netflix ушел из России: нужен Smart DNS": "Netflix left Russia: you need a Smart DNS"
 }
