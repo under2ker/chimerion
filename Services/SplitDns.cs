@@ -67,6 +67,10 @@ public static class SplitDns
         // Веб-чат Gemini: сеанс чата (processSession) и генеративный сервер. Без них страница открывалась через сервер, а чат шел
         // мимо него и отвечал «что-то пошло не так». Те же домены проведены на сервере CHIMERION DNS
         "geminiweb-pa.clients6.google.com", "appsgenaiserver-pa.clients6.google.com",
+        // Приложение Gemini на Android: без этих адресов оно отвечало «страна не поддерживается», хотя сайт открывался
+        // (проверено на телефоне 07.11.2026). Те же домены проведены на сервере CHIMERION DNS
+        "robinfrontend-pa.googleapis.com", "subscriptionsfirstparty-pa.googleapis.com", "signaler-pa.googleapis.com",
+        "proactivebackend-pa.googleapis.com",
     };
 
     /// <summary>

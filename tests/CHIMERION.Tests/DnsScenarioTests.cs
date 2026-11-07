@@ -343,6 +343,8 @@ public class DnsScenarioTests
         Assert.Contains(".claude.ai", rule.ns);
         Assert.Contains("gemini.google.com", rule.ns.Concat(rule.ns.Select(n => n.TrimStart('.'))));
         Assert.Contains("geminiweb-pa.clients6.google.com", rule.ns);           // сеанс веб-чата Gemini
+        Assert.Contains("robinfrontend-pa.googleapis.com", rule.ns);            // приложение Gemini на Android
+        Assert.DoesNotContain("googleapis.com", rule.ns);                       // общий домен Google целиком не отправляем
         var active = DnsSwitcher.GetActive()!;
         Assert.True(active.ProxyNrpt);
         Assert.True(active.UsesNrpt);
