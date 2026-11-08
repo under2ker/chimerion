@@ -106,6 +106,13 @@ public class AppSettings
     public string? EgressCountry { get; set; }
     /// <summary>Отправлять итоги проверок в общую карту серверов (Crowd). null — еще не спрашивали.</summary>
     public bool? CrowdConsent { get; set; }
+    /// <summary>
+    /// Сообщать в общую карту, открываются ли популярные сервисы (Incidents.Sites), чтобы сервер замечал новые
+    /// блокировки у провайдера. Работает только вместе с CrowdConsent. null — еще не спрашивали.
+    /// </summary>
+    public bool? CrowdSites { get; set; }
+    /// <summary>О каких блокировках у провайдера уже сказали (Incidents.Key), последние 50.</summary>
+    public List<string> IncidentsNotified { get; set; } = new();
     /// <summary>Запасной случайный ID, если Windows не отдала свой идентификатор.</summary>
     public string? UsageId { get; set; }
     /// <summary>Секунды работы и запуски с прошлой отметки в счетчике.</summary>

@@ -451,6 +451,7 @@ public partial class MainWindow
         links.Children.Add(SideNav("Google Flow", "film", () => GoogleFlow_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
+        links.Children.Add(SideNav("Аккаунты", "shield-user", () => AccountRisk_Click(this, new RoutedEventArgs())));
         links.Children.Add(SideNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
         // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
         links.Children.Add(SideNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Dnex.Models;
 using Dnex.Services;
+using Dnex.Services.Tools;
 
 namespace Dnex;
 
@@ -52,14 +53,69 @@ public partial class MainWindow
     /// </summary>
     private void AskCrowdConsent()
     {
-        if (_settings.CrowdConsent != null || !IsVisible) return;
-        bool yes = DnexDialog.Ask("Помогать общей карте серверов?",
-            "Раз в час программа будет отправлять итоги проверок: адрес сервера и открываются ли через него нейросети. Ваш IP и сайты не уходят.\n\n" +
-            "Взамен она подскажет, какой сервер лучше работает у вашего провайдера. Изменить можно в настройках, во вкладке «Приватность».",
-            "Помогать", "Не сейчас", DialogKind.Info, windowTitle: "Общая карта серверов");
-        _settings.CrowdConsent = yes;
+        if (!IsVisible) return;
+        if (_settings.CrowdConsent == null)
+        {
+            bool yes = DnexDialog.Ask("Помогать общей карте серверов?",
+                "Раз в час программа будет отправлять итоги проверок: адрес сервера, открываются ли через него нейросети " +
+                "и открываются ли YouTube, Discord, Telegram и еще несколько популярных сервисов. Ваш IP и ваши сайты не уходят.\n\n" +
+                "Взамен она подскажет, какой сервер лучше работает у вашего провайдера, и предупредит, если провайдер начал что-то блокировать. " +
+                "Изменить можно в настройках, во вкладке «Приватность».",
+                "Помогать", "Не сейчас", DialogKind.Info, windowTitle: "Общая карта серверов");
+            _settings.CrowdConsent = yes;
+            _settings.CrowdSites = yes;
+            Log(yes ? "Общая карта серверов: отчеты о проверках включены" : "Общая карта серверов: отчеты не отправляются");
+        }
+        else if (_settings.CrowdConsent == true && _settings.CrowdSites == null)
+        {
+            // Согласие давали на отчеты о серверах: о сервисах спрашиваем отдельно, молча расширять его нельзя
+            bool yes = DnexDialog.Ask("Предупреждать о новых блокировках?",
+                "Программа может сообщать общей карте, открываются ли у вас YouTube, Discord, Telegram и еще несколько популярных сервисов. " +
+                "Ваш IP и ваши сайты не уходят.\n\nКогда у пользователей вашего провайдера сервис перестанет открываться, программа скажет об этом и подскажет, что включить.",
+                "Сообщать", "Не нужно", DialogKind.Info, windowTitle: "Общая карта серверов");
+            _settings.CrowdSites = yes;
+            Log(yes ? "Общая карта: отчеты о популярных сервисах включены" : "Общая карта: отчеты о популярных сервисах не отправляются");
+        }
+        else return;
         try { Storage.Save("settings.json", _settings); } catch (Exception) { }
-        Log(yes ? "Общая карта серверов: отчеты о проверках включены" : "Общая карта серверов: отчеты не отправляются");
+    }
+
+    /// <summary>После круга проверки сайтов: итоги по популярным сервисам в очередь общей карты (если человек согласился).</summary>
+    private void CrowdCollectSites(IEnumerable<SiteWatch.Site> checkedSites)
+    {
+        if (_settings.CrowdConsent != true || _settings.CrowdSites != true) return;
+        var reports = Incidents.Collect(checkedSites, BypassOn());
+        if (reports.Count == 0) return;
+        Crowd.EnqueueSites(_crowdQueue, reports);
+        Crowd.SaveQueue(_crowdQueue);
+    }
+
+    /// <summary>Работает ли сейчас обход zapret: от этого зависит, о какой блокировке речь.</summary>
+    private bool BypassOn()
+    {
+        var z = _tools.OfType<ZapretTool>().FirstOrDefault();
+        return z != null && z.IsInstalled && z.IsRunning();
+    }
+
+    /// <summary>
+    /// Новые блокировки у провайдера из свежего рейтинга. Говорим только о сервисах, которыми человек пользуется
+    /// (они есть в наблюдении за сайтами), и о каждой не чаще раза в сутки. Без наблюдения за сайтами молчим:
+    /// иначе пришлось бы тревожить всех обо всем.
+    /// </summary>
+    private void NotifyIncidents()
+    {
+        if (_crowd is not { Incidents.Count: > 0 } st || !_settings.SiteWatch) return;
+        var used = _sites.Sites.Values.Where(s => s.Seen >= SiteWatch.SeenToWatch).Select(s => s.Host);
+        var fresh = Incidents.ToNotify(st.Incidents, st.Asn, used, BypassOn(), _settings.IncidentsNotified, DateTime.Today);
+        if (fresh.Count == 0) return;
+        foreach (var i in fresh)
+        {
+            _settings.IncidentsNotified.Add(Incidents.Key(st.Asn, i, DateTime.Today));
+            var text = Incidents.Describe(i, Crowd.NetName(st));
+            Notify(text, "Warn", logLine: $"Общая карта: {text} (неудачных {i.Fail}% из {i.Checks})", feature: FeatureSites);
+        }
+        if (_settings.IncidentsNotified.Count > 50) _settings.IncidentsNotified.RemoveRange(0, _settings.IncidentsNotified.Count - 50);
+        try { Storage.Save("settings.json", _settings); } catch (Exception) { }
     }
 
     /// <summary>После проверки серверов: итоги в очередь. При VPN и сбое сети результат не про сервер, не отправляем.</summary>
@@ -93,6 +149,7 @@ public partial class MainWindow
                 _crowd = await Crowd.FetchAsync();
                 _topSig = null;
                 UpdateTopList();
+                NotifyIncidents();
                 await CrowdDiscoverAsync();
             }
         }

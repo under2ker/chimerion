@@ -94,6 +94,7 @@ public partial class MainWindow
                             : _sites.Due(now, SiteEvery);
             bool connected = DnsSwitcher.GetActive() != null;
             var changes = new List<SiteWatch.Change>();
+            var checkedNow = new List<SiteWatch.Site>();
             foreach (var s in due)
             {
                 // Домены ИИ без подключения закрыты для России и должны быть закрыты: это не сбой, а отключенный Smart DNS.
@@ -104,6 +105,7 @@ public partial class MainWindow
                 if (smart && !connected) continue;
                 var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, CancellationToken.None);
                 if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) changes.Add(ch);
+                checkedNow.Add(s);
             }
             // Несколько сайтов упали в одном круге: это скорее сбой сети, чем блокировка каждого. Не тревожим, а перепроверим
             var downs = changes.Where(c => c.Down).ToList();
@@ -113,6 +115,8 @@ public partial class MainWindow
                 foreach (var c in downs) { c.Site.Down = false; c.Site.Fails = SiteWatch.FailsToAlert - 1; }
                 changes.RemoveAll(c => c.Down);
             }
+            // Сбой сети в общую карту не отправляем: он про этот компьютер, а не про провайдера
+            else CrowdCollectSites(checkedNow);
             foreach (var ch in changes) ReportSite(ch);
             _sites.Save();
             SitesWindow.Refresh();

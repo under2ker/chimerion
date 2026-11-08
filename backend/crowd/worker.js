@@ -4,7 +4,8 @@
 //                   (AS) берется из cf.asn, IP не хранится. С одного адреса не больше 5 отчетов в час.
 // POST /v1/ping    отметка копии программы при запуске и каждые 6 часов: ID устройства, версия, время работы, признаки подмены.
 // GET  /v1/usage   сводка для владельца по ключу администратора: сколько устройств всего и активных.
-// GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий.
+// GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий. В поле incidents
+//                   новые блокировки популярных сервисов в этой сети (из sites в /v1/report).
 // POST /tg/<secret> Telegram-бот: /dns — что работает сейчас, /status — сколько данных.
 // POST /tg-setup    подключить бота (заголовок X-Admin-Key): адрес вебхука и команды.
 // GET  /v1/discover серверы, которые у многих работают: программы добавляют их к себе и проверяют сами.
@@ -23,6 +24,16 @@ const SERVICE_RE = /^[\p{L}\p{N} .+_-]{1,32}$/u;
 const HOST_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 const IPV4_RE = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const IPV6_RE = /^[0-9a-f:]{2,39}$/i;
+// Популярные сервисы, о которых программы сообщают, открываются ли они (Services/Incidents.cs, тот же список).
+// Другие имена отбрасываются: свои сайты пользователей сюда попасть не могут
+export const SITES = new Set(["youtube.com", "discord.com", "t.me", "telegram.org", "whatsapp.com",
+  "instagram.com", "x.com", "facebook.com", "twitch.tv", "linkedin.com"]);
+const MAX_SITES = 20;
+// Новая блокировка: за последние RECENT_HOURS не меньше MIN_RECENT проверок и FAIL_SHARE% неудачных, а в
+// какой-то из часов не открылось хотя бы у двух отчетов (один человек так блокировку не изобразит). До этого
+// сервис открывался: за неделю не меньше MIN_BASE проверок и OK_SHARE% удачных. Давно закрытое (Instagram)
+// блокировкой не считается: о нем и так все знают
+const RECENT_HOURS = 6, MIN_RECENT = 4, FAIL_SHARE = 60, MIN_BASE = 5, OK_SHARE = 70, BASE_HOURS = 7 * 24;
 
 const json = (data, status = 200, extra = {}) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...extra } });
@@ -97,9 +108,14 @@ async function report(req, env) {
     const url = dohUrl(it.url);
     if (url && serverKey(url) === server) urls.set(server, url);
   }
-  if (agg.size === 0) return json({ accepted: 0 });
+  const sites = parseSites(body.sites);
+  if (agg.size === 0 && sites.length === 0) return json({ accepted: 0 });
 
   const stmts = [];
+  const ss = env.DB.prepare(
+    "INSERT INTO site_stats (hour, site, asn, bypass, ok, fail) VALUES (?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT (hour, site, asn, bypass) DO UPDATE SET ok = ok + excluded.ok, fail = fail + excluded.fail");
+  if (asn) for (const { site, ok, bypass } of sites) stmts.push(ss.bind(hour, site, asn, bypass ? 1 : 0, ok ? 1 : 0, ok ? 0 : 1));
   const up = env.DB.prepare(
     "INSERT INTO stats (hour, server, service, asn, ok, fail) VALUES (?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT (hour, server, service, asn) DO UPDATE SET ok = ok + excluded.ok, fail = fail + excluded.fail");
@@ -110,7 +126,47 @@ async function report(req, env) {
   for (const [server, url] of urls) stmts.push(su.bind(url, server));
   if (asn && org) stmts.push(env.DB.prepare("INSERT INTO asns (asn, org) VALUES (?, ?) ON CONFLICT (asn) DO UPDATE SET org = excluded.org").bind(asn, org));
   await env.DB.batch(stmts);
-  return json({ accepted: agg.size, asn });
+  return json({ accepted: agg.size + sites.length, asn });
+}
+
+/** Отчеты о популярных сервисах: только из SITES, по одному на сервис и состояние обхода, не больше MAX_SITES. */
+export function parseSites(raw) {
+  if (!Array.isArray(raw)) return [];
+  const by = new Map();
+  for (const it of raw.slice(0, MAX_SITES)) {
+    const site = typeof it?.site === "string" ? it.site.trim().toLowerCase() : "";
+    if (!SITES.has(site) || typeof it.ok !== "boolean") continue;
+    const bypass = it.bypass === true;
+    by.set(`${site}\u0000${bypass}`, { site, ok: it.ok, bypass });
+  }
+  return [...by.values()];
+}
+
+/**
+ * Новые блокировки по строкам сводки (site, bypass, ok6, fail6, maxfail6, okb, failb, since): правила в RECENT_HOURS
+ * и соседних константах. fail — доля неудачных за последние часы, since — час первой неудачи в этом окне.
+ */
+export function pickIncidents(rows) {
+  const out = [];
+  for (const r of rows) {
+    const recent = r.ok6 + r.fail6, base = r.okb + r.failb;
+    if (recent < MIN_RECENT || r.fail6 * 100 < FAIL_SHARE * recent || (r.maxfail6 || 0) < 2) continue;
+    if (base < MIN_BASE || r.okb * 100 < OK_SHARE * base) continue;
+    out.push({ site: r.site, bypass: !!r.bypass, fail: Math.round((100 * r.fail6) / recent), checks: recent, since: r.since });
+  }
+  return out.sort((a, b) => b.checks - a.checks);
+}
+
+async function incidents(env, asn) {
+  const h = nowHour();
+  const res = await env.DB.prepare(
+    `SELECT site, bypass,
+            SUM(CASE WHEN hour >= ?2 THEN ok ELSE 0 END) AS ok6, SUM(CASE WHEN hour >= ?2 THEN fail ELSE 0 END) AS fail6,
+            MAX(CASE WHEN hour >= ?2 THEN fail ELSE 0 END) AS maxfail6,
+            SUM(CASE WHEN hour < ?2 THEN ok ELSE 0 END) AS okb, SUM(CASE WHEN hour < ?2 THEN fail ELSE 0 END) AS failb,
+            MIN(CASE WHEN hour >= ?2 AND fail > 0 THEN hour END) AS since
+     FROM site_stats WHERE asn = ?3 AND hour >= ?1 GROUP BY site, bypass`).bind(h - BASE_HOURS, h - RECENT_HOURS, asn).all();
+  return pickIncidents(res.results || []);
 }
 
 /** Сводка за 24 часа и за последние 6: по серверу и сервису. asn = null — по всем сетям. */
@@ -135,8 +191,10 @@ async function stats(req, env, ctx) {
   const hit = await cache.match(cacheKey);
   if (hit) return hit;
   const org = asn ? (await env.DB.prepare("SELECT org FROM asns WHERE asn = ?").bind(asn).first())?.org || null : null;
-  const [provider, global] = await Promise.all([asn ? summary(env, asn) : [], summary(env, null)]);
-  const resp = json({ v: 1, asn, org, updated: new Date().toISOString(), provider, global }, 200, { "cache-control": "public, max-age=300" });
+  // Таблицы site_stats может еще не быть (сервер обновили раньше миграции): рейтинг отдаем и без блокировок
+  const [provider, global, inc] = await Promise.all([asn ? summary(env, asn) : [], summary(env, null),
+    asn ? incidents(env, asn).catch(() => []) : []]);
+  const resp = json({ v: 1, asn, org, updated: new Date().toISOString(), provider, global, incidents: inc }, 200, { "cache-control": "public, max-age=300" });
   ctx.waitUntil(cache.put(cacheKey, resp.clone()));
   return resp;
 }
@@ -623,6 +681,7 @@ export default {
     if (h % 24 !== 3) return;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM stats WHERE hour < ?").bind(h - KEEP_HOURS),
+      env.DB.prepare("DELETE FROM site_stats WHERE hour < ?").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM seen WHERE hour < ?").bind(h - 48),
       env.DB.prepare("DELETE FROM devices WHERE last_day < ?").bind(today() - 180),
       env.DB.prepare("DELETE FROM reach WHERE day < ?").bind(today() - 31),

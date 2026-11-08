@@ -90,6 +90,10 @@ public partial class SettingsWindow : Window
         SafetyBox.Unchecked += (_, _) => CountryRow.IsEnabled = false;
         CountryRow.IsEnabled = settings.AccountSafetyGuard;
         CrowdBox.IsChecked = settings.CrowdConsent == true;
+        CrowdSitesBox.IsChecked = settings.CrowdSites == true;
+        CrowdSitesBox.IsEnabled = CrowdBox.IsChecked == true;
+        CrowdBox.Checked += (_, _) => CrowdSitesBox.IsEnabled = true;
+        CrowdBox.Unchecked += (_, _) => CrowdSitesBox.IsEnabled = false;
         SiteWatchBox.IsChecked = settings.SiteWatch;
 
         var v = Assembly.GetExecutingAssembly().GetName().Version;
@@ -307,6 +311,7 @@ public partial class SettingsWindow : Window
         _settings.SiteWatch = SiteWatchBox.IsChecked == true;
         // Не спрашивали и галочку не трогали: вопрос при запуске остается. Иначе выбор в настройках и есть ответ
         if (_settings.CrowdConsent != null || CrowdBox.IsChecked == true) _settings.CrowdConsent = CrowdBox.IsChecked == true;
+        if (_settings.CrowdSites != null || CrowdSitesBox.IsChecked == true) _settings.CrowdSites = CrowdSitesBox.IsChecked == true;
         PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
         try
         {

@@ -53,6 +53,8 @@ public static class Crowd
     public sealed class Queue
     {
         public List<Item> Items { get; set; } = new();
+        /// <summary>Открываются ли популярные сервисы (Incidents): только с отдельного согласия AppSettings.CrowdSites.</summary>
+        public List<Incidents.Report> Sites { get; set; } = new();
         public DateTime? LastSent { get; set; }
     }
 
@@ -65,6 +67,8 @@ public static class Crowd
         public DateTime Fetched { get; set; }
         public List<Row> Provider { get; set; } = new();
         public List<Row> Global { get; set; } = new();
+        /// <summary>Новые блокировки в сети провайдера того, кто спрашивает. Старый сервер поле не присылает: пусто.</summary>
+        public List<Dnex.Services.Incidents.Incident> Incidents { get; set; } = new();
     }
 
     /// <summary>Ключ сервера, как его понимает общая карта: хост DoH, иначе основной IP.</summary>
@@ -93,6 +97,19 @@ public static class Crowd
         if (q.Items.Count > MaxQueue) q.Items.RemoveRange(0, q.Items.Count - MaxQueue);
     }
 
+    /// <summary>
+    /// Итоги по популярным сервисам в очередь: на сервис одна запись, последняя заменяет прежнюю, и при смене
+    /// исхода внутри часа уходит последний. Очередь не растет: сервисов в списке десяток.
+    /// </summary>
+    public static void EnqueueSites(Queue q, IEnumerable<Incidents.Report> reports)
+    {
+        foreach (var r in reports)
+        {
+            q.Sites.RemoveAll(x => x.Site == r.Site);
+            q.Sites.Add(r);
+        }
+    }
+
     public static Queue LoadQueue()
     {
         try { return Storage.LoadOrCreate(QueueFile, () => new Queue()); } catch (Exception) { return new Queue(); }
@@ -104,16 +121,18 @@ public static class Crowd
     public static async Task<bool> SendAsync(Queue q, CancellationToken ct = default, DateTime? now = null)
     {
         var t = now ?? DateTime.Now;
-        if (q.Items.Count == 0 || q.LastSent is { } last && t - last < SendEvery) return false;
+        if (q.Items.Count == 0 && q.Sites.Count == 0 || q.LastSent is { } last && t - last < SendEvery) return false;
         var body = JsonSerializer.Serialize(new
         {
             v = 1, app = UpdateChecker.CurrentVersion.ToString(3),
             items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = i.Url }),
+            sites = q.Sites.Select(r => new { site = r.Site, ok = r.Ok, bypass = r.Bypass }),
         });
         using var resp = await Http.PostAsync(BaseUrl() + "/v1/report", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
         // 429: с этого адреса уже прислали (несколько компьютеров за одним IP). Не повторяем до следующего часа
         if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 429) return false;
         q.Items.Clear();
+        q.Sites.Clear();
         q.LastSent = t;
         return true;
     }

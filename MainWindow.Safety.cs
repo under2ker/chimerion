@@ -59,6 +59,39 @@ public partial class MainWindow
         UpdateTopList();
     }
 
+    /// <summary>Окно «Как вас видят сервисы»: только по уже собранным данным, без новых запросов.</summary>
+    private void AccountRisk_Click(object sender, System.Windows.RoutedEventArgs e) =>
+        AccountRiskWindow.Show(this, AccountRiskNow, PinCountry);
+
+    /// <summary>
+    /// Оценка по последней проверке подключения. Страна берется только у сервисов, которые открылись через Smart DNS:
+    /// без подключения сервис видит настоящий адрес, и сравнивать его с привычной страной незачем.
+    /// </summary>
+    private (AccountRisk.Result Result, DateTime? Taken, string? Pinned) AccountRiskNow()
+    {
+        var snap = _after ?? _before;
+        bool connected = DnsSwitcher.GetActive() != null;
+        var names = _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList();
+        var views = names.Select(name =>
+        {
+            var st = connected ? snap?.Services.FirstOrDefault(x => x.Name == name && x.Proxied && x.Egress != null && x.Access.StartsWith('✓')) : null;
+            var ip = st?.Egress?.Ip;
+            return new AccountRisk.ServiceView(name, st?.Egress?.Country?.ToUpperInvariant(), _safety.Home(name), _safety.Recent(name), IpReputation.Cached(ip));
+        }).ToList();
+        return (AccountRisk.Assess(views, _settings.AccountSafetyGuard), snap?.Taken, AccountSafety.Pinned);
+    }
+
+    /// <summary>Закрепить страну из окна «Аккаунты»: то же, что выбор страны в настройках.</summary>
+    private void PinCountry(string country)
+    {
+        _settings.AccountSafetyGuard = true;
+        _settings.EgressCountry = country.ToUpperInvariant();
+        ApplyCountryPin();
+        try { Storage.Save("settings.json", _settings); } catch (Exception) { }
+        Log($"Защита аккаунтов: закреплена страна {GeoLocation.CountryName(country)}, серверы с другой страной выхода не подключаются сами");
+        UpdateTopList();
+    }
+
     /// <summary>Подбор замены и запасного сервера с учетом страны выхода, если защита включена.</summary>
     private Func<DnsServer, int>? SafetyFit => _settings.AccountSafetyGuard ? _safety.Fit : null;
 

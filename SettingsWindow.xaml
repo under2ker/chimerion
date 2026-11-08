@@ -229,6 +229,9 @@
                                            Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <TextBlock Text="Сервер общей карты, как любой сайт, видит ваш IP во время запроса: он нужен только для лимита отчетов в час и не сохраняется. Сохраняется номер сети провайдера (AS), чтобы рейтинг был по вашему провайдеру. Рейтинг виден и без галочки"
                                            Style="{StaticResource FieldHint}" Margin="26,6,0,0"/>
+                                <CheckBox x:Name="CrowdSitesBox" Content="Сообщать, открываются ли популярные сервисы" Margin="0,12,0,0"/>
+                                <TextBlock Text="YouTube, Discord, Telegram, WhatsApp и еще несколько: открылся ли сервис и включен ли обход. Так сервер замечает новые блокировки у провайдера, а программа предупреждает о них. Только вместе с первой галочкой"
+                                           Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <TextBlock Margin="26,6,0,0" FontSize="12.5"><Hyperlink Click="CrowdCode_Click" Foreground="{DynamicResource Accent}">Код сервера общей карты на GitHub</Hyperlink></TextBlock>
                             </StackPanel>
                         </Border>
