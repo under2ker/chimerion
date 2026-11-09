@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Threading;
 using Dnex.Models;
 using Dnex.Services;
@@ -154,6 +154,7 @@ public partial class MainWindow
             }
         }
         catch (Exception) { }
+        await SupportSyncAsync();
     }
 
     /// <summary>

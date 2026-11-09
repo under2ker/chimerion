@@ -186,7 +186,8 @@ public partial class SettingsWindow : Window
     private void Repo_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}");
     private void License_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/LICENSE");
     private void Changelog_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl($"https://github.com/{UpdateChecker.Repo}/blob/main/CHANGELOG.md");
-    private void Issues_Click(object sender, RoutedEventArgs e) => AutoStart.OpenUrl(Diagnostics.IssuesUrl);
+    private void Issues_Click(object sender, RoutedEventArgs e) =>
+        ReportWindow.Show(() => null, () => AutoStart.OpenUrl(Diagnostics.IssuesUrl), _ => { });
 
     // Telegram: канал, чат и его темы. Ссылки на темы (t.me/c/...) открываются у тех, кто уже вступил в чат
     private const string TgChannel = "https://t.me/chimeriondns", TgChat = "https://t.me/+rXN4fR7HWcxlMTYy", TgChatTopic = "https://t.me/c/4330210118/";

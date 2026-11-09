@@ -10,7 +10,7 @@ namespace Dnex;
 
 /// <summary>
 /// Окно «Диагностика»: все проверки одним списком (зеленые, желтые, красные строки), копирование отчета
-/// и «Сообщить о проблеме» — черновик issue на GitHub с отчетом без личных данных.
+/// и «Сообщить о проблеме»: обращение разработчику в Telegram с отчетом без личных данных (запасной путь: черновик issue на GitHub).
 /// </summary>
 internal sealed class DiagnosticsWindow
 {
@@ -126,6 +126,8 @@ internal sealed class DiagnosticsWindow
         left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(_w)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
+        left.Children.Add(Add(Support.Current.Items.Count == 0 ? "Мои обращения" : $"Мои обращения ({Support.Current.Items.Count})", "Strong", TicketsWindow.Show)
+            .With(b => { b.Margin = new Thickness(8, 0, 0, 0); b.ToolTip = "Что вы отправляли разработчику, статус и ответы"; }));
         var footer = Ui.Footer(left, Add("Сообщить о проблеме", "Primary", () => _ = BusyAsync(ReportAsync)), close);
         Grid.SetRow(footer, 4); root.Children.Add(footer);
         _w.Content = root;
@@ -358,9 +360,21 @@ internal sealed class DiagnosticsWindow
         catch (Exception e) { _state.Text = "Не удалось сохранить отчет: " + e.Message; }
     }
 
+    /// <summary>
+    /// Основной путь: обращение разработчику, оно приходит ему в Telegram, ответ возвращается в программу (ReportWindow, Support).
+    /// Отчет собирается заранее, чтобы его можно было посмотреть перед отправкой. Черновик на GitHub остался второй кнопкой.
+    /// </summary>
     private async Task ReportAsync()
     {
-        if (await ReportTextAsync() is not { } text) return;
+        var text = await ReportTextAsync();
+        _state.Text = text != null ? "Отчет диагностики приложен к обращению, его можно посмотреть перед отправкой"
+                                   : "Проверка еще не закончилась: обращение можно отправить и без отчета";
+        ReportWindow.Show(() => text, () => OpenGitHubDraft(text), _log);
+    }
+
+    private void OpenGitHubDraft(string? text)
+    {
+        if (text == null) { _state.Text = "Сначала дождитесь окончания проверки: отчет еще не готов"; return; }
         if (!DnexDialog.Ask("Открыть черновик на GitHub?",
                 "Отчет будет виден всем на GitHub. Ваш внешний IP, адреса локальной сети, имя пользователя Windows и почта из него убраны, " +
                 "адреса DNS-серверов остаются. Перед отправкой отчет можно поправить. Нужен аккаунт GitHub.",

@@ -194,6 +194,7 @@ public partial class MainWindow : Window
             _ = RefreshFlowExtensionAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
             StartCrowd();
+            InitSupport();
             StartSiteWatch();
             ScheduleUpdateCheck(); // настройку «Проверять новую версию» смотрит сама проверка: ее можно включить на ходу
             if (DnsSwitcher.GetActive() is { } a)
