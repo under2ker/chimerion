@@ -437,8 +437,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <StackPanel Orientation="Horizontal" Background="Transparent">
-                            <Border x:Name="box" Width="16" Height="16" CornerRadius="4" BorderThickness="1.5"
+                        <!-- DockPanel, а не StackPanel: длинная подпись в узкой колонке переносится, а не обрезается -->
+                        <DockPanel Background="Transparent" LastChildFill="True">
+                            <Border x:Name="box" DockPanel.Dock="Left" Width="16" Height="16" CornerRadius="4" BorderThickness="1.5"
                                     BorderBrush="{DynamicResource ControlBorder}" Background="Transparent" VerticalAlignment="Center">
                                 <!-- Область Path совпадает с внутренней частью рамки (13×13 при толщине 1.5): галочка по центру -->
                                 <Path x:Name="mark" Data="M2.5,6.7 L5.3,9.5 L10.5,3.7" Stroke="{DynamicResource OnToggle}" StrokeThickness="2"
@@ -447,7 +448,7 @@
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                             <ContentPresenter Margin="8,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        </DockPanel>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="box" Property="Background" Value="{DynamicResource ToggleOn}"/>

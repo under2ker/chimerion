@@ -145,14 +145,12 @@ public partial class SettingsWindow : Window
         {
             ("Свои домены", "Домены, которые вы добавите в «Настроить два DNS», тоже пойдут через Smart DNS"),
         }),
-        ["Look"] = ("Внешний вид", new[]
-        {
-            ("Видно сразу", "Тема и цвета меняются сразу, чтобы было видно результат"),
-            ("Язык", "Русский или English справа в шапке настроек, переключается без «Сохранить»"),
-        }),
     };
 
-    private readonly Dictionary<string, (FrameworkElement Block, System.Windows.Controls.Panel Home, int Index)> _extras = new();
+    private readonly List<(string Tab, FrameworkElement Block, System.Windows.Controls.Panel Home, int Index)> _extras = new();
+
+    /// <summary>Вкладки без правой колонки: их содержимое само занимает всю ширину.</summary>
+    private static readonly HashSet<string> WideTabs = new() { "About", "Look" };
 
     /// <summary>
     /// Правая колонка до края страницы: выноска или собственный блок вкладки. На узкой странице колонки нет,
@@ -162,26 +160,32 @@ public partial class SettingsWindow : Window
     {
         if (SidePanel == null || BodyScroll == null || SideColumn == null || Pages == null) return;
         if (_extras.Count == 0)
-            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Data", DataExtra) })
+            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Watch", WatchServices), ("Watch", WatchSites), ("Data", DataExtra) })
             {
                 var home = (System.Windows.Controls.Panel)block.Parent;
-                _extras[tab] = (block, home, home.Children.IndexOf(block));
+                _extras.Add((tab, block, home, home.Children.IndexOf(block)));
             }
-        bool about = _tab == "About";
+        bool about = WideTabs.Contains(_tab);
         bool notes = SideNotes.ContainsKey(_tab);
-        bool show = !about && (notes || _extras.ContainsKey(_tab)) && BodyScroll.ActualWidth >= 1000;
+        bool show = !about && (notes || _extras.Any(e => e.Tab == _tab)) && BodyScroll.ActualWidth >= 1000;
         SidePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         SideNotesBox.Visibility = notes ? Visibility.Visible : Visibility.Collapsed;
         SideColumn.Width = show || about ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         System.Windows.Controls.Grid.SetColumnSpan(Pages, about ? 2 : 1);
 
-        foreach (var (tab, (block, home, index)) in _extras)
+        // Обратно в обратном порядке: индексы на странице восстанавливаются точно
+        for (int i = _extras.Count - 1; i >= 0; i--)
         {
-            var target = show && tab == _tab ? (System.Windows.Controls.Panel)SideExtras : home;
-            if (ReferenceEquals(block.Parent, target)) continue;
+            var (tab, block, home, index) = _extras[i];
+            if (show && tab == _tab || ReferenceEquals(block.Parent, home)) continue;
             ((System.Windows.Controls.Panel)block.Parent).Children.Remove(block);
-            if (ReferenceEquals(target, home)) home.Children.Insert(Math.Min(index, home.Children.Count), block);
-            else target.Children.Add(block);
+            home.Children.Insert(Math.Min(index, home.Children.Count), block);
+        }
+        foreach (var (tab, block, home, _) in _extras)
+        {
+            if (!(show && tab == _tab) || ReferenceEquals(block.Parent, SideExtras)) continue;
+            home.Children.Remove(block);
+            SideExtras.Children.Add(block);
         }
 
         if (!show || !notes || _sideTab == _tab) return;

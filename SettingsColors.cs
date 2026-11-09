@@ -57,7 +57,6 @@ public partial class SettingsWindow
 
     private void Preview() => ThemeColors.Apply(_colors, _theme);
 
-    private bool _colorsExpanded;
 
     private void RenderColors()
     {
@@ -106,26 +105,35 @@ public partial class SettingsWindow
         }
         ColorsHost.Children.Add(presets);
 
-        // Свой цвет каждого элемента: длинный список свернут, основное здесь тема и готовые наборы.
-        // Раскрыт сам, если свои цвета уже есть или какой-то цвет плохо виден на фоне
-        bool anyCustom = ThemeColors.Slots.Any(sl => _colors.ContainsKey(K(sl.Key)));
-        bool anyWarn = ThemeColors.Slots.Any(sl => ThemeColors.Warning(sl.Key, ThemeColors.Get(_colors, sl.Key, Dark)) != null);
-        var manual = new StackPanel();
-        foreach (var slot in ThemeColors.Slots) manual.Children.Add(ColorRow(slot));
-        var reset = new Button { Content = "Вернуть стандартные цвета", Style = (Style)FindResource("Strong"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 14, 0, 0),
-                                 ToolTip = "Все цвета ниже вернутся к стандартным для текущей темы" };
-        reset.Click += (_, _) => { foreach (var s2 in ThemeColors.Slots) _colors.Remove(K(s2.Key)); Preview(); RenderColors(); };
-        manual.Children.Add(reset);
-        var expander = new Expander { Header = "Дополнительные цвета" + (anyCustom ? " (есть свои)" : ""), Content = manual, Margin = new Thickness(0, 12, 0, 0),
-                                      IsExpanded = _colorsExpanded || anyCustom || anyWarn };
-        expander.Expanded += (_, _) => _colorsExpanded = true;
-        expander.Collapsed += (_, _) => _colorsExpanded = false;
-        ColorsHost.Children.Add(expander);
         ColorsHost.Children.Add(new TextBlock
         {
             Text = "Цвета видно сразу, сохранятся по «Сохранить». Оттенки рамок и наведения программа подберет сама",
             Style = (Style)FindResource("FieldHint"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0),
         });
+
+        // Свой цвет каждого элемента: отдельной карточкой ниже, в две колонки, чтобы вкладка помещалась без прокрутки
+        bool anyCustom = ThemeColors.Slots.Any(sl => _colors.ContainsKey(K(sl.Key)));
+        ExtraColorsTitle.Text = "Дополнительные цвета" + (anyCustom ? " (есть свои)" : "");
+        ExtraColorsHost.Children.Clear();
+        // Три колонки, строки по высоте содержимого: плашка-предупреждение не раздувает соседние строки
+        const int cols = 3;
+        var grid = new Grid();
+        for (int c = 0; c < cols; c++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < ThemeColors.Slots.Count; i++)
+        {
+            if (i % cols == 0) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var row = ColorRow(ThemeColors.Slots[i]);
+            row.Margin = new Thickness(0, i < cols ? 0 : 14, i % cols < cols - 1 ? 28 : 0, 0);
+            row.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetRow(row, i / cols); Grid.SetColumn(row, i % cols);
+            grid.Children.Add(row);
+        }
+        ExtraColorsHost.Children.Add(grid);
+        var reset = new Button { Content = "Вернуть стандартные цвета", Style = (Style)FindResource("Strong"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 16, 0, 0),
+                                 ToolTip = "Все цвета выше вернутся к стандартным для текущей темы" };
+        reset.Click += (_, _) => { foreach (var s2 in ThemeColors.Slots) _colors.Remove(K(s2.Key)); Preview(); RenderColors(); };
+        ExtraColorsHost.Children.Add(reset);
     }
 
     private FrameworkElement ColorRow(ThemeColors.Slot slot)

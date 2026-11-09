@@ -319,6 +319,7 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <StackPanel x:Name="WatchServices">
                         <TextBlock Text="Проверка сервисов" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
@@ -327,13 +328,16 @@
                                 <TextBlock Text="Если ChatGPT, Claude или Gemini перестали открываться через текущий сервер, программа сама перейдет на лучший рабочий. Иначе только уведомление. Работает, если ниже разрешено «Программа может сама переходить на другой сервер»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
+                        </StackPanel>
+                        <StackPanel x:Name="WatchSites">
                         <TextBlock Text="Наблюдение за сайтами" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <CheckBox x:Name="SiteWatchBox" Content="Следить за сайтами, которыми я пользуюсь (рекомендуем)"/>
+                                <CheckBox x:Name="SiteWatchBox"><TextBlock Text="Следить за сайтами, которыми я пользуюсь (рекомендуем)" TextWrapping="Wrap"/></CheckBox>
                                 <TextBlock Text="Сообщит, если сайт, которым вы пользуетесь, перестал открываться, и скажет почему. Список хранится только у вас: «Помощь» → «Сайты под наблюдением»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>
                         </Border>
+                        </StackPanel>
                         <TextBlock Text="Смена сервера и аккаунты" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
@@ -398,6 +402,10 @@
                         <TextBlock Text="Тема и цвета" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel x:Name="ColorsHost"/>
+                        </Border>
+                        <TextBlock x:Name="ExtraColorsTitle" Text="Дополнительные цвета" Style="{StaticResource SectionTitle}"/>
+                        <Border Style="{StaticResource Card}" Padding="18">
+                            <StackPanel x:Name="ExtraColorsHost"/>
                         </Border>
                     </StackPanel>
 
