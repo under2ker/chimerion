@@ -114,7 +114,8 @@
         </Grid>
 
     <Grid>
-    <DockPanel x:Name="PanelShell" Visibility="{Binding ElementName=RootGrid, Path=Visibility}">
+    <!-- Левое меню одно на всю программу: на главной, в панели управления и в разделах -->
+    <DockPanel x:Name="PanelShell">
         <Border x:Name="PanelSidebar" DockPanel.Dock="Left" Width="220" ClipToBounds="True" Background="{DynamicResource Surface}"
                 BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
             <DockPanel Margin="8,10,8,10">
@@ -123,14 +124,15 @@
                             ToolTip="Свернуть меню" AutomationProperties.Name="Свернуть меню" Margin="0" Padding="10,9">
                         <controls:Icon x:Name="PanelCollapseIcon" Kind="shrink" Size="16"/>
                     </Button>
-                    <TextBlock x:Name="PanelCollapseText" Text="Панель управления" FontSize="13" FontWeight="SemiBold"
+                    <TextBlock x:Name="PanelCollapseText" Text="Меню" FontSize="13" FontWeight="SemiBold"
                                VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
                 <!-- Карточка обновления: единственное место проверки новой версии, наполняется в коде (MainWindow.Update.cs) -->
                 <ContentControl x:Name="PanelUpdateHost" DockPanel.Dock="Bottom" Focusable="False"/>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="PanelNavItems">
-                <Button Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
+                <Button x:Name="HomeButton" Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
+                <Button x:Name="ControlPanelButton" Click="ControlPanel_Click" Style="{StaticResource PanelNavButton}" ToolTip="Список серверов, проверка и подключение"><StackPanel Orientation="Horizontal"><controls:Icon Kind="layout-dashboard" Size="16" Margin="0,0,10,0"/><TextBlock Text="Панель управления"/></StackPanel></Button>
                 <Button x:Name="AddServerButton" Click="AddServer_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></Button>
                 <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
                 <ToggleButton x:Name="ModeToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
@@ -161,6 +163,7 @@
                 </ScrollViewer>
             </DockPanel>
         </Border>
+    <Grid x:Name="ContentArea">
     <Grid x:Name="RootGrid" Margin="20,8,20,16" Visibility="Collapsed">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- шапка -->
@@ -876,8 +879,11 @@
             </StackPanel>
         </Border>
     </Grid>
-    </DockPanel>
+    <!-- Главная и разделы (диагностика, настройки, журнал...) открываются здесь, справа от общего меню -->
     <ContentControl x:Name="DashboardHost"/>
+    <ContentControl x:Name="PageHost" Visibility="Collapsed" Focusable="False"/>
+    </Grid>
+    </DockPanel>
     </Grid>
     </DockPanel>
 </Window>

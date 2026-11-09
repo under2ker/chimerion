@@ -26,12 +26,8 @@ internal sealed class HelpWindow
     /// <summary>factories: страницы вкладок по порядку Tab (создаются один раз, при первом выборе вкладки).</summary>
     public static void Show(Window? owner, Tab tab, Func<FrameworkElement>[] factories)
     {
-        if (_open == null) { _open = new HelpWindow(owner, factories); _open._w.Show(); }
-        else
-        {
-            if (_open._w.WindowState == WindowState.Minimized) _open._w.WindowState = WindowState.Normal;
-            _open._w.Activate();
-        }
+        if (_open == null) { _open = new HelpWindow(owner, factories); DnexDialog.Present(_open._w); }
+        else DnexDialog.Present(_open._w);
         _open.Select((int)tab);
     }
 

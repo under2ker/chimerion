@@ -21,9 +21,9 @@ internal sealed class AccountRiskWindow
 
     public static void Show(Window? owner, Func<(AccountRisk.Result, DateTime?, string?)> source, Action<string> pin)
     {
-        if (_open != null) { _open._w.Activate(); _open.Render(); return; }
+        if (_open != null) { DnexDialog.Present(_open._w); _open.Render(); return; }
         _open = new AccountRiskWindow(source, pin);
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
     }
 
     private AccountRiskWindow(Func<(AccountRisk.Result, DateTime?, string?)> source, Action<string> pin)

@@ -2512,5 +2512,7 @@
  "Откройте «Диагностика → Мои обращения»": "Open Diagnostics → My requests",
  "Сначала дождитесь окончания проверки: отчет еще не готов": "Wait for the check to finish first: the report is not ready yet",
  "Отчет диагностики приложен к обращению, его можно посмотреть перед отправкой": "The diagnostics report is attached to the request, you can review it before sending",
- "Проверка еще не закончилась: обращение можно отправить и без отчета": "The check has not finished yet: you can send the request without the report"
+ "Проверка еще не закончилась: обращение можно отправить и без отчета": "The check has not finished yet: you can send the request without the report",
+ "Меню": "Menu",
+ "Список серверов, проверка и подключение": "Server list, checks and connection"
 }

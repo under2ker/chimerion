@@ -71,9 +71,9 @@ internal sealed class ToolsWindow
     public static void Show(IReadOnlyList<Tool> tools, Action<string> log, Action changed, Action relaunchElevated, Func<string, string>? toSmartDns = null)
     {
         _toSmartDns = toSmartDns;
-        if (_open != null) { _open._w.Activate(); return; }
+        if (_open != null) { DnexDialog.Present(_open._w); return; }
         _open = new ToolsWindow(tools, log, changed, relaunchElevated);
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
         _ = _open.CheckUpdatesAsync(quiet: true);
     }
 
@@ -628,7 +628,7 @@ internal sealed class ToolsWindow
     private async Task EditSitesAsync(ZapretTool z)
     {
         var catalog = await BypassCatalog.LoadAsync();
-        if (BypassSitesWindow.Ask(_w, z, catalog, () => _busy, _toSmartDns) is not { } r) return;
+        if (BypassSitesWindow.Ask(DnexDialog.OwnerOf(_w)!, z, catalog, () => _busy, _toSmartDns) is not { } r) return;
         await RunAsync(z, $"Сайты для обхода сохранены: наборов {r.Groups.Count}, больших списков {r.Big.Count}, своих {r.Own.Count}", async p =>
         {
             if (r.Big.Count > 0) p.Report("Скачиваю большие списки…");

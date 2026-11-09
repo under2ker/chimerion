@@ -74,14 +74,9 @@ internal sealed class LogWindow
 
     public static void Show(Window? owner, ObservableCollection<LogEntry> log, Func<Task<List<LogEntry>>> stored, Action clear)
     {
-        if (_open != null)
-        {
-            if (_open._w.WindowState == WindowState.Minimized) _open._w.WindowState = WindowState.Normal;
-            _open._w.Activate();
-            return;
-        }
+        if (_open != null) { DnexDialog.Present(_open._w); return; }
         _open = new LogWindow(owner, log, stored, clear);
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
         _open.ScrollToEnd();
     }
 
@@ -422,7 +417,7 @@ internal sealed class LogWindow
         {
             FileName = $"chimerion-log-{DateTime.Now:yyyy-MM-dd-HHmm}.txt", Filter = "Текст (*.txt)|*.txt", DefaultExt = ".txt",
         };
-        if (dlg.ShowDialog(_w) != true) return;
+        if (dlg.ShowDialog(DnexDialog.OwnerOf(_w)!) != true) return;
         try
         {
             var all = await AllForExportAsync();

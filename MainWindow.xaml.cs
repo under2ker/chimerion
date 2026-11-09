@@ -110,6 +110,7 @@ public partial class MainWindow : Window
         TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
         UpdateTitleId();
         PanelUpdateHost.Content = CreatePanelBottom();
+        InitPages();
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
@@ -360,10 +361,22 @@ public partial class MainWindow : Window
     /// <summary>Настройки программы. После сохранения файл перечитывается.</summary>
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
+        if (_settingsOpen != null) { DnexDialog.Present(_settingsOpen); return; }
         var before = System.Text.Json.JsonSerializer.Serialize(_settings, Storage.Options); // для отмены
         var autoBefore = AutoStart.IsEnabled();
-        var w = new SettingsWindow(_settings) { Owner = this };
-        w.ShowDialog();
+        var w = new SettingsWindow(_settings);
+        DnexDialog.Remember(w, "Настройки");
+        // Настройки открываются страницей главного окна: итог разбирается, когда раздел закрыли
+        w.Closed += (_, _) => { _settingsOpen = null; AfterSettings(w, before, autoBefore); };
+        if (IsVisible) w.Owner = this;
+        _settingsOpen = w;
+        DnexDialog.Present(w);
+    }
+
+    private SettingsWindow? _settingsOpen;
+
+    private void AfterSettings(SettingsWindow w, string before, bool autoBefore)
+    {
         if (w.RollbackRequested) { RollbackAndRestart(); return; }
         if (w.TransferRequested == "export") { ExportSettings(); return; }
         if (w.TransferRequested == "import") { ImportSettings(); return; }

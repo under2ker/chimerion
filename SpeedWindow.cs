@@ -38,9 +38,9 @@ internal sealed class SpeedWindow
 
     public static void Show(AppSettings settings, DnsServer? server, NetSnapshot? snapshot, Action<string> log)
     {
-        if (_open != null) { _open._w.Activate(); return; }
+        if (_open != null) { DnexDialog.Present(_open._w); return; }
         _open = new SpeedWindow(settings, server, snapshot, log);
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
     }
 
     private static TextBlock Value(string s) => new TextBlock { Text = s, FontSize = 22, FontWeight = FontWeights.SemiBold }.Ref(TextBlock.ForegroundProperty, "Text");

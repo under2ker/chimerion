@@ -247,18 +247,13 @@ public partial class MainWindow
         page.Children.Add(logCard);
 
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
+        // Левое меню общее для всей программы (MainWindow.xaml), у главной своего нет
         var layout = new Grid();
-        var sidebarColumn = new ColumnDefinition { Width = new GridLength(208) };
-        layout.ColumnDefinitions.Add(sidebarColumn); layout.ColumnDefinitions.Add(new ColumnDefinition());
-        var sidebar = DashboardSidebar(); Grid.SetColumn(scroll, 1); layout.Children.Add(sidebar); layout.Children.Add(scroll);
+        layout.Children.Add(scroll);
         int lastLayout = -1;
         layout.SizeChanged += (_, e) =>
         {
-            // Узкое окно: меню сворачивается в полоску значков, а не пропадает (раньше вместе с ним пропадала и кнопка обновления)
-            bool wide = e.NewSize.Width >= 900;
-            sidebarColumn.Width = new GridLength(wide ? 208 : 64);
-            SetDashboardRail(!wide);
-            double available = e.NewSize.Width - (wide ? 208 : 64);
+            double available = e.NewSize.Width;
             int mode = available < 640 ? 0 : available < 960 ? 1 : 2;
             if (mode == lastLayout) return;
             lastLayout = mode;
@@ -379,45 +374,6 @@ public partial class MainWindow
         }
     }
 
-    private readonly List<(Button Button, TextBlock Text, string Title, object? Tip)> _dashNav = new();
-    private DockPanel? _dashSidebarContent;
-    private FrameworkElement? _dashBrandText;
-    private bool? _dashRail;
-
-    /// <summary>Полоска значков вместо меню: подписи прозрачные, название пункта в подсказке, карточка обновления одним значком.</summary>
-    private void SetDashboardRail(bool rail)
-    {
-        if (_dashRail == rail) return;
-        _dashRail = rail;
-        if (_dashSidebarContent != null) _dashSidebarContent.Margin = rail ? new Thickness(8, 24, 8, 18) : new Thickness(15, 24, 15, 18);
-        if (_dashBrandText != null) _dashBrandText.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var (button, text, title, tip) in _dashNav)
-        {
-            text.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-            button.ToolTip = rail ? (tip is string t ? $"{title}: {t}" : title) : tip;
-            button.HorizontalContentAlignment = rail ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        }
-        foreach (var v in _updateCards.Where(c => _dashSidebarContent != null && IsInside(c.Card, _dashSidebarContent)))
-        {
-            v.Text.Visibility = rail ? Visibility.Collapsed : Visibility.Visible;
-            v.Card.BorderThickness = new Thickness(rail ? 0 : 1);
-        }
-    }
-
-    private static bool IsInside(DependencyObject child, DependencyObject parent)
-    {
-        for (var d = child; d != null; d = LogicalTreeHelper.GetParent(d) ?? (d is Visual ? VisualTreeHelper.GetParent(d) : null))
-            if (ReferenceEquals(d, parent)) return true;
-        return false;
-    }
-
-    private Button SideNav(string title, string icon, Action click, bool selected = false, bool soon = false)
-    {
-        var b = DashboardNav(title, icon, click, selected, soon);
-        if (b.Content is StackPanel { Children.Count: > 1 } row && row.Children[1] is TextBlock t) _dashNav.Add((b, t, title, b.ToolTip));
-        return b;
-    }
-
     /// <summary>
     /// Пункт платного CHIMERION DNS в меню: золотая звезда, как у строки в таблице серверов и плашки на главной. Текст и фон
     /// как у остальных пунктов, чтобы выделение было заметным, но не кричащим. В светлой теме цвет темнее (ресурс «Promo»).
@@ -427,52 +383,6 @@ public partial class MainWindow
         if (nav.Content is StackPanel { Children.Count: > 0 } row && row.Children[0] is Controls.Icon star)
             star.SetResourceReference(Controls.Icon.ForegroundProperty, "Promo");
         return nav;
-    }
-
-    private FrameworkElement DashboardSidebar()
-    {
-        var content = _dashSidebarContent = new DockPanel { Margin = new Thickness(15, 24, 15, 18) };
-        var bottom = new StackPanel();
-        foreach (var (title, icon, act) in SideLinks()) bottom.Children.Add(SideNav(title, icon, act));
-        bottom.Children.Add(CreateUpdateCard());
-        DockPanel.SetDock(bottom, Dock.Bottom); content.Children.Add(bottom);
-        var links = new StackPanel();
-        var logo = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(10, 2, 0, 24) };
-        logo.Children.Add(new Controls.BrandMark { Width = 28, Height = 28, Margin = new Thickness(0, 0, 10, 0) });
-        var brandText = new StackPanel();
-        brandText.Children.Add(new TextBlock { Text = "CHIMERION", FontSize = 13, FontWeight = FontWeights.Bold });
-        brandText.Children.Add(Ui.Hint("Панель сети", 1)); logo.Children.Add(brandText); links.Children.Add(logo);
-        _dashBrandText = brandText;
-        // Тот же порядок, что в меню панели управления: главная, серверы, обход, диагностика, настройки
-        links.Children.Add(SideNav("Главная", "shield-check", () => { }, true));
-        links.Children.Add(SideNav("Панель управления", "layout-dashboard", ShowControlPanel));
-        links.Children.Add(MarkPromo(SideNav("CHIMERION DNS", "star", ChimerionDnsWindow.Show)));
-        links.Children.Add(SideNav("Обход и Telegram", "zap", () => ToolsToggle_Click(this, new RoutedEventArgs())));
-        links.Children.Add(SideNav("Google Flow", "film", () => GoogleFlow_Click(this, new RoutedEventArgs())));
-        links.Children.Add(SideNav("Диагностика", "stethoscope", () => DiagToggle_Click(this, new RoutedEventArgs())));
-        links.Children.Add(SideNav("Тест скорости", "gauge", () => SpeedTest_Click(this, new RoutedEventArgs())));
-        links.Children.Add(SideNav("Аккаунты", "shield-user", () => AccountRisk_Click(this, new RoutedEventArgs())));
-        links.Children.Add(SideNav("Настройки", "settings", () => Settings_Click(this, new RoutedEventArgs())));
-        // Как «Компактно» в меню панели управления: узкое окно с кнопкой подключения, сервисами и рабочими серверами
-        links.Children.Add(SideNav("Компактно", "shrink", () => { ShowControlPanel(); SetCompact(true); }));
-        // Раздел в разработке: приглушенный и зачеркнутый, нажатие показывает заглушку
-        links.Children.Add(SideNav("Приватный проект", "eye-off", () => PrivateProject_Click(this, new RoutedEventArgs()), soon: true));
-        content.Children.Add(links);
-        return new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = content }.Ref(Border.BackgroundProperty, "Surface").Ref(Border.BorderBrushProperty, "Border");
-    }
-
-    private static Button DashboardNav(string title, string icon, Action click, bool selected = false, bool soon = false)
-    {
-        var button = Ui.Action(title, "Ghost", click);
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        row.Children.Add(MenuGlyph(icon, 17).With(e => e.VerticalAlignment = VerticalAlignment.Center));
-        row.Children.Add(new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center }); // раздел в разработке приглушен, без зачеркивания
-        button.Content = row; button.Margin = new Thickness(0, 0, 0, 5); button.Padding = new Thickness(12, 10, 12, 10);
-        button.HorizontalContentAlignment = HorizontalAlignment.Left;
-        button.Template = DashboardNavTemplate();
-        if (selected) { button.SetResourceReference(Control.BackgroundProperty, "AccentSoft"); button.SetResourceReference(Control.ForegroundProperty, "Accent"); }
-        if (soon) { button.Opacity = .55; button.ToolTip = "В разработке"; }
-        return button;
     }
 
     private static void DashboardReflow(Grid grid, int columns)
@@ -489,26 +399,6 @@ public partial class MainWindow
             Grid.SetColumnSpan(child, span);
             child.Margin = new Thickness(i % columns == 0 ? 0 : 5, i < columns ? 0 : 10, i % columns + span == columns ? 0 : 5, 0);
         }
-    }
-
-    private static ControlTemplate DashboardNavTemplate()
-    {
-        var template = new ControlTemplate(typeof(Button));
-        var border = new FrameworkElementFactory(typeof(Border), "NavBorder");
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
-        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Control.BackgroundProperty));
-        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
-        presenter.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
-        presenter.SetValue(FrameworkElement.HorizontalAlignmentProperty, new TemplateBindingExtension(Control.HorizontalContentAlignmentProperty));
-        presenter.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        border.AppendChild(presenter); template.VisualTree = border;
-        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty, new DynamicResourceExtension("SurfaceHover"), "NavBorder"));
-        template.Triggers.Add(hover);
-        var focus = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
-        focus.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1), "NavBorder"));
-        focus.Setters.Add(new Setter(Border.BorderBrushProperty, new DynamicResourceExtension("Accent"), "NavBorder"));
-        template.Triggers.Add(focus); return template;
     }
 
     private static void DashboardFact(Grid grid, int index, string kind, string label, FrameworkElement value, TextBlock? hint)
@@ -919,6 +809,6 @@ public partial class MainWindow
         }
         finally { _dashboardToolBusy = false; UpdateToolsTray(); RefreshDashboard(); }
     }
-    private void ShowControlPanel() { DashboardHost.Visibility = Visibility.Collapsed; RootGrid.Visibility = Visibility.Visible; }
-    private void DashboardHome_Click(object sender, RoutedEventArgs e) { if (_compact) SetCompact(false); RootGrid.Visibility = Visibility.Collapsed; DashboardHost.Visibility = Visibility.Visible; RefreshDashboard(); }
+    private void ShowControlPanel() => ShowView(View.Panel);
+    private void DashboardHome_Click(object sender, RoutedEventArgs e) { if (_compact) SetCompact(false); ShowView(View.Home); RefreshDashboard(); }
 }

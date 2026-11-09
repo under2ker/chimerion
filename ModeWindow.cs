@@ -37,9 +37,9 @@ internal sealed class ModeWindow
 
     public static void Show(Window owner, IReadOnlyList<ModeInfo> modes, Func<State> state, Func<int, Action<string>, Task<List<string>>> apply)
     {
-        if (_open != null) { _open.Render(); _open._w.Activate(); return; }
+        if (_open != null) { _open.Render(); DnexDialog.Present(_open._w); return; }
         _open = new ModeWindow(owner, modes, state, apply);
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
     }
 
     /// <summary>Состояние поменялось снаружи (трей, главная): открытое окно обновляется.</summary>

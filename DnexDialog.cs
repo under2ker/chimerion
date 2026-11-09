@@ -20,6 +20,35 @@ internal static class UiExt
 /// </summary>
 internal static class DnexDialog
 {
+    /// <summary>
+    /// Встроить окно раздела страницей в главное окно (справа от общего левого меню). Задает главное окно; если
+    /// встроить нельзя (главное окно в трее), раздел открывается отдельным окном, как раньше.
+    /// </summary>
+    internal static Func<Window, bool>? Embed;
+
+    /// <summary>Окна, чье содержимое сейчас показано страницей главного окна: сами они на экран не выводятся.</summary>
+    internal static readonly HashSet<Window> Embedded = new();
+
+    /// <summary>Открыть раздел или вернуться к уже открытому: страницей главного окна или отдельным окном.</summary>
+    public static void Present(Window w)
+    {
+        if ((Embedded.Contains(w) || !w.IsVisible) && Embed?.Invoke(w) == true) return;
+        if (!w.IsVisible) { w.Show(); return; }
+        if (w.WindowState == WindowState.Minimized) w.WindowState = WindowState.Normal;
+        w.Activate();
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Window, string> Keys = new();
+
+    /// <summary>Название раздела без перевода: по нему главное окно подсвечивает пункт меню (заголовок окна переводится).</summary>
+    public static string KeyOf(Window w) => Keys.TryGetValue(w, out var key) ? key : w.Title.Replace("CHIMERION · ", "");
+
+    /// <summary>Запомнить название раздела для окна, собранного не через CreateWindow (разметка XAML).</summary>
+    public static void Remember(Window w, string key) => Keys.AddOrUpdate(w, key);
+
+    /// <summary>Владелец для диалога из раздела: у встроенного раздела своего окна на экране нет, им служит главное.</summary>
+    public static Window? OwnerOf(Window w) => Embedded.Contains(w) ? Application.Current.MainWindow : w;
+
     /// <summary>Пустое окно программы: заголовок «CHIMERION · …», значок, палитра, темная рамка.</summary>
     public static Window CreateWindow(string title, double width,
         [System.Runtime.CompilerServices.CallerMemberName] string member = "",
@@ -44,6 +73,7 @@ internal static class DnexDialog
             FontSize = 13,
         };
         SupportTraceUi.Identify(w, member, line, expression);
+        Keys.AddOrUpdate(w, title);
         w.SetResourceReference(Window.BackgroundProperty, "Bg");
         w.SetResourceReference(Window.ForegroundProperty, "Text");
         // Текст и раскладка как у главного окна: без этого при плавной прокрутке на дробное смещение текст

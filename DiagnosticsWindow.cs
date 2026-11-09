@@ -65,9 +65,9 @@ internal sealed class DiagnosticsWindow
     public static void Show(AppSettings settings, IReadOnlyList<Tool> tools, Func<Task<IEnumerable<string>>> logTail, Action<string> log,
                             Func<string, Task>? fix = null)
     {
-        if (_open != null) { _open._w.Activate(); return; }
+        if (_open != null) { DnexDialog.Present(_open._w); return; }
         _open = new DiagnosticsWindow(settings, tools, logTail, log) { _fix = fix };
-        _open._w.Show();
+        DnexDialog.Present(_open._w);
         _ = _open.RunAsync();
     }
 
@@ -123,7 +123,7 @@ internal sealed class DiagnosticsWindow
         var left = new StackPanel { Orientation = Orientation.Horizontal };
         left.Children.Add(Add("Скопировать отчет", "Strong", () => _ = BusyAsync(CopyAsync)).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
         left.Children.Add(Add("Отчет в один клик", "Strong", () => _ = BusyAsync(OneClickAsync)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Проверить, собрать отчет, сохранить его на рабочий стол, скопировать и показать файл"; }));
-        left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(_w)).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
+        left.Children.Add(Add("История сети", "Strong", () => NetHistoryWindow.Show(DnexDialog.OwnerOf(_w))).With(b => { b.Margin = new Thickness(0, 0, 8, 0); b.ToolTip = "Что программа меняла в настройках сети, когда и почему"; }));
         left.Children.Add(Add("Повторить", "Ghost", () => _ = RunAsync()));
         var close = Add("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
         left.Children.Add(Add(Support.Current.Items.Count == 0 ? "Мои обращения" : $"Мои обращения ({Support.Current.Items.Count})", "Strong", TicketsWindow.Show)
@@ -350,7 +350,7 @@ internal sealed class DiagnosticsWindow
             FileName = $"chimerion-report-{DateTime.Now:yyyy-MM-dd-HHmm}.txt", Filter = "Текст (*.txt)|*.txt", DefaultExt = ".txt",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
         };
-        if (dlg.ShowDialog(_w) != true) return;
+        if (dlg.ShowDialog(DnexDialog.OwnerOf(_w)!) != true) return;
         try
         {
             System.IO.File.WriteAllText(dlg.FileName, text, new System.Text.UTF8Encoding(false));

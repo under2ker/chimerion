@@ -51,7 +51,7 @@ internal static class ChimerionDnsInfo
 /// <summary>Окно «CHIMERION DNS»: чем хорош, где находится, сколько стоит, где купить и куда написать.</summary>
 internal static class ChimerionDnsWindow
 {
-    public static void Show() => Build().ShowDialog();
+    public static void Show() => DnexDialog.Present(Build());
 
     internal static Window Build()
     {

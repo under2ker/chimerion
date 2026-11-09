@@ -172,7 +172,11 @@ public partial class MainWindow
         if (IsLoaded) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(ApplyResponsive));
     }
 
-    private void Mode_Click(object sender, RoutedEventArgs e) => SetCompact(!_compact);
+    private void Mode_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_compact) ShowControlPanel(); // компактный вид строится на панели управления: с главной и из раздела переходим туда
+        SetCompact(!_compact);
+    }
 
     /// <summary>
     /// Строка компактного вида: Telegram и «YouTube и Discord» с логотипом, состоянием и переключателем, как на главной.
@@ -246,6 +250,7 @@ public partial class MainWindow
         PanelCollapseButton.Visibility = v;
         StatsText.Visibility = v;
         AddServerButton.Visibility = v;
+        ControlPanelButton.Visibility = v; // компактный вид и есть панель управления
         ChimerionDnsButton.Visibility = v;
         SettingsButton.Visibility = v;
         DataButton.Visibility = v;

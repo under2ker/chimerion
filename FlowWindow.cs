@@ -13,7 +13,7 @@ namespace Dnex;
 /// </summary>
 internal static class FlowWindow
 {
-    public static void Show(Action<string> log) => Build(log).ShowDialog();
+    public static void Show(Action<string> log) => DnexDialog.Present(Build(log));
 
     internal static Window Build(Action<string> log)
     {
