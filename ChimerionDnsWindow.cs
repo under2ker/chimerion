@@ -46,6 +46,23 @@ internal static class ChimerionDnsInfo
         "Работает в CHIMERION на Windows 10 и 11, в браузере и в «Частном DNS» на Android",
         "Команда /dns в боте в любой момент покажет доступ и инструкцию",
     };
+
+    /// <summary>Как подключить: от оплаты до работающего DNS, три шага.</summary>
+    public static readonly (string Title, string Text)[] Steps =
+    {
+        ("Оплатите в боте", "Откройте @CHIMERIONDNS_BOT, выберите срок и оплатите звездами. Другой способ оплаты: напишите @dev_under2ker"),
+        ("Получите доступ", "Бот сразу пришлет вашу ссылку DoH и адрес DoT. Команда /dns покажет их снова в любой момент"),
+        ("Подключите", "В CHIMERION: «Добавить сервер», вставьте ссылку DoH и подключитесь. На Android адрес DoT вписывается в «Частный DNS»"),
+    };
+
+    /// <summary>Частые вопросы, те же ответы, что в боте.</summary>
+    public static readonly (string Question, string Answer)[] Faq =
+    {
+        ("На скольких устройствах работает", "На всех ваших сразу: ПК, ноутбук, телефон. Настройку повторите на каждом устройстве и в каждом браузере"),
+        ("Можно поделиться доступом", "Нет: адреса личные, по ним считается ваш трафик. Если ссылка попала к чужим, напишите, выдадим новую"),
+        ("Оплатил, а доступа нет", "Отправьте боту /dns. Если доступ не появился за несколько минут, напишите в поддержку и укажите Telegram ID"),
+        ("Сайт все равно не открывается", "Выключите в браузере свой безопасный DNS и перезапустите браузер. Не помогло: напишите в чат и приложите снимок экрана"),
+    };
 }
 
 /// <summary>Окно «CHIMERION DNS»: чем хорош, где находится, сколько стоит, где купить и куда написать.</summary>
@@ -56,10 +73,22 @@ internal static class ChimerionDnsWindow
     internal static Window Build()
     {
         var w = DnexDialog.CreateWindow("CHIMERION DNS", Ui.Narrow + 40);
-        var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "CHIMERION DNS", "Личный Smart DNS от создателей программы", glyph: "star"));
+        // Шапка сверху, кнопки прижаты к низу, середина прокручивается: на странице главного окна кнопки всегда внизу
+        var root = new DockPanel { Margin = new Thickness(24, 22, 24, 20), LastChildFill = true };
+        var header = DnexDialog.Header(DialogKind.Info, "CHIMERION DNS", "Личный Smart DNS от создателей программы", glyph: "star");
+        DockPanel.SetDock(header, Dock.Top);
+        root.Children.Add(header);
 
-        // Слева что дает доступ и сколько стоит, справа регион и где купить. В узком окне колонки встают друг под друга
+        var buy = Ui.Action("Открыть бота", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl));
+        var contact = Ui.Action("Написать", "Strong", () => AutoStart.OpenUrl(ChimerionDnsInfo.ContactUrl));
+        var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
+        // Все три кнопки справа: левый слот подвала растягивается на всю свободную ширину, и «Написать» выходила огромной
+        var footer = Ui.Footer(null, buy, contact, close);
+        footer.Margin = new Thickness(0, 14, 0, 0);
+        DockPanel.SetDock(footer, Dock.Bottom);
+        root.Children.Add(footer);
+
+        // Слева что дает доступ, справа регион и где купить. В узком окне колонки встают друг под друга
         var left = new StackPanel();
         left.Children.Add(Ui.Section("Преимущества", first: true));
         foreach (var benefit in ChimerionDnsInfo.Benefits) left.Children.Add(BenefitRow(benefit));
@@ -72,21 +101,18 @@ internal static class ChimerionDnsWindow
         right.Children.Add(Ui.Section("Где купить"));
         right.Children.Add(ContactCard());
 
-        var body = TwoColumns(left, right, 820);
+        var body = new StackPanel();
+        body.Children.Add(TwoColumns(left, right, 820));
+        body.Children.Add(Ui.Section("Как подключить"));
+        body.Children.Add(StepTiles());
+        body.Children.Add(Ui.Section("Частые вопросы"));
+        body.Children.Add(FaqGrid());
 
-        // Шапка и кнопки занимают около 230: на небольшом экране прокручивается середина, а кнопки остаются видны
-        var scroll = Ui.Scroll(body, Math.Min(780, Ui.WorkAreaOf(null).Height - 230));
+        // Отдельным окном (программа в трее) середина не выше экрана: шапка и кнопки занимают около 230
+        var scroll = Ui.Scroll(body, Ui.WorkAreaOf(null).Height - 230);
         root.Children.Add(scroll);
         // При показе окно ставит фокус на первую кнопку, а это ссылка внизу списка: без сброса окно открывалось прокрученным
         w.Loaded += (_, _) => w.Dispatcher.BeginInvoke(scroll.ScrollToTop, System.Windows.Threading.DispatcherPriority.Background);
-
-        var buy = Ui.Action("Открыть бота", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl));
-        var contact = Ui.Action("Написать", "Strong", () => AutoStart.OpenUrl(ChimerionDnsInfo.ContactUrl));
-        var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
-        // Все три кнопки справа: левый слот подвала растягивается на всю свободную ширину, и «Написать» выходила огромной
-        var footer = Ui.Footer(null, buy, contact, close);
-        footer.Margin = new Thickness(0, 14, 0, 0);
-        root.Children.Add(footer);
         w.Content = root;
         return w;
     }
@@ -187,6 +213,11 @@ internal static class ChimerionDnsWindow
             stars.Children.Add(new TextBlock { Text = plan.Stars.ToString(), FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
             stars.Children.Add(new Controls.Icon { Kind = "star", Size = 13, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Accent"));
             tile.Children.Add(stars);
+            var perDay = (double)plan.Rub / plan.Days;
+            var day = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            day.Children.Add(Ui.Hint($"около {Math.Round(perDay):0} ₽ в день", 0).With(t => t.Margin = new Thickness(0, 0, 8, 0)));
+            if (i == ChimerionDnsInfo.Plans.Length - 1) day.Children.Add(Ui.Hint("Выгоднее всего", 0, "Accent"));
+            tile.Children.Add(day);
             var card = Ui.Card(tile, bottom: 0);
             card.Margin = new Thickness(0, 0, i < ChimerionDnsInfo.Plans.Length - 1 ? 8 : 0, 0);
             grid.Children.Add(card);
@@ -233,5 +264,45 @@ internal static class ChimerionDnsWindow
         Grid.SetColumn(link, 2);
         g.Children.Add(link);
         return g;
+    }
+
+    /// <summary>Три шага подключения рядом: номер, заголовок и пояснение.</summary>
+    private static UniformGrid StepTiles()
+    {
+        var grid = new UniformGrid { Columns = ChimerionDnsInfo.Steps.Length };
+        for (int i = 0; i < ChimerionDnsInfo.Steps.Length; i++)
+        {
+            var (title, text) = ChimerionDnsInfo.Steps[i];
+            var head = new StackPanel { Orientation = Orientation.Horizontal };
+            var badge = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Margin = new Thickness(0, 0, 10, 0),
+                Child = new TextBlock { Text = (i + 1).ToString(), FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                    .Ref(TextBlock.ForegroundProperty, "Accent") }.Ref(Border.BackgroundProperty, "AccentSoft");
+            head.Children.Add(badge);
+            head.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            var tile = new StackPanel();
+            tile.Children.Add(head);
+            tile.Children.Add(Ui.Hint(text, 10));
+            var card = Ui.Card(tile, bottom: 0);
+            card.Margin = new Thickness(0, 0, i < ChimerionDnsInfo.Steps.Length - 1 ? 8 : 0, 0);
+            grid.Children.Add(card);
+        }
+        return grid;
+    }
+
+    /// <summary>Частые вопросы карточками по два в ряд.</summary>
+    private static UniformGrid FaqGrid()
+    {
+        var grid = new UniformGrid { Columns = 2 };
+        for (int i = 0; i < ChimerionDnsInfo.Faq.Length; i++)
+        {
+            var (question, answer) = ChimerionDnsInfo.Faq[i];
+            var tile = new StackPanel();
+            tile.Children.Add(new TextBlock { Text = question, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            tile.Children.Add(Ui.Hint(answer, 6));
+            var card = Ui.Card(tile, bottom: 0);
+            card.Margin = new Thickness(0, 0, i % 2 == 0 ? 8 : 0, i < ChimerionDnsInfo.Faq.Length - 2 ? 8 : 0);
+            grid.Children.Add(card);
+        }
+        return grid;
     }
 }

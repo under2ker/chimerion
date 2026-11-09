@@ -2514,5 +2514,22 @@
  "Отчет диагностики приложен к обращению, его можно посмотреть перед отправкой": "The diagnostics report is attached to the request, you can review it before sending",
  "Проверка еще не закончилась: обращение можно отправить и без отчета": "The check has not finished yet: you can send the request without the report",
  "Меню": "Menu",
- "Список серверов, проверка и подключение": "Server list, checks and connection"
+ "Список серверов, проверка и подключение": "Server list, checks and connection",
+ "Частые вопросы": "FAQ",
+ "около {0} ₽ в день": "about {0} ₽ a day",
+ "Выгоднее всего": "Best value",
+ "Оплатите в боте": "Pay in the bot",
+ "Откройте @CHIMERIONDNS_BOT, выберите срок и оплатите звездами. Другой способ оплаты: напишите @dev_under2ker": "Open @CHIMERIONDNS_BOT, pick a term and pay with Stars. Another payment method: message @dev_under2ker",
+ "Получите доступ": "Get your access",
+ "Бот сразу пришлет вашу ссылку DoH и адрес DoT. Команда /dns покажет их снова в любой момент": "The bot sends your DoH link and DoT address right away. The /dns command shows them again at any time",
+ "Подключите": "Connect",
+ "В CHIMERION: «Добавить сервер», вставьте ссылку DoH и подключитесь. На Android адрес DoT вписывается в «Частный DNS»": "In CHIMERION: “Add server”, paste the DoH link and connect. On Android, enter the DoT address in “Private DNS”",
+ "На скольких устройствах работает": "How many devices it works on",
+ "На всех ваших сразу: ПК, ноутбук, телефон. Настройку повторите на каждом устройстве и в каждом браузере": "All of yours at once: PC, laptop, phone. Repeat the setup on each device and in each browser",
+ "Можно поделиться доступом": "Can I share my access",
+ "Нет: адреса личные, по ним считается ваш трафик. Если ссылка попала к чужим, напишите, выдадим новую": "No: the addresses are personal and your traffic is counted by them. If the link leaked, message us and we will issue a new one",
+ "Оплатил, а доступа нет": "I paid but have no access",
+ "Отправьте боту /dns. Если доступ не появился за несколько минут, напишите в поддержку и укажите Telegram ID": "Send /dns to the bot. If access does not appear within a few minutes, contact support and include your Telegram ID",
+ "Сайт все равно не открывается": "The site still does not open",
+ "Выключите в браузере свой безопасный DNS и перезапустите браузер. Не помогло: напишите в чат и приложите снимок экрана": "Turn off the browser's own secure DNS and restart the browser. Still not working: write to the chat and attach a screenshot"
 }
