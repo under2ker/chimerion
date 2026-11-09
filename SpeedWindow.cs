@@ -106,10 +106,10 @@ internal sealed class SpeedWindow
         speed.Children.Add(side);
         var speedBody = new StackPanel();
         speedBody.Children.Add(_steps.View);
-        speedBody.Children.Add(speed.With(g => g.Margin = new Thickness(0, 10, 0, 0)));
+        speedBody.Children.Add(speed.With(g => g.Margin = new Thickness(0, 14, 0, 6)));
         speedBody.Children.Add(_bar);
         speedBody.Children.Add(_uses.With(p => p.Margin = new Thickness(0, 12, 0, 0)));
-        body.Children.Add(Ui.Card(speedBody, bottom: 0).With(c => c.Padding = new Thickness(16, 14, 16, 14)));
+        body.Children.Add(Ui.Card(speedBody, bottom: 0).With(c => c.Padding = new Thickness(20, 18, 20, 18)));
         RenderUses(null);
 
         body.Children.Add(Ui.Section("Скорость DNS"));
@@ -345,9 +345,9 @@ internal sealed class SpeedWindow
     /// </summary>
     private sealed class Gauge
     {
-        private const double Size = 180, Radius = 74, Stroke = 11, Max = 1000, Sweep = 270, Start = 135;
+        private const double Size = 240, Radius = 100, Stroke = 14, Max = 1000, Sweep = 270, Start = 135;
         private readonly Path _arc = new() { StrokeThickness = Stroke, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round };
-        private readonly TextBlock _value = new() { FontSize = 32, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Text = "—" };
+        private readonly TextBlock _value = new() { FontSize = 44, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, Text = "—" };
         private readonly TextBlock _title;
         private readonly DropShadowEffect _glow = new() { BlurRadius = 18, ShadowDepth = 0, Opacity = 0 };
         private double _shown, _target;
@@ -364,8 +364,8 @@ internal sealed class SpeedWindow
             // Подписи шкалы
             foreach (var mark in new[] { 1, 10, 100, 1000 })
             {
-                var p = At(Start + Share(mark) * Sweep, Radius - 22);
-                var t = new TextBlock { Text = mark.ToString(CultureInfo.InvariantCulture), FontSize = 10 }.Ref(TextBlock.ForegroundProperty, "Muted");
+                var p = At(Start + Share(mark) * Sweep, Radius - 28);
+                var t = new TextBlock { Text = mark.ToString(CultureInfo.InvariantCulture), FontSize = 11 }.Ref(TextBlock.ForegroundProperty, "Muted");
                 t.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 Canvas.SetLeft(t, p.X - t.DesiredSize.Width / 2);
                 Canvas.SetTop(t, p.Y - t.DesiredSize.Height / 2);
@@ -373,11 +373,11 @@ internal sealed class SpeedWindow
             }
             var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
             center.Children.Add(_value);
-            center.Children.Add(new TextBlock { Text = "Мбит/с", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
-            var host = new Grid { Width = Size, Height = Size - 16 };
+            center.Children.Add(new TextBlock { Text = "Мбит/с", FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
+            var host = new Grid { Width = Size, Height = Size - 20 };
             host.Children.Add(canvas);
             host.Children.Add(center);
-            _title = new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
+            _title = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center };
             var root = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
             root.Children.Add(host);
             root.Children.Add(_title);
