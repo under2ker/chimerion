@@ -28,7 +28,7 @@ internal sealed class ModeWindow
     private readonly Func<State> _state;
     private readonly Func<int, Action<string>, Task<List<string>>> _apply;
     private readonly StackPanel _now = new();
-    private readonly UniformGrid _tiles = new() { Columns = 2 };
+    private readonly UniformGrid _tiles = new() { Columns = 2, Margin = new Thickness(0, 0, -10, 0) }; // отступ справа у плиток: край сетки вровень с карточкой выше
     private readonly StackPanel _progress = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 12, 0, 0) };
     private readonly TextBlock _stage = Ui.Hint("", 6);
     private readonly TextBlock _result = Ui.Hint("", 0);

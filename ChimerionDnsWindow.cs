@@ -59,18 +59,20 @@ internal static class ChimerionDnsWindow
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "CHIMERION DNS", "Личный Smart DNS от создателей программы", glyph: "star"));
 
-        var body = new StackPanel();
-        body.Children.Add(Ui.Section("Преимущества", first: true));
-        foreach (var benefit in ChimerionDnsInfo.Benefits) body.Children.Add(BenefitRow(benefit));
+        // Слева что дает доступ и сколько стоит, справа регион и где купить. В узком окне колонки встают друг под друга
+        var left = new StackPanel();
+        left.Children.Add(Ui.Section("Преимущества", first: true));
+        foreach (var benefit in ChimerionDnsInfo.Benefits) left.Children.Add(BenefitRow(benefit));
+        left.Children.Add(Ui.Section("Сроки и цены"));
+        left.Children.Add(PlanTiles());
 
-        body.Children.Add(Ui.Section("Регион"));
-        body.Children.Add(RegionCard());
+        var right = new StackPanel();
+        right.Children.Add(Ui.Section("Регион", first: true));
+        right.Children.Add(RegionCard());
+        right.Children.Add(Ui.Section("Где купить"));
+        right.Children.Add(ContactCard());
 
-        body.Children.Add(Ui.Section("Сроки и цены"));
-        body.Children.Add(PlanTiles());
-
-        body.Children.Add(Ui.Section("Где купить"));
-        body.Children.Add(ContactCard());
+        var body = TwoColumns(left, right, 820);
 
         // Шапка и кнопки занимают около 230: на небольшом экране прокручивается середина, а кнопки остаются видны
         var scroll = Ui.Scroll(body, Math.Min(780, Ui.WorkAreaOf(null).Height - 230));
@@ -87,6 +89,31 @@ internal static class ChimerionDnsWindow
         root.Children.Add(footer);
         w.Content = root;
         return w;
+    }
+
+    /// <summary>Две колонки на широкой странице, одна под другой уже <paramref name="wide"/> точек.</summary>
+    internal static Grid TwoColumns(FrameworkElement left, FrameworkElement right, double wide)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        g.Children.Add(left); g.Children.Add(right);
+        bool? sideBySide = null;
+        void Place(double width)
+        {
+            bool side = width >= wide;
+            if (side == sideBySide) return;
+            sideBySide = side;
+            Grid.SetColumnSpan(left, side ? 1 : 3);
+            Grid.SetRow(right, side ? 0 : 1); Grid.SetColumn(right, side ? 2 : 0); Grid.SetColumnSpan(right, side ? 1 : 3);
+            right.Margin = new Thickness(0, side ? 0 : 14, 0, 0);
+        }
+        Place(0);
+        g.SizeChanged += (_, e) => Place(e.NewSize.Width);
+        return g;
     }
 
     /// <summary>Пункт списка: галочка и текст, перенос строки встает под текст, а не под значок.</summary>

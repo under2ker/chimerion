@@ -65,11 +65,13 @@ public partial class MainWindow
         ShowView(View.Page);
         MarkNav(NavFor(DnexDialog.KeyOf(w)));
         if (!entry.Page.IsLoaded) w.RaiseEvent(new RoutedEventArgs(LoadedEvent)); // подписчики Loaded окна ждут показа
-        Dispatcher.BeginInvoke(() => entry.Page.MoveFocus(new TraversalRequest(FocusNavigationDirection.First)), System.Windows.Threading.DispatcherPriority.Loaded);
         return true;
     }
 
-    /// <summary>Содержимое окна раздела в рамке страницы: ширина как у окна, высота по месту в главном окне.</summary>
+    /// <summary>Предел ширины страницы раздела: шире строки и карточки читаются хуже.</summary>
+    internal const double PageMaxWidth = 1400;
+
+    /// <summary>Содержимое окна раздела в рамке страницы: вся ширина и высота справа от меню.</summary>
     private FrameworkElement BuildPage(Window w)
     {
         var content = (UIElement)w.Content;
@@ -80,14 +82,14 @@ public partial class MainWindow
         {
             Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        // Страница занимает всю область справа от меню, как главная; на очень широком экране строки не растягиваются бесконечно
         var frame = new Border
         {
             Child = body,
-            MaxWidth = double.IsNaN(w.Width) ? 1000 : Math.Max(w.Width, 640),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            // Окно с высотой по содержимому не растягивается на всю высоту: подвал с кнопками сразу под содержимым
-            VerticalAlignment = w.SizeToContent == SizeToContent.Manual ? VerticalAlignment.Stretch : VerticalAlignment.Top,
-            Margin = new Thickness(16, 8, 16, 8),
+            MaxWidth = PageMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(8, 6, 8, 6),
         };
         if (w.Resources.Count > 0 || w.Resources.MergedDictionaries.Count > 0) frame.Resources = w.Resources; // стили из разметки окна (настройки)
         // Клавиши страницы получает и окно: его Esc, Ctrl+F и другие сочетания работают как в отдельном окне

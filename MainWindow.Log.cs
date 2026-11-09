@@ -20,7 +20,7 @@ namespace Dnex;
 public partial class MainWindow
 {
     /// <summary>Журнал открывается отдельным окном (его держат рядом, пока что-то делают в программе).</summary>
-    private void LogToggle_Click(object sender, RoutedEventArgs e) { LogToggle.IsChecked = false; OpenLog(); }
+    private void LogToggle_Click(object sender, RoutedEventArgs e) => OpenLog();
 
     private void OpenLog() => LogWindow.Show(this, _log, StoredLogAsync, () => ClearLog_Click(this, new RoutedEventArgs()));
 

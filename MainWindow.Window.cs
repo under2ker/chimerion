@@ -236,7 +236,7 @@ public partial class MainWindow
         bool wasCompact = _compact;
         _compact = compact;
         var v = compact ? Visibility.Collapsed : Visibility.Visible;
-        foreach (var command in PanelNavItems.Children.OfType<System.Windows.Controls.Primitives.ToggleButton>()) command.Visibility = v;
+        foreach (var command in new FrameworkElement[] { ModeToggle, ToolsToggle, DiagToggle, HelpToggle, LogToggle }) command.Visibility = v;
         // Подписи меню меняем после того, как пункты снова видны: подпись, показанная внутри скрытого пункта,
         // не перерисовывалась, и после компактного вида у части пунктов оставались одни иконки
         if (compact != wasCompact)

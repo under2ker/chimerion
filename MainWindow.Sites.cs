@@ -143,7 +143,6 @@ public partial class MainWindow
     /// <summary>Кнопка «Помощь» внизу: меню из мастера «Не открывается», списка сайтов и настройки телефона.</summary>
     private void HelpToggle_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        HelpToggle.IsChecked = false;
         OpenHelp(HelpWindow.Tab.NotOpening);
     }
 

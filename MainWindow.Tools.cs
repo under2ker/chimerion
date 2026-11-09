@@ -141,7 +141,6 @@ public partial class MainWindow
     /// <summary>«Режим» открывает отдельное окно: что работает сейчас и что изменит каждый режим.</summary>
     private void ModeToggle_Click(object sender, RoutedEventArgs e)
     {
-        ModeToggle.IsChecked = false;
         OpenModeWindow();
     }
 
@@ -247,13 +246,11 @@ public partial class MainWindow
 
     private void DiagToggle_Click(object sender, RoutedEventArgs e)
     {
-        DiagToggle.IsChecked = false;
         DiagnosticsWindow.Show(_settings, _tools, LogForReportAsync, Log, DiagFixAsync);
     }
 
     private void ToolsToggle_Click(object sender, RoutedEventArgs e)
     {
-        ToolsToggle.IsChecked = false; // это кнопка, а не переключатель панели: окно открывается отдельно
         ToolsWindow.Show(_tools, Log, UpdateToolsTray, RelaunchElevated, SendToSmartDns);
     }
 

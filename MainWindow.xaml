@@ -68,21 +68,6 @@
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
-        <Style x:Key="PanelNavToggle" TargetType="ToggleButton" BasedOn="{StaticResource LinkToggle}">
-            <Setter Property="ToolTipService.Placement" Value="Right"/><Setter Property="ToolTipService.HorizontalOffset" Value="8"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/><Setter Property="Padding" Value="10,9"/><Setter Property="Margin" Value="0,0,0,4"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
-                <Border x:Name="bg" Background="Transparent" CornerRadius="8">
-                    <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Margin="{TemplateBinding Padding}"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="bg" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="bg" Property="Background" Value="{DynamicResource SurfaceHover}"/></Trigger>
-                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="bg" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="bg" Property="BorderThickness" Value="1"/></Trigger>
-                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger>
-                </ControlTemplate.Triggers>
-            </ControlTemplate></Setter.Value></Setter>
-        </Style>
     </Window.Resources>
 
     <DockPanel>
@@ -135,22 +120,22 @@
                 <Button x:Name="ControlPanelButton" Click="ControlPanel_Click" Style="{StaticResource PanelNavButton}" ToolTip="Список серверов, проверка и подключение"><StackPanel Orientation="Horizontal"><controls:Icon Kind="layout-dashboard" Size="16" Margin="0,0,10,0"/><TextBlock Text="Панель управления"/></StackPanel></Button>
                 <Button x:Name="AddServerButton" Click="AddServer_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></Button>
                 <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
-                <ToggleButton x:Name="ModeToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
-                              Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="ToolsToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
-                              Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></ToggleButton>
+                <Button x:Name="ModeToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                              Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></Button>
+                <Button x:Name="ToolsToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                              Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></Button>
                 <Button x:Name="FlowButton" Click="GoogleFlow_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Расширение для браузера, с которым Google Flow открывается из России"><StackPanel Orientation="Horizontal"><controls:Icon Kind="film" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelFlowText" Text="Google Flow"/></StackPanel></Button>
-                <ToggleButton x:Name="DiagToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
-                              Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></ToggleButton>
+                <Button x:Name="DiagToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                              Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></Button>
                 <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="gauge" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
                 <Button x:Name="AccountRiskButton" Click="AccountRisk_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Из какой страны и с какого адреса вас видят ChatGPT, Claude и Gemini, и чем это грозит аккаунту"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-user" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAccountRiskText" Text="Аккаунты"/></StackPanel></Button>
-                <ToggleButton x:Name="HelpToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center"
-                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></ToggleButton>
-                <ToggleButton x:Name="LogToggle" Style="{StaticResource PanelNavToggle}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
-                              Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></ToggleButton>
+                <Button x:Name="HelpToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></Button>
+                <Button x:Name="LogToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
+                              Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></Button>
                 <Button x:Name="PrivateButton" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
                 <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
