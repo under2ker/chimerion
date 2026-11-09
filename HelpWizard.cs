@@ -70,6 +70,11 @@ internal sealed class HelpWizard
         body.Children.Add(_steps);
         root.Children.Add(Ui.Card(body, bottom: 0));
         _verdict.Text = "Выберите, что не открывается";
+
+        // Пока проверка не запускалась: частые причины, которые человек может убрать сам
+        _idle.Children.Add(Ui.Section("Частые причины"));
+        _idle.Children.Add(Ui.InfoTiles(Causes, 2));
+        root.Children.Add(_idle);
         View = root;
     }
 
@@ -138,8 +143,19 @@ internal sealed class HelpWizard
         else await _fix(action);
     }
 
+    private readonly StackPanel _idle = new();
+
+    private static readonly (string, string)[] Causes =
+    {
+        ("Безопасный DNS в браузере", "Chrome, Edge и Яндекс Браузер могут обходить системный DNS. Выключите в браузере «Безопасный DNS» и перезапустите его"),
+        ("Включен VPN или прокси", "Они подменяют DNS и адрес. Выключите их и проверьте снова"),
+        ("Браузер запомнил старое", "Закройте все окна браузера и откройте заново: он мог сохранить прежние адреса сайтов"),
+        ("Не помогло", "Нажмите «Сообщить о сбое» в меню: журнал и результаты проверки уйдут разработчику"),
+    };
+
     private void Begin(string what)
     {
+        _idle.Visibility = Visibility.Collapsed;
         _steps.Children.Clear();
         _verdict.Text = $"Проверяю {what}…";
         _verdict.Foreground = Ui.B("Text");

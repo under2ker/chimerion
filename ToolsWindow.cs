@@ -108,6 +108,10 @@ internal sealed class ToolsWindow
         root.Children.Add(grid);
         root.Children.Add(_settingsHost);
         root.Children.Add(_pickHost);
+        root.Children.Add(Ui.Section("Как это работает"));
+        root.Children.Add(Ui.InfoTiles(HowItWorks, 2));
+        root.Children.Add(Ui.Section("Если не работает"));
+        root.Children.Add(Ui.InfoTiles(Troubles, 2));
 
         var credits = Ui.Hint("Открытый код: TG WS Proxy (Flowseal), zapret (bol-van, Flowseal), лицензия MIT", 0)
             .With(t => { t.FontSize = 11; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; t.VerticalAlignment = VerticalAlignment.Center; });
@@ -116,6 +120,20 @@ internal sealed class ToolsWindow
         _w.Content = Ui.WindowContent(root);
         Render();
     }
+
+    private static readonly (string, string)[] HowItWorks =
+    {
+        ("Telegram", "На вашем ПК запускается локальный прокси: Telegram ходит через веб-адреса самого Telegram, их провайдер не замедляет. VPN не нужен"),
+        ("YouTube и Discord", "zapret меняет первые пакеты соединения, и фильтр провайдера не узнает сайт. Адрес остается вашим, VPN не нужен"),
+    };
+
+    private static readonly (string, string)[] Troubles =
+    {
+        ("Telegram не подключился", "Нажмите «Подключить Telegram» в карточке выше: Telegram сам предложит включить прокси, согласитесь"),
+        ("YouTube все еще тормозит", "Смените стратегию zapret в его настройках: у разных провайдеров работает разная. После смены обновите страницу"),
+        ("zapret пропал или не запускается", "Антивирус иногда удаляет winws.exe. Добавьте папку zapret в исключения антивируса и включите переключатель снова"),
+        ("Windows спрашивает разрешение", "zapret работает через сетевой драйвер, ему нужны права администратора. Без них YouTube и Discord не ускорятся"),
+    };
 
     private async Task CheckUpdatesAsync(bool quiet)
     {

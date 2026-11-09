@@ -428,8 +428,32 @@ internal static class Ui
         // Последний элемент DockPanel занимает все свободное место. Без левой части им оказывалась крайняя левая кнопка
         // и растягивалась (в диалогах «Понятно» выходила на всю ширину): пустой заполнитель забирает место вместо нее
         d.Children.Add(left ?? new Border());
-        return new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d }
+        var footer = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d }
             .Ref(Border.BorderBrushProperty, "Border");
+        Footers.AddOrUpdate(footer, footer);
+        return footer;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Border, Border> Footers = new();
+
+    /// <summary>Это нижняя строка окна из <see cref="Footer"/>: на странице главного окна ее прижимают к низу.</summary>
+    public static bool IsFooter(UIElement e) => e is Border b && Footers.TryGetValue(b, out _);
+
+    /// <summary>Карточки «заголовок и пояснение» сеткой по columns в ряд: советы, частые вопросы, как это работает.</summary>
+    public static System.Windows.Controls.Primitives.UniformGrid InfoTiles(IReadOnlyList<(string Title, string Text)> items, int columns)
+    {
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = columns };
+        int rows = (items.Count + columns - 1) / columns;
+        for (int i = 0; i < items.Count; i++)
+        {
+            var tile = new StackPanel();
+            tile.Children.Add(new TextBlock { Text = items[i].Title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            tile.Children.Add(Hint(items[i].Text, 6));
+            var card = Card(tile, bottom: 0);
+            card.Margin = new Thickness(0, 0, i % columns < columns - 1 ? 8 : 0, i / columns < rows - 1 ? 8 : 0);
+            grid.Children.Add(card);
+        }
+        return grid;
     }
 
     /// <summary>Многострочное поле: текст сверху, а не по центру (общий стиль полей центрирует однострочные).</summary>

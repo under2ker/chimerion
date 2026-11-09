@@ -78,10 +78,10 @@ public partial class MainWindow
         w.Content = null;
         // Окно с высотой по содержимому без своей прокрутки: прокручивается страница целиком
         bool scrolls = w.SizeToContent == SizeToContent.Manual || HasScroll(content);
-        UIElement body = scrolls ? content : new ScrollViewer
+        UIElement body = PinFooter(content) ?? (scrolls ? content : new ScrollViewer
         {
             Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
+        });
         // Страница занимает всю область справа от меню, как главная; на очень широком экране строки не растягиваются бесконечно
         var frame = new Border
         {
@@ -96,6 +96,28 @@ public partial class MainWindow
         frame.PreviewKeyDown += (_, e) => Forward(w, e, Keyboard.PreviewKeyDownEvent);
         frame.KeyDown += (_, e) => Forward(w, e, Keyboard.KeyDownEvent);
         return frame;
+    }
+
+    /// <summary>
+    /// Окно «столбик с нижней строкой в конце»: на странице нижняя строка прижимается к низу, середина прокручивается.
+    /// Иначе кнопки висели сразу под содержимым посреди страницы. null: окно устроено иначе, остается как есть.
+    /// </summary>
+    private static FrameworkElement? PinFooter(UIElement content)
+    {
+        var stack = content as StackPanel ?? (content as ScrollViewer)?.Content as StackPanel;
+        if (stack == null || stack.Children.Count < 2 || !Ui.IsFooter(stack.Children[stack.Children.Count - 1])) return null;
+        if (content is ScrollViewer outer) outer.Content = null;
+        var footer = stack.Children[stack.Children.Count - 1];
+        stack.Children.Remove(footer);
+        var dock = new DockPanel { Margin = stack.Margin, LastChildFill = true };
+        stack.Margin = new Thickness(0);
+        DockPanel.SetDock(footer, Dock.Bottom);
+        dock.Children.Add(footer);
+        dock.Children.Add(HasScroll(stack) ? stack : new ScrollViewer
+        {
+            Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
+        return dock;
     }
 
     private static void Forward(Window w, KeyEventArgs e, RoutedEvent routed)

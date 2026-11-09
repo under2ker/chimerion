@@ -290,19 +290,5 @@ internal static class ChimerionDnsWindow
     }
 
     /// <summary>Частые вопросы карточками по два в ряд.</summary>
-    private static UniformGrid FaqGrid()
-    {
-        var grid = new UniformGrid { Columns = 2 };
-        for (int i = 0; i < ChimerionDnsInfo.Faq.Length; i++)
-        {
-            var (question, answer) = ChimerionDnsInfo.Faq[i];
-            var tile = new StackPanel();
-            tile.Children.Add(new TextBlock { Text = question, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-            tile.Children.Add(Ui.Hint(answer, 6));
-            var card = Ui.Card(tile, bottom: 0);
-            card.Margin = new Thickness(0, 0, i % 2 == 0 ? 8 : 0, i < ChimerionDnsInfo.Faq.Length - 2 ? 8 : 0);
-            grid.Children.Add(card);
-        }
-        return grid;
-    }
+    private static UniformGrid FaqGrid() => Ui.InfoTiles(ChimerionDnsInfo.Faq, 2);
 }

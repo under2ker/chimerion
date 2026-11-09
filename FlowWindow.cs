@@ -86,6 +86,8 @@ internal static class FlowWindow
                 body.Children.Add(Ui.Hint("Когда вернетесь сюда, CHIMERION сам проверит подключение.", 2));
             }
             body.Children.Add(status);
+            body.Children.Add(Ui.Section("Частые вопросы"));
+            body.Children.Add(Ui.InfoTiles(Faq, 2));
             remove.Visibility = FlowExtension.Prepared ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -96,6 +98,14 @@ internal static class FlowWindow
         Render();
         return w;
     }
+
+    private static readonly (string, string)[] Faq =
+    {
+        ("Это VPN?", "Нет. Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними"),
+        ("Что оно видит", "Работает только на flow.google.com и ничего не отправляет в сеть. Код открыт, лицензия MIT"),
+        ("Flow открылся, а генерации нет", "Google может ограничивать доступ на своих серверах, это расширение не обходит"),
+        ("Как убрать", "Отключите или удалите его на странице расширений браузера. Кнопка «Убрать» внизу удаляет и папку расширения"),
+    };
 
     private static Border StateCard(FlowExtension.Browser? b, FlowExtension.State state)
     {

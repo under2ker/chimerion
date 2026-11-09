@@ -81,6 +81,8 @@ internal sealed class AccountRiskWindow
 
         _body.Children.Add(Ui.Hint("Что именно сервисы считают подозрительным, снаружи не знает никто. Чаще всего блокируют за частую смену страны " +
                                    "и за адреса из черных списков: за этим окно и следит", 2));
+        _body.Children.Add(Ui.Section("Как беречь аккаунт"));
+        _body.Children.Add(Ui.InfoTiles(Tips, 2));
 
         // Одно действие, которое реально снижает риск: закрепить привычную страну, если она общая и еще не закреплена
         if (pinned == null && AccountRisk.CommonHome(r.Services) is { } home)
@@ -88,6 +90,14 @@ internal sealed class AccountRiskWindow
         else if (pinned != null)
             _left.Children.Add(Ui.Hint($"Страна закреплена: {GeoLocation.CountryName(pinned)}", 0).With(h => h.VerticalAlignment = VerticalAlignment.Center));
     }
+
+    private static readonly (string, string)[] Tips =
+    {
+        ("Одна страна", "Заходите в ChatGPT, Claude и Gemini из одной и той же страны. Частая смена страны чаще всего ведет к проверкам и блокировкам"),
+        ("Закрепите страну", "Тогда серверы с другой страной выхода не подключатся сами. Кнопка внизу или выбор страны в настройках"),
+        ("Чистый адрес", "Адреса из черных списков вызывают проверки и капчи. Если окно отметило такой адрес, подключите другой сервер"),
+        ("Один вход", "Не входите в один аккаунт одновременно с устройств в разных странах: для сервиса это похоже на передачу доступа"),
+    };
 
     private static FrameworkElement ServiceRow(AccountRisk.ServiceView s)
     {
