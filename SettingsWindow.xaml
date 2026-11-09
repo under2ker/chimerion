@@ -33,21 +33,21 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="LineHeight" Value="20"/>
         </Style>
-        <!-- Пункт боковой панели: значок и название, у выбранного акцентная полоска слева и подсветка -->
+        <!-- Вкладка раздела настроек: значок и название, у выбранной подсветка и акцентная полоска снизу -->
         <Style x:Key="NavItem" TargetType="RadioButton">
             <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
             <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="GroupName" Value="nav"/>
-            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Margin" Value="0,0,4,4"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="bd" Background="Transparent" CornerRadius="8">
                             <Grid>
                                 <Border x:Name="sel" Background="{DynamicResource AccentSoft}" CornerRadius="8" Opacity="0"/>
-                                <Border x:Name="bar" Width="3" CornerRadius="2" HorizontalAlignment="Left" Margin="0,8" Background="{DynamicResource Accent}" Opacity="0"/>
-                                <ContentPresenter VerticalAlignment="Center" Margin="14,9,12,9"/>
+                                <Border x:Name="bar" Height="2" CornerRadius="1" VerticalAlignment="Bottom" Margin="12,0" Background="{DynamicResource Accent}" Opacity="0"/>
+                                <ContentPresenter VerticalAlignment="Center" Margin="12,8,14,8"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -77,36 +77,30 @@
     </Window.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="236"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- ===== Боковая панель ===== -->
-        <Border Grid.Column="0" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,1,0">
-            <DockPanel Margin="16,20,16,16">
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,22">
-                    <Border Width="38" Height="38" CornerRadius="11" Background="{DynamicResource AccentSoft}">
-                        <controls:BrandMark Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="Настройки" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="SideVersion" Text="CHIMERION" Style="{StaticResource Label}" FontSize="11" Margin="0,2,0,0"/>
+        <!-- ===== Шапка и вкладки разделов: одна строка сверху, а не второе меню рядом с меню программы ===== -->
+        <DockPanel>
+        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="32,22,32,10">
+            <StackPanel>
+                <DockPanel Margin="0,0,0,14">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Padding="3" CornerRadius="9" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border}" BorderThickness="1" VerticalAlignment="Center" ToolTip="Язык интерфейса, меняется сразу">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="LangRu" Style="{StaticResource Tab}" GroupName="lang" Content="Русский" Checked="Lang_Checked" Tag="ru"/>
+                                <RadioButton x:Name="LangEn" Style="{StaticResource Tab}" GroupName="lang" Content="English" Checked="Lang_Checked" Tag="en"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
-                </StackPanel>
-
-                <!-- Язык интерфейса: переключается сразу, без «Сохранить» -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                    <TextBlock Text="Язык" Style="{StaticResource Label}" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,6"/>
-                    <Border Padding="3" CornerRadius="9" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource Border}" BorderThickness="1" HorizontalAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <RadioButton x:Name="LangRu" Style="{StaticResource Tab}" GroupName="lang" Content="Русский" Checked="Lang_Checked" Tag="ru"/>
-                            <RadioButton x:Name="LangEn" Style="{StaticResource Tab}" GroupName="lang" Content="English" Checked="Lang_Checked" Tag="en"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="38" Height="38" CornerRadius="11" Background="{DynamicResource AccentSoft}">
+                            <controls:BrandMark Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Настройки" FontSize="16" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="SideVersion" Text="CHIMERION" Style="{StaticResource Label}" FontSize="11" Margin="0,2,0,0"/>
                         </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <StackPanel x:Name="Nav">
+                    </StackPanel>
+                </DockPanel>
+                <WrapPanel x:Name="Nav">
                     <RadioButton Style="{StaticResource NavItem}" Tag="General" Checked="Nav_Checked">
                         <StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="16" Margin="0,0,11,0"/><TextBlock Text="Основные" VerticalAlignment="Center"/></StackPanel>
                     </RadioButton>
@@ -131,15 +125,16 @@
                     <RadioButton Style="{StaticResource NavItem}" Tag="About" Checked="Nav_Checked">
                         <StackPanel Orientation="Horizontal"><controls:Icon Kind="info" Size="16" Margin="0,0,11,0"/><TextBlock Text="О программе" VerticalAlignment="Center"/></StackPanel>
                     </RadioButton>
-                </StackPanel>
-            </DockPanel>
+                </WrapPanel>
+            </StackPanel>
         </Border>
 
         <!-- ===== Содержимое вкладки ===== -->
-        <DockPanel Grid.Column="1">
-            <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0">
-                <TextBlock x:Name="PageTitle" Text="Основные" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock x:Name="PageHint" Style="{StaticResource Label}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        <DockPanel>
+            <!-- Название раздела уже на вкладке: здесь только пояснение, о чем раздел -->
+            <StackPanel DockPanel.Dock="Top" Margin="32,16,32,0">
+                <TextBlock x:Name="PageTitle" Text="Основные" FontSize="20" FontWeight="SemiBold" Visibility="Collapsed"/>
+                <TextBlock x:Name="PageHint" Style="{StaticResource Label}" FontSize="12.5" TextWrapping="Wrap"/>
             </StackPanel>
 
             <!-- Нижняя панель: сообщение отдельной строкой, кнопки справа -->
@@ -537,6 +532,7 @@
                 </Grid>
                 </Grid>
             </ScrollViewer>
+        </DockPanel>
         </DockPanel>
     </Grid>
 </Window>
