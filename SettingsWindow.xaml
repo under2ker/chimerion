@@ -163,7 +163,24 @@
                 </StackPanel>
             </Border>
 
-            <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" Padding="32,6,22,24" controls:SmoothScroll.IsEnabled="True">
+            <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" Padding="32,6,22,24" controls:SmoothScroll.IsEnabled="True" SizeChanged="BodyScroll_SizeChanged">
+                <!-- Карточки не шире 900: длинные строки читаются плохо. Справа на «Основных» пояснение, если хватает места -->
+                <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="900"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Border x:Name="GeneralSide" Grid.Column="1" Width="300" Margin="20,45,0,0" VerticalAlignment="Top" Visibility="Collapsed" Style="{StaticResource Card}" Padding="18">
+                    <StackPanel>
+                        <TextBlock Text="Как работает запуск" FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock Text="В трее" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                        <TextBlock Text="Крестик прячет окно, а подключение продолжает работать. Программа открывается щелчком по значку в трее" Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <TextBlock Text="Права администратора" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                        <TextBlock Text="Запуск с Windows идет без них. Права нужны, только чтобы сменить или вернуть DNS Windows" Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                        <TextBlock Text="Подключение сохраняется" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                        <TextBlock Text="После перезапуска программа сама восстанавливает последнее подключение" Style="{StaticResource FieldHint}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Border>
                 <Grid x:Name="Pages">
 
                     <!-- Основные -->
@@ -517,6 +534,7 @@
                         </Border>
                         </Expander>
                     </StackPanel>
+                </Grid>
                 </Grid>
             </ScrollViewer>
         </DockPanel>

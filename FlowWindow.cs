@@ -20,13 +20,17 @@ internal static class FlowWindow
         var w = DnexDialog.CreateWindow("Google Flow", Ui.Narrow + 40);
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Google Flow", "Расширение для браузера, с которым Flow открывается из России", glyph: "film"));
-        root.Children.Add(Ui.Hint("Оно меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними, а генерацию Google может и не дать.", 0)
-            .With(t => t.ToolTip = "Google Flow Geo Bypass, открытый код (MIT). Работает только на flow.google.com и ничего не отправляет в сеть. Если Google ограничивает доступ на своих серверах, расширение не поможет."));
 
         var browsers = FlowExtension.Find();
         var current = FlowExtension.Preferred(browsers);
         var body = new StackPanel();
-        root.Children.Add(body);
+        // Слева браузер, состояние и шаги; справа как это работает и вопросы. В узком окне одно под другим
+        var side = new StackPanel();
+        side.Children.Add(Ui.Section("Как это работает", first: true));
+        side.Children.Add(Ui.Card(Ui.Hint("Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними, VPN не нужен. Генерацию Google все равно может не дать", 0, "Text"), bottom: 0));
+        side.Children.Add(Ui.Section("Частые вопросы"));
+        side.Children.Add(Ui.InfoTiles(Faq, 1));
+        root.Children.Add(Ui.Columns(body, side, 860, 3, 2));
         var status = Ui.Status();
 
         var open = Ui.Action("Открыть Flow", "Primary", () =>
@@ -86,8 +90,6 @@ internal static class FlowWindow
                 body.Children.Add(Ui.Hint("Когда вернетесь сюда, CHIMERION сам проверит подключение.", 2));
             }
             body.Children.Add(status);
-            body.Children.Add(Ui.Section("Частые вопросы"));
-            body.Children.Add(Ui.InfoTiles(Faq, 2));
             remove.Visibility = FlowExtension.Prepared ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -101,7 +103,6 @@ internal static class FlowWindow
 
     private static readonly (string, string)[] Faq =
     {
-        ("Это VPN?", "Нет. Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними"),
         ("Что оно видит", "Работает только на flow.google.com и ничего не отправляет в сеть. Код открыт, лицензия MIT"),
         ("Flow открылся, а генерации нет", "Google может ограничивать доступ на своих серверах, это расширение не обходит"),
         ("Как убрать", "Отключите или удалите его на странице расширений браузера. Кнопка «Убрать» внизу удаляет и папку расширения"),
@@ -148,10 +149,10 @@ internal static class FlowWindow
         g.Children.Add(text);
         if (action != null)
         {
-            action.Margin = new Thickness(12, 0, 0, 0);
-            action.VerticalAlignment = VerticalAlignment.Top;
-            Grid.SetColumn(action, 2);
-            g.Children.Add(action);
+            // Кнопка сразу под своим шагом, а не у дальнего края страницы
+            action.Margin = new Thickness(0, 8, 0, 0);
+            action.HorizontalAlignment = HorizontalAlignment.Left;
+            text.Children.Add(action);
         }
         return g;
     }

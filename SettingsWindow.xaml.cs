@@ -113,10 +113,19 @@ public partial class SettingsWindow : Window
     private static int _lastTab;
 
     /// <summary>Вкладка: страница с тем же именем видна, остальные скрыты. Заголовок и пояснение берутся из Tag страницы.</summary>
+    private string _tab = "General";
+
+    /// <summary>Пояснение справа только на «Основных» и только если рядом с карточками хватает места.</summary>
+    private void UpdateSide() { if (GeneralSide != null && BodyScroll != null) GeneralSide.Visibility = _tab == "General" && BodyScroll.ActualWidth >= 1050 ? Visibility.Visible : Visibility.Collapsed; }
+
+    private void BodyScroll_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateSide();
+
     private void Nav_Checked(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.RadioButton { Tag: string name } rb) return;
         _lastTab = Nav.Children.IndexOf(rb);
+        _tab = name;
+        UpdateSide();
         foreach (FrameworkElement page in Pages.Children)
         {
             bool show = page.Name == "Page" + name;

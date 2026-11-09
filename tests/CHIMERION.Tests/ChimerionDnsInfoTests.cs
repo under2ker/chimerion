@@ -15,7 +15,7 @@ public class ChimerionDnsInfoTests
     public void Links_are_https_and_texts_follow_project_rules()
     {
         Assert.All(new[] { ChimerionDnsInfo.BotUrl, ChimerionDnsInfo.ChannelUrl, ChimerionDnsInfo.ShopUrl }, u => Assert.StartsWith("https://", u));
-        var text = string.Join(" ", ChimerionDnsInfo.Benefits) + ChimerionDnsInfo.Region;
+        var text = string.Join(" ", ChimerionDnsInfo.Benefits.Select(b => b.Title + " " + b.Text)) + ChimerionDnsInfo.Promise + ChimerionDnsInfo.Region;
         Assert.DoesNotContain("ё", text);
         Assert.DoesNotContain("—", text);
         Assert.DoesNotMatch(@"\d+\.\d+\.\d+\.\d+", text);

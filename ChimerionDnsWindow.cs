@@ -38,13 +38,15 @@ internal static class ChimerionDnsInfo
         ("365 дней", 365, 2490, 2490),
     };
 
-    public static readonly string[] Benefits =
+    /// <summary>Главное в одной строке: заголовок витрины.</summary>
+    public const string Promise = "ChatGPT, Claude и Gemini без VPN";
+
+    public static readonly (string Icon, string Title, string Text)[] Benefits =
     {
-        "ChatGPT, Claude и Gemini открываются без VPN",
-        "Личный доступ: своя ссылка DoH и свой адрес DoT, а не общий сервер из списка",
-        "Запросы DNS зашифрованы, провайдер их не видит и не подменяет",
-        "Работает в CHIMERION на Windows 10 и 11, в браузере и в «Частном DNS» на Android",
-        "Команда /dns в боте в любой момент покажет доступ и инструкцию",
+        ("link", "Личный доступ", "Своя ссылка DoH и свой адрес DoT, а не общий сервер из списка"),
+        ("shield-check", "Шифрование", "Запросы DNS зашифрованы, провайдер их не видит и не подменяет"),
+        ("smartphone", "Ваши устройства", "CHIMERION на Windows 10 и 11, браузеры и «Частный DNS» на Android"),
+        ("send", "Доступ сразу", "Бот присылает доступ после оплаты, команда /dns покажет его снова"),
     };
 
     /// <summary>Как подключить: от оплаты до работающего DNS, три шага.</summary>
@@ -79,30 +81,29 @@ internal static class ChimerionDnsWindow
         DockPanel.SetDock(header, Dock.Top);
         root.Children.Add(header);
 
-        var buy = Ui.Action("Открыть бота", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl));
-        var contact = Ui.Action("Написать", "Strong", () => AutoStart.OpenUrl(ChimerionDnsInfo.ContactUrl));
         var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
-        // Все три кнопки справа: левый слот подвала растягивается на всю свободную ширину, и «Написать» выходила огромной
-        var footer = Ui.Footer(null, buy, contact, close);
+        // Купить и написать теперь в карточке цен; внизу новости и закрыть
+        var news = new TextBlock { Text = $"Новости: {ChimerionDnsInfo.ChannelName}", FontSize = 12, Cursor = System.Windows.Input.Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, ToolTip = ChimerionDnsInfo.ChannelUrl }
+            .Ref(TextBlock.ForegroundProperty, "Muted");
+        news.MouseLeftButtonUp += (_, _) => AutoStart.OpenUrl(ChimerionDnsInfo.ChannelUrl);
+        var footer = Ui.Footer(news, close);
         footer.Margin = new Thickness(0, 14, 0, 0);
         DockPanel.SetDock(footer, Dock.Bottom);
         root.Children.Add(footer);
 
-        // Слева что дает доступ, справа регион и где купить. В узком окне колонки встают друг под друга
+        // Витрина: слева что это и регион, рядом заметная карточка цен с покупкой. В узком окне колонки встают друг под друга
         var left = new StackPanel();
-        left.Children.Add(Ui.Section("Преимущества", first: true));
-        foreach (var benefit in ChimerionDnsInfo.Benefits) left.Children.Add(BenefitRow(benefit));
-        left.Children.Add(Ui.Section("Сроки и цены"));
-        left.Children.Add(PlanTiles());
+        left.Children.Add(Ui.Section("О доступе", first: true));
+        left.Children.Add(IntroCard());
 
         var right = new StackPanel();
-        right.Children.Add(Ui.Section("Регион", first: true));
-        right.Children.Add(RegionCard());
-        right.Children.Add(Ui.Section("Где купить"));
-        right.Children.Add(ContactCard());
+        right.Children.Add(Ui.Section("Сроки и цены", first: true));
+        right.Children.Add(PriceCard());
 
         var body = new StackPanel();
         body.Children.Add(TwoColumns(left, right, 820));
+        body.Children.Add(Ui.Section("Преимущества"));
+        body.Children.Add(Ui.IconTiles(ChimerionDnsInfo.Benefits, 4, 190));
         body.Children.Add(Ui.Section("Как подключить"));
         body.Children.Add(StepTiles());
         body.Children.Add(Ui.Section("Частые вопросы"));
@@ -118,47 +119,39 @@ internal static class ChimerionDnsWindow
     }
 
     /// <summary>Две колонки на широкой странице, одна под другой уже <paramref name="wide"/> точек.</summary>
-    internal static Grid TwoColumns(FrameworkElement left, FrameworkElement right, double wide)
+    internal static Grid TwoColumns(FrameworkElement left, FrameworkElement right, double wide) => Ui.Columns(left, right, wide);
+
+    /// <summary>Что это и откуда вас видят: обещание, пояснение и регион с флагом.</summary>
+    private static Border IntroCard()
     {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        g.Children.Add(left); g.Children.Add(right);
-        bool? sideBySide = null;
-        void Place(double width)
-        {
-            bool side = width >= wide;
-            if (side == sideBySide) return;
-            sideBySide = side;
-            Grid.SetColumnSpan(left, side ? 1 : 3);
-            Grid.SetRow(right, side ? 0 : 1); Grid.SetColumn(right, side ? 2 : 0); Grid.SetColumnSpan(right, side ? 1 : 3);
-            right.Margin = new Thickness(0, side ? 0 : 14, 0, 0);
-        }
-        Place(0);
-        g.SizeChanged += (_, e) => Place(e.NewSize.Width);
-        return g;
+        var box = new StackPanel();
+        box.Children.Add(new TextBlock { Text = ChimerionDnsInfo.Promise, FontSize = 19, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+            FontFamily = (FontFamily)Application.Current.Resources["DisplayFont"] });
+        box.Children.Add(Ui.Hint("Личный Smart DNS от создателей CHIMERION: свой доступ для нейросетей, а не общий сервер из списка", 6));
+        box.Children.Add(Ui.Separator().With(s => s.Margin = new Thickness(0, 14, 0, 14)));
+        box.Children.Add(RegionRow());
+        var card = Ui.Card(box, bottom: 0);
+        card.Padding = new Thickness(18, 16, 18, 16);
+        return card;
     }
 
-    /// <summary>Пункт списка: галочка и текст, перенос строки встает под текст, а не под значок.</summary>
-    private static Grid BenefitRow(string text)
+    /// <summary>Цены и покупка в одной заметной карточке: три срока, кнопка бота и другой способ оплаты.</summary>
+    private static Border PriceCard()
     {
-        var g = new Grid { Margin = new Thickness(0, 0, 0, 7) };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var mark = new Controls.Icon { Kind = "circle-check", Size = 17, Margin = new Thickness(0, 1, 11, 0), VerticalAlignment = VerticalAlignment.Top }
-            .Ref(Controls.Icon.ForegroundProperty, "Ok");
-        g.Children.Add(mark);
-        var t = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, LineHeight = 19 };
-        Grid.SetColumn(t, 1);
-        g.Children.Add(t);
-        return g;
+        var box = new StackPanel();
+        box.Children.Add(PlanTiles());
+        var actions = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
+        actions.Children.Add(Ui.Action("Купить в боте", "Primary", () => AutoStart.OpenUrl(ChimerionDnsInfo.BotUrl)).With(b => b.Margin = new Thickness(0, 0, 8, 0)));
+        actions.Children.Add(Ui.Action("Написать", "Strong", () => AutoStart.OpenUrl(ChimerionDnsInfo.ContactUrl)).With(b => b.ToolTip = ChimerionDnsInfo.ContactName));
+        box.Children.Add(actions);
+        box.Children.Add(Ui.Hint($"Оплата звездами Telegram, доступ приходит в чат сразу. Другой способ оплаты и вопросы: {ChimerionDnsInfo.ContactName}", 10));
+        var card = Ui.Card(box, selected: true, bottom: 0);
+        card.Padding = new Thickness(16, 16, 16, 16);
+        return card;
     }
 
     /// <summary>Страна сервера: флаг, название и пояснение. Флаг берется из кэша, а если его еще нет, догружается.</summary>
-    private static Border RegionCard()
+    private static Grid RegionRow()
     {
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -172,9 +165,7 @@ internal static class ChimerionDnsWindow
         text.Children.Add(Ui.Hint("Нейросети видят вас из этой страны", 2));
         Grid.SetColumn(text, 1);
         row.Children.Add(text);
-        var card = Ui.Card(row, bottom: 0);
-        card.Padding = new Thickness(16, 12, 16, 12);
-        return card;
+        return row;
     }
 
     private static async Task ShowFlagAsync(Image flag, string country)
@@ -223,47 +214,6 @@ internal static class ChimerionDnsWindow
             grid.Children.Add(card);
         }
         return grid;
-    }
-
-    /// <summary>Где купить и как связаться: бот, личные сообщения и канал. Адрес в каждой строке открывает свою ссылку.</summary>
-    private static Border ContactCard()
-    {
-        var list = new StackPanel();
-        list.Children.Add(ContactRow("Купить в боте", "Оплата звездами. Доступ приходит в чат сразу после оплаты", ChimerionDnsInfo.BotName, ChimerionDnsInfo.BotUrl));
-        list.Children.Add(Ui.Separator());
-        list.Children.Add(ContactRow("Другой способ оплаты и вопросы", null, ChimerionDnsInfo.ContactName, ChimerionDnsInfo.ContactUrl));
-        list.Children.Add(Ui.Separator());
-        list.Children.Add(ContactRow("Новости", null, ChimerionDnsInfo.ChannelName, ChimerionDnsInfo.ChannelUrl));
-        return Ui.Card(list, bottom: 0);
-    }
-
-    private static Grid ContactRow(string title, string? note, string handle, string url)
-    {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var logo = new Image { Width = 22, Height = 22, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
-        logo.SetResourceReference(Image.SourceProperty, "LogoTelegram");
-        g.Children.Add(logo);
-        var name = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        Grid.SetColumn(name, 1);
-        g.Children.Add(name);
-        // Пояснение на всю ширину под названием, а не в узкой колонке рядом с кнопкой
-        if (note != null)
-        {
-            var hint = Ui.Hint(note, 4);
-            Grid.SetRow(hint, 1); Grid.SetColumn(hint, 1); Grid.SetColumnSpan(hint, 2);
-            g.Children.Add(hint);
-        }
-        var link = new Button { Content = handle, Style = (Style)Application.Current.Resources["Ghost"], Padding = new Thickness(10, 5, 10, 5), MinHeight = 0, Margin = new Thickness(0), FontWeight = FontWeights.SemiBold, ToolTip = url, VerticalAlignment = VerticalAlignment.Center }
-            .Ref(Control.ForegroundProperty, "Accent");
-        link.Click += (_, _) => AutoStart.OpenUrl(url);
-        Grid.SetColumn(link, 2);
-        g.Children.Add(link);
-        return g;
     }
 
     /// <summary>Три шага подключения рядом: номер, заголовок и пояснение.</summary>

@@ -229,7 +229,7 @@ public class UiDesignTests
                 w.UpdateLayout();
                 var texts = AllOf<TextBlock>(w).Select(t => t.Text).ToList();
                 foreach (var (_, _, rub, _) in ChimerionDnsInfo.Plans) Assert.Contains($"{rub} ₽", texts);
-                var buttons = AllOf<Button>(w).Where(b => b.Content is string s && s is "Открыть бота" or "Написать" or "Закрыть").ToList();
+                var buttons = AllOf<Button>(w).Where(b => b.Content is string s && s is "Купить в боте" or "Написать" or "Закрыть").ToList();
                 Assert.Equal(3, buttons.Count);
                 // Левый слот подвала растягивался, и «Написать» занимала полокна
                 Assert.All(buttons, b => Assert.InRange(b.ActualWidth, 60, 200));

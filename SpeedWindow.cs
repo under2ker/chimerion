@@ -74,17 +74,17 @@ internal sealed class SpeedWindow
         top.ColumnDefinitions.Add(new ColumnDefinition());
         _show = Ui.Action("Показать", "Ghost", () => { _reveal = !_reveal; RenderInfo(); }).With(b => { b.Padding = new Thickness(10, 3, 10, 3); b.MinHeight = 0; b.Margin = new Thickness(0); });
         var you = new StackPanel();
-        var youHead = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var youHead = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
         DockPanel.SetDock(_show, Dock.Right);
         youHead.Children.Add(_show);
-        youHead.Children.Add(new TextBlock { Text = "Ваше подключение", FontSize = 15, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        youHead.Children.Add(new TextBlock { Text = "Ваше подключение", FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         you.Children.Add(youHead);
         you.Children.Add(_you);
-        top.Children.Add(Ui.Card(you, bottom: 0).With(c => c.Padding = new Thickness(16, 12, 16, 12)));
+        top.Children.Add(Ui.Card(you, bottom: 0).With(c => c.Padding = new Thickness(14, 10, 14, 10)));
         var dns = new StackPanel();
-        dns.Children.Add(new TextBlock { Text = "Подключенный DNS", FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 3, 0, 11) });
+        dns.Children.Add(new TextBlock { Text = "Подключенный DNS", FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 2, 0, 8) });
         dns.Children.Add(_dns);
-        var dnsCard = Ui.Card(dns, bottom: 0).With(c => c.Padding = new Thickness(16, 12, 16, 12));
+        var dnsCard = Ui.Card(dns, bottom: 0).With(c => c.Padding = new Thickness(14, 10, 14, 10));
         Grid.SetColumn(dnsCard, 2);
         top.Children.Add(dnsCard);
         body.Children.Add(top);
@@ -192,20 +192,34 @@ internal sealed class SpeedWindow
         if (s.ProxyCountryName.Length > 0) _dns.Children.Add(Line("Страна выхода", s.ProxyCountryName));
     }
 
-    /// <summary>На что хватает: строки с отметкой. До замера показываются бледно.</summary>
+    /// <summary>
+    /// До замера: что измеряется. После: итог одной строкой и по каждой задаче отметка с тем, сколько для нее нужно.
+    /// </summary>
     private void RenderUses(InternetResult? r)
     {
         _uses.Children.Clear();
+        if (r == null)
+        {
+            _uses.Children.Add(Ui.Hint("Замер покажет пинг, скорость скачивания и отправки и подскажет, для чего их хватает: видео в 4K, видеозвонки, онлайн-игры и отправка больших файлов", 0));
+            return;
+        }
+        var uses = SpeedVerdict.For(r);
+        int ok = uses.Count(u => u.Ok);
+        var (verdict, brush) = ok == uses.Count ? ("Подходит для всего ниже", "Ok") : ok == 0 ? ("Для этих задач скорости мало", "Bad") : ("Подходит не для всего: отметки ниже", "Warn");
+        _uses.Children.Add(new TextBlock { Text = verdict, FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10) }.Ref(TextBlock.ForegroundProperty, brush));
         var grid = new UniformGrid { Columns = 4 };
-        var uses = SpeedVerdict.For(r ?? new InternetResult(null, null, null, null, null));
         foreach (var use in uses)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, ToolTip = Loc.T("Нужно: ") + Loc.T(use.Need), Opacity = r == null ? 0.45 : 1, Margin = new Thickness(0, 0, 12, 0) };
-            var icon = new Controls.Icon { Kind = r == null ? "minus" : use.Ok ? "circle-check" : "circle-x", Size = 15, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
-            icon.SetResourceReference(Controls.Icon.ForegroundProperty, r == null ? "Muted" : use.Ok ? "Ok" : "Bad");
+            var cell = new StackPanel { Margin = new Thickness(0, 0, 12, 0) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            var icon = new Controls.Icon { Kind = use.Ok ? "circle-check" : "circle-x", Size = 15, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+            icon.SetResourceReference(Controls.Icon.ForegroundProperty, use.Ok ? "Ok" : "Bad");
             row.Children.Add(icon);
-            row.Children.Add(new TextBlock { Text = use.Title, FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
-            grid.Children.Add(row);
+            row.Children.Add(new TextBlock { Text = use.Title, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            cell.Children.Add(row);
+            cell.Children.Add(new TextBlock { Text = Loc.T("Нужно: ") + Loc.T(use.Need), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(21, 3, 0, 0) }
+                .Ref(TextBlock.ForegroundProperty, "Muted"));
+            grid.Children.Add(cell);
         }
         _uses.Children.Add(grid);
         if (r != null) _uses.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, Ui.Motion(300)));

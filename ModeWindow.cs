@@ -87,6 +87,12 @@ internal sealed class ModeWindow
         _result.Margin = new Thickness(2, 10, 0, 0);
         _result.Visibility = Visibility.Collapsed;
         root.Children.Add(_result);
+        var choose = _modes.Where(m => Situations.ContainsKey(m.Title)).Select(m => Situations[m.Title]).ToList();
+        if (choose.Count > 0)
+        {
+            root.Children.Add(Ui.Section("Как выбрать режим"));
+            root.Children.Add(Ui.InfoTiles(choose, 4, 200));
+        }
 
         var close = Ui.Action("Закрыть", "Ghost", () => { if (!_busy) _w.Close(); }).With(b => b.IsCancel = true);
         root.Children.Add(Ui.Footer(Ui.Hint("Режим можно включить и из трея: правая кнопка по значку → «Режим». Ctrl+1…4 включает режим по порядку", 0)
@@ -148,6 +154,15 @@ internal sealed class ModeWindow
         return row;
     }
 
+    /// <summary>Как выбрать: по одной жизненной ситуации на режим, с названием режима в ответе.</summary>
+    private static readonly Dictionary<string, (string, string)> Situations = new()
+    {
+        ["Только ИИ"] = ("Нужны только нейросети", "«Только ИИ»: ChatGPT, Claude и Gemini через Smart DNS, ускорение Telegram и обход выключатся"),
+        ["Все сразу"] = ("Тормозят YouTube, Discord или Telegram", "«Все сразу»: нейросети, ускорение Telegram и обход включатся вместе"),
+        ["Игры"] = ("Провайдер мешает онлайн-играм", "«Игры»: обход zapret заработает и для игр, DNS и Telegram не меняются"),
+        ["Все выключить"] = ("Нужен обычный интернет", "«Все выключить»: DNS вашей сети, без ускорения Telegram и обхода"),
+    };
+
     /// <summary>Плитка режима: значок, название, метки, пояснение, что изменится по частям и кнопка.</summary>
     private FrameworkElement Tile(ModeInfo m, State s, bool current)
     {
@@ -169,7 +184,9 @@ internal sealed class ModeWindow
         body.Children.Add(head);
 
         // Что изменится: по каждой части отдельной строкой, без догадок
-        var changes = new StackPanel { Margin = new Thickness(52, 10, 0, 0) };
+        var changes = new StackPanel { Margin = new Thickness(52, 12, 0, 0) };
+        changes.Children.Add(new TextBlock { Text = "Что изменится", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) }
+            .Ref(TextBlock.ForegroundProperty, "Muted"));
         changes.Children.Add(Change("Smart DNS", m.Dns, s.Dns, false, s.Dns ? null : s.HasWorkingServers ? null : "нет рабочих серверов: сначала найдите их"));
         changes.Children.Add(Change("Telegram", m.Telegram, s.Telegram || s.TelegramForeign, false, s.TelegramForeign && m.Telegram == Target.Off ? "ваша копия не выключается" : null));
         changes.Children.Add(Change("Обход zapret", m.Zapret, s.Zapret, s.ZapretGames, null));
@@ -201,8 +218,8 @@ internal sealed class ModeWindow
         };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
         row.Children.Add(new Controls.Icon { Kind = kind, Size = 14, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, color));
-        row.Children.Add(new TextBlock { Text = part + ": ", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
-        row.Children.Add(new TextBlock { Text = text, FontSize = 12.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color));
+        row.Children.Add(new TextBlock { Text = part + ": ", FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        row.Children.Add(new TextBlock { Text = text, FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color));
         if (note == null) return row;
         var block = new StackPanel();
         block.Children.Add(row);

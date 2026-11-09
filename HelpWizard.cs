@@ -58,7 +58,8 @@ internal sealed class HelpWizard
         _site.KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Enter) _ = RunSiteAsync(); };
         row.Children.Add(_site);
         ask.Children.Add(row);
-        root.Children.Add(Ui.Card(ask));
+        var left = new StackPanel();
+        left.Children.Add(Ui.Card(ask, bottom: 0));
 
         // Шаг 2: что нашлось
         var body = new StackPanel();
@@ -68,13 +69,18 @@ internal sealed class HelpWizard
         body.Children.Add(head);
         body.Children.Add(_verdict);
         body.Children.Add(_steps);
-        root.Children.Add(Ui.Card(body, bottom: 0));
+        // Результат появляется с первой проверкой: до нее пустой карточки нет, приглашение уже в карточке выше
+        _found = Ui.Card(body, bottom: 0);
+        _found.Margin = new Thickness(0, 12, 0, 0);
+        _found.Visibility = Visibility.Collapsed;
+        left.Children.Add(_found);
         _verdict.Text = "Выберите, что не открывается";
 
-        // Пока проверка не запускалась: частые причины, которые человек может убрать сам
-        _idle.Children.Add(Ui.Section("Частые причины"));
-        _idle.Children.Add(Ui.InfoTiles(Causes, 2));
-        root.Children.Add(_idle);
+        // Справа всегда: частые причины, которые человек может убрать сам
+        var side = new StackPanel();
+        side.Children.Add(Ui.Section("Попробуйте сначала", first: true));
+        side.Children.Add(Ui.InfoTiles(Causes, 1));
+        root.Children.Add(Ui.Columns(left, side, 900, 3, 2));
         View = root;
     }
 
@@ -143,7 +149,7 @@ internal sealed class HelpWizard
         else await _fix(action);
     }
 
-    private readonly StackPanel _idle = new();
+    private Border _found = null!;
 
     private static readonly (string, string)[] Causes =
     {
@@ -155,7 +161,7 @@ internal sealed class HelpWizard
 
     private void Begin(string what)
     {
-        _idle.Visibility = Visibility.Collapsed;
+        _found.Visibility = Visibility.Visible;
         _steps.Children.Clear();
         _verdict.Text = $"Проверяю {what}…";
         _verdict.Foreground = Ui.B("Text");

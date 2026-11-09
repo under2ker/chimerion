@@ -439,21 +439,79 @@ internal static class Ui
     /// <summary>Это нижняя строка окна из <see cref="Footer"/>: на странице главного окна ее прижимают к низу.</summary>
     public static bool IsFooter(UIElement e) => e is Border b && Footers.TryGetValue(b, out _);
 
-    /// <summary>Карточки «заголовок и пояснение» сеткой по columns в ряд: советы, частые вопросы, как это работает.</summary>
-    public static System.Windows.Controls.Primitives.UniformGrid InfoTiles(IReadOnlyList<(string Title, string Text)> items, int columns)
+    /// <summary>
+    /// Карточки «заголовок и пояснение» сеткой до columns в ряд: советы, частые вопросы, как это работает.
+    /// minWidth: плитка не уже этого, на узкой странице колонок становится меньше.
+    /// </summary>
+    public static System.Windows.Controls.Primitives.UniformGrid InfoTiles(IReadOnlyList<(string Title, string Text)> items, int columns, double minWidth = 0) =>
+        Tiles(items.Select(i => ((string?)null, i.Title, i.Text)).ToList(), columns, minWidth);
+
+    /// <summary>То же с иконкой над заголовком.</summary>
+    public static System.Windows.Controls.Primitives.UniformGrid IconTiles(IReadOnlyList<(string Icon, string Title, string Text)> items, int columns, double minWidth = 0) =>
+        Tiles(items.Select(i => ((string?)i.Icon, i.Title, i.Text)).ToList(), columns, minWidth);
+
+    private static System.Windows.Controls.Primitives.UniformGrid Tiles(IReadOnlyList<(string? Icon, string Title, string Text)> items, int columns, double minWidth)
     {
         var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = columns };
-        int rows = (items.Count + columns - 1) / columns;
-        for (int i = 0; i < items.Count; i++)
+        var cards = new List<Border>();
+        foreach (var (icon, title, text) in items)
         {
             var tile = new StackPanel();
-            tile.Children.Add(new TextBlock { Text = items[i].Title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
-            tile.Children.Add(Hint(items[i].Text, 6));
+            if (icon != null)
+                tile.Children.Add(new Border
+                {
+                    Width = 34, Height = 34, CornerRadius = new CornerRadius(9), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 10),
+                    Child = new Controls.Icon { Kind = icon, Size = 17, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                        .Ref(Controls.Icon.ForegroundProperty, "Accent"),
+                }.Ref(Border.BackgroundProperty, "AccentSoft"));
+            tile.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            tile.Children.Add(Hint(text, 6));
             var card = Card(tile, bottom: 0);
-            card.Margin = new Thickness(0, 0, i % columns < columns - 1 ? 8 : 0, i / columns < rows - 1 ? 8 : 0);
+            cards.Add(card);
             grid.Children.Add(card);
         }
+        void Lay(int cols)
+        {
+            grid.Columns = cols;
+            int rows = (cards.Count + cols - 1) / cols;
+            for (int i = 0; i < cards.Count; i++)
+                cards[i].Margin = new Thickness(0, 0, i % cols < cols - 1 ? 8 : 0, i / cols < rows - 1 ? 8 : 0);
+        }
+        Lay(columns);
+        if (minWidth > 0)
+            grid.SizeChanged += (_, e) =>
+            {
+                int cols = Math.Clamp((int)((e.NewSize.Width + 8) / (minWidth + 8)), 1, columns);
+                if (cols != grid.Columns) Lay(cols);
+            };
         return grid;
+    }
+
+    /// <summary>
+    /// Две колонки на широкой странице (доли leftStar и rightStar), одна под другой уже <paramref name="wide"/> точек.
+    /// </summary>
+    public static Grid Columns(FrameworkElement left, FrameworkElement right, double wide, double leftStar = 1, double rightStar = 1)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(leftStar, GridUnitType.Star) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(rightStar, GridUnitType.Star) });
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        g.Children.Add(left); g.Children.Add(right);
+        bool? sideBySide = null;
+        void Place(double width)
+        {
+            bool side = width >= wide;
+            if (side == sideBySide) return;
+            sideBySide = side;
+            Grid.SetColumnSpan(left, side ? 1 : 3);
+            Grid.SetRow(right, side ? 0 : 1); Grid.SetColumn(right, side ? 2 : 0); Grid.SetColumnSpan(right, side ? 1 : 3);
+            right.Margin = new Thickness(0, side ? 0 : 14, 0, 0);
+        }
+        Place(0);
+        g.SizeChanged += (_, e) => Place(e.NewSize.Width);
+        return g;
     }
 
     /// <summary>Многострочное поле: текст сверху, а не по центру (общий стиль полей центрирует однострочные).</summary>
