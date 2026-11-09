@@ -2641,5 +2641,6 @@
  "Хранится 3 дня, старое удаляется само": "Kept for 3 days, older entries are deleted automatically",
  "Чат в Telegram": "Telegram chat",
  "Кнопки ведут в нужную тему чата: баг-репорты, идеи или ошибки": "The buttons lead to the right chat topic: bug reports, ideas or errors",
- "История изменений, сообщения о проблемах и текст лицензии открываются на GitHub": "The changelog, issue reports and license text open on GitHub"
+ "История изменений, сообщения о проблемах и текст лицензии открываются на GitHub": "The changelog, issue reports and license text open on GitHub",
+ "Темы чата": "Chat topics"
 }

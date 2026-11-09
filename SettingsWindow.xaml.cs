@@ -162,20 +162,38 @@ public partial class SettingsWindow : Window
             ("Поддержка", "Не отправляйте settings.json: в нем могут быть Cookie. Для поддержки есть «Скопировать отчет» в диагностике"),
             ("Журнал", "Хранится 3 дня, старое удаляется само"),
         }),
-        ["About"] = ("Связь", new[]
-        {
-            ("Чат в Telegram", "Кнопки ведут в нужную тему чата: баг-репорты, идеи или ошибки"),
-            ("GitHub", "История изменений, сообщения о проблемах и текст лицензии открываются на GitHub"),
-        }),
     };
 
-    /// <summary>Выноска вкладки справа до края страницы, если рядом с карточками хватает места; иначе колонки нет.</summary>
+    private readonly Dictionary<string, (FrameworkElement Block, System.Windows.Controls.Panel Home, int Index)> _extras = new();
+
+    /// <summary>
+    /// Справа до края страницы: выноска вкладки и под ней блоки-пояснения этой вкладки («Что скрывается», «Что делает сторож»).
+    /// На узкой странице правой колонки нет, блоки возвращаются на свое место. «О программе» занимает всю ширину.
+    /// </summary>
     private void UpdateSide()
     {
-        if (GeneralSide == null || BodyScroll == null || SideColumn == null) return;
-        bool show = SideNotes.ContainsKey(_tab) && BodyScroll.ActualWidth >= 1000;
-        GeneralSide.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        SideColumn.Width = show ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        if (SidePanel == null || BodyScroll == null || SideColumn == null || Pages == null) return;
+        if (_extras.Count == 0)
+            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Watch", WatchExtra) })
+            {
+                var home = (System.Windows.Controls.Panel)block.Parent;
+                _extras[tab] = (block, home, home.Children.IndexOf(block));
+            }
+        bool about = _tab == "About";
+        bool show = !about && SideNotes.ContainsKey(_tab) && BodyScroll.ActualWidth >= 1000;
+        SidePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        SideColumn.Width = show || about ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        System.Windows.Controls.Grid.SetColumnSpan(Pages, about ? 2 : 1);
+
+        foreach (var (tab, (block, home, index)) in _extras)
+        {
+            var target = show && tab == _tab ? (System.Windows.Controls.Panel)SideExtras : home;
+            if (ReferenceEquals(block.Parent, target)) continue;
+            ((System.Windows.Controls.Panel)block.Parent).Children.Remove(block);
+            if (ReferenceEquals(target, home)) home.Children.Insert(Math.Min(index, home.Children.Count), block);
+            else target.Children.Add(block);
+        }
+
         if (!show || _sideTab == _tab) return;
         _sideTab = _tab;
         var (title, items) = SideNotes[_tab];
