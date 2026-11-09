@@ -118,7 +118,10 @@ public partial class SettingsWindow : Window
     /// <summary>Пояснение справа только на «Основных» и только если рядом с карточками хватает места.</summary>
     private string? _sideTab;
 
-    /// <summary>Выноска справа у каждой вкладки: заголовок и несколько коротких пояснений.</summary>
+    /// <summary>
+    /// Выноска справа: заголовок раздела над карточкой, внутри пункты «заголовок + пояснение» (стили InfoHead, InfoBody).
+    /// Без повторов текста карточек слева (кроме «Основных»). У «Приватности» и «Данных» вместо выноски свой блок (PrivacyExtra, DataExtra).
+    /// </summary>
     private static readonly Dictionary<string, (string Title, (string Head, string Text)[] Items)> SideNotes = new()
     {
         ["General"] = ("Как работает запуск", new[]
@@ -127,61 +130,48 @@ public partial class SettingsWindow : Window
             ("Права администратора", "Запуск с Windows идет без них. Права нужны, только чтобы сменить или вернуть DNS Windows"),
             ("Подключение сохраняется", "После перезапуска программа сама восстанавливает последнее подключение"),
         }),
-        ["Privacy"] = ("Что защищается", new[]
-        {
-            ("Стример мод", "Окна CHIMERION не попадают на скриншоты, запись и трансляции, а IP, город и провайдер скрыты"),
-            ("Только скрытие", "IP, город и провайдер скрыты, а окна на записи видны как обычно"),
-            ("Общая карта", "Раз в час уходят итоги проверок серверов. Ваш IP нужен только для лимита отчетов и не сохраняется"),
-        }),
         ["Check"] = ("Как проверяется сервер", new[]
         {
             ("Сравнение ответов", "Программа спрашивает адрес ChatGPT у честного DNS и у проверяемого сервера. Разные ответы значат, что сервер ведет нейросети через себя"),
             ("Таймаут", "Сколько ждать ответа. Слишком мало: рабочие, но далекие серверы попадут в нерабочие"),
             ("Проверок одновременно", "Больше значит быстрее, но на слабой сети проверка мешает другим программам"),
         }),
-        ["Watch"] = ("Как следит сторож", new[]
+        ["Watch"] = ("Как работает сторож", new[]
         {
-            ("DNS сбросили", "Сторож сам вернет подключение. Со сторонним VPN он не спорит"),
-            ("Нейросеть не открылась", "Придет уведомление с причиной, а если смена сервера разрешена, программа перейдет на лучший рабочий"),
-            ("Страна не меняется", "Защита аккаунтов не переводит вас в другую страну без вашего согласия"),
+            ("Следит за DNS", "Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда смена сервера разрешена"),
+            ("Не спорит с VPN", "Со сторонним VPN сторож не спорит. Если DNS сбрасывают снова и снова, он отступит и подскажет, что делать."),
         }),
         ["Split"] = ("Зачем два DNS", new[]
         {
-            ("Нейросети", "Идут через Smart DNS, он открывает их из России"),
-            ("Остальные сайты", "Банки, госуслуги и магазины идут через обычный DNS"),
-            ("Надежнее", "Если со Smart DNS что-то случится, обычные сайты продолжат открываться"),
+            ("Свои домены", "Домены, которые вы добавите в «Настроить два DNS», тоже пойдут через Smart DNS"),
         }),
         ["Look"] = ("Внешний вид", new[]
         {
             ("Видно сразу", "Тема и цвета меняются сразу, чтобы было видно результат"),
             ("Язык", "Русский или English справа в шапке настроек, переключается без «Сохранить»"),
         }),
-        ["Data"] = ("Что важно знать", new[]
-        {
-            ("Перенос", "Экспорт сохраняет настройки и избранные серверы. Cookie и сведения о подключении в файл не попадают"),
-            ("Поддержка", "Не отправляйте settings.json: в нем могут быть Cookie. Для поддержки есть «Скопировать отчет» в диагностике"),
-            ("Журнал", "Хранится 3 дня, старое удаляется само"),
-        }),
     };
 
     private readonly Dictionary<string, (FrameworkElement Block, System.Windows.Controls.Panel Home, int Index)> _extras = new();
 
     /// <summary>
-    /// Справа до края страницы: выноска вкладки и под ней блоки-пояснения этой вкладки («Что скрывается», «Что делает сторож»).
-    /// На узкой странице правой колонки нет, блоки возвращаются на свое место. «О программе» занимает всю ширину.
+    /// Правая колонка до края страницы: выноска или собственный блок вкладки. На узкой странице колонки нет,
+    /// блоки возвращаются на свое место. «О программе» занимает всю ширину.
     /// </summary>
     private void UpdateSide()
     {
         if (SidePanel == null || BodyScroll == null || SideColumn == null || Pages == null) return;
         if (_extras.Count == 0)
-            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Watch", WatchExtra) })
+            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Data", DataExtra) })
             {
                 var home = (System.Windows.Controls.Panel)block.Parent;
                 _extras[tab] = (block, home, home.Children.IndexOf(block));
             }
         bool about = _tab == "About";
-        bool show = !about && SideNotes.ContainsKey(_tab) && BodyScroll.ActualWidth >= 1000;
+        bool notes = SideNotes.ContainsKey(_tab);
+        bool show = !about && (notes || _extras.ContainsKey(_tab)) && BodyScroll.ActualWidth >= 1000;
         SidePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        SideNotesBox.Visibility = notes ? Visibility.Visible : Visibility.Collapsed;
         SideColumn.Width = show || about ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         System.Windows.Controls.Grid.SetColumnSpan(Pages, about ? 2 : 1);
 
@@ -194,15 +184,17 @@ public partial class SettingsWindow : Window
             else target.Children.Add(block);
         }
 
-        if (!show || _sideTab == _tab) return;
+        if (!show || !notes || _sideTab == _tab) return;
         _sideTab = _tab;
         var (title, items) = SideNotes[_tab];
+        SideTitle.Text = title;
         SideBody.Children.Clear();
-        SideBody.Children.Add(new System.Windows.Controls.TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold });
         foreach (var (head, text) in items)
         {
-            SideBody.Children.Add(new System.Windows.Controls.TextBlock { Text = head, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 0), TextWrapping = TextWrapping.Wrap });
-            SideBody.Children.Add(new System.Windows.Controls.TextBlock { Text = text, Style = (Style)FindResource("FieldHint"), Margin = new Thickness(0, 4, 0, 0) });
+            var h = new System.Windows.Controls.TextBlock { Text = head, Style = (Style)FindResource("InfoHead") };
+            if (SideBody.Children.Count == 0) h.Margin = new Thickness(0);
+            SideBody.Children.Add(h);
+            SideBody.Children.Add(new System.Windows.Controls.TextBlock { Text = text, Style = (Style)FindResource("InfoBody") });
         }
     }
 

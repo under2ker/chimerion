@@ -24,6 +24,19 @@
             <Setter Property="Margin" Value="0,5,0,0"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
+        <!-- Пояснительные карточки справа: пункт = заголовок + приглушенное пояснение, сноска под линией -->
+        <Style x:Key="InfoHead" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,14,0,0"/>
+        </Style>
+        <Style x:Key="InfoBody" TargetType="TextBlock" BasedOn="{StaticResource FieldHint}">
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+        <Style x:Key="InfoNote" TargetType="TextBlock" BasedOn="{StaticResource FieldHint}">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
         <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Padding" Value="10,8"/>
             <Setter Property="FontSize" Value="13"/>
@@ -165,10 +178,13 @@
                     <ColumnDefinition Width="2*" MaxWidth="900"/>
                     <ColumnDefinition x:Name="SideColumn" Width="0"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel x:Name="SidePanel" Grid.Column="1" Margin="20,45,0,0" VerticalAlignment="Top" Visibility="Collapsed">
-                    <Border x:Name="GeneralSide" Style="{StaticResource Card}" Padding="18" Margin="0">
-                        <StackPanel x:Name="SideBody"/>
-                    </Border>
+                <StackPanel x:Name="SidePanel" Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Top" Visibility="Collapsed">
+                    <StackPanel x:Name="SideNotesBox">
+                        <TextBlock x:Name="SideTitle" Style="{StaticResource SectionTitle}"/>
+                        <Border x:Name="GeneralSide" Style="{StaticResource Card}" Padding="18">
+                            <StackPanel x:Name="SideBody"/>
+                        </Border>
+                    </StackPanel>
                     <StackPanel x:Name="SideExtras"/>
                 </StackPanel>
                 <Grid x:Name="Pages">
@@ -216,17 +232,19 @@
                         <TextBlock Text="Что скрывается" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
-                                <TextBlock Text="В обоих режимах" FontWeight="SemiBold"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Ваш внешний IP, город и провайдер на экране: в журнале, проверке и диагностике. Адреса DNS-серверов и страны остаются"/>
-                                <TextBlock Text="Только «Скрывать данные от записи экрана»" FontWeight="SemiBold" Margin="0,14,0,0"/>
-                                <TextBlock x:Name="StreamerState" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/>
+                                <TextBlock Text="В обоих режимах" Style="{StaticResource InfoHead}" Margin="0"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="Ваш внешний IP, город и провайдер на экране: в журнале, проверке и диагностике. Адреса DNS-серверов и страны остаются"/>
+                                <TextBlock Text="Только «Скрывать данные от записи экрана»" Style="{StaticResource InfoHead}"/>
+                                <TextBlock x:Name="StreamerState" Style="{StaticResource InfoBody}"/>
                                 <StackPanel x:Name="StreamerOnly">
-                                    <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Окна, меню и подсказки не видны в OBS, Discord, Zoom, Teams, «Ножницах» и на Print Screen"/>
-                                    <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• Миниатюры на панели задач и в Alt+Tab: вместо окна значок"/>
+                                    <TextBlock Style="{StaticResource InfoBody}" Text="Окна, меню и подсказки не видны в OBS, Discord, Zoom, Teams, «Ножницах» и на Print Screen"/>
+                                    <TextBlock Style="{StaticResource InfoBody}" Text="Миниатюры на панели задач и в Alt+Tab: вместо окна значок"/>
                                 </StackPanel>
-                                <TextBlock Text="Всегда, даже без скрытия" FontWeight="SemiBold" Margin="0,14,0,0"/>
-                                <TextBlock Style="{StaticResource Para}" Foreground="{DynamicResource Text}" Margin="0,6,0,0" Text="• В скопированном журнале и отчетах внешний IP, адреса локальной сети, имя пользователя Windows и почта заменяются метками. Произвольный текст, который вы сами вписали в поля, программа не правит"/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,12,0,0" Text="Не скроет то, что уже записано, и не защитит от камеры или программ с правами администратора. На Windows 10 до версии 2004 окно на записи будет черным"/>
+                                <TextBlock Text="Всегда, даже без скрытия" Style="{StaticResource InfoHead}"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="В скопированном журнале и отчетах внешний IP, адреса локальной сети, имя пользователя Windows и почта заменяются метками. Произвольный текст, который вы сами вписали в поля, программа не правит"/>
+                                <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource Border}" Margin="0,16,0,0" Padding="0,12,0,0">
+                                    <TextBlock Style="{StaticResource InfoNote}" Text="Не скроет то, что уже записано, и не защитит от камеры или программ с правами администратора. На Windows 10 до версии 2004 окно на записи будет черным"/>
+                                </Border>
                             </StackPanel>
                         </Border>
                         </StackPanel>
@@ -334,15 +352,6 @@
                                 </DockPanel>
                             </StackPanel>
                         </Border>
-                        <StackPanel x:Name="WatchExtra">
-                        <TextBlock Text="Что делает сторож" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда это разрешено выше."/>
-                                <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0" Text="Со сторонним VPN сторож не спорит. Если DNS сбрасывают снова и снова, он отступит и подскажет, что делать."/>
-                            </StackPanel>
-                        </Border>
-                        </StackPanel>
                     </StackPanel>
 
                     <!-- Два DNS -->
@@ -419,23 +428,23 @@
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
+                        <StackPanel x:Name="DataExtra">
                         <TextBlock Text="Что внутри" Style="{StaticResource SectionTitle}"/>
                         <Border Style="{StaticResource Card}" Padding="18">
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                <TextBlock Text="settings.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Column="1" Text="настройки программы" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="1" Text="servers.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="1" Grid.Column="1" Text="список серверов и итоги их проверок" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="2" Text="logs" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="2" Grid.Column="1" Text="журнал за 3 дня, старое удаляется само" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="3" Text="dns-backup.json" FontFamily="Cascadia Mono, Consolas" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="3" Grid.Column="1" Text="исходные DNS до первого подключения: по ним программа и reset-dns.cmd все возвращают" Style="{StaticResource FieldHint}" Margin="0,0,0,8"/>
-                                <TextBlock Grid.Row="4" Text="tools.json" FontFamily="Cascadia Mono, Consolas"/>
-                                <TextBlock Grid.Row="4" Grid.Column="1" Text="состояние zapret и TG WS Proxy" Style="{StaticResource FieldHint}"/>
-                            </Grid>
+                            <StackPanel>
+                                <TextBlock Text="settings.json" Style="{StaticResource InfoHead}" FontFamily="Cascadia Mono, Consolas" Margin="0"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="настройки программы"/>
+                                <TextBlock Text="servers.json" Style="{StaticResource InfoHead}" FontFamily="Cascadia Mono, Consolas"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="список серверов и итоги их проверок"/>
+                                <TextBlock Text="logs" Style="{StaticResource InfoHead}" FontFamily="Cascadia Mono, Consolas"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="журнал за 3 дня, старое удаляется само"/>
+                                <TextBlock Text="dns-backup.json" Style="{StaticResource InfoHead}" FontFamily="Cascadia Mono, Consolas"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="исходные DNS до первого подключения: по ним программа и reset-dns.cmd все возвращают"/>
+                                <TextBlock Text="tools.json" Style="{StaticResource InfoHead}" FontFamily="Cascadia Mono, Consolas"/>
+                                <TextBlock Style="{StaticResource InfoBody}" Text="состояние zapret и TG WS Proxy"/>
+                            </StackPanel>
                         </Border>
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- О программе -->

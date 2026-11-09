@@ -2642,5 +2642,15 @@
  "Чат в Telegram": "Telegram chat",
  "Кнопки ведут в нужную тему чата: баг-репорты, идеи или ошибки": "The buttons lead to the right chat topic: bug reports, ideas or errors",
  "История изменений, сообщения о проблемах и текст лицензии открываются на GitHub": "The changelog, issue reports and license text open on GitHub",
- "Темы чата": "Chat topics"
+ "Темы чата": "Chat topics",
+ "Ваш внешний IP, город и провайдер на экране: в журнале, проверке и диагностике. Адреса DNS-серверов и страны остаются": "Your external IP, city and provider on screen: in the log, check and diagnostics. DNS server addresses and countries stay",
+ "Окна, меню и подсказки не видны в OBS, Discord, Zoom, Teams, «Ножницах» и на Print Screen": "Windows, menus and tooltips are invisible in OBS, Discord, Zoom, Teams, Snipping Tool and Print Screen",
+ "Миниатюры на панели задач и в Alt+Tab: вместо окна значок": "Taskbar and Alt+Tab thumbnails: an icon instead of the window",
+ "В скопированном журнале и отчетах внешний IP, адреса локальной сети, имя пользователя Windows и почта заменяются метками. Произвольный текст, который вы сами вписали в поля, программа не правит": "In the copied log and reports, the external IP, local network addresses, Windows user name and email are replaced with labels. Free text you typed into fields yourself is not edited",
+ "Как работает сторож": "How the watchdog works",
+ "Следит за DNS": "Watches DNS",
+ "Не спорит с VPN": "Does not fight a VPN",
+ "Свои домены": "Your own domains",
+ "Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда смена сервера разрешена": "While you are connected, the watchdog keeps an eye on DNS. If it was reset, it restores the connection, and if the server died, it switches to another one when server switching is allowed",
+ "Домены, которые вы добавите в «Настроить два DNS», тоже пойдут через Smart DNS": "Domains you add in “Set up two DNS” also go through Smart DNS"
 }
