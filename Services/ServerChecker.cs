@@ -185,6 +185,7 @@ public class ServerChecker
             // Выход проверенных сервисов: новый записываем, у неработающих сейчас — убираем устаревший
             foreach (var t in targets)
                 if (egressBy.TryGetValue(t.Name, out var e)) s.EgressBy[t.Name] = e; else s.EgressBy.Remove(t.Name);
+            if (egressBy.TryGetValue("Claude", out var exit) || egressBy.TryGetValue("ChatGPT", out exit)) s.NoteExit(exit);
             s.NotifyEgress();
             s.LatencyMs = median;
             s.JitterMs = jitter;

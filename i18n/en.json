@@ -2711,5 +2711,17 @@
  "Проверить браузер": "Check browser",
  "Подключение изменилось. Проверяю, можно ли продолжать": "The connection has changed. Checking whether it is safe to continue",
  "Страна проверена только что": "Country checked just now",
- "После смены сети страна еще не проверена": "Country not checked yet after the network change"
+ "После смены сети страна еще не проверена": "Country not checked yet after the network change",
+ "Защищенный сеанс: включить": "Protected session: turn on",
+ "Защищенный сеанс: выключить": "Protected session: turn off",
+ "Не менять подключение, пока вы работаете: сервер сам не меняется, запасной не ставится": "Keep the connection while you work: the server does not change on its own, no backup is set",
+ "Защищенный сеанс: не менять подключение, пока я работаю": "Protected session: keep the connection while I work",
+ "Сервер сам не меняется и запасной не ставится: Claude все время видит один адрес. При сбое программа сообщит и предложит замену. Быстро включается в меню трея": "The server does not change on its own and no backup is set: Claude always sees one address. If something fails, the app tells you and offers a replacement. Quick toggle in the tray menu",
+ "Защищенный сеанс включен: сервер сам не меняется": "Protected session on: the server does not change on its own",
+ "Защищенный сеанс выключен": "Protected session off",
+ "Защищенный сеанс включен. Запасной сервер снимется после переподключения": "Protected session on. The backup server is removed after reconnecting",
+ "Сменить сервер во время сеанса?": "Change the server during the session?",
+ "Защищенный сеанс": "Protected session",
+ ". Нажмите, чтобы выбрать замену": ". Click to choose a replacement",
+ "Мало проверок, чтобы судить о постоянстве выхода": "Too few checks to judge exit stability"
 }

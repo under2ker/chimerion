@@ -201,7 +201,8 @@ public class DnsServer : INotifyPropertyChanged
         : $"{LocationText}\n{LocationNote}\nПо данным IP-баз. Точное физическое место может отличаться")
         + string.Concat(EgressBy.OrderBy(kv => kv.Key).Select(kv =>
             $"\nИИ видят, {kv.Key}: {GeoLocation.CountryName(kv.Value.Country)}" +
-            (EgressCityByIp.TryGetValue(kv.Value.Ip, out var c) && c.Length > 0 ? ", " + GeoLocation.CityName(c) : "") + $" ({kv.Value.Ip})"));
+            (EgressCityByIp.TryGetValue(kv.Value.Ip, out var c) && c.Length > 0 ? ", " + GeoLocation.CityName(c) : "") + $" ({kv.Value.Ip})"))
+        + (ExitSeen.Count > 0 ? "\n" + Services.ExitStability.Assess(ExitSeen, DateTime.Now).Text : "");
 
     /// <summary>Когда геолокацию в последний раз определяли. Через 30 дней — снова.</summary>
     public DateTime? GeoCheckedAt { get; set; }
@@ -226,6 +227,15 @@ public class DnsServer : INotifyPropertyChanged
     /// от страны прокси: прокси пересылает трафик дальше (keyoneday в России выходит через Cloudflare во Франции).
     /// </summary>
     public Dictionary<string, Egress> EgressBy { get; set; } = new();
+
+    /// <summary>История выхода (Claude, если нет — ChatGPT) по проверкам: для показателя постоянства выхода (ExitStability).</summary>
+    public List<ExitSeen> ExitSeen { get; set; } = new();
+
+    public void NoteExit(Egress e)
+    {
+        Services.ExitStability.Note(ExitSeen, new ExitSeen(e.At ?? DateTime.Now, e.Ip, e.Country));
+        On(nameof(LocationTooltip));
+    }
 
     /// <summary>
     /// Список из версии без времени измерения страны: выход записывается при проверке сервера, поэтому время

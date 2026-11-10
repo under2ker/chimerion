@@ -125,6 +125,7 @@ public partial class MainWindow
                     "Подключиться", windowTitle: "Подключение")))
                 return false;
             if (!auto && !ConfirmCountryChange(s)) return false;
+            if (!auto && !ConfirmSessionSwitch(s, prevActive)) return false;
             // Без человека страна входа не меняется: сторож, запасной сервер и автоподключение берут только серверы с той же страной
             if (auto && _settings.AccountSafetyGuard && _safety.Compare(AccountSafety.EgressOf(s)) is { Count: > 0 } mism)
             {
@@ -150,7 +151,7 @@ public partial class MainWindow
 
             // 2. Смена DNS (UAC).
             ProgressText.Text = "Меняю DNS…";
-            var backup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers.Where(Usable), s, SafetyFit) : null;
+            var backup = BackupOk ? ConnectionMonitor.Backup(_servers.Where(Usable), s, SafetyFit) : null;
             await DnsSwitcher.ApplyAsync(s, _settings, Log, backup);
             ConnectionChanged();
             _disconnectFailed = false; // новое подключение: сторож снова следит за ним
@@ -169,7 +170,7 @@ public partial class MainWindow
                     Log($"После переключения на «{s.DisplayName}» сайты не открываются. Возвращаю «{prevServer.DisplayName}»");
                     try
                     {
-                        var prevBackup = _settings.UseBackupServer && _settings.AllowServerSwitch ? ConnectionMonitor.Backup(_servers.Where(Usable), prevServer, SafetyFit) : null;
+                        var prevBackup = BackupOk ? ConnectionMonitor.Backup(_servers.Where(Usable), prevServer, SafetyFit) : null;
                         await DnsSwitcher.ApplyAsync(prevServer, _settings, Log, prevBackup);
                         ShowToast($"«{s.DisplayName}» не отвечает, вернул «{prevServer.DisplayName}»", "Bad");
                         DnexDialog.Show("Сервер не отвечает", $"После переключения на «{s.DisplayName}» сайты не открывались, поэтому подключение к «{prevServer.DisplayName}» возвращено.",
@@ -193,6 +194,7 @@ public partial class MainWindow
                 ShowToast($"Подключено · {s.DisplayName}\n{RestartHint}");
                 Log(RestartHint);
                 connected = true;
+                CountSessionSwitch(prevActive, s);
             }
         }
         catch (DohUnavailableException)
@@ -604,7 +606,7 @@ public partial class MainWindow
     /// </summary>
     private async Task TryReturnToPreferredAsync(DnsSwitcher.ActiveConnection active)
     {
-        if (_settings.PreferredServerId is not { } pid || pid == active.ServerId || !_settings.AllowServerSwitch
+        if (_settings.PreferredServerId is not { } pid || pid == active.ServerId || !AutoSwitchOk
             || _servers.FirstOrDefault(x => x.Id == pid) is not { } pref || pref.IsPromo)
         {
             _monitor.ForgetPreferred();
@@ -630,6 +632,11 @@ public partial class MainWindow
     private async Task SwitchToNextBestAsync(DnsSwitcher.ActiveConnection active, bool byUser = false)
     {
         using var cause = byUser ? null : NetHistory.Because("замена сервера: прежний перестал отвечать");
+        if (!byUser && SessionOn)
+        {
+            ReportSessionDown(active, $"«{DnsServer.Clip(active.Name)}» не отвечает");
+            return;
+        }
         if (!byUser && !_settings.AllowServerSwitch)
         {
             // Сторож зовет сюда каждые три неудачи подряд: без ограничения уведомление повторялось бы каждые 3 минуты

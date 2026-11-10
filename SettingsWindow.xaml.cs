@@ -81,6 +81,7 @@ public partial class SettingsWindow : Window
         StartCompactBox.IsChecked = settings.StartCompact;
         AutoSwitchBox.IsChecked = settings.AutoSwitchOnServiceDown;
         BackupBox.IsChecked = settings.UseBackupServer;
+        SessionBox.IsChecked = settings.ProtectedSession;
         AllowSwitchBox.IsChecked = settings.AllowServerSwitch;
         AllowSwitch_Changed(this, new RoutedEventArgs());
         SafetyBox.IsChecked = settings.AccountSafetyGuard;
@@ -394,6 +395,7 @@ public partial class SettingsWindow : Window
         _settings.StartCompact = StartCompactBox.IsChecked == true;
         _settings.AutoSwitchOnServiceDown = AutoSwitchBox.IsChecked == true;
         _settings.UseBackupServer = BackupBox.IsChecked == true;
+        _settings.ProtectedSession = SessionBox.IsChecked == true;
         _settings.AllowServerSwitch = AllowSwitchBox.IsChecked == true;
         _settings.AccountSafetyGuard = SafetyBox.IsChecked == true;
         _settings.EgressCountry = _country;

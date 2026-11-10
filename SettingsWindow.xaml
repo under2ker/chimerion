@@ -313,6 +313,8 @@
                                         <TextBlock Text="Главный переключатель. Без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
                                         <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="24,14,0,0"/>
                                         <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать, Windows перейдет на него за секунды. Вступит в силу после переподключения" Style="{StaticResource FieldHint}" Margin="48,4,0,0"/>
+                                        <CheckBox x:Name="SessionBox" Margin="0,14,0,0"><TextBlock Text="Защищенный сеанс: не менять подключение, пока я работаю" TextWrapping="Wrap"/></CheckBox>
+                                        <TextBlock Text="Сервер сам не меняется и запасной не ставится: Claude все время видит один адрес. При сбое программа сообщит и предложит замену. Быстро включается в меню трея" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
 
                                         <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,1,0,0" Margin="0,18,0,0" Padding="0,18,0,0">
                                             <StackPanel>

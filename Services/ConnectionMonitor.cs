@@ -160,6 +160,7 @@ public sealed class ConnectionMonitor
             .Where(s => s.Id != active.ServerId && !s.IsJunk && s.Status == ServerStatus.Ok)
             .OrderByDescending(s => Stability(s) / 10)
             .ThenByDescending(s => fit?.Invoke(s) ?? 0)
+            .ThenByDescending(s => ExitStability.Rank(s, t))
             .ThenByDescending(s => Stability(s))
             .ThenByDescending(s => s.IsFavorite)
             .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)
@@ -201,6 +202,7 @@ public sealed class ConnectionMonitor
                         && IPAddress.TryParse(s.Primary, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
                         && !own.Contains(s.Primary!) && SameCountry(primary, s, t))
             .OrderByDescending(s => fit?.Invoke(s) ?? 0)
+            .ThenByDescending(s => ExitStability.Rank(s, t))
             .ThenByDescending(s => Stability(s) / 10)
             .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)
             .ThenBy(s => s.LatencyMs ?? long.MaxValue)

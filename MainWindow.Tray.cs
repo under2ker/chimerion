@@ -70,6 +70,8 @@ public partial class MainWindow
         if (srv == null) return;
         string Mark(ServiceState x) => x.Access.StartsWith("✓") ? "✓" : x.Access.Contains("закрыт") ? "✗ регион" : "✗";
         srv.Summary = string.Join(" · ", snap.Services.Select(x => $"{x.Name} {Mark(x)}"));
+        // Выход активного сервера, измеренный этой проверкой, идет в историю постоянства выхода
+        if (snap.Services.FirstOrDefault(x => x.Name == "Claude" && x.Proxied && snap.Measured(x))?.Egress is { } exit) srv.NoteExit(exit);
         srv.Status = snap.Services.All(x => x.Access.StartsWith("✓")) ? ServerStatus.Ok
                    : snap.Services.Any(x => x.Access.StartsWith("✓")) ? ServerStatus.Partial
                    : ServerStatus.Fail;
@@ -169,6 +171,8 @@ public partial class MainWindow
         menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync()));
         menu.Items.Add(TrayItem("Не открывается…", () => { ShowFromTray(); OpenHelpWizard(); }));
         menu.Items.Add(TrayItem("Сайты", () => { ShowFromTray(); OpenSites(); }));
+        _traySession = TrayItem("Защищенный сеанс: включить", () => SetSession(!SessionOn));
+        menu.Items.Add(_traySession);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         _trayTg = TrayItem("Telegram: включить", () => _ = ToggleToolFromTrayAsync(_tools[0]));
         _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]));
@@ -190,7 +194,7 @@ public partial class MainWindow
             modes.DropDownItems.Add(mi);
         }
         menu.Items.Add(modes);
-        menu.Opening += (_, _) => { UpdateToolsTray(); TranslateTray(); }; // состояние могло поменяться само (программу закрыли вручную)
+        menu.Opening += (_, _) => { UpdateToolsTray(); UpdateSessionTray(); TranslateTray(); }; // состояние могло поменяться само (программу закрыли вручную)
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Выход", ExitFromTray));
         // Ширина пунктов задана явно: раньше пункты выходили шире меню (291 против 264) и стрелка подменю обрезалась

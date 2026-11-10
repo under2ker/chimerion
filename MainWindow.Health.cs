@@ -126,7 +126,7 @@ public partial class MainWindow
     private void ReportDown(DnsSwitcher.ActiveConnection active, string name, string text)
     {
         Log("Проверка сервисов: " + text);
-        if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
+        if (_settings.AutoSwitchOnServiceDown && AutoSwitchOk && !_uacDeclined)
         {
             Notify(text + ". Переключаюсь на лучший рабочий сервер", "Bad", logLine: null);
             _ = SwitchToNextBestAsync(active);
@@ -148,7 +148,7 @@ public partial class MainWindow
     {
         var text = $"{name} не отвечает, работает запасной сервер {backup.ShortName}";
         Log("Проверка сервисов: " + text);
-        if (_settings.AutoSwitchOnServiceDown && _settings.AllowServerSwitch && !_uacDeclined)
+        if (_settings.AutoSwitchOnServiceDown && AutoSwitchOk && !_uacDeclined)
         {
             Notify(text + ". Делаю его основным", "Warn", logLine: null, feature: FeatureWatchdog);
             _ = ConnectToAsync(backup, auto: true);
