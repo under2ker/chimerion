@@ -457,91 +457,109 @@
 
                     <!-- О программе -->
                     <StackPanel x:Name="PageAbout" Visibility="Collapsed" Tag="О программе|Что это, кто автор и на каких условиях можно пользоваться">
-                        <Grid Margin="0,16,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <Border Style="{StaticResource Card}" Padding="22" Margin="0">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Border Width="64" Height="64" CornerRadius="18" Background="{DynamicResource AccentSoft}">
-                                            <controls:BrandMark Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <StackPanel Margin="18,0,0,0" VerticalAlignment="Center">
-                                            <controls:BrandWordmark Height="20" HorizontalAlignment="Left"/>
-                                            <TextBlock x:Name="VersionText" Text="CHIMERION" Style="{StaticResource Label}" FontSize="12" Margin="0,8,0,0"/>
-                                        </StackPanel>
-                                    </StackPanel>
-                                    <TextBlock Style="{StaticResource Para}" Margin="0,18,0,0" Foreground="{DynamicResource Text}"
-                                               Text="Сетевые инструменты для открытого интернета: ChatGPT, Claude и Gemini без VPN, обход замедления YouTube и Discord, быстрый Telegram."/>
-                                    <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
-                                               Text="Сама находит и проверяет серверы, подключается в один клик и все возвращает, если что-то пошло не так. Права администратора нужны только для смены DNS."/>
-                                    <TextBlock Margin="0,14,0,0">
-                                        <Hyperlink Click="Site_Click" Foreground="{DynamicResource Accent}">chimerion.dev</Hyperlink>
-                                        <Run Text=" · сайт программы" Foreground="{DynamicResource Muted}"/>
-                                    </TextBlock>
-                                    <TextBlock x:Name="DeviceIdLine" Margin="0,8,0,0" FontSize="12" Cursor="Hand" MouseLeftButtonUp="DeviceId_Click"
-                                               ToolTip="Щелчок копирует ID. В счетчик пользователей уходят он, версия и время работы, данных о вас там нет">
-                                        <Run x:Name="DeviceIdLabel" Text="ID устройства" Foreground="{DynamicResource Muted}"/><Run Text=": " Foreground="{DynamicResource Muted}"/><Run x:Name="DeviceIdValue" FontFamily="Consolas" Foreground="{DynamicResource Text}"/>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                                <Border Grid.Column="2" Style="{StaticResource Card}" Padding="18" Margin="0">
-                                <StackPanel>
-                                    <TextBlock Text="Telegram" FontSize="14" FontWeight="SemiBold"/>
-                                    <TextBlock Text="Канал" Style="{StaticResource Label}" Margin="0,14,0,3"/>
-                                    <TextBlock TextWrapping="Wrap">
-                                        <Hyperlink Click="TgChannel_Click" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
-                                        <Run Text=" · новости о версиях" Foreground="{DynamicResource Muted}"/>
-                                    </TextBlock>
-                                    <TextBlock Text="Чат" Style="{StaticResource Label}" Margin="0,12,0,3"/>
-                                    <TextBlock TextWrapping="Wrap">
-                                        <Hyperlink Click="TgChat_Click" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
-                                        <Run Text=" · помощь, рабочие DNS, идеи" Foreground="{DynamicResource Muted}"/>
-                                    </TextBlock>
-                                    <TextBlock Text="Темы чата" Style="{StaticResource Label}" Margin="0,18,0,8"/>
-                                    <Button Content="Баг-репорты" Click="TgTopic_Click" Tag="bugs" Style="{StaticResource Strong}" HorizontalAlignment="Stretch" Margin="0,0,0,8" ToolTip="Тема чата в Telegram"/>
-                                    <Button Content="Идеи" Click="TgTopic_Click" Tag="ideas" Style="{StaticResource Strong}" HorizontalAlignment="Stretch" Margin="0,0,0,8" ToolTip="Тема чата в Telegram"/>
-                                    <Button Content="Ошибки" Click="TgTopic_Click" Tag="help" Style="{StaticResource Strong}" HorizontalAlignment="Stretch" Margin="0" ToolTip="Тема чата в Telegram"/>
-                                    <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,10,0,0" Text="Кнопки открывают темы чата в Telegram. Если вы еще не в чате, сначала вступите по ссылке выше."/>
-                                </StackPanel>
-                            </Border>
-                                <StackPanel Grid.Row="1" Grid.ColumnSpan="3">
-                                <TextBlock Text="Автор и лицензия" Style="{StaticResource SectionTitle}"/>
-                                <Border Style="{StaticResource Card}" Padding="18">
+                        <!-- Две колонки, каждая по образцу настроек: заголовок раздела над карточкой. Высоты колонок независимы,
+                             поэтому карточки не растягиваются под соседа; кнопки по ширине текста -->
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Программа" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
                                     <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                                            <TextBlock Text="Автор" Style="{StaticResource Label}" Margin="0,0,0,10"/>
-                                            <TextBlock Grid.Column="1" Text="under2ker" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                            <TextBlock Grid.Row="1" Text="Лицензия" Style="{StaticResource Label}" Margin="0,0,0,10"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="PolyForm Noncommercial 1.0.0" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                            <TextBlock Grid.Row="2" Text="Исходный код" Style="{StaticResource Label}"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1">
-                                                <Hyperlink Click="Repo_Click" Foreground="{DynamicResource Accent}">github.com/under2ker/chimerion</Hyperlink>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border Width="56" Height="56" CornerRadius="16" Background="{DynamicResource AccentSoft}">
+                                                <controls:BrandMark Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+                                                <controls:BrandWordmark Height="18" HorizontalAlignment="Left"/>
+                                                <TextBlock x:Name="VersionText" Text="CHIMERION" Style="{StaticResource Label}" FontSize="12" Margin="0,8,0,0"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <TextBlock Style="{StaticResource Para}" Margin="0,18,0,0" Foreground="{DynamicResource Text}"
+                                                   Text="Сетевые инструменты для открытого интернета: ChatGPT, Claude и Gemini без VPN, обход замедления YouTube и Discord, быстрый Telegram."/>
+                                        <TextBlock Style="{StaticResource Para}" Margin="0,8,0,0"
+                                                   Text="Сама находит и проверяет серверы, подключается в один клик и все возвращает, если что-то пошло не так. Права администратора нужны только для смены DNS."/>
+                                        <Grid Margin="0,18,0,0">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                            <TextBlock Text="Сайт" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                            <TextBlock Grid.Column="1" Margin="0,0,0,10">
+                                                <Hyperlink Click="Site_Click" Foreground="{DynamicResource Accent}">chimerion.dev</Hyperlink>
+                                            </TextBlock>
+                                            <TextBlock x:Name="DeviceIdLabel" Grid.Row="1" Text="ID устройства" Style="{StaticResource Label}" TextWrapping="Wrap" Margin="0,0,12,0"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap" Cursor="Hand" MouseLeftButtonUp="DeviceId_Click"
+                                                       ToolTip="Щелчок копирует ID. В счетчик пользователей уходят он, версия и время работы, данных о вас там нет">
+                                                <Run x:Name="DeviceIdValue" FontFamily="Consolas" Foreground="{DynamicResource Text}"/>
                                             </TextBlock>
                                         </Grid>
-                                        <TextBlock Style="{StaticResource FieldHint}" Margin="0,14,0,0" FontSize="12"
-                                                   Text="Программу можно использовать, копировать и менять в некоммерческих целях. Продавать ее или брать деньги за сборки нельзя."/>
-                                        <WrapPanel Margin="0,12,0,0">
-                                            <Button Content="История изменений" Click="Changelog_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Откроется на GitHub"/>
-                                            <Button Content="Сообщить о проблеме" Click="Issues_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Откроется на GitHub"/>
-                                            <Button Content="Текст лицензии" Click="License_Click" Style="{StaticResource Ghost}" ToolTip="Откроется на GitHub"/>
+                                        <WrapPanel Margin="0,18,0,0">
+                                            <Button Content="Сообщить о проблеме" Click="Issues_Click" Style="{StaticResource Strong}" Margin="0,0,8,0" ToolTip="Обращение уйдет разработчику, ответ придет в программу"/>
+                                            <Button Content="История изменений" Click="Changelog_Click" Style="{StaticResource Strong}" ToolTip="Откроется на GitHub"/>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Border>
-                                    </StackPanel>
-                        </Grid>
 
-                        <Expander Header="Сторонние компоненты и их лицензии" Margin="0,18,0,0" Foreground="{DynamicResource Muted}">
-                        <Border Style="{StaticResource Card}" Padding="18" Margin="0,8,0,0">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0" Text="TG WS Proxy и zapret-discord-youtube (Flowseal, bol-van; WinDivert, basil00): лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы."/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Списки сайтов и адресов: v2fly/domain-list-community, Re:filter, eduard256/russia-blocked-ips, RussiaFancyLists (MIT)."/>
-                                <TextBlock Style="{StaticResource FieldHint}" FontSize="12" Margin="0,8,0,0" Text="Анимированные иконки useanimations.com (MIT), остальные Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
+                                <TextBlock Text="Автор и лицензия" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="130"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                            <TextBlock Text="Автор" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                            <TextBlock Grid.Column="1" Text="under2ker" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                            <TextBlock Grid.Row="1" Text="Лицензия" Style="{StaticResource Label}" Margin="0,0,0,10"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="PolyForm Noncommercial 1.0.0" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                                            <TextBlock Grid.Row="2" Text="Исходный код" Style="{StaticResource Label}"/>
+                                            <TextBlock Grid.Row="2" Grid.Column="1" TextWrapping="Wrap">
+                                                <Hyperlink Click="Repo_Click" Foreground="{DynamicResource Accent}">github.com/under2ker/chimerion</Hyperlink>
+                                            </TextBlock>
+                                        </Grid>
+                                        <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,1,0,0" Margin="0,16,0,0" Padding="0,12,0,0">
+                                            <TextBlock Style="{StaticResource InfoNote}" Text="Программу можно использовать, копировать и менять в некоммерческих целях. Продавать ее или брать деньги за сборки нельзя."/>
+                                        </Border>
+                                        <WrapPanel Margin="0,14,0,0">
+                                            <Button Content="Текст лицензии" Click="License_Click" Style="{StaticResource Strong}" ToolTip="Откроется на GitHub"/>
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                        </Border>
-                        </Expander>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Telegram" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource InfoHead}" Margin="0">
+                                            <Hyperlink Click="TgChannel_Click" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Канал: новости о версиях"/>
+                                        <TextBlock Style="{StaticResource InfoHead}">
+                                            <Hyperlink Click="TgChat_Click" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
+                                        </TextBlock>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Чат: помощь, рабочие DNS, идеи"/>
+                                        <TextBlock Text="Темы чата" Style="{StaticResource FieldLabel}" Margin="0,18,0,8"/>
+                                        <WrapPanel>
+                                            <Button Content="Баг-репорты" Click="TgTopic_Click" Tag="bugs" Style="{StaticResource Strong}" Margin="0,0,8,8" ToolTip="Тема чата в Telegram"/>
+                                            <Button Content="Идеи" Click="TgTopic_Click" Tag="ideas" Style="{StaticResource Strong}" Margin="0,0,8,8" ToolTip="Тема чата в Telegram"/>
+                                            <Button Content="Ошибки" Click="TgTopic_Click" Tag="help" Style="{StaticResource Strong}" Margin="0,0,8,8" ToolTip="Тема чата в Telegram"/>
+                                        </WrapPanel>
+                                        <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,12,0,0">
+                                            <TextBlock Style="{StaticResource InfoNote}" Text="Темы открываются у тех, кто уже в чате. Если еще нет, сначала вступите по ссылке выше."/>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Сторонние компоненты" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource InfoHead}" Margin="0" Text="TG WS Proxy и zapret-discord-youtube"/>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Flowseal, bol-van; WinDivert, basil00. Лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы."/>
+                                        <TextBlock Style="{StaticResource InfoHead}" Text="Списки сайтов и адресов"/>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="v2fly/domain-list-community, Re:filter, eduard256/russia-blocked-ips, RussiaFancyLists (MIT)."/>
+                                        <TextBlock Style="{StaticResource InfoHead}" Text="Иконки и логотипы"/>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Анимированные иконки useanimations.com (MIT), остальные Lucide (ISC). Логотипы ChatGPT, Claude и Gemini из Simple Icons (CC0) принадлежат своим владельцам."/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Grid>
                 </Grid>

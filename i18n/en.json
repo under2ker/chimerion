@@ -2653,5 +2653,15 @@
  "Свои домены": "Your own domains",
  "Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда смена сервера разрешена": "While you are connected, the watchdog keeps an eye on DNS. If it was reset, it restores the connection, and if the server died, it switches to another one when server switching is allowed",
  "Домены, которые вы добавите в «Настроить два DNS», тоже пойдут через Smart DNS": "Domains you add in “Set up two DNS” also go through Smart DNS",
- "Все цвета выше вернутся к стандартным для текущей темы": "All colors above return to the standard ones for the current theme"
+ "Все цвета выше вернутся к стандартным для текущей темы": "All colors above return to the standard ones for the current theme",
+ "Программа": "App",
+ "Сайт": "Website",
+ "Канал: новости о версиях": "Channel: release news",
+ "Чат: помощь, рабочие DNS, идеи": "Chat: help, working DNS, ideas",
+ "Темы открываются у тех, кто уже в чате. Если еще нет, сначала вступите по ссылке выше.": "Topics open for chat members. If you have not joined yet, join via the link above first.",
+ "Обращение уйдет разработчику, ответ придет в программу": "The report goes to the developer, the reply arrives in the app",
+ "TG WS Proxy и zapret-discord-youtube": "TG WS Proxy and zapret-discord-youtube",
+ "Flowseal, bol-van; WinDivert, basil00. Лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы.": "Flowseal, bol-van; WinDivert, basil00. MIT license. CHIMERION installs their official GitHub releases after verifying the checksum.",
+ "Списки сайтов и адресов": "Site and address lists",
+ "Иконки и логотипы": "Icons and logos"
 }
