@@ -8,10 +8,10 @@ using Dnex.Services;
 namespace Dnex;
 
 /// <summary>
-/// Окно «Два DNS (эксперимент)»: общий DNS для всего интернета и Smart DNS только для доменов ИИ.
-/// Общий DNS выбирается из готовых или задается свой; кнопка «Проверить все» показывает для каждого, открываются ли
-/// заблокированные зарубежные сайты и настоящие ли адреса у российских. Сохранение пишет settings.json;
-/// если подключение активно, главное окно переподключается, чтобы режим заработал сразу.
+/// Окно «Два DNS»: какие сайты идут через Smart DNS (ИИ всегда, плюс отмеченные сервисы, закрытые для России),
+/// а какие через обычный DNS. Сверху схема «что куда идет», она меняется вместе с галочками. Слева выбор сервисов
+/// с поиском по названию и домену, справа обычный DNS для остального интернета, свои домены и наборы для разработчиков.
+/// Сохранение пишет settings.json; если подключение активно, главное окно переподключается, чтобы режим заработал сразу.
 /// </summary>
 internal sealed class SplitDnsWindow
 {
@@ -23,9 +23,8 @@ internal sealed class SplitDnsWindow
     private readonly TextBox _ip1 = new() { Width = 150, Tag = "IP 1" };
     private readonly TextBox _ip2 = new() { Width = 150, Tag = "IP 2", Margin = new Thickness(8, 0, 0, 0) };
     private readonly TextBox _doh = new() { Tag = "DoH: https://…/dns-query", Margin = new Thickness(0, 8, 0, 0) };
-    private readonly TextBox _extra = new() { AcceptsReturn = true, Height = 64, TextWrapping = TextWrapping.Wrap, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-    private readonly CheckBox _enabled = new() { Content = "Включить два DNS" };
-    private readonly TextBlock _state = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0) };
+    private readonly CheckBox _enabled = new();
+    private readonly TextBlock _state = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _checkState = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Ui.B("Muted") };
     private readonly Button _checkBtn = Ui.Action("Проверить все", "Strong", () => { });
     /// <summary>Выбрать рекомендуемый общий DNS; видна, только когда выбран другой.</summary>
@@ -37,8 +36,15 @@ internal sealed class SplitDnsWindow
     /// После «Проверить все» лучший по проверке: все российские сайты с настоящими адресами и больше всего открытого зарубежного.
     /// </summary>
     private string _recommended = SplitDns.Presets[0].Name;
-    private TextBox? _extraBox;
+    private TextBox _extraBox = Ui.MultiLine("", 64);
     private readonly List<CheckBox> _groupChecks = new();
+    private readonly Dictionary<CheckBox, BypassCatalog.Group> _groupOf = new();
+    /// <summary>Разделы списка сервисов: заголовок, панель галочек и сами галочки (для поиска).</summary>
+    private readonly List<(FrameworkElement Header, Panel Items, List<CheckBox> Checks)> _sections = new();
+    private readonly TextBox _search = new() { Tag = "Найти сервис: Canva, Figma, Adobe, Cursor…" };
+    private readonly TextBlock _searchState = new() { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 6, 0, 0), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _routeSmart = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock _routeGeneral = new() { FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
     private readonly ProgressBar _bar = new() { IsIndeterminate = true, Margin = new Thickness(0, 12, 0, 0) };
     private bool _checking;
 
@@ -63,50 +69,29 @@ internal sealed class SplitDnsWindow
             _ip2.Text = _edit.GeneralAddresses.ElementAtOrDefault(1) ?? "";
             _doh.Text = _edit.GeneralDoh ?? "";
         }
-        _extra.Text = string.Join(Environment.NewLine, _edit.ExtraAiDomains);
+        _extraBox.Text = string.Join(Environment.NewLine, _edit.ExtraAiDomains);
         _enabled.IsChecked = _edit.Enabled;
 
-        _w = DnexDialog.CreateWindow("Два DNS", Ui.Wide);
+        _w = DnexDialog.CreateWindow("Два DNS", Math.Min(980, Ui.WorkAreaOf(null).Width - 40));
         if (owner is { IsVisible: true }) { _w.Owner = owner; _w.WindowStartupLocation = WindowStartupLocation.CenterOwner; _w.ShowInTaskbar = false; }
 
         var root = Ui.Root();
         root.Margin = new Thickness(24, 22, 24, 4);
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Два DNS",
-            "ChatGPT, Claude и Gemini идут через Smart DNS, а все остальные сайты через общий DNS. Друг другу они не мешают", glyph: "arrow-left-right"));
+            "Нейросети и отмеченные сервисы идут через Smart DNS, весь остальной интернет через обычный DNS", glyph: "arrow-left-right"));
 
-        _enabled.Content = null;
-        _enabled.Margin = new Thickness(0);
-        root.Children.Add(Ui.Card(Ui.Row("Включить два DNS",
-            "Рекомендуем включить. Заработает при подключении к серверу или сразу, если подключение уже есть", _enabled), bottom: 0));
-        root.Children.Add(Ui.Steps("Не знаете, что выбрать: включите, оставьте общий DNS с меткой «рекомендуем» и нажмите «Сохранить»"));
+        // Включение и схема: что куда пойдет при текущем выборе
+        var top = new StackPanel();
+        top.Children.Add(Ui.Row("Включить два DNS", "Заработает при подключении к серверу или сразу, если подключение уже есть", _enabled));
+        top.Children.Add(Ui.Separator().With(x => x.Margin = new Thickness(0, 14, 0, 12)));
+        top.Children.Add(Route("Через Smart DNS", "Accent", _routeSmart));
+        top.Children.Add(Route("Через обычный DNS", "Muted", _routeGeneral).With(r => r.Margin = new Thickness(0, 8, 0, 0)));
+        root.Children.Add(Ui.Card(top).With(c => c.Margin = new Thickness(0, 18, 0, 0)));
+        _enabled.Checked += (_, _) => UpdateRoutes();
+        _enabled.Unchecked += (_, _) => UpdateRoutes();
 
-        // Две вкладки вместо длинной простыни. Обе страницы лежат в одной ячейке, неактивная скрыта (Hidden, а не
-        // Collapsed): высота окна по большей из них и не прыгает при переключении
-        var tabs = new StackPanel { Orientation = Orientation.Horizontal };
-        var tabBox = new Border
-        {
-            Padding = new Thickness(3), CornerRadius = new CornerRadius(9), Background = Ui.B("Surface2"), BorderBrush = Ui.B("Border"),
-            BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 18, 0, 12), Child = tabs,
-        };
         _checkBtn.Click += (_, _) => _ = CheckAllAsync();
-        var pageGeneral = GeneralPage();
-        var pageSmart = SmartPage(settings);
-        void Tab(string text, FrameworkElement page, bool on)
-        {
-            var rb = new RadioButton { Content = text, GroupName = "split", IsChecked = on, Style = (Style)Res["Tab"] };
-            // Скрытая вкладка места не занимает (Collapsed): раньше окно держало высоту самой длинной вкладки,
-            // и под «Общим DNS» оставалась пустота. Окно подстраивается под открытую вкладку, длинная прокручивается
-            rb.Checked += (_, _) => { pageGeneral.Visibility = page == pageGeneral ? Visibility.Visible : Visibility.Collapsed; pageSmart.Visibility = page == pageSmart ? Visibility.Visible : Visibility.Collapsed; };
-            tabs.Children.Add(rb);
-        }
-        Tab("Общий DNS", pageGeneral, true);
-        Tab("ИИ и наборы", pageSmart, false);
-        pageSmart.Visibility = Visibility.Collapsed;
-        root.Children.Add(tabBox);
-        var pages = new Grid();
-        pages.Children.Add(pageGeneral);
-        pages.Children.Add(pageSmart);
-        root.Children.Add(pages);
+        root.Children.Add(Ui.Columns(SmartSide(), GeneralSide(), 860, 3, 2).With(g => g.Margin = new Thickness(0, 4, 0, 0)));
 
         // Кнопки всегда видны внизу окна, вне прокрутки
         var save = Ui.Action("Сохранить", "Primary", Save).With(b => b.IsDefault = true);
@@ -123,41 +108,62 @@ internal sealed class SplitDnsWindow
         dock.Children.Add(scroll);
         _w.Content = dock;
         RenderPresets();
+        UpdateRoutes();
     }
 
-    /// <summary>Вкладка «Общий DNS»: компактный список вариантов с кружком выбора и проверка.</summary>
-    private FrameworkElement GeneralPage()
+    /// <summary>Строка схемы: цветная метка пути слева, что по нему идет справа.</summary>
+    private static FrameworkElement Route(string title, string brush, TextBlock what)
     {
-        var page = new StackPanel();
-        page.Children.Add(Ui.Hint("Через него идут все сайты, кроме ИИ. Лучше тот, что отдает российским сайтам настоящие адреса", 0)
-                            .With(t => t.Margin = new Thickness(2, 0, 0, 10)));
-        page.Children.Add(Ui.Card(_presets, bottom: 0).With(b => b.Padding = new Thickness(6)));
-        _checkBtn.Margin = new Thickness(0, 0, 8, 0);
-        _pickRecBtn.Click += (_, _) => { _selected = _recommended; RenderPresets(); };
-        var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        actions.Children.Add(_checkBtn);
-        actions.Children.Add(_pickRecBtn);
-        page.Children.Add(actions);
-        _checkState.Margin = new Thickness(2, 8, 0, 0);
-        page.Children.Add(_checkState);
-        page.Children.Add(Ui.Hint("Instagram, X и YouTube провайдер режет не через DNS: для них в CHIMERION есть zapret («Telegram и YouTube»)", 8)
-                            .With(t => { t.FontSize = 11; t.Margin = new Thickness(2, 8, 0, 0); }));
-        return page;
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var label = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        label.Children.Add(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }
+            .Ref(System.Windows.Shapes.Shape.FillProperty, brush));
+        label.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, FontSize = 12.5 });
+        g.Children.Add(label);
+        Grid.SetColumn(what, 1);
+        g.Children.Add(what);
+        return g;
     }
 
-    /// <summary>Вкладка «ИИ и наборы»: какие домены идут в Smart DNS, свои домены и готовые наборы сервисов.</summary>
-    private FrameworkElement SmartPage(AppSettings settings)
+    /// <summary>Схема сверху: сколько сервисов и доменов уйдет в Smart DNS и какой DNS у остального.</summary>
+    private void UpdateRoutes()
     {
-        var page = new StackPanel();
-        // Только домены ИИ: без своих доменов и наборов, они показаны ниже отдельно
-        var aiOnly = new AppSettings();
-        var ns = SplitDns.Namespaces(aiOnly).Where(n => !n.StartsWith('.')).ToList();
+        var on = _enabled.IsChecked == true;
+        var chosen = _groupChecks.Where(c => c.IsChecked == true).Select(c => _groupOf[c]).ToList();
+        var extra = _extraBox.Text.Split('\n').Select(SplitDns.Clean).Count(d => d.Length > 0);
+        var parts = new List<string> { "ChatGPT, Claude и Gemini" };
+        if (chosen.Count > 0) parts.Add($"сервисов из списка: {chosen.Count} ({chosen.Sum(g => g.Domains.Count)} доменов)");
+        if (extra > 0) parts.Add($"своих доменов: {extra}");
+        _routeSmart.Text = string.Join(" · ", parts) + (chosen.Count == 0 ? ". Сервисы из списка не отмечены: Canva, Figma и другие пойдут обычным путем" : "");
+        _routeGeneral.Text = $"Все остальные сайты · {(_selected == Custom ? "свой DNS" : _selected)}";
+        _routeSmart.SetResourceReference(TextBlock.ForegroundProperty, on ? "Text" : "Muted");
+        _routeGeneral.SetResourceReference(TextBlock.ForegroundProperty, on ? "Text" : "Muted");
+        _state.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        _state.Text = on ? "" : "Два DNS выключены: все сайты идут через Smart DNS сервера, как обычно";
+    }
 
-        // Домены ИИ: одной строкой, полный список по кнопке
+    /// <summary>Левая колонка: нейросети (всегда) и сервисы, закрытые для России, с поиском.</summary>
+    private FrameworkElement SmartSide()
+    {
+        var side = new StackPanel();
+        side.Children.Add(Ui.Section("Что идет через Smart DNS"));
+
+        // Нейросети: всегда, без галочек. Полный список доменов по кнопке
+        var ns = SplitDns.Namespaces(new AppSettings()).Where(n => !n.StartsWith('.')).ToList();
         var ai = new StackPanel();
-        ai.Children.Add(Ui.CardTitle("Домены ИИ", $"{ns.Count} доменов", "Muted"));
-        ai.Children.Add(Ui.Hint("ChatGPT, Claude и Gemini всегда идут через Smart DNS. Поиск Google, почта и YouTube остаются на общем DNS", 4)
-                          .With(t => t.FontSize = 11));
+        var head = new DockPanel();
+        var logos = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+        foreach (var k in new[] { "openai", "claude", "gemini" }) logos.Children.Add(new Controls.Icon { Kind = k, Size = 18, Margin = new Thickness(0, 0, 6, 0) });
+        DockPanel.SetDock(logos, Dock.Left);
+        head.Children.Add(logos);
+        var always = new TextBlock { Text = "всегда", FontSize = 12, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Ok");
+        DockPanel.SetDock(always, Dock.Right);
+        head.Children.Add(always);
+        head.Children.Add(new TextBlock { Text = "ChatGPT, Claude и Gemini", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        ai.Children.Add(head);
+        ai.Children.Add(Ui.Hint($"{ns.Count} доменов. Поиск Google, почта и YouTube остаются на обычном DNS", 6).With(t => t.FontSize = 12));
         var full = Ui.Hint(string.Join(", ", ns), 8).With(t => { t.FontSize = 11; t.Visibility = Visibility.Collapsed; });
         var show = new Button { Content = "Показать домены", Style = (Style)Res["Ghost"], HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-10, 4, 0, 0), Padding = new Thickness(10, 4, 10, 4) };
         show.Click += (_, _) =>
@@ -168,48 +174,118 @@ internal sealed class SplitDnsWindow
         };
         ai.Children.Add(show);
         ai.Children.Add(full);
-        ai.Children.Add(Ui.Separator());
-        ai.Children.Add(new TextBlock { Text = "Свои домены для Smart DNS", Margin = new Thickness(0, 0, 0, 6) });
-        _extraBox = Ui.MultiLine(_extra.Text, 56);
-        ai.Children.Add(_extraBox);
-        ai.Children.Add(Ui.Hint("По одному в строке, поддомены включаются", 6).With(t => t.FontSize = 11));
-        page.Children.Add(Ui.Card(ai));
+        side.Children.Add(Ui.Card(ai));
 
-        // Готовые наборы через Smart DNS: для сервисов, которые сами закрылись для России
+        // Сервисы, которые сами закрылись для России: только отмеченные пойдут через Smart DNS
         var sets = new StackPanel();
-        sets.Children.Add(Ui.CardTitle("Наборы сервисов"));
-        sets.Children.Add(Ui.Hint("Для сервисов, которые сами закрылись для России: Figma, Adobe, Unity, Docker, JetBrains, Notion. " +
-                                  "Работает, если ваш Smart DNS их поддерживает", 4).With(t => t.FontSize = 11));
+        sets.Children.Add(Ui.CardTitle("Сервисы, закрытые для России"));
+        sets.Children.Add(Ui.Hint("Отметьте те, которыми пользуетесь. Без галочки сервис идет через обычный DNS, видит российский адрес и может не открыться", 4).With(t => t.FontSize = 12));
+        _search.Margin = new Thickness(0, 12, 0, 0);
+        _search.TextChanged += (_, _) => ApplySearch();
+        sets.Children.Add(_search);
+        sets.Children.Add(_searchState);
+
         var catalog = BypassCatalog.LoadCached();
-        var chosen = BypassCatalog.Normalize(_edit.Groups);
         var list = new StackPanel();
-        if (catalog != null)
+        if (catalog == null)
+            sets.Children.Add(Ui.Hint("Список сервисов еще не загружен: он скачивается при подключении к интернету. Откройте окно чуть позже", 10, "Warn"));
+        else
         {
-            var recIds = catalog.Groups.Where(g => g.Recommend == "smartdns").Select(g => g.Id).ToHashSet();
-            sets.Children.Add(Ui.ChoiceBar(_groupChecks, c => recIds.Contains((string)c.Tag)).With(w => w.Margin = new Thickness(0, 10, 0, 4)));
+            var chosen = BypassCatalog.Normalize(_edit.Groups);
+            var smart = catalog.Groups.Where(g => g.Recommend == "smartdns").ToList();
+            var other = catalog.Groups.Where(g => g.Recommend != "smartdns").ToList();
+            sets.Children.Add(Ui.ChoiceBar(_groupChecks, c => _groupOf[c].Recommend == "smartdns").With(w => w.Margin = new Thickness(0, 12, 0, 4)));
             sets.Children.Add(SupportBar(catalog));
-            // Сначала разделы с рекомендуемыми для Smart DNS наборами
-            foreach (var cat in catalog.Groups.GroupBy(g => g.Category.Length > 0 ? g.Category : "Другое")
-                                              .OrderByDescending(c => c.Any(g => g.Recommend == "smartdns")))
-            {
-                var wrap = new WrapPanel { ItemWidth = 245 };
-                var inCat = new List<CheckBox>();
-                foreach (var g in cat)
-                {
-                    var cb = Ui.SetCheck(g.Title, g.Domains.Count, g.Note, g.Recommend == "smartdns", chosen.Contains(g.Id));
-                    cb.Tag = g.Id;
-                    _groupChecks.Add(cb);
-                    inCat.Add(cb);
-                    wrap.Children.Add(cb);
-                }
-                list.Children.Add(Ui.CategoryHeader(cat.Key, inCat, list.Children.Count == 0));
-                list.Children.Add(wrap);
-            }
+            foreach (var cat in smart.GroupBy(g => g.Category.Length > 0 ? g.Category : "Другое"))
+                AddSection(list, cat.Key, cat, chosen, null);
+            if (other.Count > 0)
+                AddSection(list, "Обычно открываются через zapret", other, chosen,
+                    "Эти сайты режет провайдер, а не сам сервис: надежнее включить «YouTube и Discord» в «Telegram и YouTube». Через Smart DNS они открываются, только если сервер их поддерживает");
         }
-        sets.Children.Add(Ui.Scroll(list, 230));
-        page.Children.Add(Ui.Card(sets));
-        page.Children.Add(Ui.Card(DevCard(), bottom: 0));
-        return page;
+        sets.Children.Add(Ui.Scroll(list, 380).With(x => x.Margin = new Thickness(0, 4, 0, 0)));
+        side.Children.Add(Ui.Card(sets, bottom: 0));
+        return side;
+    }
+
+    /// <summary>Раздел списка сервисов: заголовок с «выбрать все», необязательное пояснение и галочки в две колонки.</summary>
+    private void AddSection(Panel list, string title, IEnumerable<BypassCatalog.Group> groups, HashSet<string> chosen, string? note)
+    {
+        var items = new WrapPanel { ItemWidth = 250 };
+        var checks = new List<CheckBox>();
+        foreach (var g in groups)
+        {
+            var cb = Ui.SetCheck(g.Title, g.Domains.Count, g.Note, false, chosen.Contains(g.Id));
+            cb.Tag = g.Id;
+            cb.Checked += (_, _) => UpdateRoutes();
+            cb.Unchecked += (_, _) => UpdateRoutes();
+            _groupChecks.Add(cb);
+            _groupOf[cb] = g;
+            checks.Add(cb);
+            items.Children.Add(cb);
+        }
+        var header = new StackPanel();
+        header.Children.Add(Ui.CategoryHeader(title, checks, list.Children.Count == 0));
+        if (note != null) header.Children.Add(Ui.Hint(note, 2).With(t => { t.FontSize = 11.5; t.Margin = new Thickness(0, 2, 12, 2); }));
+        list.Children.Add(header);
+        list.Children.Add(items);
+        _sections.Add((header, items, checks));
+    }
+
+    /// <summary>Поиск по названию набора и его доменам: «canva» находит «Figma, Canva, Framer…».</summary>
+    private void ApplySearch()
+    {
+        var q = _search.Text.Trim().ToLowerInvariant();
+        int found = 0;
+        foreach (var (header, items, checks) in _sections)
+        {
+            int inSection = 0;
+            foreach (var cb in checks)
+            {
+                var g = _groupOf[cb];
+                bool hit = q.Length == 0 || g.Title.ToLowerInvariant().Contains(q) || g.Note.ToLowerInvariant().Contains(q)
+                           || g.Domains.Any(d => d.Contains(q, StringComparison.OrdinalIgnoreCase));
+                cb.Visibility = hit ? Visibility.Visible : Visibility.Collapsed;
+                if (hit) inSection++;
+            }
+            header.Visibility = items.Visibility = inSection > 0 ? Visibility.Visible : Visibility.Collapsed;
+            found += inSection;
+        }
+        _searchState.Visibility = q.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        _searchState.Text = found == 0 ? $"«{_search.Text.Trim()}» нет в списке. Можно добавить свой домен справа, в «Свои домены»"
+                                       : $"Найдено наборов: {found}. Отметьте нужный и нажмите «Сохранить»";
+        _searchState.SetResourceReference(TextBlock.ForegroundProperty, found == 0 ? "Warn" : "Muted");
+    }
+
+    /// <summary>Правая колонка: обычный DNS для остального интернета, свои домены и наборы для разработчиков.</summary>
+    private FrameworkElement GeneralSide()
+    {
+        var side = new StackPanel();
+        side.Children.Add(Ui.Section("Остальной интернет"));
+        var page = new StackPanel();
+        page.Children.Add(Ui.Hint("Через этот DNS идут все сайты, кроме отмеченных слева. Лучше тот, что отдает российским сайтам настоящие адреса", 0)
+                            .With(t => { t.FontSize = 12; t.Margin = new Thickness(0, 0, 0, 8); }));
+        page.Children.Add(_presets);
+        _checkBtn.Margin = new Thickness(0, 0, 8, 0);
+        _pickRecBtn.Click += (_, _) => { _selected = _recommended; RenderPresets(); UpdateRoutes(); };
+        var actions = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+        actions.Children.Add(_checkBtn);
+        actions.Children.Add(_pickRecBtn);
+        page.Children.Add(actions);
+        _checkState.Margin = new Thickness(2, 8, 0, 0);
+        page.Children.Add(_checkState);
+        side.Children.Add(Ui.Card(page).With(c => c.Padding = new Thickness(10, 12, 10, 12)));
+
+        var own = new StackPanel();
+        own.Children.Add(Ui.CardTitle("Свои домены через Smart DNS"));
+        own.Children.Add(Ui.Hint("Если нужного сервиса нет в списке. По одному в строке, поддомены включаются", 4).With(t => t.FontSize = 12));
+        _extraBox.Margin = new Thickness(0, 10, 0, 0);
+        _extraBox.TextChanged += (_, _) => UpdateRoutes();
+        own.Children.Add(_extraBox);
+        side.Children.Add(Ui.Card(own));
+        side.Children.Add(Ui.Card(DevCard(), bottom: 0));
+        side.Children.Add(Ui.Hint("Instagram, X и YouTube провайдер режет не через DNS: для них в CHIMERION есть zapret («Telegram и YouTube»)", 10)
+                            .With(t => { t.FontSize = 11; t.Margin = new Thickness(2, 10, 0, 0); }));
+        return side;
     }
 
     /// <summary>
@@ -357,6 +433,7 @@ internal sealed class SplitDnsWindow
             if (_selected == name) return;
             _selected = name;
             RenderPresets();
+            UpdateRoutes();
         };
         return b;
     }
@@ -424,7 +501,7 @@ internal sealed class SplitDnsWindow
             _edit.GeneralAddresses = p.Addresses.ToList();
             _edit.GeneralDoh = p.Doh;
         }
-        var lines = (_extraBox ?? _extra).Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+        var lines = _extraBox.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
         var bad = lines.Where(l => SplitDns.Clean(l).Length == 0).ToList();
         if (bad.Count > 0) { Error("Не похоже на домен: " + string.Join(", ", bad.Take(3))); return; }
         _edit.ExtraAiDomains = lines.Select(SplitDns.Clean).Distinct().ToList();
@@ -441,14 +518,4 @@ internal sealed class SplitDnsWindow
     }
 
     private void Error(string text) { _state.Foreground = (Brush)Res["Bad"]; _state.Text = text; }
-
-    private static TextBlock Section(string text) => new()
-    {
-        Text = text, Foreground = (Brush)Res["Muted"], FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 20, 0, 6),
-    };
-
-    private static TextBlock Muted(string text, double left, double top) => new()
-    {
-        Text = text, Foreground = (Brush)Res["Muted"], FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(left, top, 0, 0),
-    };
 }

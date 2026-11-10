@@ -387,7 +387,7 @@
                         <Border Style="{StaticResource Card}" Padding="18">
                             <StackPanel>
                                 <TextBlock x:Name="SplitStatus" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                                <TextBlock Text="Только запросы нейросетей идут через Smart DNS, остальные сайты через обычный DNS. Так меньше сайтов зависят от Smart DNS: если с ним что-то случится, остальной интернет не заденет"
+                                <TextBlock Text="Через Smart DNS идут нейросети и сервисы, которые вы отметите (Canva, Figma, Adobe и другие), остальные сайты через обычный DNS. Так меньше сайтов зависят от Smart DNS: если с ним что-то случится, остальной интернет не заденет"
                                            Style="{StaticResource FieldHint}" Margin="0,6,0,0"/>
                                 <Button Content="Настроить два DNS" Click="SplitDns_Click" Style="{StaticResource Strong}" HorizontalAlignment="Left" Margin="0,14,0,0"/>
                             </StackPanel>
@@ -398,11 +398,11 @@
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                     <Border Background="{DynamicResource Surface2}" CornerRadius="10" Padding="14,10">
-                                        <StackPanel><TextBlock Text="ChatGPT, Claude, Gemini" FontWeight="SemiBold"/><TextBlock Text="и ваши домены из «Два DNS»" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                        <StackPanel><TextBlock Text="ChatGPT, Claude, Gemini" FontWeight="SemiBold"/><TextBlock Text="и отмеченные сервисы из «Два DNS»" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
                                     </Border>
                                     <controls:Icon Grid.Column="1" Kind="arrow-left-right" Size="18" Margin="14,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
                                     <Border Grid.Column="2" Background="{DynamicResource AccentSoft}" CornerRadius="10" Padding="14,10">
-                                        <StackPanel><TextBlock Text="Smart DNS" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/><TextBlock Text="открывает нейросети из России" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
+                                        <StackPanel><TextBlock Text="Smart DNS" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/><TextBlock Text="открывает их из России" Style="{StaticResource FieldHint}" Margin="0,2,0,0"/></StackPanel>
                                     </Border>
                                 </Grid>
                                 <Grid Margin="0,10,0,0">
