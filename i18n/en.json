@@ -2729,8 +2729,8 @@
  "Как ChatGPT, Claude и Gemini видят ваш вход и как беречь аккаунт. По последней проверке, без новых запросов": "How ChatGPT, Claude and Gemini see your sign-in and how to keep your account safe. Based on the last check, no new requests",
  "Как вас видят ChatGPT, Claude и Gemini, чем это грозит аккаунту и как его беречь": "How ChatGPT, Claude and Gemini see you, what it means for your account and how to keep it safe",
  "Заходите в ChatGPT, Claude и Gemini из одной и той же страны и не меняйте сервер без необходимости. Частая смена страны чаще всего ведет к проверкам и блокировкам. Перед сменой CHIMERION предупредит, если заметит разницу.": "Use ChatGPT, Claude and Gemini from the same country and don't switch servers without need. Frequent country changes most often lead to checks and bans. CHIMERION warns you before a switch if it sees a difference.",
- "Тогда серверы с другой страной выхода не подключатся сами. Кнопка внизу или выбор страны в настройках.": "Then servers with a different exit country won't connect on their own. Use the button below or pick a country in settings.",
- "Адреса из черных списков вызывают проверки и капчи. Если в «Сервисах» отмечен такой адрес, подключите другой сервер.": "Blacklisted addresses trigger checks and captchas. If such an address is marked under Services, connect another server.",
+ "Тогда серверы с другой страной выхода не подключатся сами. Кнопка в карточке итога вверху или выбор страны в настройках.": "Then servers with a different exit country won't connect on their own. Use the button in the summary card at the top or pick a country in settings.",
+ "Адреса из черных списков вызывают проверки и капчи. Если в карточке сервиса отмечен такой адрес, подключите другой сервер.": "Blacklisted addresses trigger checks and captchas. If a service card marks such an address, connect another server.",
  "Не пропускайте предупреждения": "Don't skip warnings",
  "Один вход, свои устройства": "One sign-in, your own devices",
  "Не входите в один аккаунт одновременно из разных стран: для сервиса это похоже на передачу доступа. Незнакомые сеансы завершайте в настройках аккаунта.": "Don't sign in to one account from different countries at the same time: to the service it looks like shared access. End unfamiliar sessions in account settings.",
@@ -2765,5 +2765,16 @@
  "и отмеченные сервисы из «Два DNS»": "and services checked in «Two DNS»",
  "открывает их из России": "opens them from Russia",
  "Сервисы и свои домены": "Services and your own domains",
- "Canva, Figma, Adobe и другие сервисы, закрытые для России, идут через Smart DNS, только если отметить их в «Настроить два DNS». Там же можно добавить свои домены": "Canva, Figma, Adobe and other services closed to Russia go through Smart DNS only if you check them in «Set up two DNS». You can add your own domains there too"
+ "Canva, Figma, Adobe и другие сервисы, закрытые для России, идут через Smart DNS, только если отметить их в «Настроить два DNS». Там же можно добавить свои домены": "Canva, Figma, Adobe and other services closed to Russia go through Smart DNS only if you check them in «Set up two DNS». You can add your own domains there too",
+ "как обычно": "as usual",
+ "не как обычно": "not as usual",
+ "привычной пока нет": "no usual country yet",
+ "адрес в черном списке": "blacklisted address",
+ "Не проверено": "Not checked",
+ "Сервис сейчас идет мимо Smart DNS или еще не проверен": "The service bypasses Smart DNS right now or hasn't been checked yet",
+ "страна, из которой сервис видит вас сейчас": "the country the service sees you from now",
+ "Обычно": "Usually",
+ "пока не набралось": "not enough data yet",
+ "не проверялся": "not checked",
+ "Серверы с другой страной выхода не подключатся сами": "Servers with a different exit country won't connect on their own"
 }
