@@ -73,7 +73,7 @@ public partial class MainWindow
         return v.Card;
     }
 
-    /// <summary>Ссылки внизу левого меню над карточкой обновления: безопасность аккаунта, сообщить о проблеме, канал, сайт.</summary>
+    /// <summary>Ссылки внизу левого меню над карточкой обновления (под CHIMERION DNS и «Помощью»): безопасность аккаунта, сообщить о проблеме, канал, сайт.</summary>
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
         (AccountGuideWindow.Title, "shield-check", () => AccountGuideWindow.Show(() => AccountRisk_Click(this, new RoutedEventArgs()), () => BrowserCheckWindow.Show(BrowserCheckState))),
@@ -85,7 +85,7 @@ public partial class MainWindow
     /// <summary>Низ меню панели управления: те же ссылки кнопками меню и карточка обновления.</summary>
     private FrameworkElement CreatePanelBottom()
     {
-        var box = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        var box = new StackPanel(); // отступ сверху задает блок CHIMERION DNS и «Помощь» над ним
         var style = (Style)FindResource("PanelNavButton");
         foreach (var (title, icon, act) in SideLinks())
         {

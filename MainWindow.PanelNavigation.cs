@@ -21,7 +21,10 @@ public partial class MainWindow
         PanelCollapseIcon.Margin = new Thickness(0); // в кнопке одна иконка: отступ справа сдвигал ее от центра рамки
         PanelCollapseButton.ToolTip = expanded ? "Свернуть меню" : "Развернуть меню";
         AutomationProperties.SetName(PanelCollapseButton, expanded ? "Свернуть меню" : "Развернуть меню");
-        foreach (var control in PanelNavItems.Children.OfType<ContentControl>())
+        // Подписи групп в узком меню не читаются: прозрачны, место остается и разделяет группы
+        foreach (var caption in PanelNavItems.Children.OfType<TextBlock>().Where(x => Equals(x.Tag, "navgroup")))
+            caption.Opacity = expanded ? 1 : 0;
+        foreach (var control in PanelNavItems.Children.OfType<ContentControl>().Concat(PanelBottomNav.Children.OfType<ContentControl>()))
         {
             if (control.Content is not StackPanel row) continue;
             foreach (var item in row.Children)

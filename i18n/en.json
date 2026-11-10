@@ -2723,5 +2723,7 @@
  "Сменить сервер во время сеанса?": "Change the server during the session?",
  "Защищенный сеанс": "Protected session",
  ". Нажмите, чтобы выбрать замену": ". Click to choose a replacement",
- "Мало проверок, чтобы судить о постоянстве выхода": "Too few checks to judge exit stability"
+ "Мало проверок, чтобы судить о постоянстве выхода": "Too few checks to judge exit stability",
+ "Возможности": "Features",
+ "Проверки": "Checks"
 }

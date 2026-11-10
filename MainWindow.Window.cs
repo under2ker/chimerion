@@ -253,8 +253,7 @@ public partial class MainWindow
         ControlPanelButton.Visibility = v; // компактный вид и есть панель управления
         ChimerionDnsButton.Visibility = v;
         SettingsButton.Visibility = v;
-        DataButton.Visibility = v;
-        PrivateButton.Visibility = v;
+        foreach (var group in PanelNavItems.Children.OfType<FrameworkElement>().Where(x => Equals(x.Tag, "navgroup"))) group.Visibility = v;
         SpeedButton.Visibility = v;
         AccountRiskButton.Visibility = v;
         UpdateTitleId();

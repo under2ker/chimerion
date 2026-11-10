@@ -114,36 +114,45 @@
                 </DockPanel>
                 <!-- Карточка обновления: единственное место проверки новой версии, наполняется в коде (MainWindow.Update.cs) -->
                 <ContentControl x:Name="PanelUpdateHost" DockPanel.Dock="Bottom" Focusable="False"/>
+                <!-- Над ссылками внизу: личный Smart DNS и справка. Пункты подсвечиваются, как разделы меню -->
+                <StackPanel x:Name="PanelBottomNav" DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
+                    <Button x:Name="HelpToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                                  Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></Button>
+                </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="PanelNavItems">
+                <!-- Порядок: основное (главная, серверы), возможности, проверки, настройки. Справка, CHIMERION DNS и ссылки внизу меню.
+                     Подписи групп (Tag="navgroup") в узком меню прозрачны, в компактном виде скрыты -->
                 <Button x:Name="HomeButton" Click="DashboardHome_Click" Style="{StaticResource PanelNavButton}" ToolTip="Главная"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-check" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHomeText" Text="Главная"/></StackPanel></Button>
-                <Button x:Name="ControlPanelButton" Click="ControlPanel_Click" Style="{StaticResource PanelNavButton}" ToolTip="Список серверов, проверка и подключение"><StackPanel Orientation="Horizontal"><controls:Icon Kind="layout-dashboard" Size="16" Margin="0,0,10,0"/><TextBlock Text="Панель управления"/></StackPanel></Button>
+                <Button x:Name="ControlPanelButton" Click="ControlPanel_Click" Style="{StaticResource PanelNavButton}" ToolTip="Список серверов, проверка и подключение"><StackPanel Orientation="Horizontal"><controls:Icon Kind="layout-dashboard" Size="16" Margin="0,0,10,0"/><TextBlock Text="Серверы"/></StackPanel></Button>
                 <Button x:Name="AddServerButton" Click="AddServer_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Добавить сервер" AutomationProperties.Name="Добавить сервер"><StackPanel Orientation="Horizontal"><controls:Icon Kind="plus" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAddText" Text="Добавить сервер"/></StackPanel></Button>
-                <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
+                <TextBlock Tag="navgroup" Text="Возможности" FontSize="11" Margin="12,16,0,6" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
                 <Button x:Name="ModeToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
                               Click="ModeToggle_Click" ToolTip="Включить нужное одним щелчком: только ИИ, все сразу, игры или все выключить"><StackPanel Orientation="Horizontal"><controls:Icon Kind="sliders-horizontal" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelModeText" Text="Режим"/></StackPanel></Button>
                 <Button x:Name="ToolsToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
                               Click="ToolsToggle_Click" ToolTip="Ускорение Telegram Desktop и обход замедления YouTube и Discord"><StackPanel Orientation="Horizontal"><controls:Icon Kind="zap" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelToolsText" Text="Telegram и YouTube"/></StackPanel></Button>
                 <Button x:Name="FlowButton" Click="GoogleFlow_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Расширение для браузера, с которым Google Flow открывается из России"><StackPanel Orientation="Horizontal"><controls:Icon Kind="film" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelFlowText" Text="Google Flow"/></StackPanel></Button>
+                <TextBlock Tag="navgroup" Text="Проверки" FontSize="11" Margin="12,16,0,6" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
                 <Button x:Name="DiagToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
                               Click="DiagToggle_Click" ToolTip="Все проверки одним отчетом. Отсюда же можно сообщить о проблеме"><StackPanel Orientation="Horizontal"><controls:Icon Kind="stethoscope" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDiagText" Text="Диагностика"/></StackPanel></Button>
                 <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="gauge" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
                 <Button x:Name="AccountRiskButton" Click="AccountRisk_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Из какой страны и с какого адреса вас видят ChatGPT, Claude и Gemini, и чем это грозит аккаунту"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-user" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAccountRiskText" Text="Аккаунты"/></StackPanel></Button>
-                <Button x:Name="HelpToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
-                              Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></Button>
                 <Button x:Name="LogToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
                               Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></Button>
-                <Button x:Name="PrivateButton" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
-                <Button x:Name="DataButton" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="folder" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
+                <Border Tag="navgroup" Height="1" Margin="10,14,10,10" Background="{DynamicResource Border}"/>
                 <Button x:Name="SettingsButton" Click="Settings_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Настройки программы"><StackPanel Orientation="Horizontal"><controls:Icon Kind="settings" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSettingsText" Text="Настройки"/></StackPanel></Button>
                 <Button x:Name="ModeButton" Click="Mode_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Компактный / полный вид"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shrink" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="ModeButtonText" Text="Компактно"/></StackPanel></Button>
+                <!-- Раздел в разработке и папка данных (открывается из «Настройки → Данные») в меню не показываются -->
+                <Button x:Name="PrivateButton" Visibility="Collapsed" Click="PrivateProject_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Приватный проект: раздел в разработке" Opacity="0.55"><StackPanel Orientation="Horizontal"><controls:Icon Kind="eye-off" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelPrivateText" Text="Приватный проект" Foreground="{DynamicResource Muted}"/></StackPanel></Button>
+                <Button x:Name="DataButton" Visibility="Collapsed" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
+                        ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="folder" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
                     </StackPanel>
                 </ScrollViewer>
             </DockPanel>
