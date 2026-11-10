@@ -1,167 +1,307 @@
 ﻿<#
-  Быстрый обход интерфейса отладочной сборки CHIMERION со снимками всех страниц, вкладок, диалогов и прокрутки.
+  ОСНОВНОЙ ИНСТРУМЕНТ ВИЗУАЛЬНЫХ ТЕСТОВ CHIMERION.
+  Запускает отладочную сборку на отдельных копиях данных, проходит все страницы, вкладки, диалоги и прокрутку
+  в темной и светлой теме, проверяет, что каждый шаг открыл нужное, снимает окна и сравнивает с прошлым прогоном.
 
-  .\tools\ui-shots.ps1                          # собрать при изменениях, запустить, снять все в обычном размере окна
-  .\tools\ui-shots.ps1 -Sizes 1440x1300,1000x760  # еще и в заданных размерах
-  .\tools\ui-shots.ps1 -Only settings,journal   # только эти шаги (по началу имени)
-  .\tools\ui-shots.ps1 -NoScroll -NoBuild       # без снимков прокрутки и без проверки сборки
+  .\tools\ui-shots.ps1                            # полный прогон: темная и светлая тема параллельно, сравнение с прошлым
+  .\tools\ui-shots.ps1 -Themes dark               # только темная тема
+  .\tools\ui-shots.ps1 -Langs ru,en               # еще и английский интерфейс (длинные строки, переносы)
+  .\tools\ui-shots.ps1 -Only settings,journal     # только эти шаги (по началу имени)
+  .\tools\ui-shots.ps1 -Sizes 1440x1300,1000x760  # в заданных размерах окна (по умолчанию обычный размер)
+  .\tools\ui-shots.ps1 -Baseline E:\...\прогон    # сравнить с конкретным прогоном; -NoCompare без сравнения
+  .\tools\ui-shots.ps1 -Sequential                # проходы по очереди (если машина слабая)
+  .\tools\ui-shots.ps1 -Trace                     # время каждого нажатия и снимка
 
-  Скорость: фиксированных пауз нет. После нажатия скрипт ждет только то, что реально грузится:
-  нужный элемент появился, кадр сменился и перестал меняться, диалог открылся или закрылся.
-  PNG пишутся в фоне, поиск прокрутки идет одним запросом UI Automation.
+  Итог: папка E:\CHIMERION\ui-shots\<дата> с PNG, index.html (все снимки, изменившиеся отмечены, рядом карта
+  отличий) и report.txt. Код выхода 1, если какой-то шаг не открылся или не нашел своей страницы.
+
+  Скорость:
+  - фиксированных пауз нет: ждем только то, что реально грузится (элемент появился, кадр сменился и перестал
+    меняться, окно открылось или закрылось, кнопка стала доступна); анимации программы выключены (DNEX_NO_ANIMATION);
+  - копии данных для всех проходов делаются параллельно (robocopy /MT) одновременно с проверкой сборки;
+  - все программы запускаются сразу и грузятся, пока готовится помощник (C#, кэшируется в DLL по хэшу исходника);
+  - каждая тема и язык снимаются своим процессом параллельно: у тестовой копии свой ключ «единственной копии»;
+  - проверка страницы идет в фоне параллельно со снимком, PNG пишутся в фоне, сравнение многопоточное.
 
   Безопасность:
-  - работает только с копией данных (DNEX_DATA_DIR), рабочие настройки и серверы владельца не трогаются;
-  - нажимает только кнопки из списка $Plan; переключатели (защита, YouTube, Telegram), «Подключить»,
-    «Сохранить», «Отправить», покупки и внешние ссылки запрещены и дополнительно проверяются перед нажатием;
+  - каждый проход работает на свежей копии данных в %TEMP% с DNEX_NO_AUTORESTORE=1: программа не меняет DNS
+    компьютера, не поднимает прокси, ничего не отправляет в общую карту и счетчик, ID устройства подменен.
+    Поэтому настоящая CHIMERION может оставаться запущенной;
+  - нажимаются только кнопки из $Plan; переключатели, ссылки, «Подключить», «Сохранить», «Отправить», покупки
+    и все, что открывает браузер или Telegram, запрещены и дополнительно проверяются перед нажатием;
   - мышь и клавиатура не используются: нажатия через UI Automation, снимки через PrintWindow,
     поэтому другие окна на экране не мешают и не попадают в кадр;
   - диалоги закрываются как крестиком (WM_CLOSE), то есть без сохранения.
-  Если запущен обычный CHIMERION, скрипт остановится: два экземпляра программы не запускаются.
+
+  Не снимается (нужны особые условия): «Выход» (закрытие программы), «Обновление» (нужна новая версия),
+  «Сайты для обхода» (нужен установленный zapret), проверка браузера (открывает браузер), меню в трее.
 #>
 param(
     [string]$Out,
     [string]$DataDir = "E:\CHIMERION\tiktok-01\data",
-    # Пусто: окно в том размере, в каком программа открылась сама
-    [string[]]$Sizes = @(),
+    [string[]]$Themes = @("dark", "light"),
+    [string[]]$Langs = @("ru"),
+    [string[]]$Sizes = @(),          # пусто: окно в том размере, в каком программа открылась сама
     [string[]]$Only,
+    [string]$Baseline,               # пусто: последний прошлый прогон
+    [int]$MaxScroll = 5,             # сколько экранов прокрутки снимать на страницу
+    [double]$MinDiff = 0.5,          # отличия меньше, % кадра: живые данные (пинги, время), в «мелочи», а не в «изменилось»
+    [switch]$NoCompare,
     [switch]$NoBuild,
     [switch]$NoScroll,
-    [switch]$KeepOpen,
-    [switch]$Trace,     # печатать время каждого нажатия и снимка
-    [int]$MaxScroll = 5, # сколько экранов прокрутки снимать на страницу
-    [switch]$Animations # оставить анимации программы (по умолчанию выключены: снимки без ожидания переходов)
+    [switch]$Sequential,
+    [switch]$Animations,             # оставить анимации программы
+    [switch]$Trace,
+    # Внутреннее: исполнитель одного прохода (его запускает основной процесс)
+    [string]$Worker, [int]$AppPid, [string]$Dll
 )
 $ErrorActionPreference = "Stop"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 $repo = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $repo "bin\Debug\net8.0-windows\CHIMERION.exe"
-if (-not $Out) { $Out = Join-Path "E:\CHIMERION\ui-shots" (Get-Date -Format "yyyy-MM-dd_HH-mm-ss") }
-
+$shotsRoot = "E:\CHIMERION\ui-shots"
+$run = Join-Path $env:TEMP "chimerion-ui-shots"
+if (-not $Out) { $Out = Join-Path $shotsRoot (Get-Date -Format "yyyy-MM-dd_HH-mm-ss") }
+function Split-List($v) { @($v | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) }   # -File передает «a,b» одной строкой
+$Themes = Split-List $Themes; $Langs = Split-List $Langs; $Sizes = Split-List $Sizes; $Only = Split-List $Only
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
-if (-not ("UiShot2" -as [type])) {
-Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
-using System; using System.Collections.Generic; using System.Drawing; using System.Drawing.Imaging;
-using System.Runtime.InteropServices; using System.Threading; using System.Threading.Tasks;
-public static class UiShot2 {
-    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
-    public delegate bool EnumProc(IntPtr h, IntPtr p);
-    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr p);
-    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-    [DllImport("user32.dll")] static extern bool PrintWindow(IntPtr h, IntPtr dc, uint f);
-    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int cx, int cy, uint f);
-    [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
-
-    // Видимые окна процесса крупнее подсказок и всплывающих меню
-    public static IntPtr[] Windows(int pid) {
-        var list = new List<IntPtr>();
-        EnumWindows(delegate(IntPtr h, IntPtr p) {
-            uint id; RECT r;
-            GetWindowThreadProcessId(h, out id);
-            if (id == pid && IsWindowVisible(h) && GetWindowRect(h, out r) && r.R - r.L > 200 && r.B - r.T > 120) list.Add(h);
-            return true;
-        }, IntPtr.Zero);
-        return list.ToArray();
-    }
-
-    // Ждать окна, кроме main: появилось (want=true) или все закрылись (want=false)
-    public static IntPtr[] WaitOthers(int pid, IntPtr main, bool want, int maxMs) {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (true) {
-            var all = Windows(pid); var others = new List<IntPtr>();
-            foreach (var h in all) if (h != main) others.Add(h);
-            if ((others.Count > 0) == want || sw.ElapsedMilliseconds >= maxMs) return others.ToArray();
-            Thread.Sleep(25);
-        }
-    }
-
-    static Bitmap Grab(IntPtr h) {
-        RECT r; GetWindowRect(h, out r);
-        var b = new Bitmap(Math.Max(1, r.R - r.L), Math.Max(1, r.B - r.T), PixelFormat.Format32bppArgb);
-        using (var g = Graphics.FromImage(b)) { var dc = g.GetHdc(); PrintWindow(h, dc, 2); g.ReleaseHdc(dc); }
-        return b;
-    }
-
-    // Хэш по каждому 7-му пикселю: быстро и ловит любое изменение крупнее точки
-    static long Hash(Bitmap b) {
-        var d = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try {
-            int n = d.Stride * d.Height / 4; var buf = new int[n]; Marshal.Copy(d.Scan0, buf, 0, n);
-            long h = unchecked((long)14695981039346656037UL);
-            for (int i = 0; i < n; i += 7) { h ^= buf[i]; h *= 1099511628211L; }
-            return h ^ ((long)b.Width << 40) ^ ((long)b.Height << 20);
-        } finally { b.UnlockBits(d); }
-    }
-
-    static readonly List<Task> Pending = new List<Task>();
-
-    // Снимок окна: сначала ждем, что кадр сменился с прошлого снимка (prev, до changeMs: страница
-    // еще не перерисовалась), потом что он перестал меняться (анимации, загрузка), но не дольше stableMs.
-    // PNG пишется в фоне. Возвращает хэш снятого кадра.
-    public static long Save(IntPtr h, string path, long prev, int changeMs, int stableMs) {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        var b = Grab(h); long last = Hash(b);
-        while (last == prev && sw.ElapsedMilliseconds < changeMs) {
-            Thread.Sleep(25); b.Dispose(); b = Grab(h); last = Hash(b);
-        }
-        sw.Restart();
-        while (sw.ElapsedMilliseconds < stableMs) {
-            Thread.Sleep(40);
-            var n = Grab(h); long hh = Hash(n);
-            b.Dispose(); b = n;
-            if (hh == last) break;
-            last = hh;
-        }
-        var bmp = b;
-        lock (Pending) Pending.Add(Task.Run(() => { bmp.Save(path, ImageFormat.Png); bmp.Dispose(); }));
-        return last;
-    }
-
-    public static void Flush() { Task[] all; lock (Pending) { all = Pending.ToArray(); Pending.Clear(); } Task.WaitAll(all); }
-}
-"@
-}
 
 # ---------- Что нажимать ----------
-# n: имя файла; c: что нажать по порядку (имя элемента, * — шаблон); tabs: вкладки внутри страницы;
-# dialog: шаг открывает отдельное окно; back: чем вернуться после шага
+# n: имя шага; nav: страница (пункт меню), открывается, только если сейчас открыта другая; c: что нажать на странице
+# (имя элемента, * — шаблон); expect: что должно быть на странице; tabs: вкладки; dialog: шаг открывает окно;
+# sub: что нажать внутри окна (вложенное окно); back: чем вернуться; stable: ожидание стабильного кадра, мс;
+# wait: сколько ждать окно, мс (перед формой обращения идет диагностика до 20 с)
 $Plan = @(
-    @{ n = "main";              c = @("Главная") },
-    @{ n = "servers";           c = @("Серверы"); tabs = @("Рабочие", "Все", "Избранные") },
-    @{ n = "servers-graph";     c = @("Серверы", "График качества"); dialog = $true },
-    @{ n = "addserver";         c = @("Добавить сервер"); dialog = $true },
-    @{ n = "mode";              c = @("Режим") },
-    @{ n = "tools";             c = @("Telegram и YouTube") },
-    @{ n = "flow";              c = @("Google Flow"); tabs = @("Chrome", "Edge", "Яндекс Браузер") },
-    @{ n = "diag";              c = @("Диагностика") },
-    @{ n = "diag-history";      c = @("Диагностика", "История сети"); dialog = $true },
-    @{ n = "speed";             c = @("Тест скорости") },
-    @{ n = "accounts";          c = @("Аккаунты") },
-    @{ n = "journal";           c = @("Журнал"); tabs = @("Все", "Успех*", "Предупреждения", "Ошибки") },
-    @{ n = "settings";          c = @("Настройки"); tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
-    @{ n = "settings-twodns";   c = @("Настройки", "Два DNS", "Настроить два DNS"); dialog = $true },
-    @{ n = "dns";               c = @("CHIMERION DNS") },
-    # Вкладки «Помощи» пока рамки без UI Automation: снимается только первая
-    @{ n = "help";              c = @("Помощь") },
-    @{ n = "report";            c = @("Сообщить о сбое"); dialog = $true },
-    @{ n = "compact";           c = @("Компактно"); back = "Полный вид" }
+    @{ n = "main";            nav = "Главная";            expect = "ИИ-сервисы" },
+    @{ n = "servers";         nav = "Серверы";            expect = "Проверка подключения"; tabs = @("Рабочие", "Все", "Избранные"); stable = 500 },
+    @{ n = "servers-graph";   nav = "Серверы";            c = @("График качества"); dialog = $true },
+    @{ n = "addserver";                                   c = @("Добавить сервер"); dialog = $true },
+    @{ n = "mode";            nav = "Режим";              expect = "Готовые режимы" },
+    @{ n = "tools";           nav = "Telegram и YouTube"; expect = "Как это работает" },
+    @{ n = "flow";            nav = "Google Flow";        expect = "Как подключить"; tabs = @("Chrome", "Edge", "Яндекс Браузер") },
+    @{ n = "diag";            nav = "Диагностика";        expect = "Проверить сайт" },
+    @{ n = "diag-history";    nav = "Диагностика";        c = @("История сети"); dialog = $true },
+    @{ n = "diag-tickets";    nav = "Диагностика";        c = @("Мои обращения*"); dialog = $true },
+    @{ n = "speed";           nav = "Тест скорости";      expect = "Скорость DNS" },
+    @{ n = "accounts";        nav = "Аккаунты";           expect = "Как беречь аккаунт" },
+    @{ n = "journal";         nav = "Журнал";             expect = "Сохранить в файл"; tabs = @("Все", "Успех*", "Предупреждения", "Ошибки") },
+    @{ n = "settings";        nav = "Настройки";          expect = "Отмена"; tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
+    @{ n = "settings-twodns"; nav = "Настройки";          c = @("Два DNS", "Настроить два DNS"); dialog = $true },
+    @{ n = "dns";             nav = "CHIMERION DNS";      expect = "Сроки и цены" },
+    @{ n = "help";            nav = "Помощь";             expect = "Что делать, если*"; tabs = @("Не открывается", "Под наблюдением", "На телефоне") },
+    @{ n = "report";                                      c = @("Сообщить о сбое"); dialog = $true; sub = @("Посмотреть"); wait = 25000 },
+    @{ n = "compact";                                     c = @("Компактно"); expect = "Полный вид"; back = "Полный вид" }
 )
-# Никогда не нажимать, даже если имя совпало случайно
-$Deny = '^(Защита|Включено|Выключено|Подключить.*|Отключить|Сохранить|Отправить.*|Очистить|Купить.*|Написать|Подробнее|Найти новые серверы|Подобрать .*|Запустить тест|Перепроверить|Проверить .*|Включить.*|Убрать|Открыть.*|Экспорт.*|Импорт.*|Вернуть .*|Рекомендуемые значения|English|Русский|Светлая|Текст лицензии|История изменений|Мои обращения|Баг-репорты|Идеи|Скопировать.*|Сохранить в файл|Папка журналов|Отчет в один клик|Канал в Telegram|Сайт chimerion\.dev|Версия.*)$'
-# Ссылки (Hyperlink) не нажимаются никогда: они открывают браузер или Telegram
+# Никогда не нажимать, даже если имя совпало случайно. Ссылки (Hyperlink) и галочки не нажимаются никогда
+$Deny = '^(Защита|Включено|Выключено|Подключить.*|Отключить|Сохранить|Отправить.*|Очистить|Купить.*|Написать.*|Подробнее|Найти новые серверы|Подобрать .*|Запустить тест|Перепроверить|Проверить .*|Включить.*|Убрать|Открыть.*|Экспорт.*|Импорт.*|Вернуть .*|Рекомендуемые значения|English|Русский|Светлая|Темная|Текст лицензии|История изменений|Баг-репорты|Идеи|Скопировать.*|Сохранить в файл|Папка журналов|Отчет в один клик|Канал в Telegram|Сайт chimerion\.dev|Версия.*|Новое обращение)$'
 
-# ---------- Сборка и запуск ----------
-$other = Get-Process CHIMERION -ErrorAction SilentlyContinue | Where-Object { $_.Path -ne $exe }
-if ($other) { throw "Запущен CHIMERION ($($other[0].Path)). Закройте его: два экземпляра программы не запускаются." }
+# ================= Исполнитель одного прохода =================
+function Run-Pass([string]$pass, [int]$appId) {
+    $script:pass = $pass
+    $script:wantLight = $pass -like "light-*"
+    $script:fails = New-Object System.Collections.Generic.List[string]
+    $script:count = 0; $script:last = 0L; $script:page = $null
+    $script:pid_ = $appId
+    $script:main = [UiShot]::WaitMain($appId, 15000)
+    if ($script:main -eq [IntPtr]::Zero) { Fail "окно программы не появилось"; return }
+    [UiShot]::ShowWindow($script:main, 5) | Out-Null   # показать как есть: размер и развернутость не меняем
+    $script:root = [Windows.Automation.AutomationElement]::FromHandle($script:main)
+    $steps = if ($Only) { $Plan | Where-Object { $n = $_.n; [bool]($Only | Where-Object { $n -like "$_*" }) } } else { $Plan }
+
+    foreach ($size in $(if ($Sizes) { $Sizes } else { @("") })) {
+        if ($size) {
+            $w, $h = $size -split "x" | ForEach-Object { [int]$_ }
+            [UiShot]::SetWindowPos($script:main, [IntPtr]::Zero, 0, 0, $w, $h, 0x14) | Out-Null
+            $script:last = 0L
+        }
+        $r = New-Object UiShot+RECT; [UiShot]::GetWindowRect($script:main, [ref]$r) | Out-Null
+        $tag = "{0}x{1}" -f ($r.R - $r.L), ($r.B - $r.T)
+        Write-Host "[$pass] размер окна $tag" -ForegroundColor Cyan
+        foreach ($s in $steps) {
+            $t0 = $sw.Elapsed.TotalSeconds
+            $ok = $true
+            if ($s.nav -and $s.nav -ne $script:page) { $ok = Press $s.nav; $script:page = $s.nav }
+            foreach ($c in $s.c) { if ($ok) { $ok = Press $c } }
+            if ($ok) {
+                $stable = if ($s.stable) { $s.stable } else { 1200 }
+                $label = "$tag-$($s.n)"
+                if ($s.dialog) { Shoot-Dialogs $label $s.sub $(if ($s.wait) { $s.wait } else { 4000 }) }
+                elseif ($s.tabs) {
+                    foreach ($t in $s.tabs) { if (Press $t) { Shoot "$label-$(($t -replace '[*\\/:?"<>| ]', '').ToLower())" $s.expect $stable } }
+                } else { Shoot $label $s.expect $stable }
+                if ($s.back) { Press $s.back | Out-Null; $script:last = 0L }
+            }
+            if (-not $ok) { $script:page = $null }   # что-то пошло не так: следующий шаг откроет свою страницу заново
+            Write-Host ("[{0}] {1,-16} {2,5:0.0} с  (+{3:0.0})" -f $pass, $s.n, $sw.Elapsed.TotalSeconds, ($sw.Elapsed.TotalSeconds - $t0))
+        }
+    }
+    [UiShot]::Flush()
+}
+
+function Fail([string]$msg) { $script:fails.Add("$($script:pass): $msg"); Write-Host "[$($script:pass)] ОШИБКА: $msg" -ForegroundColor Red }
+function T([string]$what, [double]$from) { if ($Trace) { Write-Host ("[{0}]   {1,6:0} мс  {2}" -f $script:pass, (($sw.Elapsed.TotalMilliseconds) - $from), $what) -ForegroundColor DarkGray } }
+
+$AE = [Windows.Automation.AutomationElement]
+$walker = [Windows.Automation.TreeWalker]::ControlViewWalker
+
+# Сам элемент или ближайший предок с действием (нажать, выбрать, переключить); $null, если такого нет
+function Get-Actionable($el) {
+    $pat = $null
+    while ($el) {
+        if ($el.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pat) -or
+            $el.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pat) -or
+            $el.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern, [ref]$pat)) { return @($el, $pat) }
+        $el = $walker.GetParent($el)
+    }
+    return $null
+}
+
+# Поиск ждет, пока элемент появится (страница еще строится), до maxMs
+function Find-El($scope, [string]$name, [int]$maxMs = 4000) {
+    $t = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        try {
+            if ($name.Contains("*")) {
+                $cr = New-Object Windows.Automation.CacheRequest; $cr.Add($AE::NameProperty)
+                $cr.Push()
+                try { $all = $scope.FindAll("Descendants", [Windows.Automation.Condition]::TrueCondition) } finally { $cr.Pop() }
+                foreach ($e in $all) { if ($e.Cached.Name -like $name) { return $e } }
+            } else {
+                # Обычно хватает первого совпадения (надпись внутри кнопки, по ней поднимаемся к кнопке). Если у него
+                # нет действия (такая же надпись в другом месте раньше кнопки), берем совпадение, у которого действие есть
+                $byName = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, $name)
+                $el = $scope.FindFirst("Descendants", $byName)
+                if ($el -and (Get-Actionable $el)) { return $el }
+                foreach ($e in $scope.FindAll("Descendants", $byName)) { if (Get-Actionable $e) { return $e } }
+            }
+        } catch [System.Windows.Automation.ElementNotAvailableException] { }
+        Start-Sleep -Milliseconds 30
+    } while ($t.ElapsedMilliseconds -lt $maxMs)
+    return $null
+}
+
+function Press([string]$name, $scope = $script:root) {
+    $t0 = $sw.Elapsed.TotalMilliseconds
+    try {
+        # Страница могла перестроиться между поиском и нажатием: следующая попытка ищет элемент заново
+        for ($try = 0; $try -lt 3; $try++) {
+            $r = Press-Once $name $scope
+            if (-not ($r -is [string])) { return $r }
+            Start-Sleep -Milliseconds 80
+        }
+        Fail "«$name» не нажалось: элемент пропадал при каждой попытке"
+        return $false
+    } finally { T "нажать $name" $t0 }
+}
+
+function Press-Once([string]$name, $scope) {
+    $el = Find-El $scope $name
+    if (-not $el) { Fail "нет элемента «$name»"; return $false }
+    try {
+        $act = Get-Actionable $el
+        if (-not $act) { Fail "«$name» не нажимается (нет действия для UI Automation)"; return $false }
+        $el, $pat = $act
+        $real = $el.Current.Name
+        $ct = $el.Current.ControlType
+        if ($ct -eq [Windows.Automation.ControlType]::CheckBox -or $ct -eq [Windows.Automation.ControlType]::Hyperlink -or $real -match $Deny) {
+            Fail "«$real» в запрете, не нажато"; return $false
+        }
+        # Кнопка бывает недоступна, пока идет проверка (диагностика до ~15 с): тут ждем
+        for ($i = 0; $i -lt 400 -and -not $el.Current.IsEnabled; $i++) { Start-Sleep -Milliseconds 50 }
+        if ($pat -is [Windows.Automation.InvokePattern]) { $pat.Invoke() }
+        elseif ($pat -is [Windows.Automation.SelectionItemPattern]) { $pat.Select() }
+        else { $pat.Toggle() }
+    } catch [System.Windows.Automation.ElementNotAvailableException] { return "retry" }
+    catch { Fail "«$name» не нажалось: $($_.Exception.Message)"; return $false }
+    return $true
+}
+
+function File([string]$label, [string]$suffix = "") { Join-Path $Out ("{0}-{1:000}-{2}{3}.png" -f $script:pass, $script:count, $label, $suffix) }
+
+# Снимок страницы; одновременно в фоне проверяется, что на ней есть expect
+function Shoot([string]$label, [string]$expect, [int]$stable = 1200) {
+    $script:count++
+    $t0 = $sw.Elapsed.TotalMilliseconds
+    # В фоне, пока снимается кадр: проверка страницы и поиск области прокрутки
+    $check = if ($expect) { [UiShot]::ExpectAsync($script:main, $expect, 4000) }
+    $scroll = if (-not $NoScroll) { [UiShot]::FindScrollAsync($script:main) }
+    $script:last = [UiShot]::Save($script:main, (File $label), $script:last, 400, $stable)
+    T "снимок $label" $t0
+    if ($check -and -not $check.Result) { Fail "$label`: на странице нет «$expect»" }
+    if ((([UiShot]::LastLuma) -gt 110) -ne $script:wantLight) { Fail "$label`: тема не та (средняя яркость $([int][UiShot]::LastLuma))" }
+    $t0 = $sw.Elapsed.TotalMilliseconds
+    if ($scroll -and $scroll.Result) { Shoot-Scroll $label $stable $scroll.Result; T "прокрутка" $t0 }
+}
+
+# Окна, открытые шагом: ждем появления, снимаем, жмем sub внутри (вложенные окна), закрываем без сохранения
+function Shoot-Dialogs([string]$label, [string[]]$sub, [int]$wait = 4000) {
+    $script:count++
+    $known = [IntPtr[]]@($script:main)
+    $extra = [IntPtr[]]@([UiShot]::WaitOthers($script:pid_, $known, $true, $wait))
+    if (-not $extra.Count) { Fail "$label`: окно не открылось"; return }
+    $both = [IntPtr[]]($known + $extra)
+    $k = 0
+    foreach ($h in $extra) {
+        $k++
+        [UiShot]::Save($h, (File $label "-dialog$k"), 0, 0, 1200) | Out-Null
+        foreach ($s in $sub) {
+            if (Press $s ($AE::FromHandle($h))) {
+                $inner = @([UiShot]::WaitOthers($script:pid_, $both, $true, 4000))
+                if (-not $inner.Count) { Fail "$label`: «$s» не открыло окно" }
+                foreach ($i in $inner) {
+                    [UiShot]::Save($i, (File $label "-dialog$k-$(($s -replace '\W', '').ToLower())"), 0, 0, 1200) | Out-Null
+                    [UiShot]::PostMessage($i, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+                }
+                [UiShot]::WaitOthers($script:pid_, $both, $false, 3000) | Out-Null
+            }
+        }
+    }
+    foreach ($h in $extra) { [UiShot]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
+    if ([UiShot]::WaitOthers($script:pid_, $known, $false, 3000).Count) { Fail "$label`: окно не закрылось" }
+}
+
+# Длинные страницы: найденная в фоне область листается экран за экраном
+function Shoot-Scroll([string]$label, [int]$stable, $el) {
+    try {
+        $sp = $el.GetCurrentPattern([Windows.Automation.ScrollPattern]::Pattern)
+        $view = [Math]::Max(10, $sp.Current.VerticalViewSize)
+        $part = 1
+        for ($p = $view * 0.9; $part -lt $MaxScroll; $p += $view * 0.9) {
+            $sp.SetScrollPercent(-1, [Math]::Min(100, $p))
+            $part++
+            $script:last = [UiShot]::Save($script:main, (File $label "-scroll$part"), $script:last, 250, [Math]::Min(600, $stable))
+            if ($p -ge 100) { break }
+        }
+        $sp.SetScrollPercent(-1, 0)
+    } catch [System.Windows.Automation.ElementNotAvailableException] { }
+}
+
+if ($Worker) {
+    Add-Type -Path $Dll
+    Run-Pass $Worker $AppPid
+    try { Stop-Process -Id $AppPid -Force } catch {}
+    [IO.File]::WriteAllLines((Join-Path $Out "fails-$Worker.txt"), [string[]]$script:fails, [Text.UTF8Encoding]::new($false))
+    exit 0
+}
+
+# ================= Основной процесс =================
+$passes = @(foreach ($th in $Themes) { foreach ($lg in $Langs) { "$th-$lg" } })
+# Остатки прошлых прогонов отладочной сборки (настоящая CHIMERION установлена в другой папке и не трогается)
 Get-Process CHIMERION -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process -Force
+New-Item -ItemType Directory -Force $Out, $run | Out-Null
+
+# Копии данных для всех проходов параллельно, пока проверяется сборка
+$copies = @{}
+$robo = foreach ($p in $passes) {
+    $dst = Join-Path $run "data-$p"; $copies[$p] = $dst
+    if (Test-Path $DataDir) { Start-Process robocopy -ArgumentList "`"$DataDir`" `"$dst`" /MIR /MT:16 /R:0 /W:0 /NFL /NDL /NJH /NJS /NP" -NoNewWindow -PassThru }
+    else { New-Item -ItemType Directory -Force $dst | Out-Null }
+}
 
 if (-not $NoBuild) {
     $stale = -not (Test-Path $exe)
     if (-not $stale) {
-        # Только исходники программы: bin, obj, tests, tools, backend и .git не обходим
+        # Только исходники программы: bin, obj, tests, tools, backend и служебные папки не обходим
         $t = (Get-Item $exe).LastWriteTime
         $dirs = Get-ChildItem $repo -Directory | Where-Object { $_.Name -notmatch '^(bin|obj|tests|tools|backend|docs|\..*|node_modules|packages)$' }
         $files = @(Get-ChildItem -Path "$repo\*" -File -Include *.cs, *.xaml, *.csproj) + @($dirs | ForEach-Object { Get-ChildItem $_.FullName -Recurse -File })
@@ -173,194 +313,122 @@ if (-not $NoBuild) {
         if ($LASTEXITCODE -ne 0) { throw "Сборка не прошла: dotnet build CHIMERION.csproj -c Debug" }
     }
 }
-Write-Host ("Сборка проверена: {0:0.0} с" -f $sw.Elapsed.TotalSeconds)
+foreach ($r in $robo) { if ($r) { $r.WaitForExit() } }
+Write-Host ("Сборка и копии данных: {0:0.0} с" -f $sw.Elapsed.TotalSeconds)
 
-if (-not (Test-Path $DataDir)) { $DataDir = Join-Path $env:TEMP "chimerion-ui-shots-data"; New-Item -ItemType Directory -Force $DataDir | Out-Null }
-New-Item -ItemType Directory -Force $Out | Out-Null
-$env:DNEX_DATA_DIR = $DataDir
-if (-not $Animations) { $env:DNEX_NO_ANIMATION = "1" }
-$proc = Start-Process $exe -PassThru
-Remove-Item Env:DNEX_DATA_DIR, Env:DNEX_NO_ANIMATION -ErrorAction SilentlyContinue
-for ($i = 0; $i -lt 300; $i++) { $proc.Refresh(); if ($proc.MainWindowHandle -ne 0) { break }; Start-Sleep -Milliseconds 25 }
-if ($proc.MainWindowHandle -eq 0) { throw "Окно программы не появилось" }
-$main = $proc.MainWindowHandle
-[UiShot2]::ShowWindow($main, 5) | Out-Null  # показать как есть: размер и развернутость не меняем
-$root = [Windows.Automation.AutomationElement]::FromHandle($main)
+# Копия: тема и язык прохода, без проверки обновлений и общей карты, обычный (не компактный) вид
+function Set-CopySettings([string]$dir, [string]$theme, [string]$lang) {
+    $p = Join-Path $dir "settings.json"
+    if (-not (Test-Path $p)) { return }
+    $s = [IO.File]::ReadAllText($p)
+    $set = @{ theme = "`"$theme`""; language = "`"$lang`""; checkUpdates = "false"; crowdConsent = "false"; crowdSites = "false"; startCompact = "false" }
+    foreach ($k in $set.Keys) { $s = [regex]::Replace($s, "(`"$k`"\s*:\s*)(`"[^`"]*`"|true|false|null)", "`${1}$($set[$k])") }
+    [IO.File]::WriteAllText($p, $s, [Text.UTF8Encoding]::new($false))
+}
 
-# ---------- Помощники ----------
-$AE = [Windows.Automation.AutomationElement]
-$isButton = New-Object Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [Windows.Automation.ControlType]::Button)
+# Все программы стартуют сразу: каждая тестовая копия со своим ключом экземпляра
+$apps = @{}
+foreach ($p in $passes) {
+    $th, $lg = $p -split "-"
+    Set-CopySettings $copies[$p] $th $lg
+    $env:DNEX_DATA_DIR = $copies[$p]; $env:DNEX_NO_AUTORESTORE = "1"
+    if (-not $Animations) { $env:DNEX_NO_ANIMATION = "1" }
+    $apps[$p] = (Start-Process $exe -PassThru).Id
+    if ($Sequential) { break }   # по очереди: следующая программа стартует после прохода предыдущей
+}
+Remove-Item Env:DNEX_DATA_DIR, Env:DNEX_NO_AUTORESTORE, Env:DNEX_NO_ANIMATION -ErrorAction SilentlyContinue
 
-# Поиск ждет, пока элемент появится (страница еще строится), до maxMs
-function Find-El($scope, [string]$name, [int]$maxMs = 4000) {
-    $t = [Diagnostics.Stopwatch]::StartNew()
-    do {
-        if ($name.Contains("*")) {
-            $cr = New-Object Windows.Automation.CacheRequest; $cr.Add($AE::NameProperty)
-            $cr.Push()
-            try { $all = $scope.FindAll("Descendants", [Windows.Automation.Condition]::TrueCondition) } finally { $cr.Pop() }
-            foreach ($e in $all) { if ($e.Cached.Name -like $name) { return $e } }
-        } else {
-            $byName = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, $name)
-            $el = $scope.FindFirst("Descendants", (New-Object Windows.Automation.AndCondition($byName, $isButton)))
-            if (-not $el) { $el = $scope.FindFirst("Descendants", $byName) }
-            if ($el) { return $el }
+# Помощник: компилируется, только если изменился tools/ui-shots.cs
+$src = [IO.File]::ReadAllText((Join-Path $PSScriptRoot "ui-shots.cs"))
+$hash = [BitConverter]::ToString([Security.Cryptography.SHA1]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($src))).Replace("-", "").Substring(0, 12)
+$Dll = Join-Path $run "UiShot-$hash.dll"
+if (-not (Test-Path $Dll)) { Add-Type -TypeDefinition $src -ReferencedAssemblies System.Drawing, System.Core, UIAutomationClient, UIAutomationTypes, WindowsBase -OutputAssembly $Dll -OutputType Library }
+Add-Type -Path $Dll
+Write-Host ("Программы запущены, помощник готов: {0:0.0} с" -f $sw.Elapsed.TotalSeconds)
+
+# Программы закрываются при любом исходе: ошибка, Ctrl+C, аварийный исполнитель
+$workers = @()
+try {
+    $script:allFails = New-Object System.Collections.Generic.List[string]
+    $common = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`"", "-Out", "`"$Out`"", "-Dll", "`"$Dll`"", "-MaxScroll", $MaxScroll)
+    if ($Only) { $common += @("-Only", ($Only -join ",")) }
+    if ($Sizes) { $common += @("-Sizes", ($Sizes -join ",")) }
+    if ($NoScroll) { $common += "-NoScroll" }
+    if ($Trace) { $common += "-Trace" }
+    if ($passes.Count -gt 1 -and -not $Sequential) {
+        # Каждый проход своим процессом, параллельно
+        $workers = foreach ($p in $passes) { Start-Process powershell -ArgumentList ($common + @("-Worker", $p, "-AppPid", $apps[$p])) -NoNewWindow -PassThru }
+        foreach ($w in $workers) { $w.WaitForExit() }
+        foreach ($p in $passes) {
+            $f = Join-Path $Out "fails-$p.txt"
+            if (Test-Path $f) { $script:allFails.AddRange([string[]]@(Get-Content $f -Encoding UTF8 | Where-Object { $_ })); Remove-Item $f }
+            else { $script:allFails.Add("${p}: исполнитель прохода завершился аварийно") }
         }
-        Start-Sleep -Milliseconds 30
-    } while ($t.ElapsedMilliseconds -lt $maxMs)
-    return $null
-}
-
-function T([string]$what, [double]$from) { if ($Trace) { Write-Host ("    {0,6:0} мс  {1}" -f (($sw.Elapsed.TotalMilliseconds) - $from), $what) -ForegroundColor DarkGray } }
-
-function Press([string]$name) {
-    $t0 = $sw.Elapsed.TotalMilliseconds
-    try { return (Press-Retry $name) } finally { T "нажать $name" $t0 }
-}
-
-function Press-Retry([string]$name) {
-    # Страница могла перестроиться между поиском и нажатием: следующая попытка ищет элемент заново
-    for ($try = 0; $try -lt 3; $try++) {
-        $r = Press-Once $name
-        if (-not ($r -is [string])) { return $r }
-        Start-Sleep -Milliseconds 100
-    }
-    return $false
-}
-
-function Press-Once([string]$name) {
-    $el = Find-El $root $name
-    if (-not $el) { Write-Host "  нет элемента: $name" -ForegroundColor Yellow; return $false }
-    $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
-    $pat = $null
-    try {
-        while ($el) {
-            if ($el.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern, [ref]$pat) -or
-                $el.TryGetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pat) -or
-                $el.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern, [ref]$pat)) { break }
-            $el = $walker.GetParent($el)
-        }
-        if (-not $el) { Write-Host "  не нажимается: $name" -ForegroundColor Yellow; return $false }
-        $real = $el.Current.Name
-        $ct = $el.Current.ControlType
-        if ($ct -eq [Windows.Automation.ControlType]::CheckBox -or $ct -eq [Windows.Automation.ControlType]::Hyperlink -or $real -match $Deny) {
-            Write-Host "  запрещено нажимать: $real" -ForegroundColor Red; return $false
-        }
-        # Кнопка бывает недоступна, пока идет проверка (диагностика до ~15 с): тут ждем
-        for ($i = 0; $i -lt 400 -and -not $el.Current.IsEnabled; $i++) { Start-Sleep -Milliseconds 50 }
-        if ($pat -is [Windows.Automation.InvokePattern]) { $pat.Invoke() }
-        elseif ($pat -is [Windows.Automation.SelectionItemPattern]) { $pat.Select() }
-        else { $pat.Toggle() }
-    } catch [System.Windows.Automation.ElementNotAvailableException] { return "retry" }
-    catch { Write-Host "  не нажалось: $name ($($_.Exception.Message))" -ForegroundColor Yellow; return $false }
-    return $true
-}
-
-$script:count = 0
-$script:last = 0L
-function File([string]$label, [string]$suffix = "") { Join-Path $Out ("{0:000}-{1}{2}.png" -f $script:count, $label, $suffix) }
-
-function Shoot([string]$label) {
-    $script:count++
-    $t0 = $sw.Elapsed.TotalMilliseconds
-    $script:last = [UiShot2]::Save($main, (File $label), $script:last, 700, 1200)
-    T "снимок $label" $t0
-    $t0 = $sw.Elapsed.TotalMilliseconds
-    if (-not $NoScroll) { Shoot-Scroll $label; T "прокрутка" $t0 }
-}
-
-# Окна, открытые шагом: ждем появления, снимаем, закрываем без сохранения и ждем закрытия
-function Shoot-Dialogs([string]$label) {
-    $script:count++
-    $extra = [UiShot2]::WaitOthers($proc.Id, $main, $true, 3000)
-    if (-not $extra) { Write-Host "  окно не открылось: $label" -ForegroundColor Yellow; return }
-    $k = 0
-    foreach ($h in $extra) {
-        $k++
-        [UiShot2]::Save($h, (File $label "-dialog$k"), 0, 0, 1200) | Out-Null
-        [UiShot2]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
-    }
-    [UiShot2]::WaitOthers($proc.Id, $main, $false, 2000) | Out-Null
-}
-
-# Длинные страницы: самая большая прокручиваемая область снимается экран за экраном.
-# Свойства всех областей приходят одним запросом (CacheRequest), а не по одному на элемент
-function Shoot-Scroll([string]$label) {
-    $SP = [Windows.Automation.ScrollPattern]
-    $cr = New-Object Windows.Automation.CacheRequest
-    $cr.Add($AE::BoundingRectangleProperty); $cr.Add($SP::Pattern)
-    $cr.Add($SP::VerticallyScrollableProperty); $cr.Add($SP::VerticalViewSizeProperty)
-    $cond = New-Object Windows.Automation.PropertyCondition($AE::IsScrollPatternAvailableProperty, $true)
-    $best = $null; $area = 0; $view = 100
-    # Вкладки одного шага обычно листают ту же область: сначала пробуем ее, без обхода всего дерева
-    if ($script:scrollEl) {
-        try {
-            $c = $script:scrollEl.GetUpdatedCache($cr)
-            if (-not $c.Current.IsOffscreen -and $c.GetCachedPropertyValue($SP::VerticallyScrollableProperty)) {
-                $best = $c; $view = $c.GetCachedPropertyValue($SP::VerticalViewSizeProperty)
+    } else {
+        foreach ($p in $passes) {
+            if (-not $apps[$p]) {
+                $th, $lg = $p -split "-"
+                Set-CopySettings $copies[$p] $th $lg
+                $env:DNEX_DATA_DIR = $copies[$p]; $env:DNEX_NO_AUTORESTORE = "1"; if (-not $Animations) { $env:DNEX_NO_ANIMATION = "1" }
+                $apps[$p] = (Start-Process $exe -PassThru).Id
+                Remove-Item Env:DNEX_DATA_DIR, Env:DNEX_NO_AUTORESTORE, Env:DNEX_NO_ANIMATION -ErrorAction SilentlyContinue
             }
-        } catch { $script:scrollEl = $null }
+            Run-Pass $p $apps[$p]
+            try { Stop-Process -Id $apps[$p] -Force } catch {}
+            $script:allFails.AddRange([string[]]@($script:fails))
+        }
     }
-    $all = @()
-    if (-not $best) {
-        $cr.Push()
-        try { $all = $root.FindAll("Descendants", $cond) } finally { $cr.Pop() }
-    }
-    foreach ($e in $all) {
-        try {
-            if (-not $e.GetCachedPropertyValue($SP::VerticallyScrollableProperty)) { continue }
-            $r = $e.Cached.BoundingRectangle
-            if ($r.Width * $r.Height -gt $area) { $area = $r.Width * $r.Height; $best = $e; $view = $e.GetCachedPropertyValue($SP::VerticalViewSizeProperty) }
-        } catch {}
-    }
-    if ($best) { $script:scrollEl = $best }
-    if (-not $best -or $view -ge 99.5) { return }
-    $sp = $best.GetCurrentPattern($SP::Pattern)
-    $view = [Math]::Max(10, $view)
-    $part = 1
-    for ($p = $view * 0.9; $part -lt $MaxScroll; $p += $view * 0.9) {
-        $sp.SetScrollPercent(-1, [Math]::Min(100, $p))
-        $part++
-        $script:last = [UiShot2]::Save($main, (File $label "-scroll$part"), $script:last, 300, 600)
-        if ($p -ge 100) { break }
-    }
-    $sp.SetScrollPercent(-1, 0)
+} finally {
+    foreach ($w in $workers) { if ($w -and -not $w.HasExited) { try { $w.Kill() } catch {} } }
+    foreach ($id in @($apps.Values)) { try { Stop-Process -Id $id -Force -ErrorAction Stop } catch {} }
 }
 
-# ---------- Обход ----------
-$Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ })   # -File передает «a,b» одной строкой
-$steps = if ($Only) { $Plan | Where-Object { $n = $_.n; [bool]($Only | Where-Object { $n -like "$_*" }) } } else { $Plan }
-foreach ($size in $(if ($Sizes) { $Sizes } else { @("") })) {
-    if ($size) {
-        $w, $h = $size -split "x" | ForEach-Object { [int]$_ }
-        [UiShot2]::SetWindowPos($main, [IntPtr]::Zero, 0, 0, $w, $h, 0x14) | Out-Null
+# ---------- Сравнение с прошлым прогоном ----------
+$cmp = @{}
+if (-not $NoCompare) {
+    if (-not $Baseline) {
+        $Baseline = Get-ChildItem $shotsRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne (Resolve-Path $Out).Path -and (Test-Path (Join-Path $_.FullName "report.txt")) } |
+            Sort-Object Name | Select-Object -Last 1 -ExpandProperty FullName
     }
-    $r = New-Object UiShot2+RECT; [UiShot2]::GetWindowRect($main, [ref]$r) | Out-Null
-    $tag = "{0}x{1}" -f ($r.R - $r.L), ($r.B - $r.T)
-    Write-Host "Размер окна $tag" -ForegroundColor Cyan
-    foreach ($s in $steps) {
-        $t0 = $sw.Elapsed.TotalSeconds
-        $script:scrollEl = $null
-        $ok = $true
-        foreach ($c in $s.c) { $ok = (Press $c) -and $ok }
-        if (-not $ok) { continue }
-        if ($s.dialog) { Shoot-Dialogs ("{0}-{1}" -f $tag, $s.n) }
-        elseif ($s.tabs) {
-            foreach ($t in $s.tabs) {
-                if (Press $t) { Shoot ("{0}-{1}-{2}" -f $tag, $s.n, ($t -replace '[*\\/:?"<>| ]', '').ToLower()) }
-            }
-        } else { Shoot ("{0}-{1}" -f $tag, $s.n) }
-        if ($s.back) { Press $s.back | Out-Null; $script:last = 0L }
-        Write-Host ("  {0,-18} {1,5:0.0} с  (+{2:0.0})" -f $s.n, $sw.Elapsed.TotalSeconds, ($sw.Elapsed.TotalSeconds - $t0))
+    if ($Baseline -and (Test-Path $Baseline)) {
+        foreach ($line in [UiShot]::Compare($Out, $Baseline, (Join-Path $Out "diff"))) { $p = $line -split '\|'; $cmp[$p[0]] = $p }
+        Write-Host ("Сравнение с {0}: {1:0.0} с" -f $Baseline, $sw.Elapsed.TotalSeconds)
     }
 }
-[UiShot2]::Flush()
 
-# ---------- Итог: страница со всеми снимками ----------
+# ---------- Итог: report.txt и index.html ----------
 $imgs = Get-ChildItem $Out -Filter *.png | Sort-Object Name
-$html = "<!doctype html><meta charset=utf-8><title>CHIMERION UI</title><style>body{background:#111;color:#ccc;font:14px Segoe UI;margin:16px}figure{display:inline-block;margin:8px;vertical-align:top}img{max-width:460px;border:1px solid #333}figcaption{margin-top:4px}</style>" +
-    (($imgs | ForEach-Object { "<figure><a href='$($_.Name)'><img src='$($_.Name)' loading=lazy></a><figcaption>$($_.BaseName)</figcaption></figure>" }) -join "`n")
+$inv = [Globalization.CultureInfo]::InvariantCulture
+function Pct($c) { if ($c[1] -eq "-") { -1.0 } else { [double]::Parse($c[1], $inv) } }
+$changed = @($imgs | Where-Object { $cmp[$_.Name] -and (Pct $cmp[$_.Name]) -ge $MinDiff } | Sort-Object { -(Pct $cmp[$_.Name]) })
+$minor = @($imgs | Where-Object { $cmp[$_.Name] -and (Pct $cmp[$_.Name]) -gt 0 -and (Pct $cmp[$_.Name]) -lt $MinDiff })
+$new = @($imgs | Where-Object { $cmp[$_.Name] -and $cmp[$_.Name][1] -eq "-" })
+$lines = @("Прогон $Out", "Проходы: $($passes -join ', ')", "Снимков: $($imgs.Count), время $([Math]::Round($sw.Elapsed.TotalSeconds, 1)) с", "Ошибок: $($script:allFails.Count)") + @($script:allFails | ForEach-Object { "  $_" })
+if ($cmp.Count) {
+    $lines += "Сравнение с $Baseline`: изменилось $($changed.Count) (от $MinDiff%), мелочей $($minor.Count), новых $($new.Count)"
+    $lines += @($changed + $new | ForEach-Object { "  $($_.Name): $($cmp[$_.Name][1])% $($cmp[$_.Name][2])" })
+    if ($minor.Count) { $lines += "Мелочи (меньше $MinDiff%, обычно живые данные):"; $lines += @($minor | ForEach-Object { "  $($_.Name): $($cmp[$_.Name][1])%" }) }
+}
+[IO.File]::WriteAllLines((Join-Path $Out "report.txt"), [string[]]$lines, [Text.UTF8Encoding]::new($false))
+
+$enc = { param($s) [Net.WebUtility]::HtmlEncode($s) }
+$figs = foreach ($f in $imgs) {
+    $c = $cmp[$f.Name]; $note = ""; $cls = ""
+    if ($c) {
+        if ($c[2] -like "diff/*") { if ((Pct $c) -ge $MinDiff) { $cls = " class=changed" }; $note = " · <a href='$($c[2])'>отличия $($c[1])%</a>" }
+        elseif ($c[2] -and $c[1] -ne "-") { $cls = " class=changed"; $note = " · $(& $enc $c[2])" }
+        elseif ($c[1] -eq "-") { $note = " · новый" }
+    }
+    "<figure$cls><a href='$($f.Name)'><img src='$($f.Name)' loading=lazy></a><figcaption>$(& $enc $f.BaseName)$note</figcaption></figure>"
+}
+$head = "<h1>CHIMERION, снимки интерфейса</h1><p>$($imgs.Count) снимков · проходы $($passes -join ', ') · $([Math]::Round($sw.Elapsed.TotalSeconds,1)) с · ошибок $($script:allFails.Count)" +
+    $(if ($cmp.Count) { " · изменилось $($changed.Count), мелочей $($minor.Count), новых $($new.Count) по сравнению с $(& $enc (Split-Path $Baseline -Leaf))" } else { "" }) + "</p>" +
+    $(if ($script:allFails.Count) { "<ul class=err>" + (($script:allFails | ForEach-Object { "<li>$(& $enc $_)</li>" }) -join "") + "</ul>" } else { "" })
+$html = "<!doctype html><meta charset=utf-8><title>CHIMERION UI</title><style>body{background:#111;color:#ccc;font:14px Segoe UI;margin:16px}a{color:#7ab}h1{font-size:18px}.err{color:#f77}figure{display:inline-block;margin:8px;vertical-align:top;padding:4px}figure.changed{outline:2px solid #e85}img{max-width:460px;border:1px solid #333}figcaption{margin-top:4px;max-width:460px}</style>" +
+    $head + ($figs -join "`n")
 [IO.File]::WriteAllText((Join-Path $Out "index.html"), $html, [Text.UTF8Encoding]::new($false))
 
-if (-not $KeepOpen) { $proc.CloseMainWindow() | Out-Null; if (-not $proc.WaitForExit(3000)) { $proc | Stop-Process -Force } }
-Write-Host ("Готово: {0} снимков за {1:0.0} с -> {2}" -f $imgs.Count, $sw.Elapsed.TotalSeconds, $Out) -ForegroundColor Green
+$color = if ($script:allFails.Count) { "Red" } else { "Green" }
+Write-Host ("Готово: {0} снимков, ошибок {1}{2}, {3:0.0} с -> {4}" -f $imgs.Count, $script:allFails.Count, $(if ($cmp.Count) { ", изменилось $($changed.Count), мелочей $($minor.Count), новых $($new.Count)" } else { "" }), $sw.Elapsed.TotalSeconds, $Out) -ForegroundColor $color
+if ($script:allFails.Count) { exit 1 }

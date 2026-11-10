@@ -63,7 +63,7 @@ public static class UsageCounter
     /// <summary>Отметка. atStart: первая после запуска, она идет всегда. True: сервер принял.</summary>
     public static async Task<bool> PingAsync(AppSettings s, DateTime now, bool atStart = false, CancellationToken ct = default)
     {
-        if (!Due(s, now, atStart)) return false;
+        if (!Due(s, now, atStart) || Storage.NoUpload) return false; // тестовая копия не считается запуском
         var id = DeviceId(s);
         var check = Inspect(id);
         var body = JsonSerializer.Serialize(new

@@ -121,6 +121,7 @@ public static class Crowd
     public static async Task<bool> SendAsync(Queue q, CancellationToken ct = default, DateTime? now = null)
     {
         var t = now ?? DateTime.Now;
+        if (Storage.NoUpload) return false; // прогон тестов на копии данных не попадает в общую карту
         if (q.Items.Count == 0 && q.Sites.Count == 0 || q.LastSent is { } last && t - last < SendEvery) return false;
         var body = JsonSerializer.Serialize(new
         {

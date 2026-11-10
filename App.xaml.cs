@@ -7,7 +7,17 @@ public partial class App : Application
 {
     private static Mutex? _single;
     /// <summary>Сигнал от второй копии: «покажи окно». Вторая копия будит первую и закрывается.</summary>
-    private const string ShowSignal = @"Local\DNEX-show-window";
+    private static readonly string ShowSignal = @"Local\DNEX-show-window" + InstanceSuffix;
+
+    /// <summary>
+    /// Копия данных для тестов (DNEX_NO_AUTORESTORE=1 и свой DNEX_DATA_DIR): своя «единственная копия» на каждую папку
+    /// данных. Такая копия DNS компьютера сама не меняет, поэтому может работать рядом с настоящей CHIMERION и с другими
+    /// тестовыми копиями (tools/ui-shots.ps1 снимает темы параллельно). У обычного запуска суффикса нет.
+    /// </summary>
+    private static string InstanceSuffix =>
+        Dnex.Services.Storage.TestCopy && Environment.GetEnvironmentVariable("DNEX_DATA_DIR") is { Length: > 0 } dir
+            ? "-test-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(dir.ToLowerInvariant())))[..12]
+            : "";
     private static EventWaitHandle? _show;
 
     /// <summary>Только один экземпляр: две копии CHIMERION, меняющие DNS одновременно, могли бы перепутать резервную копию.</summary>
@@ -36,7 +46,7 @@ public partial class App : Application
         bool first;
         try
         {
-            _single = new Mutex(false, @"Local\DNEX-single-instance");
+            _single = new Mutex(false, @"Local\DNEX-single-instance" + InstanceSuffix);
             // После обновления новая копия стартует, пока старая еще закрывается: ждем ее до 20 секунд
             try { first = _single.WaitOne(Dnex.Services.Updater.StartedByRestart ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
             catch (AbandonedMutexException) { first = true; } // прежняя копия завершилась аварийно: мьютекс наш

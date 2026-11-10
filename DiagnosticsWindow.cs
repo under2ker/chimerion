@@ -174,7 +174,8 @@ internal sealed class DiagnosticsWindow
         foreach (var b in _buttons) b.IsEnabled = true;
         _running = false;
         // «Сообщить о сбое»: форма обращения открывается и без отчета, если проверка не удалась (отправить можно и так)
-        if (_reportAfterRun && _w.IsLoaded) { _reportAfterRun = false; await BusyAsync(ReportAsync); }
+        // Не IsLoaded: страница, встроенная в главное окно, своего окна не показывает. Закрыли за время проверки: не открываем
+        if (_reportAfterRun && _open == this) { _reportAfterRun = false; await BusyAsync(ReportAsync); }
     }
 
     /// <summary>

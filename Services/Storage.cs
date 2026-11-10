@@ -14,6 +14,18 @@ public static class Storage
             ? custom
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DNEX");
 
+    /// <summary>
+    /// Копия данных для тестов и снимков (DNEX_NO_AUTORESTORE=1, ставит tools/ui-shots.ps1): программа не меняет DNS
+    /// компьютера и ничего не отправляет в общую карту и счетчик, чтобы прогоны не попадали в статистику.
+    /// </summary>
+    public static bool TestCopy => Environment.GetEnvironmentVariable("DNEX_NO_AUTORESTORE") == "1";
+
+    /// <summary>
+    /// Запущенная тестовая копия ничего не отправляет в общую карту и счетчик. Модульные тесты (DNEX_TEST_HOST=1)
+    /// отправку проверяют на поддельном HTTP, им она нужна.
+    /// </summary>
+    public static bool NoUpload => TestCopy && Environment.GetEnvironmentVariable("DNEX_TEST_HOST") != "1";
+
     public static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,

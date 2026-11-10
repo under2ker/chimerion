@@ -69,8 +69,7 @@ internal sealed class HelpWindow
             tabs.ColumnDefinitions.Add(new ColumnDefinition());
             var (box, icon, title, sub) = TabTile(items[i].Icon, items[i].Title, items[i].Sub);
             int index = i;
-            box.MouseLeftButtonUp += (_, _) => Select(index);
-            box.KeyDown += (_, e) => { if (e.Key is Key.Enter or Key.Space) { Select(index); e.Handled = true; } };
+            box.Click += (_, _) => Select(index);
             box.MouseEnter += (_, _) => Paint(index);
             box.MouseLeave += (_, _) => Paint(index);
             box.ToolTip = $"Ctrl+{i + 1}";
@@ -103,7 +102,7 @@ internal sealed class HelpWindow
         _w.Top = Math.Clamp(top, area.Top + 10, Math.Max(area.Top + 10, area.Bottom - 10 - e.NewSize.Height));
     }
 
-    private static (Border, Controls.Icon, TextBlock, TextBlock) TabTile(string iconKind, string title, string sub)
+    private static (Controls.ClickTile, Controls.Icon, TextBlock, TextBlock) TabTile(string iconKind, string title, string sub)
     {
         var icon = new Controls.Icon { Kind = iconKind, Size = 20, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         var t = new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold };
@@ -112,8 +111,8 @@ internal sealed class HelpWindow
         text.Children.Add(t); text.Children.Add(s);
         var row = new DockPanel();
         DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon); row.Children.Add(text);
-        var box = new Border { Child = row, Padding = new Thickness(14, 11, 14, 11), CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1.5),
-                               Cursor = Cursors.Hand, Focusable = true, Background = Brushes.Transparent };
+        var box = new Controls.ClickTile { Child = row, Padding = new Thickness(14, 11, 14, 11), CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1.5),
+                                           Background = Brushes.Transparent };
         System.Windows.Automation.AutomationProperties.SetName(box, title);
         return (box, icon, t, s);
     }
