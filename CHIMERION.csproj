@@ -14,7 +14,7 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.170</Version>
+    <Version>0.1.171</Version>
     <!-- Сбой сети при загрузке базы уязвимостей (NU1900) не должен ронять сборку: уязвимости проверяет отдельный шаг CI -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
   </PropertyGroup>
@@ -30,6 +30,7 @@
   <ItemGroup>
     <!-- Тесты живут отдельно и не входят в программу -->
     <Compile Remove="tests/**" />
+    <Compile Remove="tools/**" />
     <!-- Наборы сайтов для обхода: встроенная копия на случай работы без сети (подпись проверяется так же, как у скачанных) -->
     <EmbeddedResource Include="catalog/bypass.json" LogicalName="bypass.json" />
     <EmbeddedResource Include="catalog/bypass.json.sig" LogicalName="bypass.json.sig" />
