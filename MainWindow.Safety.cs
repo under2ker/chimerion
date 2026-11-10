@@ -59,9 +59,9 @@ public partial class MainWindow
         UpdateTopList();
     }
 
-    /// <summary>Окно «Как вас видят сервисы»: только по уже собранным данным, без новых запросов.</summary>
+    /// <summary>Страница «Аккаунты»: только по уже собранным данным, без новых запросов.</summary>
     private void AccountRisk_Click(object sender, System.Windows.RoutedEventArgs e) =>
-        AccountRiskWindow.Show(this, AccountRiskNow, PinCountry);
+        AccountRiskWindow.Show(AccountRiskNow, PinCountry, () => BrowserCheckWindow.Show(BrowserCheckState));
 
     /// <summary>
     /// Оценка по последней проверке подключения. Страна берется только у сервисов, которые открылись через Smart DNS:

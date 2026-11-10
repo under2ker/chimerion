@@ -6,15 +6,24 @@ using Dnex.Services;
 namespace Dnex;
 
 /// <summary>
-/// Окно «Как вас видят сервисы»: из какой страны и с какого адреса ChatGPT, Claude и Gemini видят вас сейчас,
-/// какая страна для них привычная и что из этого грозит аккаунту. Данные берутся из последней проверки
-/// подключения и истории стран (AccountSafety), окно само в сеть не ходит.
+/// Страница «Аккаунты»: из какой страны и с какого адреса ChatGPT, Claude и Gemini видят вас сейчас, какая страна
+/// для них привычная, что из этого грозит аккаунту и как его беречь. Справа то, что можно проверить сразу: браузер
+/// и активные сеансы Claude. Данные берутся из последней проверки подключения и истории стран (AccountSafety),
+/// страница сама в сеть не ходит. Раньше это были две страницы: «Как вас видят сервисы» и «Безопасность аккаунта».
 /// </summary>
 internal sealed class AccountRiskWindow
 {
+    public const string Title = "Аккаунты";
+    public const string ClaudeSettingsUrl = "https://claude.ai/settings";
+    public const string Disclaimer = "CHIMERION помогает замечать смену страны подключения, но не может гарантировать защиту от блокировки. Правила проверки аккаунтов определяет сам сервис.";
+
     private static AccountRiskWindow? _open;
     private readonly Window _w;
     private readonly Func<(AccountRisk.Result Result, Freshness Fresh, string? Pinned)> _source;
+    private readonly Action<string> _pin;
+    private readonly Action _openBrowser;
+    private readonly StackPanel _state = new();
+    private readonly StackPanel _left = new() { Orientation = Orientation.Horizontal };
 
     /// <summary>Когда страну последний раз измерили при текущем подключении; NetChanged — после смены сети еще не мерили.</summary>
     public sealed record Freshness(DateTime? MeasuredAt, bool NetChanged);
@@ -29,46 +38,74 @@ internal sealed class AccountRiskWindow
         }
         return f.NetChanged ? "После смены сети страна еще не проверена" : null;
     }
-    private readonly Action<string> _pin;
-    private readonly StackPanel _body = new();
-    private readonly StackPanel _left = new() { Orientation = Orientation.Horizontal };
 
-    public static void Show(Window? owner, Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin)
+    /// <summary>Советы: значок, заголовок, пояснение. Сначала то, за чем следит программа, потом то, что делает человек.</summary>
+    public static readonly (string Icon, string Title, string Text)[] Tips =
+    {
+        ("globe", "Одна страна",
+            "Заходите в ChatGPT, Claude и Gemini из одной и той же страны и не меняйте сервер без необходимости. Частая смена страны чаще всего ведет к проверкам и блокировкам. Перед сменой CHIMERION предупредит, если заметит разницу."),
+        ("circle-check", "Закрепите страну",
+            "Тогда серверы с другой страной выхода не подключатся сами. Кнопка внизу или выбор страны в настройках."),
+        ("shield-check", "Чистый адрес",
+            "Адреса из черных списков вызывают проверки и капчи. Если в «Сервисах» отмечен такой адрес, подключите другой сервер."),
+        ("triangle-alert", "Не пропускайте предупреждения",
+            "Если программа не смогла определить страну или сообщает, что она изменилась, проверьте подключение, прежде чем продолжить работу."),
+        ("smartphone", "Один вход, свои устройства",
+            "Не входите в один аккаунт одновременно из разных стран: для сервиса это похоже на передачу доступа. Незнакомые сеансы завершайте в настройках аккаунта."),
+        ("shield-user", "Защитите способ входа",
+            "Надежный пароль для почты или аккаунта, через который входите, и двухэтапная проверка, если она доступна."),
+    };
+
+    public static void Show(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser)
     {
         if (_open != null) { DnexDialog.Present(_open._w); _open.Render(); return; }
-        _open = new AccountRiskWindow(source, pin);
+        _open = new AccountRiskWindow(source, pin, openBrowser);
         DnexDialog.Present(_open._w);
     }
 
-    private AccountRiskWindow(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin)
+    private AccountRiskWindow(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser)
     {
         _source = source;
         _pin = pin;
-        _w = DnexDialog.CreateWindow("Как вас видят сервисы", 640);
-        _w.MaxHeight = Math.Min(860, Ui.WorkAreaOf(null).Height - 40);
+        _openBrowser = openBrowser;
+        _w = DnexDialog.CreateWindow(Title, Ui.Narrow + 40);
         _w.Closed += (_, _) => _open = null;
         _w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _w.Close(); };
 
-        var root = new Grid { Margin = new Thickness(24, 22, 24, 20) };
-        foreach (var h in new[] { GridLength.Auto, new GridLength(1, GridUnitType.Star), GridLength.Auto })
-            root.RowDefinitions.Add(new RowDefinition { Height = h });
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Как вас видят сервисы",
-            "Страна и адрес, с которыми ChatGPT, Claude и Gemini видят ваш вход. По последней проверке, без новых запросов", glyph: "shield-user"));
-
-        var scroll = new ScrollViewer { Content = _body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 14, 0, 0) };
-        Grid.SetRow(scroll, 1); root.Children.Add(scroll);
+        var root = new DockPanel { Margin = new Thickness(24, 22, 24, 20), LastChildFill = true };
+        var header = DnexDialog.Header(DialogKind.Info, Title,
+            "Как ChatGPT, Claude и Gemini видят ваш вход и как беречь аккаунт. По последней проверке, без новых запросов", glyph: "shield-user");
+        DockPanel.SetDock(header, Dock.Top);
+        root.Children.Add(header);
 
         var close = Ui.Action("Закрыть", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
         var footer = Ui.Footer(_left, close);
-        Grid.SetRow(footer, 2); root.Children.Add(footer);
+        footer.Margin = new Thickness(0, 14, 0, 0);
+        DockPanel.SetDock(footer, Dock.Bottom);
+        root.Children.Add(footer);
+
+        var left = new StackPanel();
+        left.Children.Add(_state);
+        left.Children.Add(Ui.Section("Как беречь аккаунт"));
+        left.Children.Add(TipsCard());
+
+        var right = new StackPanel();
+        right.Children.Add(Ui.Section("Проверить сейчас", first: true));
+        right.Children.Add(CheckCard());
+
+        var scroll = Ui.Scroll(Ui.Columns(left, right, 820, 3, 2), Ui.WorkAreaOf(null).Height - 230);
+        scroll.Margin = new Thickness(0, 14, 0, 0);
+        root.Children.Add(scroll);
+        _w.Loaded += (_, _) => _w.Dispatcher.BeginInvoke(scroll.ScrollToTop, System.Windows.Threading.DispatcherPriority.Background);
         _w.Content = root;
         Render();
     }
 
+    /// <summary>Состояние сейчас (итог, сервисы, что поправить) и кнопка закрепления страны внизу.</summary>
     private void Render()
     {
         var (r, fresh, pinned) = _source();
-        _body.Children.Clear();
+        _state.Children.Clear();
         _left.Children.Clear();
 
         // Итог: одно слово цветом уровня и короткое пояснение
@@ -78,25 +115,20 @@ internal sealed class AccountRiskWindow
             .Ref(TextBlock.ForegroundProperty, brush));
         verdict.Children.Add(Ui.Hint(AccountRisk.Summary(r), 4, "Text"));
         if (FreshnessText(fresh, DateTime.Now) is { } when) verdict.Children.Add(Ui.Hint(when, 6));
-        _body.Children.Add(Ui.Card(verdict));
+        _state.Children.Add(Ui.Card(verdict));
 
-        _body.Children.Add(Ui.Section("Сервисы", true));
+        _state.Children.Add(Ui.Section("Сервисы"));
         var table = new StackPanel();
         foreach (var s in r.Services) table.Children.Add(ServiceRow(s));
-        _body.Children.Add(Ui.Card(table));
+        _state.Children.Add(Ui.Card(table));
 
         if (r.Factors.Count > 0)
         {
-            _body.Children.Add(Ui.Section("Что поправить"));
+            _state.Children.Add(Ui.Section("Что поправить"));
             var list = new StackPanel();
             foreach (var f in r.Factors) list.Children.Add(FactorRow(f));
-            _body.Children.Add(Ui.Card(list));
+            _state.Children.Add(Ui.Card(list));
         }
-
-        _body.Children.Add(Ui.Hint("Что именно сервисы считают подозрительным, снаружи не знает никто. Чаще всего блокируют за частую смену страны " +
-                                   "и за адреса из черных списков: за этим окно и следит", 2));
-        _body.Children.Add(Ui.Section("Как беречь аккаунт"));
-        _body.Children.Add(Ui.InfoTiles(Tips, 2));
 
         // Одно действие, которое реально снижает риск: закрепить привычную страну, если она общая и еще не закреплена
         if (pinned == null && AccountRisk.CommonHome(r.Services) is { } home)
@@ -105,13 +137,48 @@ internal sealed class AccountRiskWindow
             _left.Children.Add(Ui.Hint($"Страна закреплена: {GeoLocation.CountryName(pinned)}", 0).With(h => h.VerticalAlignment = VerticalAlignment.Center));
     }
 
-    private static readonly (string, string)[] Tips =
+    /// <summary>Советы списком: значок, заголовок и пояснение, между пунктами тонкая черта.</summary>
+    private static Border TipsCard()
     {
-        ("Одна страна", "Заходите в ChatGPT, Claude и Gemini из одной и той же страны. Частая смена страны чаще всего ведет к проверкам и блокировкам"),
-        ("Закрепите страну", "Тогда серверы с другой страной выхода не подключатся сами. Кнопка внизу или выбор страны в настройках"),
-        ("Чистый адрес", "Адреса из черных списков вызывают проверки и капчи. Если окно отметило такой адрес, подключите другой сервер"),
-        ("Один вход", "Не входите в один аккаунт одновременно с устройств в разных странах: для сервиса это похоже на передачу доступа"),
-    };
+        var list = new StackPanel();
+        for (int i = 0; i < Tips.Length; i++)
+        {
+            var (icon, title, text) = Tips[i];
+            if (i > 0) list.Children.Add(Ui.Separator().With(s => s.Margin = new Thickness(0, 14, 0, 14)));
+            var row = new DockPanel();
+            var glyph = new Controls.Icon { Kind = icon, Size = 18, Margin = new Thickness(0, 1, 14, 0), VerticalAlignment = VerticalAlignment.Top }
+                .Ref(Controls.Icon.ForegroundProperty, "Accent");
+            DockPanel.SetDock(glyph, Dock.Left);
+            row.Children.Add(glyph);
+            var texts = new StackPanel();
+            texts.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            texts.Children.Add(Ui.Hint(text, 4));
+            row.Children.Add(texts);
+            list.Children.Add(row);
+        }
+        return Ui.Card(list).With(c => c.Padding = new Thickness(22));
+    }
+
+    /// <summary>Что можно проверить сразу: браузер и активные сеансы Claude; внизу оговорка о гарантиях.</summary>
+    private Border CheckCard()
+    {
+        var box = new StackPanel();
+        box.Children.Add(new TextBlock { Text = "Этот браузер", FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        box.Children.Add(Ui.Hint("Идет ли Claude в вашем браузере тем же путем, что проверяет программа", 4));
+        box.Children.Add(Ui.Action("Проверить браузер", "Strong", _openBrowser)
+            .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); }));
+
+        box.Children.Add(new TextBlock { Text = "Активные сеансы Claude", FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 0) });
+        box.Children.Add(Ui.Hint("Список устройств, с которых выполнен вход, в настройках аккаунта Claude", 4));
+        box.Children.Add(Ui.Action("Открыть настройки Claude", "Strong", () => AutoStart.OpenUrl(ClaudeSettingsUrl))
+            .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); b.ToolTip = "Откроется в браузере"; }));
+
+        box.Children.Add(Ui.Separator().With(s => s.Margin = new Thickness(0, 18, 0, 12)));
+        box.Children.Add(new TextBlock { Text = "Что именно сервисы считают подозрительным, снаружи не знает никто. Чаще всего блокируют за частую смену страны и за адреса из черных списков: за этим страница и следит.",
+                                         FontSize = 12, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        box.Children.Add(new TextBlock { Text = Disclaimer, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        return Ui.Card(box).With(c => c.Padding = new Thickness(22));
+    }
 
     private static FrameworkElement ServiceRow(AccountRisk.ServiceView s)
     {

@@ -152,13 +152,12 @@ public partial class MainWindow
         "Режим" => ModeToggle,
         "Диагностика" => DiagToggle,
         "Тест скорости" => SpeedButton,
-        "Как вас видят сервисы" => AccountRiskButton,
+        AccountRiskWindow.Title or BrowserCheckWindow.Title => AccountRiskButton,
         "Помощь" => HelpToggle,
         "Журнал" => LogToggle,
         "Настройки" => SettingsButton,
         "CHIMERION DNS" => ChimerionDnsButton,
         "Google Flow" => FlowButton,
-        AccountGuideWindow.Title or BrowserCheckWindow.Title => _panelLinkButtons.GetValueOrDefault(AccountGuideWindow.Title),
         _ => null,
     };
 

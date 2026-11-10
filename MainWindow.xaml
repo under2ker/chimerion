@@ -140,7 +140,7 @@
                 <Button x:Name="SpeedButton" Click="SpeedTest_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Ваше подключение, скорость интернета и скорость DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="gauge" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelSpeedText" Text="Тест скорости"/></StackPanel></Button>
                 <Button x:Name="AccountRiskButton" Click="AccountRisk_Click" Style="{StaticResource PanelNavButton}"
-                        ToolTip="Из какой страны и с какого адреса вас видят ChatGPT, Claude и Gemini, и чем это грозит аккаунту"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-user" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAccountRiskText" Text="Аккаунты"/></StackPanel></Button>
+                        ToolTip="Как вас видят ChatGPT, Claude и Gemini, чем это грозит аккаунту и как его беречь"><StackPanel Orientation="Horizontal"><controls:Icon Kind="shield-user" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelAccountRiskText" Text="Аккаунты"/></StackPanel></Button>
                 <Button x:Name="LogToggle" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Журнал: что делала программа, копирование для поддержки" AutomationProperties.Name="Журнал"
                               Click="LogToggle_Click"><StackPanel Orientation="Horizontal"><controls:Icon Kind="scroll-text" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelLogText" Text="Журнал"/></StackPanel></Button>
                 <Border Tag="navgroup" Height="1" Margin="10,14,10,10" Background="{DynamicResource Border}"/>

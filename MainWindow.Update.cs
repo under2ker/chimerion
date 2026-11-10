@@ -73,10 +73,9 @@ public partial class MainWindow
         return v.Card;
     }
 
-    /// <summary>Ссылки внизу левого меню над карточкой обновления (под CHIMERION DNS и «Помощью»): безопасность аккаунта, сообщить о проблеме, канал, сайт.</summary>
+    /// <summary>Ссылки внизу левого меню над карточкой обновления (под CHIMERION DNS и «Помощью»): сообщить о проблеме, канал, сайт.</summary>
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
-        (AccountGuideWindow.Title, "shield-check", () => AccountGuideWindow.Show(() => AccountRisk_Click(this, new RoutedEventArgs()), () => BrowserCheckWindow.Show(BrowserCheckState))),
         ("Сообщить о сбое", "triangle-alert", () => DiagToggle_Click(this, new RoutedEventArgs())),
         ("Канал в Telegram", "logo:LogoTelegram", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
         ("Сайт chimerion.dev", "globe", () => AutoStart.OpenUrl("https://chimerion.dev")),
