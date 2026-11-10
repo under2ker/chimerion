@@ -2175,6 +2175,7 @@
  "самые медленные": "slowest",
  "запросов в секунду": "queries per second",
  "Подключите Smart DNS, чтобы измерить его скорость": "Connect Smart DNS to measure its speed",
+ "Скорость подключенного DNS измерится вместе с тестом": "The connected DNS speed is measured with the test",
  "Замер скачает и отправит до нескольких сотен мегабайт": "The test transfers up to a few hundred megabytes",
  "Запустить тест": "Start test",
  "Остановить": "Stop",

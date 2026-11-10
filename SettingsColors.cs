@@ -150,7 +150,7 @@ public partial class SettingsWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        left.Children.Add(new TextBlock { Text = slot.Title });
+        left.Children.Add(new TextBlock { Text = slot.Title, TextWrapping = TextWrapping.Wrap });
         left.Children.Add(new TextBlock { Text = slot.Where, Style = (Style)FindResource("FieldHint"), TextWrapping = TextWrapping.Wrap });
         var warn = ThemeColors.Warning(slot.Key, color);
         if (warn != null)
@@ -186,13 +186,12 @@ public partial class SettingsWindow
         swatch.Click += (_, _) => OpenPalette(swatch, color, Set);
         right.Children.Add(swatch);
         right.Children.Add(hex);
-        if (_colors.ContainsKey(K(slot.Key)))
-        {
-            var undo = new Button { Content = new Controls.Icon { Kind = "refresh-cw", Size = 14 }, Style = (Style)FindResource("Ghost"), Padding = new Thickness(8), MinHeight = 0,
-                                    Margin = new Thickness(4, 0, 0, 0), ToolTip = $"Вернуть стандартный цвет «{slot.Title}» ({std})" };
-            undo.Click += (_, _) => { _colors.Remove(K(slot.Key)); Preview(); RenderColors(); };
-            right.Children.Add(undo);
-        }
+        // Кнопка сброса есть всегда, у стандартного цвета только скрыта: образцы и поля во всех строках на одной линии
+        var undo = new Button { Content = new Controls.Icon { Kind = "refresh-cw", Size = 14 }, Style = (Style)FindResource("Ghost"), Padding = new Thickness(8), MinHeight = 0,
+                                Margin = new Thickness(4, 0, 0, 0), ToolTip = $"Вернуть стандартный цвет «{slot.Title}» ({std})",
+                                Visibility = _colors.ContainsKey(K(slot.Key)) ? Visibility.Visible : Visibility.Hidden };
+        undo.Click += (_, _) => { _colors.Remove(K(slot.Key)); Preview(); RenderColors(); };
+        right.Children.Add(undo);
         Grid.SetColumn(right, 1);
         grid.Children.Add(right);
         return grid;

@@ -427,6 +427,9 @@ internal static class Ui
         }
         // Последний элемент DockPanel занимает все свободное место. Без левой части им оказывалась крайняя левая кнопка
         // и растягивалась (в диалогах «Понятно» выходила на всю ширину): пустой заполнитель забирает место вместо нее
+        // Подпись слева по центру строки кнопок, а не прижата к верху (было видно в «Тесте скорости»)
+        if (left is FrameworkElement fe && fe.ReadLocalValue(FrameworkElement.VerticalAlignmentProperty) == DependencyProperty.UnsetValue)
+            fe.VerticalAlignment = VerticalAlignment.Center;
         d.Children.Add(left ?? new Border());
         var footer = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 16, 0, 0), Padding = new Thickness(0, 14, 0, 0), Child = d }
             .Ref(Border.BorderBrushProperty, "Border");

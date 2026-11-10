@@ -80,7 +80,12 @@ public sealed class Icon : Viewbox
     public static readonly DependencyProperty StrokeWidthProperty = DependencyProperty.Register(
         nameof(StrokeWidth), typeof(double), typeof(Icon), new PropertyMetadata(2.0, (d, _) => ((Icon)d).Build()));
 
+    /// <summary>False: всегда контур Lucide без анимации (крестик закрытия окна, а не «x» в квадрате).</summary>
+    public static readonly DependencyProperty AnimatedProperty = DependencyProperty.Register(
+        nameof(Animated), typeof(bool), typeof(Icon), new PropertyMetadata(true, (d, _) => ((Icon)d).Build()));
+
     public string Kind { get => (string)GetValue(KindProperty); set => SetValue(KindProperty, value); }
+    public bool Animated { get => (bool)GetValue(AnimatedProperty); set => SetValue(AnimatedProperty, value); }
     public double Size { get => (double)GetValue(SizeProperty); set => SetValue(SizeProperty, value); }
     public bool Solid { get => (bool)GetValue(SolidProperty); set => SetValue(SolidProperty, value); }
     public Brush Foreground { get => (Brush)GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
@@ -183,7 +188,7 @@ public sealed class Icon : Viewbox
         _glyph = null;
         // Анимированная версия, если она есть (кроме залитых: залитая звезда избранного остается статичной)
         // У стетоскопа в наборе анимация пульса: она совпадает с значком activity, поэтому он рисуется своим контуром
-        if (!Solid && Kind != "stethoscope" && AnimatedIcons.Get(Kind) is { } anim)
+        if (Animated && !Solid && Kind != "stethoscope" && AnimatedIcons.Get(Kind) is { } anim)
         {
             _glyph = new AnimatedGlyph(this, anim);
             // Рисунок занимает середину поля 32×32: показываем центральные 24×24, тогда размер и толщина линии как у Lucide
