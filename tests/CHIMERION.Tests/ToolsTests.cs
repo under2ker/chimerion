@@ -12,6 +12,20 @@ public class ToolsTests
         "--filter-tcp=443 --hostlist=\"%LISTS%list-google.txt\" --dpi-desync-fake-tls=^! --dpi-desync-fake-quic=\"%BIN%quic_initial_www_google_com.bin\"\r\n";
 
     [Fact]
+    public void Update_check_failure_is_quiet_and_says_it_does_not_matter()
+    {
+        var text = ToolsWindow.UpdateCheckFailed("GitHub временно ограничил запросы, попробуйте позже.");
+        Assert.Equal("Обновления не проверены: GitHub временно ограничил запросы, попробуйте позже. На работу это не влияет", text);
+    }
+
+    [Fact]
+    public void Zapret_service_card_names_the_button_and_the_cause()
+    {
+        Assert.Contains("service.bat", ZapretTool.ServiceCardText);
+        Assert.Contains("«Удалить службу zapret»", ZapretTool.ServiceCardText);
+    }
+
+    [Fact]
     public void Strategy_args_are_taken_from_bat_with_paths_and_escapes()
     {
         var a = ZapretTool.ParseArgs(Bat, @"C:\Z\bin\", @"C:\Z\lists\", games: false)!;

@@ -144,10 +144,19 @@ internal sealed class ToolsWindow
                 var r = await t.CheckAsync();
                 if (!quiet) SetStatus(t, t.UpdateAvailable ? $"Доступна версия {r.Version}" : "Установлена последняя версия", false);
             }
-            catch (ToolException e) { if (!quiet) SetStatus(t, e.Message, true); }
+            // Ошибка проверки (чаще всего GitHub ограничил запросы) не мешает работе: приглушенно, без красного,
+            // и не закрывает собой настоящую ошибку включения
+            catch (ToolException e) { if (!quiet && !_errors.Contains(t.Id)) SetStatus(t, UpdateCheckFailed(e.Message), false); }
         }
         Render();
     }
+
+    /// <summary>Текст карточки, когда проверить обновления не удалось.</summary>
+    internal static string UpdateCheckFailed(string reason) =>
+        $"Обновления не проверены: {reason.TrimEnd('.')}. На работу это не влияет";
+
+    /// <summary>Служба zapret из service.bat: проверяется вне долгих действий, чтобы не звать sc.exe на каждое обновление хода работы.</summary>
+    private bool _zapretService;
 
     private void SetStatus(Tool t, string text, bool error)
     {
@@ -268,6 +277,7 @@ internal sealed class ToolsWindow
     /// <summary>Обновляет обе карточки, настройки и итоги подбора по текущему состоянию.</summary>
     private void Render()
     {
+        if (!_busy) _zapretService = ZapretTool.ForeignServiceInstalled();
         foreach (var c in _cards) RenderCard(c);
         RenderSettings();
         RenderPick();
@@ -282,9 +292,10 @@ internal sealed class ToolsWindow
         if (foreign) running = true;
         bool busyHere = _busy && _busyTool == t;
         bool want = c.Target ?? running;
+        bool service = t is ZapretTool && _zapretService && !busyHere;
 
         string state, color;
-        if (busyHere) (state, color) = (_verb switch { "Включение" => "Включаю…", "Выключение" => "Выключаю…", "Обновление" => "Обновляю…", "Подбор" => "Подбираю стратегию…", "Настройка" => "Применяю настройку…", _ => "Работаю…" }, "Accent");
+        if (busyHere) (state, color) = (_verb switch { "Включение" => "Включаю…", "Выключение" => "Выключаю…", "Обновление" => "Обновляю…", "Подбор" => "Подбираю стратегию…", "Настройка" => "Применяю настройку…", "Удаление" => "Удаляю службу…", _ => "Работаю…" }, "Accent");
         else if (foreign) (state, color) = ("Работает ваша копия", "Ok");
         else if (running) (state, color) = ("Работает", "Ok");
         else if (installed) (state, color) = ("Выключено", "Muted");
@@ -303,7 +314,7 @@ internal sealed class ToolsWindow
         c.Toggle.ToolTip = foreign ? "Запущена ваша копия, не из CHIMERION: выключается через ее значок в трее" : c.Toggle.ToolTip;
 
         // Что дальше: один короткий шаг для того, кто открыл окно впервые
-        string next = busyHere || _errors.Contains(t.Id) ? ""
+        string next = busyHere || service || _errors.Contains(t.Id) ? ""
             : t is TgProxyTool ? (foreign ? "Ссылка для Telegram берется из настроек вашей копии"
                                  : running ? "Telegram не подключился сам: нажмите «Подключить Telegram»"
                                  : "Включите, затем нажмите «Подключить Telegram»")
@@ -314,9 +325,16 @@ internal sealed class ToolsWindow
 
         // Кнопки
         c.Actions.Children.Clear();
+        if (service)
+            c.Actions.Children.Add(Ui.Action("Удалить службу zapret", "Primary",
+                () => _ = RunAsync(t, "Служба zapret удалена. Теперь включите обход переключателем", p =>
+                {
+                    p.Report("Удаляю службу zapret…");
+                    return ZapretTool.RemoveForeignServiceAsync();
+                }, "Удаление")).With(b => b.IsEnabled = !_busy));
         if (t is TgProxyTool && running)
             c.Actions.Children.Add(Ui.Action("Подключить Telegram", "Primary", ConnectTelegram).With(b => b.IsEnabled = !_busy));
-        if (t is ZapretTool z && installed)
+        if (t is ZapretTool z && installed && !service)
         {
             if (_pickCts != null) c.Actions.Children.Add(Ui.Action("Остановить подбор", "Strong", () => _pickCts?.Cancel()));
             else c.Actions.Children.Add(Ui.Action("Подобрать стратегию", running ? "Primary" : "Strong", () => _ = PickAsync(z)).With(b => b.IsEnabled = !_busy));
@@ -348,8 +366,10 @@ internal sealed class ToolsWindow
         {
             c.Progress.Visibility = Visibility.Collapsed;
             c.Bar.IsIndeterminate = false;
+            // Служба zapret важнее итога прошлого действия: пока она стоит, обход не включится
+            if (service) st = ZapretTool.ServiceCardText;
             c.Message.Text = st;
-            c.Message.SetResourceReference(TextBlock.ForegroundProperty, _errors.Contains(t.Id) ? "Bad" : "Muted");
+            c.Message.SetResourceReference(TextBlock.ForegroundProperty, service || _errors.Contains(t.Id) ? "Bad" : "Muted");
             c.Message.Visibility = st.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
 

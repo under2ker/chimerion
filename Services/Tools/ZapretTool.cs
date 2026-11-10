@@ -377,6 +377,24 @@ public sealed class ZapretTool : Tool
         catch (Exception) { return 1; }
     }
 
+    /// <summary>Текст для карточки обхода: служба мешает, и рядом кнопка, которая ее удаляет.</summary>
+    public const string ServiceCardText =
+        "Установлена служба zapret из service.bat: она запускает свою копию обхода, и CHIMERION не может включить свой. Нажмите «Удалить службу zapret», Windows спросит права";
+
+    /// <summary>
+    /// Удаление службы zapret, поставленной через service.bat (то же, что Remove Services там): остановить и удалить.
+    /// Остановка службы закрывает и ее winws. Нужны права администратора, Windows спросит их один раз.
+    /// </summary>
+    public static async Task RemoveForeignServiceAsync()
+    {
+        const string script = "& sc.exe stop zapret | Out-Null\nStart-Sleep -Seconds 2\n& sc.exe delete zapret | Out-Null\nexit $LASTEXITCODE";
+        try { await DnsSwitcher.RunPsAsync(script, elevated: true); }
+        catch (UacDeclinedException) { throw new ToolException("Права администратора не выданы: без них службу zapret не удалить"); }
+        for (int i = 0; i < 10 && ForeignServiceInstalled(); i++) await Task.Delay(300);
+        if (ForeignServiceInstalled())
+            throw new ToolException("Служба zapret еще не удалена: закройте окно «Службы», если оно открыто, или перезагрузите компьютер");
+    }
+
     private static void EnsureNoForeignService()
     {
         if (ForeignServiceInstalled())
