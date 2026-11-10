@@ -2663,5 +2663,15 @@
  "TG WS Proxy и zapret-discord-youtube": "TG WS Proxy and zapret-discord-youtube",
  "Flowseal, bol-van; WinDivert, basil00. Лицензия MIT. CHIMERION ставит их официальные релизы с GitHub после проверки контрольной суммы.": "Flowseal, bol-van; WinDivert, basil00. MIT license. CHIMERION installs their official GitHub releases after verifying the checksum.",
  "Списки сайтов и адресов": "Site and address lists",
- "Иконки и логотипы": "Icons and logos"
+ "Иконки и логотипы": "Icons and logos",
+ "Главный переключатель. Без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется": "The main switch. Without it only you change the server, and the country AI services see you from will not change on its own",
+ "Второй сервер с той же страной выхода. Если основной перестанет отвечать, Windows перейдет на него за секунды. Вступит в силу после переподключения": "A second server with the same exit country. If the main one stops answering, Windows switches to it in seconds. Takes effect after reconnecting",
+ "Подключение и замена только с выходом в этой стране. «Любая»: без закрепления, но защита аккаунтов спросит перед сменой страны": "Connect and replace only with an exit in this country. “Any”: no pinning, but account protection asks before the country changes",
+ "от 15 до 600, рекомендуем 60. Работает, пока подключено": "15 to 600, we recommend 60. Works while connected",
+ "от 1 до 60, рекомендуем 15. Чаще значит лишние запросы к сервисам с вашего адреса": "1 to 60, we recommend 15. More often means extra requests to services from your address",
+ "Переходить на рабочий сервер, если нейросеть не открывается": "Switch to a working server if an AI service does not open",
+ "Без галочки только уведомление. Нужна разрешенная смена сервера": "Without it you only get a notification. Requires server switching to be allowed",
+ "Сообщит, если сайт перестал открываться, и скажет почему. Список хранится только у вас: «Помощь» → «Сайты под наблюдением»": "Tells you when a site stops opening and why. The list is kept only on your PC: “Help” → “Watched sites”",
+ "Если DNS сбросили, вернет подключение. Если сервер перестал отвечать, переключит на другой, когда смена сервера разрешена": "If DNS gets reset, it restores the connection. If the server stops answering, it switches to another one when switching is allowed",
+ "Если DNS сбрасывают снова и снова, сторож отступит и подскажет, что делать": "If DNS keeps getting reset, the watchdog backs off and tells you what to do"
 }

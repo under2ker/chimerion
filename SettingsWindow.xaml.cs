@@ -136,11 +136,6 @@ public partial class SettingsWindow : Window
             ("Таймаут", "Сколько ждать ответа. Слишком мало: рабочие, но далекие серверы попадут в нерабочие"),
             ("Проверок одновременно", "Больше значит быстрее, но на слабой сети проверка мешает другим программам"),
         }),
-        ["Watch"] = ("Как работает сторож", new[]
-        {
-            ("Следит за DNS", "Пока вы подключены, сторож следит за DNS. Если его сбросили, вернет подключение, а если сервер умер, переключит на другой, когда смена сервера разрешена"),
-            ("Не спорит с VPN", "Со сторонним VPN сторож не спорит. Если DNS сбрасывают снова и снова, он отступит и подскажет, что делать."),
-        }),
         ["Split"] = ("Зачем два DNS", new[]
         {
             ("Свои домены", "Домены, которые вы добавите в «Настроить два DNS», тоже пойдут через Smart DNS"),
@@ -150,7 +145,7 @@ public partial class SettingsWindow : Window
     private readonly List<(string Tab, FrameworkElement Block, System.Windows.Controls.Panel Home, int Index)> _extras = new();
 
     /// <summary>Вкладки без правой колонки: их содержимое само занимает всю ширину.</summary>
-    private static readonly HashSet<string> WideTabs = new() { "About", "Look" };
+    private static readonly HashSet<string> WideTabs = new() { "About", "Look", "Watch" };
 
     /// <summary>
     /// Правая колонка до края страницы: выноска или собственный блок вкладки. На узкой странице колонки нет,
@@ -160,7 +155,7 @@ public partial class SettingsWindow : Window
     {
         if (SidePanel == null || BodyScroll == null || SideColumn == null || Pages == null) return;
         if (_extras.Count == 0)
-            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Watch", WatchServices), ("Watch", WatchSites), ("Data", DataExtra) })
+            foreach (var (tab, block) in new (string, FrameworkElement)[] { ("Privacy", PrivacyExtra), ("Data", DataExtra) })
             {
                 var home = (System.Windows.Controls.Panel)block.Parent;
                 _extras.Add((tab, block, home, home.Children.IndexOf(block)));

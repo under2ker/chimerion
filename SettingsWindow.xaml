@@ -301,61 +301,82 @@
 
                     <!-- Сторож и трей -->
                     <StackPanel x:Name="PageWatch" Visibility="Collapsed" Tag="Сторож и трей|Как часто программа следит за подключением и проверяет сервисы">
-                        <TextBlock Text="Интервалы" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Сторож DNS, сек" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox x:Name="WatchdogBox" Style="{StaticResource FieldBox}"/>
-                                    <TextBlock Text="от 15 до 600. Рекомендуем 60. Работает, пока подключено" Style="{StaticResource FieldHint}"/>
-                                </StackPanel>
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock Text="Проверка сервисов в трее, мин" Style="{StaticResource FieldLabel}"/>
-                                    <TextBox x:Name="TrayMinutesBox" Style="{StaticResource FieldBox}"/>
-                                    <TextBlock Text="от 1 до 60. Рекомендуем 15: чаще значит лишние запросы к сервисам с вашего адреса" Style="{StaticResource FieldHint}"/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                        <StackPanel x:Name="WatchServices">
-                        <TextBlock Text="Проверка сервисов" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
+                        <!-- Две колонки по образцу «О программе»: слева то, что меняет поведение (смена сервера, интервалы),
+                             справа проверки и пояснение. Высоты колонок независимы, зависимые галочки с отступом -->
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Style="{StaticResource Para}" Text="Пока вы подключены, программа следит за ChatGPT, Claude, Gemini и самим сервером. Если что-то упало, придет уведомление с причиной"/>
-                                <CheckBox x:Name="AutoSwitchBox" Content="Переключаться, когда нейросеть перестала открываться" Margin="0,14,0,0"/>
-                                <TextBlock Text="Если ChatGPT, Claude или Gemini перестали открываться через текущий сервер, программа сама перейдет на лучший рабочий. Иначе только уведомление. Работает, если ниже разрешено «Программа может сама переходить на другой сервер»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                            </StackPanel>
-                        </Border>
-                        </StackPanel>
-                        <StackPanel x:Name="WatchSites">
-                        <TextBlock Text="Наблюдение за сайтами" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
-                            <StackPanel>
-                                <CheckBox x:Name="SiteWatchBox"><TextBlock Text="Следить за сайтами, которыми я пользуюсь (рекомендуем)" TextWrapping="Wrap"/></CheckBox>
-                                <TextBlock Text="Сообщит, если сайт, которым вы пользуетесь, перестал открываться, и скажет почему. Список хранится только у вас: «Помощь» → «Сайты под наблюдением»" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                            </StackPanel>
-                        </Border>
-                        </StackPanel>
-                        <TextBlock Text="Смена сервера и аккаунты" Style="{StaticResource SectionTitle}"/>
-                        <Border Style="{StaticResource Card}" Padding="18">
-                            <StackPanel>
-                                <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
-                                <TextBlock Text="Главный переключатель: без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется. От него зависят переключение выше и запасной сервер ниже" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                                <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="26,14,0,0"/>
-                                <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать вовсе, Windows перейдет на него за секунды. Работает, когда включено «Программа может сама переходить». Изменение вступит в силу после переподключения" Style="{StaticResource FieldHint}" Margin="52,4,0,0"/>
-                                <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)" Margin="0,14,0,0"/>
-                                <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
-                                <DockPanel x:Name="CountryRow" Margin="26,14,0,0">
-                                    <ContentControl x:Name="CountryHost" DockPanel.Dock="Right" VerticalAlignment="Center"/>
+                                <TextBlock Text="Смена сервера и аккаунты" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
                                     <StackPanel>
-                                        <TextBlock Text="Страна выхода для нейросетей" FontWeight="SemiBold"/>
-                                        <TextBlock Text="Программа подключит и подберет замену только с выходом в этой стране. «Любая»: без закрепления, но защита аккаунтов все равно держит страну, из которой вас уже видели, и спросит перед ее сменой" Style="{StaticResource FieldHint}" Margin="0,4,12,0"/>
+                                        <CheckBox x:Name="AllowSwitchBox" Content="Программа может сама переходить на другой сервер" Checked="AllowSwitch_Changed" Unchecked="AllowSwitch_Changed"/>
+                                        <TextBlock Text="Главный переключатель. Без него сервер меняете только вы, и страна, из которой вас видят нейросети, сама не поменяется" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
+                                        <CheckBox x:Name="BackupBox" Content="Ставить запасной сервер (рекомендуем)" Margin="24,14,0,0"/>
+                                        <TextBlock Text="Второй сервер с той же страной выхода. Если основной перестанет отвечать, Windows перейдет на него за секунды. Вступит в силу после переподключения" Style="{StaticResource FieldHint}" Margin="48,4,0,0"/>
+
+                                        <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,1,0,0" Margin="0,18,0,0" Padding="0,18,0,0">
+                                            <StackPanel>
+                                                <CheckBox x:Name="SafetyBox" Content="Защита аккаунтов (рекомендуем)"/>
+                                                <TextBlock Text="Помнит, из какой страны вас видят сервисы, и не меняет ее без вашего согласия: смена страны повышает риск блокировки" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
+                                                <DockPanel x:Name="CountryRow" Margin="24,14,0,0">
+                                                    <ContentControl x:Name="CountryHost" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="16,0,0,0"/>
+                                                    <StackPanel>
+                                                        <TextBlock Text="Страна выхода для нейросетей" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="Подключение и замена только с выходом в этой стране. «Любая»: без закрепления, но защита аккаунтов спросит перед сменой страны" Style="{StaticResource FieldHint}" Margin="0,4,0,0"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
-                                </DockPanel>
+                                </Border>
+
+                                <TextBlock Text="Интервалы" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Сторож DNS, сек" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="WatchdogBox" Style="{StaticResource FieldBox}"/>
+                                            <TextBlock Text="от 15 до 600, рекомендуем 60. Работает, пока подключено" Style="{StaticResource FieldHint}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Проверка сервисов в трее, мин" Style="{StaticResource FieldLabel}"/>
+                                            <TextBox x:Name="TrayMinutesBox" Style="{StaticResource FieldBox}"/>
+                                            <TextBlock Text="от 1 до 60, рекомендуем 15. Чаще значит лишние запросы к сервисам с вашего адреса" Style="{StaticResource FieldHint}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
-                        </Border>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Проверка сервисов" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource InfoBody}" Margin="0" Text="Пока вы подключены, программа следит за ChatGPT, Claude, Gemini и самим сервером. Если что-то упало, придет уведомление с причиной"/>
+                                        <CheckBox x:Name="AutoSwitchBox" Margin="0,14,0,0"><TextBlock Text="Переходить на рабочий сервер, если нейросеть не открывается" TextWrapping="Wrap"/></CheckBox>
+                                        <TextBlock Text="Без галочки только уведомление. Нужна разрешенная смена сервера" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Наблюдение за сайтами" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <CheckBox x:Name="SiteWatchBox"><TextBlock Text="Следить за сайтами, которыми я пользуюсь (рекомендуем)" TextWrapping="Wrap"/></CheckBox>
+                                        <TextBlock Text="Сообщит, если сайт перестал открываться, и скажет почему. Список хранится только у вас: «Помощь» → «Сайты под наблюдением»" Style="{StaticResource FieldHint}" Margin="24,4,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Как работает сторож" Style="{StaticResource SectionTitle}"/>
+                                <Border Style="{StaticResource Card}" Padding="22">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource InfoHead}" Margin="0" Text="Следит за DNS"/>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Если DNS сбросили, вернет подключение. Если сервер перестал отвечать, переключит на другой, когда смена сервера разрешена"/>
+                                        <TextBlock Style="{StaticResource InfoHead}" Text="Не спорит с VPN"/>
+                                        <TextBlock Style="{StaticResource InfoBody}" Text="Если DNS сбрасывают снова и снова, сторож отступит и подскажет, что делать"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
 
                     <!-- Два DNS -->
