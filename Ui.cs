@@ -195,8 +195,11 @@ internal static class Ui
     /// Длительность анимации с учетом Windows: если в «Специальных возможностях» выключены эффекты анимации,
     /// все переходы мгновенные. Логика не зависит от окончания анимаций, поэтому ничего не зависает.
     /// </summary>
-    public static Duration Motion(int ms) => SystemParameters.ClientAreaAnimation ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
-    public static bool Animate => SystemParameters.ClientAreaAnimation;
+    public static Duration Motion(int ms) => Animate ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
+    public static bool Animate => SystemParameters.ClientAreaAnimation && !NoAnimation;
+
+    /// <summary>DNEX_NO_ANIMATION=1: все переходы мгновенные (tools/ui-shots.ps1 снимает окна без ожидания анимаций).</summary>
+    private static readonly bool NoAnimation = Environment.GetEnvironmentVariable("DNEX_NO_ANIMATION") == "1";
 
     /// <summary>
     /// Текст в буфер обмена. Буфер часто на миг держат другие программы (ShareX, менеджеры буфера, удаленный рабочий
