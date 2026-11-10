@@ -243,6 +243,8 @@ public static class Diagnostics
             if (i.Detail.Length > 0) sb.AppendLine("    " + i.Detail);
             if (i.More.Length > 0) sb.AppendLine("    " + i.More);
         }
+        sb.AppendLine();
+        sb.AppendLine(ConnectionProbe.Gate.Summary());
         var failures = errors?.ToList() ?? new List<string>();
         if (failures.Count > 0)
         {

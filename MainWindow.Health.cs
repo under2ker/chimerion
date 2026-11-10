@@ -19,6 +19,9 @@ public partial class MainWindow
     /// автоматическое переключение. О восстановлении — короткое уведомление. Пока есть неподтвержденная неудача,
     /// следующая проверка идет через минуту, а не через обычный интервал.
     /// </summary>
+    /// <summary>Сколько фоновых проверок подряд нашли недоступный сервис. Сбрасывается при смене подключения и сети.</summary>
+    private int _trayFails;
+
     private async Task CheckServiceHealthAsync(NetSnapshot snap)
     {
         if (DnsSwitcher.GetActive() is not { } active || _busyConn || snap.Services.Count == 0) return;
@@ -73,9 +76,12 @@ public partial class MainWindow
         if (serverChange == false) Notify($"{name} снова отвечает на DNS-запросы", "Ok");
         if (up.Count > 0) Notify(ServiceHealth.UpText(name, up), "Ok");
 
-        // Неподтвержденная неудача: перепроверить через минуту, чтобы быстрее узнать о падении или о том, что все в порядке
+        // Неподтвержденная неудача: перепроверить через минуту, чтобы быстрее узнать о падении или о том, что все в порядке.
+        // Подтвержденная и повторяющаяся: пауза растет (ProbeGate.Backoff), чтобы не слать запросы к лежащему сервису
+        _trayFails = snap.Services.Any(x => !x.Access.StartsWith('✓')) ? _trayFails + 1 : 0;
         var normal = TimeSpan.FromMinutes(Math.Clamp(_settings.TrayCheckMinutes, 1, 60));
-        var next = _health.Suspicious ? TimeSpan.FromMinutes(1) : normal;
+        var next = _health.Suspicious ? TimeSpan.FromMinutes(1) : ProbeGate<NetSnapshot>.Backoff(normal, _trayFails);
+        if (next > normal && _trayTimer.Interval <= normal) Log($"Проверки подряд неудачны: следующая через {next.TotalMinutes:0} мин, чтобы не слать лишних запросов");
         if (_trayTimer.Interval != next) { _trayTimer.Stop(); _trayTimer.Interval = next; _trayTimer.Start(); }
     }
 

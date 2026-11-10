@@ -359,7 +359,7 @@ public partial class MainWindow
     private int _afterProbes;
     private bool _afterProbeRunning => _afterProbes > 0;
 
-    private void ConnectionChanged() { _connChangedAt = DateTime.Now; _connGeneration++; }
+    private void ConnectionChanged() { _connChangedAt = DateTime.Now; _connGeneration++; _trayFails = 0; ConnectionProbe.Gate.Invalidate(); }
 
     /// <summary>
     /// Проверка после смены подключения в фоне: снимок «после», сравнение, журнал, репутация адреса выхода.
@@ -703,6 +703,8 @@ public partial class MainWindow
             _netSignature = sig;
             _netChangedAt = DateTime.Now;
             _trayFullAt = DateTime.MinValue; // следующая проверка трея снова меряет страну
+            _trayFails = 0;
+            ConnectionProbe.Gate.Invalidate(); // результат до смены сети не про текущее подключение
             _netRecheck.Stop();
             _netRecheck.Start();
         }

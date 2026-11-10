@@ -62,9 +62,17 @@ public static class ConnectionProbe
     /// claude.ai, accounts.google.com) и без определения страны выхода. Фоновая проверка идет с того же адреса, с
     /// которого человек сидит в аккаунте, и лишние автоматические запросы к сайтам сервисов там ни к чему.
     /// </param>
+    /// <remarks>
+    /// Все проверки идут через общий ограничитель (Gate): одновременные запросы получают один результат, а только что
+    /// законченная проверка отдается повторно в течение 20 секунд. ct отменяет ожидание, а не саму проверку.
+    /// </remarks>
     public static Task<NetSnapshot> TakeAsync(AppSettings st, CancellationToken ct = default, bool leakTest = false, bool light = false) =>
-        SupportTrace.RunAsync($"Проверка подключения; облегченная={light}; утечка={leakTest}; сервисов={st.Targets.Count(t => t.Enabled)}",
-            () => TakeCoreAsync(st, ct, leakTest, light), ct);
+        Gate.RunAsync(leakTest ? ProbeLevel.Leak : light ? ProbeLevel.Light : ProbeLevel.Full, () =>
+            SupportTrace.RunAsync($"Проверка подключения; облегченная={light}; утечка={leakTest}; сервисов={st.Targets.Count(t => t.Enabled)}",
+                () => TakeCoreAsync(st, CancellationToken.None, leakTest, light), CancellationToken.None), ct);
+
+    /// <summary>Общий ограничитель проверок подключения. Invalidate — при смене подключения и сети.</summary>
+    public static readonly ProbeGate<NetSnapshot> Gate = new(TimeSpan.FromSeconds(20));
 
     private static async Task<NetSnapshot> TakeCoreAsync(AppSettings st, CancellationToken ct, bool leakTest, bool light)
     {
