@@ -62,14 +62,30 @@ internal sealed class DiagnosticsWindow
 
     private static DiagnosticsWindow? _open;
 
+    /// <param name="report">
+    /// «Сообщить о сбое»: после проверки сразу открыть обращение разработчику с приложенным отчетом. «Диагностика» без него
+    /// только проверяет и показывает итог.
+    /// </param>
     public static void Show(AppSettings settings, IReadOnlyList<Tool> tools, Func<Task<IEnumerable<string>>> logTail, Action<string> log,
-                            Func<string, Task>? fix = null)
+                            Func<string, Task>? fix = null, bool report = false)
     {
-        if (_open != null) { DnexDialog.Present(_open._w); return; }
-        _open = new DiagnosticsWindow(settings, tools, logTail, log) { _fix = fix };
+        if (_open != null)
+        {
+            DnexDialog.Present(_open._w);
+            if (report)
+            {
+                if (_open._running) _open._reportAfterRun = true;
+                else _ = _open.BusyAsync(_open.ReportAsync);
+            }
+            return;
+        }
+        _open = new DiagnosticsWindow(settings, tools, logTail, log) { _fix = fix, _reportAfterRun = report };
         DnexDialog.Present(_open._w);
         _ = _open.RunAsync();
     }
+
+    /// <summary>Проверка идет; после нее открыть обращение (см. <see cref="Show"/>, report).</summary>
+    private bool _running, _reportAfterRun;
 
     private static ResourceDictionary Res => Application.Current.Resources;
 
@@ -135,9 +151,12 @@ internal sealed class DiagnosticsWindow
 
     private async Task RunAsync()
     {
+        _running = true;
         foreach (var b in _buttons) b.IsEnabled = b.IsCancel;
         _list.Children.Clear();
-        _state.Text = "Проверяю подключение, сервисы, помехи, программы и обновления. Это до 20 секунд…";
+        _state.Text = _reportAfterRun
+            ? "Проверяю подключение, сервисы и программы, чтобы приложить отчет к обращению. Это до 20 секунд, потом откроется форма…"
+            : "Проверяю подключение, сервисы, помехи, программы и обновления. Это до 20 секунд…";
         _bar.Visibility = Visibility.Visible;
         try
         {
@@ -153,6 +172,9 @@ internal sealed class DiagnosticsWindow
         catch (Exception e) { _state.Text = "Диагностика не завершилась: " + e.Message; }
         _bar.Visibility = Visibility.Collapsed;
         foreach (var b in _buttons) b.IsEnabled = true;
+        _running = false;
+        // «Сообщить о сбое»: форма обращения открывается и без отчета, если проверка не удалась (отправить можно и так)
+        if (_reportAfterRun && _w.IsLoaded) { _reportAfterRun = false; await BusyAsync(ReportAsync); }
     }
 
     /// <summary>

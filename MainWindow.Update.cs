@@ -76,7 +76,8 @@ public partial class MainWindow
     /// <summary>Ссылки внизу левого меню над карточкой обновления (под CHIMERION DNS и «Помощью»): сообщить о проблеме, канал, сайт.</summary>
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
-        ("Сообщить о сбое", "triangle-alert", () => DiagToggle_Click(this, new RoutedEventArgs())),
+        // Не то же, что «Диагностика»: проверка идет ради отчета, после нее сразу открывается обращение разработчику
+        ("Сообщить о сбое", "send", () => DiagnosticsWindow.Show(_settings, _tools, LogForReportAsync, Log, DiagFixAsync, report: true)),
         ("Канал в Telegram", "logo:LogoTelegram", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
         ("Сайт chimerion.dev", "globe", () => AutoStart.OpenUrl("https://chimerion.dev")),
     };
