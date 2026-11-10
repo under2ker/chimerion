@@ -7,6 +7,8 @@
 // GET  /v1/stats    рейтинг серверов для сети провайдера того, кто спрашивает (или ?asn=), и общий. В поле incidents
 //                   новые блокировки популярных сервисов в этой сети (из sites в /v1/report).
 // POST /tg/<secret> Telegram-бот: /dns — что работает сейчас, /status — сколько данных.
+// POST /v1/ticket  обращение из программы («Сообщить о проблеме»): текст, очищенный отчет, необязательный контакт. Владельцу уходит в Telegram.
+// POST /v1/tickets статусы и ответы по своим обращениям (по секретным токенам, которые знает только программа).
 // POST /tg-setup    подключить бота (заголовок X-Admin-Key): адрес вебхука и команды.
 // GET  /v1/discover серверы, которые у многих работают: программы добавляют их к себе и проверяют сами.
 // GET  /v1/probe    открывается ли сайт снаружи России (с узла Cloudflare): «лежит у всех» или «не открывается у вас».
@@ -14,7 +16,7 @@
 // GET  /v1/ios      профиль DNS для iPhone (.mobileconfig) с DoH выбранного сервера.
 // GET  /            страница со статусом серверов для людей.
 //
-// Переменные: DB (D1), SALT, USAGE_SALT, TG_BOT_TOKEN, TG_WEBHOOK_SECRET, ADMIN_KEY (секреты wrangler).
+// Переменные: DB (D1), SALT, USAGE_SALT, TG_BOT_TOKEN, TG_WEBHOOK_SECRET, ADMIN_KEY, OWNER_CHAT_ID (секреты wrangler).
 
 const MAX_BODY = 64 * 1024;
 const MAX_ITEMS = 400;
@@ -214,41 +216,107 @@ export function topServers(rows, minChecks = 10, take = 5) {
     .slice(0, take);
 }
 
-async function tgSend(env, chatId, text) {
-  await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
-  });
+async function tgSend(env, chatId, text, markup) {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendMessage`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: String(text).slice(0, 4000), disable_web_page_preview: true, ...(markup ? { reply_markup: markup } : {}) }),
+    });
+    return await r.json().catch(() => null);
+  } catch { return null; }
 }
 
 const HELP =
   "Бот CHIMERION. Показывает, какие Smart DNS сейчас открывают ChatGPT, Claude и Gemini, по проверкам программ CHIMERION.\n\n" +
-  "/dns — лучшие серверы за последние 6 часов\n/status — сколько проверок пришло\n\n" +
+  "Выберите действие кнопкой или командой: /shim (подборка серверов), /status, /id. Личный доступ: /dns.\n\n" +
   "Сайт: chimerion.dev\nИсходный код: github.com/under2ker/chimerion\nКанал: @chimeriondns";
+
+/** Кнопки под сообщениями бота. Владельцу сверху добавляется список открытых обращений. */
+export function menuKeyboard(isOwner) {
+  const rows = [
+    [{ text: "Лучшие DNS сейчас", callback_data: "shim" }, { text: "Статус", callback_data: "status" }],
+    [{ text: "Мой ID", callback_data: "id" }, { text: "Скачать программу", url: "https://chimerion.dev" }],
+    [{ text: "Канал", url: "https://t.me/chimeriondns" }, { text: "Исходный код", url: "https://github.com/under2ker/chimerion" }],
+  ];
+  if (isOwner) rows.unshift([{ text: "Открытые обращения", callback_data: "tickets" }]);
+  return { inline_keyboard: rows };
+}
+
+async function dnsText(env) {
+  const top = topServers(await summary(env, null));
+  return top.length === 0
+    ? "Пока мало данных: за последние 6 часов нет сервера хотя бы с 10 проверками. Загляните позже."
+    : "Лучшие Smart DNS за последние 6 часов:\n\n" + top.map((t, i) =>
+        `${i + 1}. ${t.name}${t.name !== t.server ? ` (${t.server})` : ""}\n   работает в ${t.rate}% проверок из ${t.total}: ` +
+        Object.entries(t.services).map(([s, r]) => `${s} ${r}%`).join(", ")).join("\n\n") +
+      "\n\nУ разных провайдеров результат может отличаться. Программа CHIMERION подбирает сервер под вашего провайдера сама.";
+}
+
+async function statusText(env) {
+  const h = nowHour();
+  const r = await env.DB.prepare("SELECT SUM(n) AS reports FROM seen WHERE hour >= ?").bind(h - 24).first();
+  const s = await env.DB.prepare("SELECT COUNT(DISTINCT server) AS servers, COUNT(DISTINCT asn) AS asns, SUM(ok + fail) AS checks FROM stats WHERE hour >= ?").bind(h - 24).first();
+  return `За сутки: отчетов ${r?.reports || 0}, проверок ${s?.checks || 0}, серверов ${s?.servers || 0}, сетей провайдеров ${s?.asns || 0}.`;
+}
+
+const idText = (chatId) => `Ваш id в боте: ${chatId}\nУкажите его как контакт в окне «Сообщить о проблеме», и ответ придет сюда.`;
+
+/** Общие действия для команд и кнопок. true — обработано. */
+async function botAction(env, chatId, action, isOwner) {
+  const kb = menuKeyboard(isOwner);
+  // "dns" остается для кнопок под старыми сообщениями; команду /dns теперь отвечает бот на VPS (личный доступ)
+  if (action === "shim" || action === "dns") await tgSend(env, chatId, await dnsText(env), kb);
+  else if (action === "status") await tgSend(env, chatId, await statusText(env), kb);
+  else if (action === "id") await tgSend(env, chatId, idText(chatId), kb);
+  else if (action === "tickets" && isOwner) await sendTicketList(env, chatId);
+  else if (action === "help") await tgSend(env, chatId, HELP, kb);
+  else return false;
+  return true;
+}
 
 async function telegram(req, env) {
   if (req.headers.get("x-telegram-bot-api-secret-token") !== env.TG_WEBHOOK_SECRET) return new Response("forbidden", { status: 403 });
   const update = await req.json().catch(() => null);
+  const owner = await ownerChat(env);
+
+  // Нажатие кнопки под сообщением бота
+  const cb = update?.callback_query;
+  if (cb?.id && cb.message?.chat) {
+    try {
+      await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/answerCallbackQuery`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ callback_query_id: cb.id }),
+      });
+    } catch {}
+    const chatId = cb.message.chat.id;
+    await botAction(env, chatId, String(cb.data || ""), !!owner && String(chatId) === owner);
+    return new Response("ok");
+  }
+
   const msg = update?.message;
   if (!msg?.text || !msg.chat) return new Response("ok");
   const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase();
-  if (cmd === "/dns") {
-    const top = topServers(await summary(env, null));
-    const text = top.length === 0
-      ? "Пока мало данных: за последние 6 часов нет сервера хотя бы с 10 проверками. Загляните позже."
-      : "Лучшие Smart DNS за последние 6 часов:\n\n" + top.map((t, i) =>
-          `${i + 1}. ${t.name}${t.name !== t.server ? ` (${t.server})` : ""}\n   работает в ${t.rate}% проверок из ${t.total}: ` +
-          Object.entries(t.services).map(([s, r]) => `${s} ${r}%`).join(", ")).join("\n\n") +
-        "\n\nУ разных провайдеров результат может отличаться. Программа CHIMERION подбирает сервер под вашего провайдера сама.";
-    await tgSend(env, msg.chat.id, text);
-  } else if (cmd === "/status") {
-    const h = nowHour();
-    const r = await env.DB.prepare("SELECT SUM(n) AS reports FROM seen WHERE hour >= ?").bind(h - 24).first();
-    const s = await env.DB.prepare("SELECT COUNT(DISTINCT server) AS servers, COUNT(DISTINCT asn) AS asns, SUM(ok + fail) AS checks FROM stats WHERE hour >= ?").bind(h - 24).first();
-    await tgSend(env, msg.chat.id, `За сутки: отчетов ${r?.reports || 0}, проверок ${s?.checks || 0}, серверов ${s?.servers || 0}, сетей провайдеров ${s?.asns || 0}.`);
-  } else if (cmd === "/start" || cmd === "/help") {
-    await tgSend(env, msg.chat.id, HELP);
+  if (cmd === "/owner") {
+    // Один раз: владелец присылает ключ администратора, бот запоминает его чат. Сообщение с ключом удаляется
+    const key = msg.text.trim().split(/\s+/)[1] || "";
+    if (env.ADMIN_KEY && key === env.ADMIN_KEY) {
+      await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('owner', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(String(msg.chat.id)).run();
+      try {
+        await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMessage`, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ chat_id: msg.chat.id, message_id: msg.message_id }),
+        });
+      } catch {}
+      await tgSend(env, msg.chat.id, "Готово: этот чат теперь получает обращения из программы. Ответ на обращение: реплаем на его сообщение. Команды: /tickets, /t 12, /work 12, /fixed 12 0.1.36 текст, /close 12.", menuKeyboard(true));
+    } else {
+      await tgSend(env, msg.chat.id, key ? "Ключ не подошел. Скопируйте его из crowd-admin.txt целиком, без пробелов и переносов." : "После команды укажите ключ администратора: /owner ключ");
+    }
+    return new Response("ok");
   }
+  const isOwner = !!owner && String(msg.chat.id) === owner;
+  if (isOwner && await ownerMessage(env, msg)) return new Response("ok");
+  if (cmd === "/start" && /^\/start(?:@\w+)?\s+r\d/i.test(msg.text.trim())) await linkTicket(env, msg);
+  else if (cmd === "/start") await botAction(env, msg.chat.id, "help", isOwner);
+  else await botAction(env, msg.chat.id, cmd.slice(1), isOwner);
   return new Response("ok");
 }
 
@@ -258,15 +326,213 @@ async function setup(req, env) {
   const api = (m, body) => fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/${m}`, {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   }).then((r) => r.json());
-  const hook = await api("setWebhook", { url: `${origin}/tg/${env.TG_WEBHOOK_SECRET}`, secret_token: env.TG_WEBHOOK_SECRET, allowed_updates: ["message"] });
-  const cmds = await api("setMyCommands", { commands: [
-    { command: "dns", description: "Лучшие Smart DNS сейчас" },
-    { command: "status", description: "Сколько данных за сутки" },
-    { command: "help", description: "Что умеет бот" },
-  ] });
-  return json({ webhook: hook.ok, webhookError: hook.description, commands: cmds.ok });
+  // Сообщения бота принимает бот на VPS (оплата и личные доступы) и пересылает сюда то, что обслуживает Worker,
+  // тем же запросом с секретом TG_WEBHOOK_SECRET. Вебхук здесь ставить нельзя: он отключил бы бота на VPS (409),
+  // а меню команд задает он же. Только сообщаем, стоит ли вебхук
+  const info = await api("getWebhookInfo", {});
+  return json({ webhook: false, webhookError: info.result?.url ? "вебхук стоит: бот на VPS снимет его при перезапуске" : "не нужен, сообщения пересылает бот на VPS", commands: true });
 }
 
+
+// ---------- Обращения из программы ----------
+
+const TICKET_TEXT_MAX = 4000;
+const TICKET_REPORT_MAX = 48000;
+const TICKETS_PER_HOUR = 150;
+const TOKEN_RE = /^[0-9a-f]{32}$/;
+const EMAIL_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[A-Za-z]{2,24}$/;
+const TG_NAME_RE = /^@?[A-Za-z][A-Za-z0-9_]{4,31}$/;
+const TG_ID_RE = /^\d{5,15}$/;
+const STATUS_RU = { new: "получено", work: "в работе", fixed: "исправлено", closed: "закрыто" };
+
+/** Контакт: почта, @имя в Telegram или числовой ID (в Telegram или в боте). Null, если не похоже. */
+export function cleanContact(c) {
+  if (!c || typeof c.value !== "string") return null;
+  const v = c.value.trim();
+  if (c.kind === "email") return EMAIL_RE.test(v) ? { kind: "email", value: v } : null;
+  if (c.kind === "tg") return TG_NAME_RE.test(v) ? { kind: "tg", value: "@" + v.replace(/^@/, "") } : null;
+  if (c.kind === "tgid") return TG_ID_RE.test(v) ? { kind: "tgid", value: v } : null;
+  return null;
+}
+
+const cleanText = (t, max) => typeof t === "string" ? t.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim().slice(0, max) : "";
+
+/** Ключ обращения в базе. Соль постоянная (USAGE_SALT): SALT меняется при каждой выкладке, и токены перестали бы находить свои обращения. */
+const ticketKey = (token, env) => sha256(`ticket|${token}|${env.USAGE_SALT || ""}`);
+
+/** Чат владельца: секрет OWNER_CHAT_ID или то, что запомнила команда /owner. */
+async function ownerChat(env) {
+  if (env.OWNER_CHAT_ID) return String(env.OWNER_CHAT_ID);
+  const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'owner'").first().catch(() => null);
+  return r?.v || null;
+}
+
+const ago = (sec) => {
+  const m = Math.max(0, Math.round((Date.now() / 1000 - sec) / 60));
+  return m < 60 ? `${m} мин назад` : m < 1440 ? `${Math.round(m / 60)} ч назад` : `${Math.round(m / 1440)} дн назад`;
+};
+
+const CONTACT_RU = { email: "почта", tg: "Telegram", tgid: "ID" };
+
+/** Сообщение владельцу о новом обращении и файл с отчетом. Ответ владельца на это сообщение уходит пользователю. */
+async function notifyOwner(env, t, report) {
+  const owner = await ownerChat(env);
+  if (!owner || !env.TG_BOT_TOKEN) return;
+  const contact = t.contact ? `${CONTACT_RU[t.contact_kind] || "контакт"}: ${t.contact}` : "контакт не указан";
+  const head = `Обращение #${t.id} · версия ${t.version || "?"} · ${contact}\n\n`;
+  const tail = `\n\nОтветьте на это сообщение, и ответ уйдет пользователю.\n/fixed ${t.id} версия [текст] · /work ${t.id} · /close ${t.id} · /t ${t.id}`;
+  const sent = await tgSend(env, owner, head + t.text.slice(0, 2500) + tail);
+  const mid = sent?.result?.message_id;
+  if (!mid) return;
+  await env.DB.prepare("UPDATE tickets SET owner_msg = ? WHERE id = ?").bind(mid, t.id).run();
+  if (!report) return;
+  const f = new FormData();
+  f.append("chat_id", owner);
+  f.append("reply_parameters", JSON.stringify({ message_id: mid }));
+  f.append("document", new Blob([report], { type: "text/plain" }), `chimerion-ticket-${t.id}.txt`);
+  try { await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: f }); } catch {}
+}
+
+async function createTicket(req, env) {
+  if (!await allow(env, req, "ticket", 5)) return json({ error: "too many" }, 429);
+  const text = await req.text();
+  // Запас на экранирование (\uXXXX у старых клиентов): отчет и текст дальше обрезаются по своим пределам
+  if (text.length > 6 * (TICKET_REPORT_MAX + TICKET_TEXT_MAX)) return json({ error: "too large" }, 413);
+  let body;
+  try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
+  if (!body || body.v !== 1 || typeof body.token !== "string" || !TOKEN_RE.test(body.token)) return json({ error: "bad format" }, 400);
+  const msg = cleanText(body.text, TICKET_TEXT_MAX);
+  if (msg.length < 3) return json({ error: "empty" }, 400);
+  const contact = body.contact == null ? null : cleanContact(body.contact);
+  if (body.contact != null && !contact) return json({ error: "bad contact" }, 400);
+
+  const key = await ticketKey(body.token, env);
+  // Повторная отправка с тем же токеном (связь оборвалась после записи) не создает второго обращения
+  const again = await env.DB.prepare("SELECT id, code FROM tickets WHERE key = ?").bind(key).first();
+  if (again) return json({ id: again.id, code: again.code });
+
+  const now = Math.floor(Date.now() / 1000);
+  const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM tickets WHERE created > ?").bind(now - 3600).first();
+  if ((recent?.n || 0) >= TICKETS_PER_HOUR) return json({ error: "busy" }, 429);
+
+  const report = cleanText(body.report, TICKET_REPORT_MAX) || null;
+  const version = typeof body.app === "string" && /^\d+\.\d+\.\d+$/.test(body.app) ? body.app : null;
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  const code = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const row = await env.DB.prepare(
+    "INSERT INTO tickets (key, code, created, updated, version, text, report, contact_kind, contact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id")
+    .bind(key, code, now, now, version, msg, report, contact?.kind ?? null, contact?.value ?? null).first();
+  try {
+    await notifyOwner(env, { id: row.id, version, text: msg, contact: contact?.value, contact_kind: contact?.kind }, report);
+  } catch (e) { console.log("ticket notify", String(e)); }
+  return json({ id: row.id, code });
+}
+
+/** Статусы своих обращений: программа присылает токены (не больше 20), в ответе только то, что видит пользователь. */
+async function ticketStatuses(req, env) {
+  if (!await allow(env, req, "tickets", 120)) return json({ error: "too many" }, 429);
+  const text = await req.text();
+  if (text.length > 4096) return json({ error: "too large" }, 413);
+  let body;
+  try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
+  if (!body || body.v !== 1 || !Array.isArray(body.tokens)) return json({ error: "bad format" }, 400);
+  const tokens = [...new Set(body.tokens.filter((t) => typeof t === "string" && TOKEN_RE.test(t)))].slice(0, 20);
+  if (tokens.length === 0) return json({ tickets: [] });
+  const keys = await Promise.all(tokens.map((t) => ticketKey(t, env)));
+  const res = await env.DB.prepare(
+    `SELECT id, status, fix_version, reply, updated, user_chat IS NOT NULL AS tg FROM tickets WHERE key IN (${keys.map(() => "?").join(",")})`)
+    .bind(...keys).all();
+  return json({ tickets: (res.results || []).map((r) => ({ id: r.id, status: r.status, fixVersion: r.fix_version, reply: r.reply, updated: r.updated, tg: !!r.tg })) });
+}
+
+/** Команда владельца: /tickets, /t 12, /work 12, /fixed 12 0.1.36 текст, /close 12 текст, /reply 12 текст. */
+export function parseOwnerCommand(text) {
+  const m = /^\/([a-z]+)(?:@\w+)?(?:\s+(\d{1,9}))?(?:\s+([\s\S]+))?$/i.exec((text || "").trim());
+  if (!m) return null;
+  const cmd = m[1].toLowerCase();
+  const id = m[2] ? Number(m[2]) : null;
+  let rest = (m[3] || "").trim();
+  if (cmd === "tickets" && !id) return { cmd: "list" };
+  if (cmd === "t" && id) return { cmd: "show", id };
+  if (!id || !["reply", "work", "fixed", "close"].includes(cmd)) return null;
+  let version = null;
+  if (cmd === "fixed") {
+    const v = /^(\d+\.\d+\.\d+)(?:\s+([\s\S]*))?$/.exec(rest);
+    if (v) { version = v[1]; rest = (v[2] || "").trim(); }
+  }
+  if (cmd === "reply" && !rest) return null;
+  return { cmd, id, version, text: rest || null };
+}
+
+/** Что пользователю пишет бот, если он связал обращение со своим чатом. */
+export function userNotice(t) {
+  let s = `Обращение #${t.id}: ${STATUS_RU[t.status] || t.status}`;
+  if (t.status === "fixed" && t.fix_version) s += ` в версии ${t.fix_version}. Обновите CHIMERION, чтобы получить исправление`;
+  if (t.reply) s += `\n\n${t.reply}`;
+  return s;
+}
+
+async function applyOwner(env, p) {
+  const t = await env.DB.prepare("SELECT * FROM tickets WHERE id = ?").bind(p.id).first();
+  if (!t) return `Обращения #${p.id} нет`;
+  let status = { work: "work", fixed: "fixed", close: "closed" }[p.cmd] || t.status;
+  if (p.cmd === "reply" && status === "new") status = "work";
+  const reply = p.text ?? t.reply;
+  const version = p.version ?? t.fix_version;
+  await env.DB.prepare("UPDATE tickets SET status = ?, reply = ?, fix_version = ?, updated = ? WHERE id = ?")
+    .bind(status, reply, version, Math.floor(Date.now() / 1000), t.id).run();
+  let pushed = false;
+  if (t.user_chat) {
+    const r = await tgSend(env, t.user_chat, userNotice({ ...t, status, reply, fix_version: version }));
+    pushed = !!r?.ok;
+  }
+  return `#${t.id}: ${STATUS_RU[status]}${version && status === "fixed" ? ` в ${version}` : ""}. ` +
+    (pushed ? "Пользователю отправлено в Telegram и появится в программе." : "Появится в программе при ближайшей проверке (до часа).");
+}
+
+/** Открытые обращения (новые и в работе), до 20, с кнопками меню. */
+async function sendTicketList(env, chatId) {
+  const res = await env.DB.prepare("SELECT id, status, version, created, text FROM tickets WHERE status IN ('new', 'work') ORDER BY id DESC LIMIT 20").all();
+  const rows = res.results || [];
+  const line = (r) => `#${r.id} ${STATUS_RU[r.status]} · ${r.version || "?"} · ${ago(r.created)}\n${r.text.replace(/\s+/g, " ").slice(0, 80)}`;
+  await tgSend(env, chatId, rows.length === 0 ? "Открытых обращений нет." : "Открытые обращения:\n\n" + rows.map(line).join("\n\n"), menuKeyboard(true));
+}
+
+/** Сообщения владельца: ответ на обращение или команда. true — сообщение разобрано здесь. */
+async function ownerMessage(env, msg) {
+  const text = msg.text.trim();
+  const replyTo = msg.reply_to_message?.message_id;
+  if (replyTo && !text.startsWith("/")) {
+    const t = await env.DB.prepare("SELECT id FROM tickets WHERE owner_msg = ?").bind(replyTo).first();
+    if (!t) return false;
+    await tgSend(env, msg.chat.id, await applyOwner(env, { cmd: "reply", id: t.id, text }));
+    return true;
+  }
+  const p = parseOwnerCommand(text);
+  if (!p) return false;
+  if (p.cmd === "list") {
+    await sendTicketList(env, msg.chat.id);
+  } else if (p.cmd === "show") {
+    const t = await env.DB.prepare("SELECT * FROM tickets WHERE id = ?").bind(p.id).first();
+    await tgSend(env, msg.chat.id, !t ? `Обращения #${p.id} нет`
+      : `#${t.id} · ${STATUS_RU[t.status]} · версия ${t.version || "?"} · ${ago(t.created)}\n` +
+        `${t.contact ? `${CONTACT_RU[t.contact_kind]}: ${t.contact}` : "контакт не указан"}${t.user_chat ? " · связан с ботом" : ""}\n\n${t.text.slice(0, 3000)}` +
+        (t.reply ? `\n\nОтвет: ${t.reply}` : ""));
+  } else {
+    await tgSend(env, msg.chat.id, await applyOwner(env, p));
+  }
+  return true;
+}
+
+/** Пользователь открыл ссылку t.me/бот?start=r12-код: ответы по обращению #12 приходят и в этот чат. */
+async function linkTicket(env, msg) {
+  const arg = msg.text.trim().split(/\s+/)[1] || "";
+  const m = /^r(\d{1,9})-([0-9a-f]{8})$/.exec(arg);
+  const row = m ? await env.DB.prepare("UPDATE tickets SET user_chat = ? WHERE id = ? AND code = ? RETURNING id").bind(msg.chat.id, Number(m[1]), m[2]).first() : null;
+  await tgSend(env, msg.chat.id, row
+    ? `Готово. Ответ по обращению #${row.id} придет сюда, а также появится в программе CHIMERION.`
+    : "Ссылка устарела или неверная. Откройте окно «Сообщить о проблеме» в программе и нажмите «Получать ответ в Telegram» еще раз.");
+}
 
 /** Тело запроса счетчика: { v: 1, id: 32 шестнадцатеричных знака, ver }. Null, если формат другой. */
 async function usageBody(req) {
@@ -279,6 +545,9 @@ async function usageBody(req) {
 
 // Сутки статистики начинаются в полночь по времени владельца (UTC+5)
 const today = () => Math.floor((Date.now() + 5 * 3600000) / 86400000);
+
+/** Сколько секунд отметка считается свежей: период отметок клиента (6 ч) и час запаса. */
+const LIVE_WINDOW = 7 * 3600;
 
 const count = (v, max) => (Number.isInteger(v) && v >= 0 ? Math.min(v, max) : 0);
 
@@ -310,12 +579,15 @@ async function ping(req, env) {
   const src = ["board", "windows", "random"].includes(body.src) ? body.src : "?";
   const token = typeof body.tok === "string" && hex.test(body.tok) ? await salted(body.tok) : "";
   const sec = count(body.sec, 864000), runs = count(body.runs, 10000);
-  await env.DB.prepare(`INSERT INTO devices (id, mask, first_day, last_day, days, version, source, token, moved, total_sec, last_sec, runs)
-      VALUES (?1, ?2, ?3, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?8, ?9)
-      ON CONFLICT (id) DO UPDATE SET days = days + (excluded.last_day > last_day), version = excluded.version, source = excluded.source,
+  // seen_at: время отметки, dns: в этот момент программа была подключена к DNS. Нужны для сводки «на связи сейчас», по устройству наружу не отдаются
+  const seenAt = Math.floor(Date.now() / 1000), dns = body.dns === true ? 1 : 0;
+  await env.DB.prepare(`INSERT INTO devices (id, mask, first_day, last_day, days, version, source, token, moved, total_sec, last_sec, runs, seen_at, dns)
+      VALUES (?1, ?2, ?3, ?3, 1, ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10, ?11)
+      ON CONFLICT (id) DO UPDATE SET seen_at = excluded.seen_at, dns = excluded.dns,
+        days = days + (excluded.last_day > last_day), version = excluded.version, source = excluded.source,
         token_changes = token_changes + (token <> '' AND excluded.token <> '' AND token <> excluded.token), token = excluded.token,
         moved = moved + excluded.moved, total_sec = total_sec + excluded.total_sec, last_sec = CASE WHEN excluded.last_day > last_day THEN excluded.last_sec ELSE last_sec + excluded.last_sec END, runs = runs + excluded.runs, last_day = excluded.last_day`)
-    .bind(id, `${body.id.slice(0, 4)}****${body.id.slice(-4)}`, d, ver, src, token, body.moved === true ? 1 : 0, sec, runs).run();
+    .bind(id, `${body.id.slice(0, 4)}****${body.id.slice(-4)}`, d, ver, src, token, body.moved === true ? 1 : 0, sec, runs, seenAt, dns).run();
   return json({ ok: true });
 }
 
@@ -342,9 +614,13 @@ async function usageReport(env) {
   const d = today();
   const r = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(last_day >= ?) AS day, SUM(last_day >= ?) AS week, SUM(last_day >= ?) AS month, SUM(first_day >= ?) AS fresh,
       SUM(total_sec) AS seconds, SUM(source <> 'board' OR replaced > 0 OR token_changes > 0 OR moved > 0) AS flagged FROM devices`)
-    .bind(d - 1, d - 7, d - 30, d - 7).first();
-  const v = await env.DB.prepare("SELECT version, COUNT(*) AS n FROM devices WHERE last_day >= ? GROUP BY version ORDER BY n DESC LIMIT 8").bind(d - 30).all();
-  const list = await env.DB.prepare("SELECT mask, first_day, last_day, days, version, source, replaced, token_changes, moved, total_sec, last_sec, runs FROM devices ORDER BY last_day DESC, total_sec DESC LIMIT 200").all();
+    .bind(d, d - 6, d - 29, d - 6).first(); // сегодня, 7 дней, 30 дней с учетом сегодняшнего (раньше брали на день больше)
+  const v = await env.DB.prepare("SELECT version, COUNT(*) AS n FROM devices WHERE last_day >= ? GROUP BY version ORDER BY n DESC LIMIT 8").bind(d - 29).all();
+  // Отметка приходит раз в 6 часов, поэтому «на связи» = отметка не старше 7 часов. Точнее по этим данным не сказать.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const live = await env.DB.prepare(`SELECT SUM(seen_at >= ?1) AS online, SUM(seen_at >= ?1 AND dns = 1) AS online_dns, SUM(seen_at >= ?1 AND dns = 0) AS online_no_dns,
+      SUM(seen_at >= ?2) AS hour, SUM(seen_at >= ?3 AND dns = 1) AS dns_day, MIN(first_day) AS since, MAX(seen_at) AS last_seen FROM devices`)
+    .bind(nowSec - LIVE_WINDOW, nowSec - 3600, nowSec - 86400).first();
   const reach = await env.DB.prepare("SELECT day, COUNT(*) AS n FROM reach WHERE day >= ? GROUP BY day").bind(d - 30).all();
   const ids = await env.DB.prepare("SELECT day, n FROM device_days WHERE day >= ?").bind(d - 30).all();
   const byDay = (rows) => Object.fromEntries(rows.results.map((x) => [x.day, x.n]));
@@ -353,7 +629,10 @@ async function usageReport(env) {
   const estimate = { today: est[d] || 0, yesterday: est[d - 1] || 0, avg7: last7.length ? Math.round(last7.reduce((a, b) => a + b, 0) / last7.length) : 0, peak30: Math.max(0, ...Object.values(est)) };
   const daily = [...Array(14).keys()].map((i) => ({ day: d - i, ids: exact[d - i] || 0, estimate: est[d - i] || 0 }));
   const n = (x) => x || 0;
-  return { estimate, daily, total: n(r?.total), day: n(r?.day), week: n(r?.week), month: n(r?.month), fresh: n(r?.fresh), seconds: n(r?.seconds), flagged: n(r?.flagged), versions: v.results, devices: list.results, today: d };
+  return { estimate, daily, total: n(r?.total), day: n(r?.day), week: n(r?.week), month: n(r?.month), fresh: n(r?.fresh), seconds: n(r?.seconds), flagged: n(r?.flagged), versions: v.results, today: d,
+    // Без списка устройств: по отдельным людям данные владельцу не нужны, только числа
+    live: { windowSec: LIVE_WINDOW, online: n(live?.online), onlineDns: n(live?.online_dns), onlineNoDns: n(live?.online_no_dns), hour: n(live?.hour), dnsDay: n(live?.dns_day),
+      since: n(live?.since), lastSeen: n(live?.last_seen), now: nowSec } };
 }
 
 /** Не больше limit запросов в час с одного адреса для дорогих проверок (probe). */
@@ -654,6 +933,8 @@ export default {
       if (req.method === "POST" && url.pathname === "/v1/report") return await report(req, env);
       if (req.method === "GET" && url.pathname === "/v1/stats") { ctx.waitUntil(noteReach(req, env)); return await stats(req, env, ctx); }
       if (req.method === "POST" && url.pathname === "/v1/ping") return await ping(req, env);
+      if (req.method === "POST" && url.pathname === "/v1/ticket") return await createTicket(req, env);
+      if (req.method === "POST" && url.pathname === "/v1/tickets") return await ticketStatuses(req, env);
       if (req.method === "GET" && url.pathname === "/v1/usage" && env.ADMIN_KEY && env.OWNER_ID && req.headers.get("x-admin-key") === env.ADMIN_KEY && req.headers.get("x-device-id") === env.OWNER_ID) return json(await usageReport(env));
       if (req.method === "POST" && env.TG_WEBHOOK_SECRET && url.pathname === `/tg/${env.TG_WEBHOOK_SECRET}`) return await telegram(req, env);
       if (req.method === "POST" && url.pathname === "/tg-setup") return await setup(req, env);
@@ -686,6 +967,10 @@ export default {
       env.DB.prepare("DELETE FROM devices WHERE last_day < ?").bind(today() - 180),
       env.DB.prepare("DELETE FROM reach WHERE day < ?").bind(today() - 31),
       env.DB.prepare("DELETE FROM device_days WHERE day < ?").bind(today() - 180),
+      // Обращения: отчет стирается через 30 дней, закрытые и исправленные живут 90, остальные 180
+      env.DB.prepare("UPDATE tickets SET report = NULL WHERE report IS NOT NULL AND created < ?").bind(Math.floor(Date.now() / 1000) - 30 * 86400),
+      env.DB.prepare("DELETE FROM tickets WHERE (status IN ('fixed', 'closed') AND updated < ?1) OR updated < ?2")
+        .bind(Math.floor(Date.now() / 1000) - 90 * 86400, Math.floor(Date.now() / 1000) - 180 * 86400),
     ]);
   },
 };
