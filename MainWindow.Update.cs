@@ -130,7 +130,14 @@ public partial class MainWindow
     /// <summary>В узком меню подписи карточки прозрачны и обрезаются краем, как у пунктов меню.</summary>
     private void SetUpdateCardsExpanded(bool expanded)
     {
-        foreach (var v in _updateCards.Where(c => ReferenceEquals(c.Card.Parent, PanelUpdateHost.Content))) { v.Text.Opacity = expanded ? 1 : 0; v.Card.BorderThickness = new Thickness(expanded ? 1 : 0); }
+        // В узком меню на карточку 38 px: с обычными отступами (4 слева, 8 справа) значок 30 px не помещался и обрезался
+        // справа. Отступы по 4 с каждой стороны: значок ровно по центру меню и целиком
+        foreach (var v in _updateCards.Where(c => ReferenceEquals(c.Card.Parent, PanelUpdateHost.Content)))
+        {
+            v.Text.Opacity = expanded ? 1 : 0;
+            v.Card.BorderThickness = new Thickness(expanded ? 1 : 0);
+            v.Card.Padding = expanded ? new Thickness(4, 6, 8, 6) : new Thickness(4);
+        }
         foreach (var t in _panelLinkTexts) t.Opacity = expanded ? 1 : 0;
     }
 
