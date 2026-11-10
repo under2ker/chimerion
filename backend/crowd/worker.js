@@ -393,9 +393,32 @@ async function notifyOwner(env, t, report) {
   try { await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: f }); } catch {}
 }
 
+// Тело запроса текстом. С 0.1.167 программа сжимает обращение (заголовок x-body: gzip): у части провайдеров
+// большие отправки на Cloudflare замирают, а сжатый отчет в разы меньше. Свой заголовок, а не Content-Encoding,
+// чтобы по дороге тело никто не распаковывал. limit ограничивает распакованный размер.
+async function bodyText(req, limit) {
+  if ((req.headers.get("x-body") || "").toLowerCase() !== "gzip") return await req.text();
+  const reader = req.body.pipeThrough(new DecompressionStream("gzip")).getReader();
+  const parts = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) { await reader.cancel(); return null; }
+    parts.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.length; }
+  return new TextDecoder().decode(all);
+}
+
 async function createTicket(req, env) {
   if (!await allow(env, req, "ticket", 5)) return json({ error: "too many" }, 429);
-  const text = await req.text();
+  let text;
+  try { text = await bodyText(req, 6 * (TICKET_REPORT_MAX + TICKET_TEXT_MAX) + 1); } catch { return json({ error: "bad gzip" }, 400); }
+  if (text == null) return json({ error: "too large" }, 413);
   // Запас на экранирование (\uXXXX у старых клиентов): отчет и текст дальше обрезаются по своим пределам
   if (text.length > 6 * (TICKET_REPORT_MAX + TICKET_TEXT_MAX)) return json({ error: "too large" }, 413);
   let body;

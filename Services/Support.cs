@@ -157,6 +157,18 @@ public static class Support
         return report[..20000] + cut + report[^(MaxReport - 20000 - cut.Length)..];
     }
 
+    /// <summary>Тело JSON, сжатое gzip, с заголовком x-body: gzip (свой заголовок: Content-Encoding по дороге могут распаковать).</summary>
+    internal static ByteArrayContent Gzip(string json)
+    {
+        using var ms = new System.IO.MemoryStream();
+        using (var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+            gz.Write(Encoding.UTF8.GetBytes(json));
+        var content = new ByteArrayContent(ms.ToArray());
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        content.Headers.Add("x-body", "gzip");
+        return content;
+    }
+
     /// <summary>
     /// Отправить обращение. token создается один раз на форму: повторная отправка после обрыва не создаст второе обращение
     /// (сервер узнает токен). Обращение попадает в хранилище и сохраняется.
@@ -176,7 +188,16 @@ public static class Support
         HttpResponseMessage resp;
         try
         {
-            resp = await Crowd.Http.PostAsync(Crowd.BaseUrl() + "/v1/ticket", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
+            // Сжатым: у части провайдеров большая отправка на Cloudflare замирает на середине, и программа писала
+            // «Сервер не отвечает». Сжатый отчет в 10-20 раз меньше. Сервер без поддержки сжатия ответит «bad json»,
+            // тогда повторяем как раньше, без сжатия.
+            resp = await Crowd.Http.PostAsync(Crowd.BaseUrl() + "/v1/ticket", Gzip(body), ct).ConfigureAwait(false);
+            if (resp.StatusCode == System.Net.HttpStatusCode.BadRequest
+                && (await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false)).Contains("bad json"))
+            {
+                resp.Dispose();
+                resp = await Crowd.Http.PostAsync(Crowd.BaseUrl() + "/v1/ticket", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
+            }
         }
         catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException)
         {

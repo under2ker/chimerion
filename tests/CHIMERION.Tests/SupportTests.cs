@@ -15,10 +15,23 @@ public class SupportTests
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string Reply = "{}";
         public bool Offline;
+        /// <summary>Сервер без поддержки сжатия: на сжатое тело отвечает «bad json».</summary>
+        public bool NoGzip;
+        public readonly List<bool> Gzipped = new();
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
-            Calls.Add((req.RequestUri!.ToString(), req.Content == null ? "" : await req.Content.ReadAsStringAsync(ct)));
+            var gz = req.Content?.Headers.TryGetValues("x-body", out var v) == true && v.Contains("gzip");
+            Gzipped.Add(gz);
+            string body = "";
+            if (req.Content != null && gz)
+            {
+                using var z = new System.IO.Compression.GZipStream(await req.Content.ReadAsStreamAsync(ct), System.IO.Compression.CompressionMode.Decompress);
+                body = await new StreamReader(z).ReadToEndAsync(ct);
+            }
+            else if (req.Content != null) body = await req.Content.ReadAsStringAsync(ct);
+            Calls.Add((req.RequestUri!.ToString(), body));
             if (Offline) throw new HttpRequestException("offline");
+            if (NoGzip && gz) return new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("""{"error":"bad json"}""") };
             return new HttpResponseMessage(Status) { Content = new StringContent(Reply) };
         }
     }
@@ -97,6 +110,32 @@ public class SupportTests
         Assert.Equal("tg", store.ContactKind);
         Assert.Equal("@under2ker", store.ContactValue);
         Assert.Equal("https://t.me/CHIMERIONDNS_BOT?start=r12-099d2823", Support.BotLink(t));
+        Assert.True(h.Gzipped.Single());
+    }
+
+    [Fact]
+    public async Task Send_compresses_a_big_report_many_times()
+    {
+        var report = string.Concat(Enumerable.Range(0, 1500).Select(i => $"строка журнала {i}: DNS 1.1.1.1 ok\n"));
+        var json = JsonSerializer.Serialize(new { report });
+        var gz = await Support.Gzip(json).ReadAsByteArrayAsync();
+        Assert.True(gz.Length * 5 < System.Text.Encoding.UTF8.GetByteCount(json), $"{gz.Length} байт");
+    }
+
+    [Fact]
+    public async Task Send_retries_without_compression_when_the_server_does_not_understand_it()
+    {
+        var (h, restore) = Fake();
+        using var _ = restore;
+        h.NoGzip = true;
+        h.Reply = """{"id":7,"code":"aa"}""";
+        var store = new Support.Store();
+
+        var t = await Support.SendAsync(store, Support.NewToken(), "DNS не подключается", null, "отчет");
+
+        Assert.Equal(7, t.Id);
+        Assert.Equal(new[] { true, false }, h.Gzipped);
+        Assert.Equal(h.Calls[0].Body, h.Calls[1].Body);
     }
 
     [Fact]
