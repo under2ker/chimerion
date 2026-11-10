@@ -150,6 +150,16 @@ public static class SystemCheck
         return list;
     }
 
+    /// <summary>То, из-за чего браузер может идти мимо DNS системы: свой «безопасный DNS» и прокси Windows. Для окна «Проверка браузера».</summary>
+    public static List<Issue> BrowserIssues()
+    {
+        var list = BrowserSecureDns().ToList();
+        if (SystemProxy() is { } proxy)
+            list.Add(new Issue($"В Windows включен прокси: {proxy}",
+                "Браузер отправляет запросы через прокси, и DNS системы не используется. Отключите: Параметры → Сеть и Интернет → Прокси."));
+        return list;
+    }
+
     /// <summary>
     /// «Безопасный DNS» в браузере со своим провайдером: браузер сам ходит к DoH-серверу и не использует DNS системы.
     /// Режим «автоматически» не мешает: он включает шифрование только у серверов из своего списка.

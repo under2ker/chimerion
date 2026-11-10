@@ -30,9 +30,10 @@ internal static class AccountGuideWindow
     };
 
     /// <param name="openRisk">Открыть окно «Как вас видят сервисы».</param>
-    public static void Show(Action openRisk) => DnexDialog.Present(Build(openRisk));
+    /// <param name="openBrowser">Открыть окно «Проверка браузера».</param>
+    public static void Show(Action openRisk, Action openBrowser) => DnexDialog.Present(Build(openRisk, openBrowser));
 
-    internal static Window Build(Action openRisk)
+    internal static Window Build(Action openRisk, Action openBrowser)
     {
         var w = DnexDialog.CreateWindow(Title, Ui.Narrow + 40);
         var root = new DockPanel { Margin = new Thickness(24, 22, 24, 20), LastChildFill = true };
@@ -52,7 +53,7 @@ internal static class AccountGuideWindow
 
         var right = new StackPanel();
         right.Children.Add(Ui.Section("Проверить сейчас", first: true));
-        right.Children.Add(CheckCard(w, openRisk));
+        right.Children.Add(CheckCard(w, openRisk, openBrowser));
 
         var scroll = Ui.Scroll(Ui.Columns(left, right, 820, 3, 2), Ui.WorkAreaOf(null).Height - 230);
         root.Children.Add(scroll);
@@ -84,12 +85,17 @@ internal static class AccountGuideWindow
     }
 
     /// <summary>Что можно сделать сразу: открыть окно стран и настройки Claude; внизу оговорка о гарантиях.</summary>
-    private static Border CheckCard(Window w, Action openRisk)
+    private static Border CheckCard(Window w, Action openRisk, Action openBrowser)
     {
         var box = new StackPanel();
         box.Children.Add(new TextBlock { Text = "Из какой страны вас видят", FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
         box.Children.Add(Ui.Hint("Страна сейчас и привычная для ChatGPT, Claude и Gemini, по последней проверке подключения", 4));
         box.Children.Add(Ui.Action("Как вас видят сервисы", "Strong", openRisk)
+            .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); }));
+
+        box.Children.Add(new TextBlock { Text = "Этот браузер", FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 0) });
+        box.Children.Add(Ui.Hint("Идет ли Claude в вашем браузере тем же путем, что проверяет программа", 4));
+        box.Children.Add(Ui.Action("Проверить браузер", "Strong", openBrowser)
             .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); }));
 
         box.Children.Add(new TextBlock { Text = "Активные сеансы Claude", FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 0) });

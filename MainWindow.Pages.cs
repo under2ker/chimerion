@@ -158,7 +158,7 @@ public partial class MainWindow
         "Настройки" => SettingsButton,
         "CHIMERION DNS" => ChimerionDnsButton,
         "Google Flow" => FlowButton,
-        AccountGuideWindow.Title => _panelLinkButtons.GetValueOrDefault(AccountGuideWindow.Title),
+        AccountGuideWindow.Title or BrowserCheckWindow.Title => _panelLinkButtons.GetValueOrDefault(AccountGuideWindow.Title),
         _ => null,
     };
 

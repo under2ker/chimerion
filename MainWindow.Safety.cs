@@ -72,9 +72,7 @@ public partial class MainWindow
         var snap = _after ?? _before;
         bool connected = DnsSwitcher.GetActive() != null;
         var names = _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList();
-        // Страна в счет, только если ее измерили при этом подключении, в этой сети и не слишком давно
-        var since = _connChangedAt > _netChangedAt ? _connChangedAt : _netChangedAt;
-        bool Valid(Egress e) => e.At is { } at && at > since && e.FreshAt(DateTime.Now);
+        bool Valid(Egress e) => EgressValid(e);
         var views = names.Select(name =>
         {
             var st = connected ? snap?.Services.FirstOrDefault(x => x.Name == name && x.Proxied && x.Egress != null && Valid(x.Egress) && x.Access.StartsWith('✓')) : null;
@@ -84,6 +82,22 @@ public partial class MainWindow
         var measured = connected ? snap?.Services.Where(x => x.Egress != null && Valid(x.Egress)).Select(x => x.Egress!.At).Max() : null;
         var fresh = new AccountRiskWindow.Freshness(measured, connected && measured == null && _netChangedAt > _connChangedAt);
         return (AccountRisk.Assess(views, _settings.AccountSafetyGuard), fresh, AccountSafety.Pinned);
+    }
+
+    /// <summary>Страна в счет, только если ее измерили при этом подключении, в этой сети и не слишком давно.</summary>
+    private bool EgressValid(Egress e)
+    {
+        var since = _connChangedAt > _netChangedAt ? _connChangedAt : _netChangedAt;
+        return e.At is { } at && at > since && e.FreshAt(DateTime.Now);
+    }
+
+    /// <summary>Для окна «Проверка браузера»: подключено ли и откуда Claude видит вход по свежему измерению программы.</summary>
+    private (bool Connected, string? Expected) BrowserCheckState()
+    {
+        bool connected = DnsSwitcher.GetActive() != null;
+        var snap = _after ?? _before;
+        var claude = connected ? snap?.Services.FirstOrDefault(x => x.Name == "Claude" && x.Proxied && x.Egress != null && EgressValid(x.Egress)) : null;
+        return (connected, claude?.Egress?.Country.ToUpperInvariant());
     }
 
     /// <summary>Закрепить страну из окна «Аккаунты»: то же, что выбор страны в настройках.</summary>
