@@ -23,6 +23,9 @@ public sealed class NetSnapshot
     public Egress? Egress { get; set; }
     public string? EgressCity { get; set; }
     public string? EgressOrg { get; set; }
+
+    /// <summary>Страну сервиса измерили в этой проверке, а не перенесли из прошлой (облегченная проверка страну не меряет).</summary>
+    public bool Measured(ServiceState x) => x.Egress?.At is { } t && t >= Taken;
 }
 
 /// <summary>Состояние сервиса. Access — короткий статус для плитки, Note — причина подробно (подсказка и журнал).</summary>

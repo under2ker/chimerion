@@ -67,18 +67,23 @@ public partial class MainWindow
     /// Оценка по последней проверке подключения. Страна берется только у сервисов, которые открылись через Smart DNS:
     /// без подключения сервис видит настоящий адрес, и сравнивать его с привычной страной незачем.
     /// </summary>
-    private (AccountRisk.Result Result, DateTime? Taken, string? Pinned) AccountRiskNow()
+    private (AccountRisk.Result Result, AccountRiskWindow.Freshness Fresh, string? Pinned) AccountRiskNow()
     {
         var snap = _after ?? _before;
         bool connected = DnsSwitcher.GetActive() != null;
         var names = _settings.Targets.Where(t => t.Enabled).Select(t => t.Name).ToList();
+        // Страна в счет, только если ее измерили при этом подключении, в этой сети и не слишком давно
+        var since = _connChangedAt > _netChangedAt ? _connChangedAt : _netChangedAt;
+        bool Valid(Egress e) => e.At is { } at && at > since && e.FreshAt(DateTime.Now);
         var views = names.Select(name =>
         {
-            var st = connected ? snap?.Services.FirstOrDefault(x => x.Name == name && x.Proxied && x.Egress != null && x.Access.StartsWith('✓')) : null;
+            var st = connected ? snap?.Services.FirstOrDefault(x => x.Name == name && x.Proxied && x.Egress != null && Valid(x.Egress) && x.Access.StartsWith('✓')) : null;
             var ip = st?.Egress?.Ip;
             return new AccountRisk.ServiceView(name, st?.Egress?.Country?.ToUpperInvariant(), _safety.Home(name), _safety.Recent(name), IpReputation.Cached(ip));
         }).ToList();
-        return (AccountRisk.Assess(views, _settings.AccountSafetyGuard), snap?.Taken, AccountSafety.Pinned);
+        var measured = connected ? snap?.Services.Where(x => x.Egress != null && Valid(x.Egress)).Select(x => x.Egress!.At).Max() : null;
+        var fresh = new AccountRiskWindow.Freshness(measured, connected && measured == null && _netChangedAt > _connChangedAt);
+        return (AccountRisk.Assess(views, _settings.AccountSafetyGuard), fresh, AccountSafety.Pinned);
     }
 
     /// <summary>Закрепить страну из окна «Аккаунты»: то же, что выбор страны в настройках.</summary>
@@ -125,7 +130,8 @@ public partial class MainWindow
         if (!_settings.AccountSafetyGuard || DnsSwitcher.GetActive() is not { } active || SystemCheck.ActiveVpns().Count > 0) return;
         var key = $"{active.ServerId}|{active.Since:O}";
         if (_safetyFor != key) { _safetyWarned.Clear(); _safetyPending.Clear(); _safetyFor = key; }
-        var now = snap.Services.Where(x => x.Egress != null && x.Access.StartsWith('✓'))
+        // Только страны, измеренные этой проверкой: перенесенная из прошлой не должна подтверждать саму себя
+        var now = snap.Services.Where(x => snap.Measured(x) && x.Access.StartsWith('✓'))
                                .Select(x => new KeyValuePair<string, string?>(x.Name, x.Egress!.Country)).ToList();
         // Чужая страна засчитывается со второй проверки подряд: разовый уход Windows на запасной DNS не повод пугать
         var mism = _safety.Compare(now);

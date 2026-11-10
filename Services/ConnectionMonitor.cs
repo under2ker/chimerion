@@ -168,9 +168,18 @@ public sealed class ConnectionMonitor
             .ToList();
     }
 
-    /// <summary>По каждому сервису, у которого известна страна выхода основного, запасной выводит туда же.</summary>
-    public static bool SameCountry(DnsServer primary, DnsServer backup) =>
-        primary.EgressBy.All(kv => backup.EgressBy.TryGetValue(kv.Key, out var e) && string.Equals(e.Country, kv.Value.Country, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// Запасной выводит сервисы туда же, куда основной, по свежим измерениям обоих. Если основной открывает ChatGPT
+    /// или Claude, а их страна неизвестна или устарела, сравнивать не с чем: ответ «нет».
+    /// </summary>
+    public static bool SameCountry(DnsServer primary, DnsServer backup, DateTime? now = null)
+    {
+        var t = now ?? DateTime.Now;
+        if (AccountSafety.Unknown(primary, t).Count > 0) return false;
+        var known = primary.EgressBy.Where(kv => kv.Value.FreshAt(t)).ToList();
+        return known.Count > 0 && known.All(kv => backup.EgressBy.TryGetValue(kv.Key, out var e) && e.FreshAt(t)
+                                                   && string.Equals(e.Country, kv.Value.Country, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static int Stability(DnsServer s) => s.AllStability ?? (s.ChecksTotal == 0 ? 0 : s.ChecksOk * 100 / s.ChecksTotal);
 
@@ -187,11 +196,10 @@ public sealed class ConnectionMonitor
     {
         var own = new HashSet<string>(new[] { primary.Primary, primary.Secondary }.Where(a => !string.IsNullOrEmpty(a))!, StringComparer.OrdinalIgnoreCase);
         var t = now ?? DateTime.Now;
-        if (primary.EgressBy.Count == 0) return null;
         return servers
             .Where(s => s.Id != primary.Id && !s.IsJunk && s.Status == ServerStatus.Ok
                         && IPAddress.TryParse(s.Primary, out var ip) && ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                        && !own.Contains(s.Primary!) && SameCountry(primary, s))
+                        && !own.Contains(s.Primary!) && SameCountry(primary, s, t))
             .OrderByDescending(s => fit?.Invoke(s) ?? 0)
             .ThenByDescending(s => Stability(s) / 10)
             .ThenByDescending(s => ServerMetrics.Of(s, t).Fresh)

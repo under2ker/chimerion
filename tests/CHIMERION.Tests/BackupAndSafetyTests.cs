@@ -65,7 +65,7 @@ public class BackupChoiceTests
     {
         var s = new DnsServer { Name = name, Primary = ip, Status = status, LatencyMs = 30 };
         s.ChecksOk = stability; s.ChecksTotal = 100; s.LastChecked = DateTime.Now;
-        if (country != null) foreach (var n in new[] { "ChatGPT", "Claude" }) s.EgressBy[n] = new Egress("192.0.2.1", country);
+        if (country != null) foreach (var n in new[] { "ChatGPT", "Claude" }) s.EgressBy[n] = new Egress("192.0.2.1", country, DateTime.Now);
         return s;
     }
 
@@ -110,7 +110,7 @@ public class BackupChoiceTests
         Assert.Null(ConnectionMonitor.Backup(new[] { noData, Srv("NL", "198.51.100.4", 99, "NL") }, noData)); // страна основного неизвестна
 
         var mixed = Srv("Смешанный", "198.51.100.7", 99, "NL");
-        mixed.EgressBy["Claude"] = new Egress("192.0.2.1", "KZ"); // ChatGPT в NL, Claude в KZ: не годится
+        mixed.EgressBy["Claude"] = new Egress("192.0.2.1", "KZ", DateTime.Now); // ChatGPT в NL, Claude в KZ: не годится
         Assert.Null(ConnectionMonitor.Backup(new[] { main, mixed }, main));
     }
 
@@ -178,11 +178,11 @@ public class AccountSafetyTests
         var s = new AccountSafety();
         s.Record("ChatGPT", "NL"); s.Record("Claude", "NL");
         var srv = new DnsServer();
-        srv.EgressBy["ChatGPT"] = new Egress("192.0.2.1", "NL");
-        srv.EgressBy["Claude"] = new Egress("192.0.2.1", "DE");
-        srv.EgressBy["Gemini"] = new Egress("192.0.2.1", "US"); // истории нет: не считается
+        srv.EgressBy["ChatGPT"] = new Egress("192.0.2.1", "NL", DateTime.Now);
+        srv.EgressBy["Claude"] = new Egress("192.0.2.1", "DE", DateTime.Now);
+        srv.EgressBy["Gemini"] = new Egress("192.0.2.1", "US", DateTime.Now); // истории нет: не считается
         Assert.Equal(0, s.Fit(srv));
-        srv.EgressBy["Claude"] = new Egress("192.0.2.1", "NL");
+        srv.EgressBy["Claude"] = new Egress("192.0.2.1", "NL", DateTime.Now);
         Assert.Equal(2, s.Fit(srv));
     }
 }

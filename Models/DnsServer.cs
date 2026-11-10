@@ -226,6 +226,18 @@ public class DnsServer : INotifyPropertyChanged
     /// от страны прокси: прокси пересылает трафик дальше (keyoneday в России выходит через Cloudflare во Франции).
     /// </summary>
     public Dictionary<string, Egress> EgressBy { get; set; } = new();
+
+    /// <summary>
+    /// Список из версии без времени измерения страны: выход записывается при проверке сервера, поэтому время
+    /// измерения берем из LastChecked. Без этого после обновления все страны считались бы неизмеренными
+    /// до следующей проверки списка, и запасной сервер не подбирался бы.
+    /// </summary>
+    public void DateLegacyEgress()
+    {
+        if (LastChecked is not { } at) return;
+        foreach (var k in EgressBy.Where(kv => kv.Value.At == null).Select(kv => kv.Key).ToList())
+            EgressBy[k] = EgressBy[k] with { At = at };
+    }
     /// <summary>Город выхода по адресу (страну дает сам trace Cloudflare, город — IP-база).</summary>
     public Dictionary<string, string> EgressCityByIp { get; set; } = new();
 

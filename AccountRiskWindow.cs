@@ -14,19 +14,33 @@ internal sealed class AccountRiskWindow
 {
     private static AccountRiskWindow? _open;
     private readonly Window _w;
-    private readonly Func<(AccountRisk.Result Result, DateTime? Taken, string? Pinned)> _source;
+    private readonly Func<(AccountRisk.Result Result, Freshness Fresh, string? Pinned)> _source;
+
+    /// <summary>Когда страну последний раз измерили при текущем подключении; NetChanged — после смены сети еще не мерили.</summary>
+    public sealed record Freshness(DateTime? MeasuredAt, bool NetChanged);
+
+    /// <summary>«Страна проверена 12 мин назад», «После смены сети страна еще не проверена» или null, если сказать нечего.</summary>
+    public static string? FreshnessText(Freshness f, DateTime now)
+    {
+        if (f.MeasuredAt is { } at)
+        {
+            var min = (int)Math.Max(0, (now - at).TotalMinutes);
+            return min < 1 ? "Страна проверена только что" : min < 60 ? $"Страна проверена {min} мин назад" : $"Страна проверена {min / 60} ч назад";
+        }
+        return f.NetChanged ? "После смены сети страна еще не проверена" : null;
+    }
     private readonly Action<string> _pin;
     private readonly StackPanel _body = new();
     private readonly StackPanel _left = new() { Orientation = Orientation.Horizontal };
 
-    public static void Show(Window? owner, Func<(AccountRisk.Result, DateTime?, string?)> source, Action<string> pin)
+    public static void Show(Window? owner, Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin)
     {
         if (_open != null) { DnexDialog.Present(_open._w); _open.Render(); return; }
         _open = new AccountRiskWindow(source, pin);
         DnexDialog.Present(_open._w);
     }
 
-    private AccountRiskWindow(Func<(AccountRisk.Result, DateTime?, string?)> source, Action<string> pin)
+    private AccountRiskWindow(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin)
     {
         _source = source;
         _pin = pin;
@@ -53,7 +67,7 @@ internal sealed class AccountRiskWindow
 
     private void Render()
     {
-        var (r, taken, pinned) = _source();
+        var (r, fresh, pinned) = _source();
         _body.Children.Clear();
         _left.Children.Clear();
 
@@ -63,7 +77,7 @@ internal sealed class AccountRiskWindow
         verdict.Children.Add(new TextBlock { Text = r.Known ? AccountRisk.Title(r.Level) : "Нет данных", FontSize = 20, FontWeight = FontWeights.SemiBold }
             .Ref(TextBlock.ForegroundProperty, brush));
         verdict.Children.Add(Ui.Hint(AccountRisk.Summary(r), 4, "Text"));
-        if (taken is { } t) verdict.Children.Add(Ui.Hint($"Проверка подключения в {t:HH:mm}", 6));
+        if (FreshnessText(fresh, DateTime.Now) is { } when) verdict.Children.Add(Ui.Hint(when, 6));
         _body.Children.Add(Ui.Card(verdict));
 
         _body.Children.Add(Ui.Section("Сервисы", true));

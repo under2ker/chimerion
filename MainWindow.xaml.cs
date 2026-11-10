@@ -74,6 +74,7 @@ public partial class MainWindow : Window
         _servers = new ObservableCollection<DnsServer>(Storage.LoadOrCreate(ServersFile, () => new List<DnsServer>()));
         foreach (var s in _servers.Where(s => s.Status == ServerStatus.Checking))
             s.Status = ServerStatus.Unknown;
+        foreach (var s in _servers) s.DateLegacyEgress();
 
         _junk = Storage.LoadOrCreate(JunkFile, () => new Dictionary<string, DateTime>());
         foreach (var k in _junk.Where(kv => DateTime.Now - kv.Value > JunkTtl).Select(kv => kv.Key).ToList()) _junk.Remove(k);

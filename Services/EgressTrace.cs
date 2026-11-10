@@ -4,8 +4,18 @@ using System.Net.Sockets;
 
 namespace Dnex.Services;
 
-/// <summary>Откуда ИИ-сервис видит соединение: адрес и страна выхода в интернет.</summary>
-public sealed record Egress(string Ip, string Country);
+/// <summary>
+/// Откуда ИИ-сервис видит соединение: адрес и страна выхода в интернет. At — когда страну действительно измерили.
+/// Null — время неизвестно (данные из старых версий): такая страна не считается подтвержденной.
+/// </summary>
+public sealed record Egress(string Ip, string Country, DateTime? At = null)
+{
+    /// <summary>Сколько измерение действует для автоматических решений (запасной сервер, закрепление страны).</summary>
+    public static readonly TimeSpan MaxAge = TimeSpan.FromHours(12);
+
+    /// <summary>Страну измерили не раньше MaxAge до now.</summary>
+    public bool FreshAt(DateTime now) => At is { } t && now - t < MaxAge;
+}
 
 /// <summary>
 /// Настоящий выход в интернет, а не адрес прокси из DNS. Некоторые Smart DNS (например, keyoneday) отвечают адресом
@@ -55,7 +65,7 @@ public static class EgressTrace
         try
         {
             var text = await http.GetStringAsync($"https://{host}/cdn-cgi/trace", ct);
-            return Parse(text);
+            return Parse(text) is { } e ? e with { At = DateTime.Now } : null;
         }
         catch (Exception) when (!ct.IsCancellationRequested) { return null; }
     }

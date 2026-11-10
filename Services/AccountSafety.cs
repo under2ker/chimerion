@@ -26,9 +26,37 @@ public sealed class AccountSafety
     /// </summary>
     public static string? Pinned { get; set; }
 
-    /// <summary>Сервер выводит все сервисы в выбранную страну. Без выбора подходит любой.</summary>
-    public static bool Fits(Models.DnsServer s) =>
-        Pinned == null || (s.EgressBy.Count > 0 && s.EgressBy.Values.All(e => string.Equals(e.Country, Pinned, StringComparison.OrdinalIgnoreCase)));
+    /// <summary>
+    /// Сервер выводит все сервисы в выбранную страну, и страна измерена недавно. Без выбора подходит любой.
+    /// Если сервер открывает ChatGPT или Claude, а их страна неизвестна или устарела, он не подходит: закрепление
+    /// не должно пропускать сервер только потому, что про нужный сервис нет данных.
+    /// </summary>
+    public static bool Fits(Models.DnsServer s, DateTime? now = null)
+    {
+        if (Pinned == null) return true;
+        var t = now ?? DateTime.Now;
+        var known = s.EgressBy.Values.Where(e => e.FreshAt(t)).ToList();
+        return known.Count > 0 && known.All(e => string.Equals(e.Country, Pinned, StringComparison.OrdinalIgnoreCase)) && Unknown(s, t).Count == 0;
+    }
+
+    /// <summary>
+    /// Сервисы, страну выхода которых программа измеряет надежно (служебная страница Cloudflare на их же сайте).
+    /// У Gemini такой страницы нет, его страна часто не определяется, поэтому она автоматику не останавливает.
+    /// </summary>
+    public static readonly string[] Strict = { "ChatGPT", "Claude" };
+
+    /// <summary>Последняя проверка сервера показала, что сервис через него открывается.</summary>
+    public static bool Opens(Models.DnsServer s, string service) => s.Chips.Any(c => c.Name == service && c.State == "ok");
+
+    /// <summary>
+    /// Сервисы из Strict, которые сервер открывает, но страна выхода которых не измерена или измерена давно.
+    /// Непустой список останавливает автоматический выбор: подключение сторожем, автоподключение, запасной сервер.
+    /// </summary>
+    public static List<string> Unknown(Models.DnsServer s, DateTime? now = null)
+    {
+        var t = now ?? DateTime.Now;
+        return Strict.Where(n => Opens(s, n) && !(s.EgressBy.TryGetValue(n, out var e) && e.FreshAt(t))).ToList();
+    }
 
     /// <summary>Тесты подменяют «сегодня».</summary>
     internal static Func<DateTime> Today = () => DateTime.Today;
@@ -104,9 +132,12 @@ public sealed class AccountSafety
               .Select(e => new Mismatch(e.Key, e.Home!, e.Country))
               .ToList();
 
-    /// <summary>Куда сервер выведет сервисы (по последней проверке сервера): сервис → страна.</summary>
-    public static IEnumerable<KeyValuePair<string, string?>> EgressOf(Models.DnsServer s) =>
-        s.EgressBy.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.Country));
+    /// <summary>Куда сервер выведет сервисы по последней проверке сервера, если она свежая: сервис → страна.</summary>
+    public static IEnumerable<KeyValuePair<string, string?>> EgressOf(Models.DnsServer s, DateTime? now = null)
+    {
+        var t = now ?? DateTime.Now;
+        return s.EgressBy.Where(kv => kv.Value.FreshAt(t)).Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.Country));
+    }
 
     /// <summary>
     /// Насколько сервер подходит по стране: сколько сервисов он выведет в привычную страну минус сколько в чужую.

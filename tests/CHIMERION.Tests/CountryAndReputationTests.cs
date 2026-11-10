@@ -29,7 +29,7 @@ public class CountryAndReputationTests : IDisposable
     {
         var s = new DnsServer { Name = "s", Primary = "203.0.113.10", Status = ServerStatus.Ok };
         var names = new[] { "ChatGPT", "Claude", "Gemini" };
-        for (int i = 0; i < countries.Length; i++) s.EgressBy[names[i]] = new Egress(exitIp, countries[i]);
+        for (int i = 0; i < countries.Length; i++) s.EgressBy[names[i]] = new Egress(exitIp, countries[i], DateTime.Now);
         return s;
     }
 

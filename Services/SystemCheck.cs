@@ -49,6 +49,28 @@ public static class SystemCheck
     /// локальной сети поверх интернета (Radmin VPN, ZeroTier, Hamachi) без своих DNS и без шлюза запросы
     /// не перехватывает, о нем не предупреждаем: так было в журнале пользователя с Radmin VPN.
     /// </summary>
+    /// <summary>
+    /// Отпечаток сети: IPv4-адреса и шлюзы работающих адаптеров. Меняется при смене Wi-Fi, обрыве и пробуждении,
+    /// но не от смены временных адресов IPv6, из-за которых Windows тоже шлет событие «адрес изменился».
+    /// </summary>
+    public static string NetworkSignature()
+    {
+        try
+        {
+            return string.Join("|", NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel))
+                .Select(n =>
+                {
+                    var p = n.GetIPProperties();
+                    var v4 = p.UnicastAddresses.Where(a => a.Address.AddressFamily == AddressFamily.InterNetwork).Select(a => a.Address.ToString()).OrderBy(x => x);
+                    var gw = p.GatewayAddresses.Where(g => g.Address.AddressFamily == AddressFamily.InterNetwork).Select(g => g.Address.ToString()).OrderBy(x => x);
+                    return $"{n.Id}={string.Join(",", v4)}>{string.Join(",", gw)}";
+                })
+                .OrderBy(x => x, StringComparer.Ordinal));
+        }
+        catch (Exception) { return ""; }
+    }
+
     public static List<string> ActiveVpns()
     {
         try

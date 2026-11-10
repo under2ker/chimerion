@@ -78,10 +78,16 @@ public partial class MainWindow
     private DateTime _trayFullAt = DateTime.MinValue;
     private NetSnapshot? _trayFull;
 
-    /// <summary>Облегченная проверка страну не узнает: подставляем ту, что узнали последней полной, чтобы защита аккаунтов и колонка «Где» не мигали.</summary>
+    /// <summary>
+    /// Облегченная проверка страну не узнает: для показа подставляем ту, что узнала последняя полная, чтобы колонка
+    /// «Где» не мигала. Только если та проверка была при этом же подключении и в этой же сети. Перенесенная страна
+    /// сохраняет время своего измерения (NetSnapshot.Measured), поэтому защита аккаунтов ее второй раз не засчитывает.
+    /// </summary>
     private void KeepEgress(NetSnapshot snap)
     {
-        if ((_trayFull ?? _after) is not { } last) return;
+        var last = new[] { _trayFull, _after }.Where(x => x != null && x.Taken > _connChangedAt && x.Taken > _netChangedAt)
+                                             .OrderByDescending(x => x!.Taken).FirstOrDefault();
+        if (last == null) return;
         snap.Egress ??= last.Egress;
         snap.EgressCity ??= last.EgressCity;
         snap.EgressOrg ??= last.EgressOrg;

@@ -131,6 +131,12 @@ public partial class MainWindow
                 Log($"Защита аккаунтов: «{s.DisplayName}» сменит страну входа ({AccountSafety.Describe(mism)}), сам не подключаю");
                 return false;
             }
+            // Неизвестная страна не повод подключать: без измерения нельзя сказать, что страна входа не сменится
+            if (auto && _settings.AccountSafetyGuard && AccountSafety.Unknown(s) is { Count: > 0 } unknown)
+            {
+                Log($"Защита аккаунтов: у «{s.DisplayName}» не измерена страна выхода для {string.Join(", ", unknown)}, сам не подключаю");
+                return false;
+            }
 
             // Снимок «до»: внешний IP, DNS, куда сейчас резолвятся ИИ-сервисы и открываются ли они.
             // Свежая проверка без подключения уже есть (фон, трей, проверка после отключения): ее и берем, новая
@@ -359,7 +365,7 @@ public partial class MainWindow
     /// Проверка после смены подключения в фоне: снимок «после», сравнение, журнал, репутация адреса выхода.
     /// Если за это время подключение снова сменилось, итог не записывается.
     /// </summary>
-    private async Task AfterChangeProbeAsync(string title, bool connected)
+    private async Task AfterChangeProbeAsync(string title, bool connected, bool leakTest = true)
     {
         int generation = _connGeneration;
         _afterProbes++;
@@ -368,7 +374,7 @@ public partial class MainWindow
         {
             if (!connected) await Task.Delay(500); // Windows успевает применить возвращенные DNS
             using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(connected ? 45 : 20));
-            var snap = await ConnectionProbe.TakeAsync(_settings, limit.Token, leakTest: true);
+            var snap = await ConnectionProbe.TakeAsync(_settings, limit.Token, leakTest: leakTest);
             if (generation != _connGeneration) return;
             _after = snap;
             ShowCompare(disconnected: !connected);
@@ -665,15 +671,41 @@ public partial class MainWindow
 
     private HashSet<string> _vpnSeen = new();
 
-    /// <summary>Следит за сетью: если при подключенном CHIMERION включили VPN, предупреждает.</summary>
+    /// <summary>Когда сменилась сеть (другой Wi-Fi, пробуждение, обрыв). Страны, измеренные раньше, текущее подключение не подтверждают.</summary>
+    private DateTime _netChangedAt = DateTime.MinValue;
+    private string _netSignature = "";
+    /// <summary>Перепроверка после смены сети: Windows шлет несколько событий подряд, проверяем один раз, когда сеть успокоится.</summary>
+    private readonly DispatcherTimer _netRecheck = new() { Interval = TimeSpan.FromSeconds(6) };
+
+    /// <summary>Следит за сетью: если при подключенном CHIMERION включили VPN, предупреждает; после смены сети перепроверяет страну.</summary>
     private void WatchVpn()
     {
         _vpnSeen = SystemCheck.ActiveVpns().ToHashSet();
+        _netSignature = SystemCheck.NetworkSignature();
+        _netRecheck.Tick += (_, _) => { _netRecheck.Stop(); RecheckAfterNetworkChange(); };
         System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => Dispatcher.BeginInvoke(OnNetworkChanged);
+    }
+
+    /// <summary>Подключено, сеть сменилась: полная проверка с измерением страны.</summary>
+    private void RecheckAfterNetworkChange()
+    {
+        if (DnsSwitcher.GetActive() == null || _busyConn || _afterProbeRunning) return;
+        Log("Подключение изменилось. Проверяю, можно ли продолжать");
+        _ = AfterChangeProbeAsync("После смены сети", connected: true, leakTest: false);
     }
 
     private void OnNetworkChanged()
     {
+        // Событие приходит и без настоящей смены (адреса IPv6, виртуальные адаптеры): сверяем адреса и шлюзы
+        var sig = SystemCheck.NetworkSignature();
+        if (sig != _netSignature)
+        {
+            _netSignature = sig;
+            _netChangedAt = DateTime.Now;
+            _trayFullAt = DateTime.MinValue; // следующая проверка трея снова меряет страну
+            _netRecheck.Stop();
+            _netRecheck.Start();
+        }
         var now = SystemCheck.ActiveVpns().ToHashSet();
         var added = now.Except(_vpnSeen).ToList();
         _vpnSeen = now;
@@ -792,7 +824,8 @@ public partial class MainWindow
     private void CheckEgressChange(NetSnapshot snap)
     {
         var active = DnsSwitcher.GetActive();
-        var changes = _egressWatch.Update(active?.ServerId.ToString(), snap.Services.Select(s => (s.Name, s.Egress?.Country)));
+        // Только страны, измеренные этой проверкой: перенесенная из прошлой не подтверждает и не опровергает смену
+        var changes = _egressWatch.Update(active?.ServerId.ToString(), snap.Services.Select(s => (s.Name, snap.Measured(s) ? s.Egress!.Country : null)));
         if (changes.Count == 0 || active == null) return;
         // Сервис без подмены адреса: запрос ушел мимо сервера, через DNS сети, и сервис видит реальную страну
         var leaked = snap.Services.Where(s => !s.Proxied).Select(s => s.Name).ToHashSet();

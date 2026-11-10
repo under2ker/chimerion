@@ -28,8 +28,8 @@ public class ServerTableTests
     public void Flags_use_only_each_services_measured_country_and_refresh()
     {
         var server = new DnsServer { Summary = "ChatGPT ✓ · Claude ✓ · Gemini ✓" };
-        server.EgressBy["ChatGPT"] = new Egress("203.0.113.11", "NL");
-        server.EgressBy["Claude"] = new Egress("203.0.113.12", "DE");
+        server.EgressBy["ChatGPT"] = new Egress("203.0.113.11", "NL", DateTime.Now);
+        server.EgressBy["Claude"] = new Egress("203.0.113.12", "DE", DateTime.Now);
         server.NotifyEgress();
         Assert.Equal("NL", server.Chips.Single(x => x.Name == "ChatGPT").Country);
         Assert.Equal("DE", server.Chips.Single(x => x.Name == "Claude").Country);
