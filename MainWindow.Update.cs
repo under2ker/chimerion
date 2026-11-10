@@ -73,9 +73,10 @@ public partial class MainWindow
         return v.Card;
     }
 
-    /// <summary>Ссылки внизу левого меню над карточкой обновления: сайт, канал с новостями, сообщить о проблеме.</summary>
+    /// <summary>Ссылки внизу левого меню над карточкой обновления: безопасность аккаунта, сообщить о проблеме, канал, сайт.</summary>
     private (string Title, string Icon, Action Click)[] SideLinks() => new (string, string, Action)[]
     {
+        (AccountGuideWindow.Title, "shield-check", () => AccountGuideWindow.Show(() => AccountRisk_Click(this, new RoutedEventArgs()))),
         ("Сообщить о сбое", "triangle-alert", () => DiagToggle_Click(this, new RoutedEventArgs())),
         ("Канал в Telegram", "logo:LogoTelegram", () => AutoStart.OpenUrl("https://t.me/chimeriondns")),
         ("Сайт chimerion.dev", "globe", () => AutoStart.OpenUrl("https://chimerion.dev")),
@@ -97,12 +98,16 @@ public partial class MainWindow
             b.Click += (_, _) => act();
             box.Children.Add(b);
             _panelLinkTexts.Add(text);
+            _panelLinkButtons[title] = b;
         }
         box.Children.Add(CreateUpdateCard());
         return box;
     }
 
     private readonly List<TextBlock> _panelLinkTexts = new();
+
+    /// <summary>Кнопки ссылок внизу меню по названию: раздел, открытый отсюда, подсвечивается как пункт меню.</summary>
+    private readonly Dictionary<string, Button> _panelLinkButtons = new();
 
     /// <summary>Значок пункта меню: контурная иконка или фирменный логотип («logo:Ключ» из палитры App.xaml).</summary>
     internal static FrameworkElement MenuGlyph(string icon, double size)

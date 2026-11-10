@@ -158,13 +158,14 @@ public partial class MainWindow
         "Настройки" => SettingsButton,
         "CHIMERION DNS" => ChimerionDnsButton,
         "Google Flow" => FlowButton,
+        AccountGuideWindow.Title => _panelLinkButtons.GetValueOrDefault(AccountGuideWindow.Title),
         _ => null,
     };
 
     /// <summary>Подсветка открытого пункта меню: мягкий акцентный фон, как у выбранного пункта раньше на главной.</summary>
     private void MarkNav(FrameworkElement? selected)
     {
-        foreach (var item in PanelNavItems.Children.OfType<FrameworkElement>())
+        foreach (var item in PanelNavItems.Children.OfType<FrameworkElement>().Concat(_panelLinkButtons.Values))
         {
             bool on = ReferenceEquals(item, selected);
             if (item is ToggleButton toggle) toggle.IsChecked = on;
