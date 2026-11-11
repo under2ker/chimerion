@@ -1,5 +1,5 @@
 name = "chimerion-crowd"
-main = "worker.js"
+main = "cloudflare-worker.js"
 compatibility_date = "2025-01-01"
 workers_dev = true
 

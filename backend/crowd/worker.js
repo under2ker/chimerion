@@ -633,7 +633,7 @@ async function noteReach(req, env) {
 }
 
 /** Сводка для владельца: устройства всего и активные, время работы, подозрительные, версии и список устройств. */
-async function usageReport(env) {
+export async function usageReport(env) {
   const d = today();
   const r = await env.DB.prepare(`SELECT COUNT(*) AS total, SUM(last_day >= ?) AS day, SUM(last_day >= ?) AS week, SUM(last_day >= ?) AS month, SUM(first_day >= ?) AS fresh,
       SUM(total_sec) AS seconds, SUM(source <> 'board' OR replaced > 0 OR token_changes > 0 OR moved > 0) AS flagged FROM devices`)
