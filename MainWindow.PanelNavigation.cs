@@ -16,6 +16,8 @@ public partial class MainWindow
     {
         _panelNavExpanded = expanded;
         PanelSidebar.Width = expanded ? 220 : 54;
+        // В узком меню полоса прокрутки (10 px) обрезает значки справа. Прокручивается колесом мыши и клавишами, полоса скрыта
+        PanelScroll.VerticalScrollBarVisibility = expanded ? ScrollBarVisibility.Auto : ScrollBarVisibility.Hidden;
         PanelCollapseText.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
         PanelCollapseIcon.Kind = expanded ? "shrink" : "expand";
         PanelCollapseIcon.Margin = new Thickness(0); // в кнопке одна иконка: отступ справа сдвигал ее от центра рамки
