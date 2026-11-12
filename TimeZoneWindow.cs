@@ -241,12 +241,12 @@ internal static class TimeZoneWindow
                 Scope.Browser => "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor».",
                 Scope.Apps => "Для Claude Desktop и приложения ChatGPT пояс можно выбрать в настройке Windows. Она действует на все программы.",
                 Scope.Windows => "После подтверждения пояс изменится во всех программах. Прежний пояс можно вернуть здесь же.",
-                _ => "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем.",
+                _ => "Вставьте команду в PowerShell. Она передаст выбранный пояс новому сеансу.",
             });
             guideDetails.Text = Loc.T(scope switch
             {
                 Scope.Browser => "Вставьте команду внизу и нажмите Enter. Закройте DevTools для сброса.",
-                Scope.Code => "После выхода из Claude Code прежний пояс восстановится.",
+                Scope.Code => "Когда спросите текущее время, сеанс сможет прочитать часы в выбранном поясе.",
                 _ => "",
             });
             guideDetails.Visibility = guideDetails.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -297,7 +297,7 @@ internal static class TimeZoneWindow
                 }
                 else
                 {
-                    Copy(TimeZoneSettings.ClaudeCodeCommand(zone.IanaId), "Команда скопирована. Вставьте ее в PowerShell.");
+                    Copy(TimeZoneSettings.ClaudeCodeCommand(zone.IanaId, zone.Windows?.Id), "Команда скопирована. Вставьте ее в PowerShell.");
                 }
             }
             catch (Exception)

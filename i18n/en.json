@@ -2836,5 +2836,7 @@
  "Пояса не найдены. Попробуйте другой город, страну или смещение UTC.": "No time zones found. Try another city, country or UTC offset.",
  "Для этого места доступна настройка в браузере или в командной строке": "For this location, use the browser or command-line setting",
  "Все страны": "All countries",
- "Город или UTC": "City or UTC offset"
+ "Город или UTC": "City or UTC offset",
+ "Вставьте команду в PowerShell. Она передаст выбранный пояс новому сеансу.": "Paste the command into PowerShell to pass the selected time zone to the new session.",
+ "Когда спросите текущее время, сеанс сможет прочитать часы в выбранном поясе.": "When you ask for the current time, the session can read it in the selected time zone."
 }

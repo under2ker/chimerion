@@ -9,14 +9,33 @@ internal static class TimeZoneSettings
 {
     private static readonly SemaphoreSlim WindowsChange = new(1, 1);
 
-    /// <summary>Часовой пояс действует в процессе Claude Code и его дочерних процессах до выхода.</summary>
-    internal static string ClaudeCodeCommand(string ianaId)
+    /// <summary>Передает пояс процессу и дает сеансу способ получить местное время из часов UTC.</summary>
+    internal static string ClaudeCodeCommand(string ianaId, string? windowsId = null)
     {
         if (!KnownIana(ianaId)) throw new ArgumentException("Неизвестный часовой пояс", nameof(ianaId));
+
+        // Одинарные кавычки оболочки и обратные кавычки JavaScript работают и в PowerShell 5.1, и в Bash.
+        var nodeClock = $"node -p 'new Date().toLocaleString(`sv-SE`,{{timeZone:`{ianaId}`,timeZoneName:`longOffset`}})'";
+        var prompt = $"The selected time zone for this session is {ianaId}. " +
+            "Report this ID as the selected zone when asked about the user's time zone or the session time zone. " +
+            "Use this zone for the user's local date and time. To answer a question about the current time or date, " +
+            $"run this read-only shell command and use its output: {nodeClock}. ";
+        if (windowsId != null)
+        {
+            var systemZone = PowerShellLiteral(TimeZoneInfo.FindSystemTimeZoneById(windowsId).Id);
+            var windowsClock = $"[TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTimeOffset]::UtcNow, {systemZone})" +
+                ".ToString('yyyy-MM-dd HH:mm:ss zzz', [Globalization.CultureInfo]::InvariantCulture)";
+            prompt += $"If Node.js is unavailable, evaluate this PowerShell expression `{windowsClock}`. ";
+        }
+        prompt += "Plain Get-Date and tzutil /g report the Windows settings. If you cannot read the clock in the selected zone, " +
+            "give the selected zone ID and say that you could not verify its current time.";
+
         return "& { $previousZone = [Environment]::GetEnvironmentVariable('TZ', 'Process'); " +
-            $"try {{ $env:TZ = '{ianaId}'; claude }} " +
+            $"try {{ $env:TZ = {PowerShellLiteral(ianaId)}; claude --append-system-prompt {PowerShellLiteral(prompt)} }} " +
             "finally { [Environment]::SetEnvironmentVariable('TZ', $previousZone, 'Process') } }";
     }
+
+    private static string PowerShellLiteral(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
 
     internal static string BrowserCommand(string ianaId)
     {

@@ -144,7 +144,7 @@ function Run-Pass([string]$pass, [int]$appId) {
                         $expect = $s.expect
                         if ($s.zoneSearch) {
                             $expect = switch ($t) {
-                                "Claude Code" { "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем." }
+                                "Claude Code" { "Вставьте команду в PowerShell. Она передаст выбранный пояс новому сеансу." }
                                 "В браузере" { "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor»." }
                                 "Приложения Windows" { "Выбрать системный пояс" }
                                 "Вся Windows" { "Применить в Windows" }
