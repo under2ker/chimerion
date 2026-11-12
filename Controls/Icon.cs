@@ -57,6 +57,8 @@ public sealed class Icon : Viewbox
         ["link"] = "M 10 13 a 5 5 0 0 0 7.54 .54 l 3 -3 a 5 5 0 0 0 -7.07 -7.07 l -1.72 1.71 | M 14 11 a 5 5 0 0 0 -7.54 -.54 l -3 3 a 5 5 0 0 0 7.07 7.07 l 1.71 -1.71",
         ["minus"] = "M 5 12 h 14",
         ["square"] = "M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z",
+        ["lock"] = "M5,11 H19 A2,2 0 0 1 21,13 V20 A2,2 0 0 1 19,22 H5 A2,2 0 0 1 3,20 V13 A2,2 0 0 1 5,11 Z | M 7 11 V 7 a 5 5 0 0 1 10 0 v 4",
+        ["log-out"] = "M 9 21 H 5 a 2 2 0 0 1 -2 -2 V 5 a 2 2 0 0 1 2 -2 h 4 | M 16 17 l 5 -5 l -5 -5 | M 21 12 H 9",
         ["circle-arrow-up"] = "M2,12 A10,10 0 1 0 22,12 A10,10 0 1 0 2,12 Z | M 16 12 l -4 -4 l -4 4 | M 12 16 V 8",
     };
 
@@ -173,6 +175,8 @@ public sealed class Icon : Viewbox
     }
 
     /// <summary>Контуры через «|»: каждый своей фигурой, как отдельные элементы в исходном SVG.</summary>
+    internal static Geometry ParseData(string data) => Parse(data);
+
     private static Geometry Parse(string data)
     {
         var parts = data.Split('|');

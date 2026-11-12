@@ -141,9 +141,7 @@ public partial class MainWindow
         menu.Opened += (_, _) => TrayMenu.Round(menu);
         var pad = new System.Windows.Forms.Padding(12, 8, 12, 8);
         // Строки статуса не выделяются при наведении: это надписи, а не пункты.
-        _trayStatus = new System.Windows.Forms.ToolStripLabel("Не подключено") { Padding = pad, Image = TrayMenu.Dot(Palette.Get("Muted")),
-            DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.ImageAndText, ImageAlign = System.Drawing.ContentAlignment.MiddleLeft,
-            TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText };
+        _trayStatus = new System.Windows.Forms.ToolStripLabel("Не подключено") { Padding = pad, Tag = "dot" };
         menu.Items.Add(_trayStatus);
         _trayPing = new TrayPingStrip();
         menu.Items.Add(new System.Windows.Forms.ToolStripControlHost(_trayPing)
@@ -154,7 +152,7 @@ public partial class MainWindow
             Padding = System.Windows.Forms.Padding.Empty,
             BackColor = Palette.Get("MenuBg"),
         });
-        _trayStab = new System.Windows.Forms.ToolStripLabel("Стабильность: —") { Padding = pad };
+        _trayStab = new System.Windows.Forms.ToolStripLabel("Стабильность: —") { Padding = pad, Tag = "activity" };
         menu.Items.Add(_trayStab);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         _traySvc = new TrayServiceStrip(_settings.Targets.Where(x => x.Enabled).Select(x => x.Name));
@@ -167,19 +165,19 @@ public partial class MainWindow
             BackColor = Palette.Get("MenuBg"),
         });
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add(TrayItem("Открыть", () => ShowFromTray()));
-        menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync()));
-        menu.Items.Add(TrayItem("Не открывается…", () => { ShowFromTray(); OpenHelpWizard(); }));
-        menu.Items.Add(TrayItem("Сайты", () => { ShowFromTray(); OpenSites(); }));
-        _traySession = TrayItem("Защищенный сеанс: включить", () => SetSession(!SessionOn));
+        menu.Items.Add(TrayItem("Открыть", () => ShowFromTray(), "layout-dashboard"));
+        menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync(), "arrow-left-right"));
+        menu.Items.Add(TrayItem("Не открывается…", () => { ShowFromTray(); OpenHelpWizard(); }, "circle-help"));
+        menu.Items.Add(TrayItem("Сайты", () => { ShowFromTray(); OpenSites(); }, "globe"));
+        _traySession = TrayItem("Защищенный сеанс: включить", () => SetSession(!SessionOn), "lock");
         menu.Items.Add(_traySession);
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        _trayTg = TrayItem("Telegram: включить", () => _ = ToggleToolFromTrayAsync(_tools[0]));
-        _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]));
+        _trayTg = TrayItem("Telegram: включить", () => _ = ToggleToolFromTrayAsync(_tools[0]), "send");
+        _trayZapret = TrayItem("YouTube и Discord: включить", () => _ = ToggleToolFromTrayAsync(_tools[1]), "zap");
         menu.Items.Add(_trayTg);
         menu.Items.Add(_trayZapret);
         // Режимы в один клик: подменю «Режим»
-        var modes = new System.Windows.Forms.ToolStripMenuItem("Режим") { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8) };
+        var modes = new System.Windows.Forms.ToolStripMenuItem("Режим") { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8), Tag = "sliders-horizontal" };
         modes.DropDown.BackColor = menu.BackColor;
         modes.DropDown.ForeColor = menu.ForeColor;
         modes.DropDown.Renderer = menu.Renderer;
@@ -187,16 +185,16 @@ public partial class MainWindow
         // Подменю без пустого поля под картинки (из-за него текст стоял далеко от края) и в том же виде, что меню
         if (modes.DropDown is System.Windows.Forms.ToolStripDropDownMenu ddm) { ddm.ShowImageMargin = false; ddm.ShowCheckMargin = false; }
         modes.DropDown.Opened += (_, _) => TrayMenu.Round(modes.DropDown);
-        foreach (var (mode, title, hint, _, _, _, _) in Modes)
+        foreach (var (mode, title, hint, icon, _, _, _) in Modes)
         {
-            var mi = TrayItem(title, () => _ = ApplyModeAsync(mode));
+            var mi = TrayItem(title, () => _ = ApplyModeAsync(mode), icon);
             mi.ToolTipText = hint;
             modes.DropDownItems.Add(mi);
         }
         menu.Items.Add(modes);
         menu.Opening += (_, _) => { UpdateToolsTray(); UpdateSessionTray(); TranslateTray(); }; // состояние могло поменяться само (программу закрыли вручную)
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-        menu.Items.Add(TrayItem("Выход", ExitFromTray));
+        menu.Items.Add(TrayItem("Выход", ExitFromTray, "log-out"));
         // Ширина пунктов задана явно: раньше пункты выходили шире меню (291 против 264) и стрелка подменю обрезалась
         FixWidths(menu.Items, TrayWidth.Menu);
         FixWidths(modes.DropDownItems, 190);
@@ -262,9 +260,10 @@ public partial class MainWindow
         dd.Size = new System.Drawing.Size(width + 2, h);
     }
 
-    private static System.Windows.Forms.ToolStripMenuItem TrayItem(string text, Action onClick)
+    /// <summary>Пункт меню трея. icon: название значка из Controls/Icon.cs, рисуется в колонке значков (Tray.cs).</summary>
+    private static System.Windows.Forms.ToolStripMenuItem TrayItem(string text, Action onClick, string? icon = null)
     {
-        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8) };
+        var item = new System.Windows.Forms.ToolStripMenuItem(text) { Padding = new System.Windows.Forms.Padding(12, 8, 12, 8), Tag = icon };
         item.Click += (_, _) => onClick();
         return item;
     }
@@ -275,7 +274,6 @@ public partial class MainWindow
         if (_trayStatus == null || _tray == null) return;
         _trayStatus.Text = name == null ? "Не подключено" : DnsServer.Clip(name, 26);
         _trayStatus.ForeColor = Palette.Get(name == null ? "Muted" : "Ok");
-        _trayStatus.Image = TrayMenu.Dot(Palette.Get(name == null ? "Muted" : "Ok"));
         if (_trayPing != null)
             _trayPing.SetPing(srv?.LatencyMs, srv?.LatencyMs == null ? "Пинг: —" : $"Пинг: {srv.PingText} мс");
         if (_trayStab != null)

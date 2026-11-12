@@ -56,17 +56,38 @@ internal sealed class TrayRenderer : ToolStripProfessionalRenderer
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
         e.TextColor = !e.Item.Enabled ? Muted : e.Item.ForeColor == Color.Empty || e.Item is ToolStripMenuItem ? Text : e.Item.ForeColor;
-        e.TextFormat |= TextFormatFlags.EndEllipsis;
-        if (e.Item is ToolStripMenuItem)
-        {
-            // Текст по центру строки: высота пунктов задана явно, а WinForms ставил текст к верху, и подсветка
-            // выглядела сдвинутой относительно надписи
-            e.TextFormat = (e.TextFormat & ~(TextFormatFlags.Top | TextFormatFlags.Bottom)) | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
-            e.TextRectangle = new Rectangle(14, 0, e.Item.Width - 14 - 30, e.Item.Height);
-        }
+        // Значок (его название лежит в Tag пункта) в общей колонке; пункт со значком ставит текст в колонку текста,
+        // без значка (подменю без картинок) текст стоит на краю колонки значков
+        var kind = e.Item.Tag as string;
+        var hasIcon = kind != null;
+        if (hasIcon) DrawIcon(e, kind!);
+        var left = (hasIcon ? TrayLayout.TextX : TrayLayout.IconX) - e.Item.Bounds.X; // Bounds.X: пункт и надпись WinForms ставит с разным отступом
+        var right = e.Item is ToolStripMenuItem { HasDropDownItems: true } ? 30 : 14;
+        // Текст по центру строки: высота пунктов задана явно, а WinForms ставил текст к верху, и подсветка
+        // выглядела сдвинутой относительно надписи. NoPadding: без своего отступа слева, чтобы текст начинался ровно в колонке
+        e.TextFormat = (e.TextFormat & ~(TextFormatFlags.Top | TextFormatFlags.Bottom | TextFormatFlags.HorizontalCenter | TextFormatFlags.Right | TextFormatFlags.LeftAndRightPadding))
+                       | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
+        e.TextRectangle = new Rectangle(left, 0, Math.Max(10, e.Item.Width - left - right), e.Item.Height);
         base.OnRenderItemText(e);
         // Стрелка подменю у правого края: при заданной ширине пункта WinForms место под нее не оставляет
         if (e.Item is ToolStripMenuItem { HasDropDownItems: true } mi) DrawChevron(e.Graphics, mi.Width - 18, mi.Height / 2f);
+    }
+
+    /// <summary>Значок или точка статуса в колонке значков: по центру строки, цвет как у текста пункта.</summary>
+    private static void DrawIcon(ToolStripItemTextRenderEventArgs e, string kind)
+    {
+        var color = !e.Item.Enabled ? Muted : e.Item.ForeColor == Color.Empty || e.Item is ToolStripMenuItem ? Text : e.Item.ForeColor;
+        var x = TrayLayout.IconX - e.Item.Bounds.X;
+        var y = (e.Item.Height - TrayIcons.Size) / 2;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        if (kind == "dot")
+        {
+            // Точка статуса соединения: круг 8 px посередине колонки значков
+            using var b = new SolidBrush(color);
+            e.Graphics.FillEllipse(b, x + 4, y + 4, 8, 8);
+        }
+        else if (TrayIcons.Get(kind, color) is { } bmp)
+            e.Graphics.DrawImage(bmp, x, y, TrayIcons.Size, TrayIcons.Size);
     }
 
     private static void DrawChevron(Graphics g, float cx, float cy)
@@ -117,17 +138,6 @@ internal static class TrayMenu
         }
         catch (Exception) { /* старая Windows: обычные углы */ }
     }
-
-    /// <summary>Точка статуса для строки меню: нарисованный круг, а не символ шрифта.</summary>
-    public static Image Dot(Color color)
-    {
-        var bmp = new Bitmap(10, 10);
-        using var g = Graphics.FromImage(bmp);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var b = new SolidBrush(color);
-        g.FillEllipse(b, 1, 1, 8, 8);
-        return bmp;
-    }
 }
 
 internal sealed class TrayColors : ProfessionalColorTable
@@ -174,7 +184,6 @@ internal sealed class TrayPingStrip : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.Clear(Palette.Get("MenuBg"));
 
         var (lit, brush) = Dnex.Controls.PingBars.Level(_ms);
@@ -182,8 +191,8 @@ internal sealed class TrayPingStrip : Control
         var color = Color.FromArgb(wpf.A, wpf.R, wpf.G, wpf.B);
         var off = Palette.Get("ScrollThumb");
         var bottom = ClientSize.Height / 2 + 7;
-        const int barWidth = 3, gap = 2;
-        int x = 6; // полоса стоит с отступом 8 от края меню: столбики начинаются на линии текста пунктов (14)
+        const int barWidth = 3, gap = 1; // четыре столбика 15 px: помещаются в колонку значков (16 px)
+        int x = TrayLayout.IconX - Left; // Left: полосу WinForms ставит правее края меню, считаем от края меню
         for (var i = 0; i < Heights.Length; i++)
         {
             using var br = new SolidBrush(i < lit ? color : off);
@@ -191,9 +200,10 @@ internal sealed class TrayPingStrip : Control
             x += barWidth + gap;
         }
 
-        using var sf = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
-        using var tb = new SolidBrush(TextColor);
-        g.DrawString(Dnex.Services.Loc.T(_text), Font, tb, new RectangleF(x + 6, 0, ClientSize.Width - x - 6, ClientSize.Height), sf); // на языке интерфейса
+        // Текст в колонке текста: на одной линии с «Стабильность» и надписями пунктов
+        var left = TrayLayout.TextX - Left;
+        TextRenderer.DrawText(g, Dnex.Services.Loc.T(_text), Font, new Rectangle(left, 0, ClientSize.Width - left, ClientSize.Height), TextColor,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis); // на языке интерфейса
     }
 }
 
@@ -232,22 +242,32 @@ internal sealed class TrayServiceStrip : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
         g.Clear(Palette.Get("MenuBg"));
         if (Names.Count == 0) return;
 
-        var cell = ClientSize.Width / (float)Names.Count;
+        // Первая точка стоит по центру колонки значков (как значки пунктов ниже), остальные делят строку поровну
+        var start = TrayLayout.IconX + 4 - Left;
+        var cell = (ClientSize.Width - start - 6) / (float)Names.Count;
         var cy = ClientSize.Height / 2f;
-        using var sf = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
         for (var i = 0; i < Names.Count; i++)
         {
-            var x = i * cell + 6;
+            var x = start + i * cell;
             var dot = _state[i] switch { 1 => OkColor, 2 => BadColor, _ => UnknownColor };
             using (var br = new SolidBrush(dot)) g.FillEllipse(br, x, cy - 4, 8, 8);
-            using var tb = new SolidBrush(TextColor);
-            g.DrawString(Names[i], Font, tb, new RectangleF(x + 12, 0, cell - 14, ClientSize.Height), sf);
+            TextRenderer.DrawText(g, Names[i], Font, new Rectangle((int)x + 12, 0, (int)cell - 14, ClientSize.Height), TextColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
         }
     }
+}
+
+/// <summary>
+/// Сетка меню трея: колонка значков (значок 16 px, у точки статуса и столбиков пинга тоже) и колонка текста правее нее.
+/// Все строки (статус, пинг, стабильность, сервисы, пункты) считаются от края меню, поэтому левый край общий.
+/// </summary>
+internal static class TrayLayout
+{
+    public const int IconX = 14;
+    public const int TextX = IconX + TrayIcons.Size + 10;
 }
 
 /// <summary>Ширина меню трея: пункты, строки статуса и подменю выравниваются по ней.</summary>
