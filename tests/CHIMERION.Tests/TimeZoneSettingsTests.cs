@@ -68,7 +68,9 @@ public class TimeZoneSettingsTests
         Assert.Equal(zone, args.GetProperty("timezoneId").GetString());
     }
 
-    [Fact]
-    public void Browser_command_rejects_an_unknown_zone() =>
-        Assert.Throws<ArgumentException>(() => TimeZoneSettings.BrowserCommand("Invalid"));
+    [Theory]
+    [InlineData("Invalid")]
+    [InlineData("UTC+03")]
+    public void Browser_command_rejects_an_unknown_zone(string id) =>
+        Assert.Throws<ArgumentException>(() => TimeZoneSettings.BrowserCommand(id));
 }

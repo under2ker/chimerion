@@ -2830,5 +2830,9 @@
  "Через системный пояс": "Uses the Windows time zone",
  "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor».": "Open the service tab in Chrome or Edge. Press F12, then Ctrl+Shift+P and choose «Show Protocol monitor».",
  "Для Claude Desktop и приложения ChatGPT пояс можно выбрать в настройке Windows. Она действует на все программы.": "Use the Windows time zone setting for Claude Desktop and the ChatGPT app. This applies to all apps.",
- "Вставьте команду внизу и нажмите Enter. Закройте DevTools для сброса.": "Paste into the bottom field and press Enter. Close DevTools to reset."
+ "Вставьте команду внизу и нажмите Enter. Закройте DevTools для сброса.": "Paste into the bottom field and press Enter. Close DevTools to reset.",
+ "Город, страна или UTC": "City, country or UTC offset",
+ "Город и страна": "City and country",
+ "Пояса не найдены. Попробуйте другой город, страну или смещение UTC.": "No time zones found. Try another city, country or UTC offset.",
+ "Для этого места доступна настройка в браузере или в командной строке": "For this location, use the browser or command-line setting"
 }

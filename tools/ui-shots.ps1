@@ -305,15 +305,24 @@ function Test-TimeZoneSearch([string]$label, [int]$stable) {
         $search = Wait-TimeZoneElement $name "Поиск часового пояса"
         $inputBox = $search.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
         $inputBox.SetValue("NoSuchTimeZone")
-        $empty = UiName "Пояса не найдены. Попробуйте другое название или смещение UTC."
+        $empty = UiName "Пояса не найдены. Попробуйте другой город, страну или смещение UTC."
         $copy = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, (UiName "Скопировать команду"))
         $copyButton = Wait-TimeZoneElement $copy "Скопировать команду"
         if (-not [UiShot]::ExpectAsync($script:main, $empty, 4000).GetAwaiter().GetResult() -or $copyButton.Current.IsEnabled) {
             Fail "Часовой пояс: пустой поиск должен показывать подсказку и отключать копирование"
         }
+        $inputBox.SetValue($(if ($script:pass -like "*-en") { "Germany" } else { "Германия" }))
+        $berlin = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "Europe/Berlin")
+        $item = Wait-TimeZoneElement $berlin "Europe/Berlin"
+        $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        $labelBerlin = if ($script:pass -like "*-en") { "Berlin, Germany" } else { "Берлин, Германия" }
+        if (-not [UiShot]::ExpectAsync($script:main, "11:30", 4000).GetAwaiter().GetResult() -or $item.Current.Name -ne $labelBerlin) {
+            Fail "Часовой пояс: страна должна находить Берлин и показывать его местное время"
+        }
+        Shoot "$label-country-search" "11:30" $stable
         $inputBox.SetValue("UTC+9 Tokyo")
-        $tokyo = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "Tokyo Standard Time")
-        $item = Wait-TimeZoneElement $tokyo "Tokyo Standard Time"
+        $tokyo = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "Asia/Tokyo")
+        $item = Wait-TimeZoneElement $tokyo "Asia/Tokyo"
         $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
         Shoot "$label-search" "19:30" $stable
         if (-not (Press "Очистить поиск")) { return }

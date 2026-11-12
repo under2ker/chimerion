@@ -39,14 +39,14 @@
 
     <Style x:Key="TimeZoneItem" TargetType="ListBoxItem">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-        <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
-        <Setter Property="AutomationProperties.AutomationId" Value="{Binding Zone.WindowsId}"/>
+        <Setter Property="AutomationProperties.Name" Value="{Binding Label}"/>
+        <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Margin" Value="0,1,4,1"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="row" Padding="9,6" CornerRadius="7" BorderThickness="1"
+                    <Border x:Name="row" Padding="9,4" Height="44" CornerRadius="7" BorderThickness="1"
                             BorderBrush="Transparent" Background="Transparent">
                         <Grid>
                             <ContentPresenter VerticalAlignment="Center"/>
@@ -76,7 +76,20 @@
         <DockPanel>
             <TextBlock DockPanel.Dock="Right" Text="{Binding Offset}" Foreground="{DynamicResource Muted}"
                        FontSize="12" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" Margin="9,0,0,0"/>
-            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+            <StackPanel VerticalAlignment="Center" ToolTip="{Binding Label}">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Country}" Foreground="{DynamicResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Country}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
         </DockPanel>
     </DataTemplate>
 </ResourceDictionary>

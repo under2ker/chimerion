@@ -14,7 +14,7 @@
     <Copyright>under2ker</Copyright>
     <RootNamespace>Dnex</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.175</Version>
+    <Version>0.1.176</Version>
     <!-- Сбой сети при загрузке базы уязвимостей (NU1900) не должен ронять сборку: уязвимости проверяет отдельный шаг CI -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900</WarningsNotAsErrors>
   </PropertyGroup>
@@ -35,6 +35,9 @@
     <EmbeddedResource Include="catalog/bypass.json" LogicalName="bypass.json" />
     <EmbeddedResource Include="catalog/bypass.json.sig" LogicalName="bypass.json.sig" />
     <EmbeddedResource Include="i18n/en.json" LogicalName="i18n.en.json" />
+    <EmbeddedResource Include="Assets/time-zone-places.json" LogicalName="time-zone-places.json" />
+    <EmbeddedResource Include="Assets/time-zone-places.LICENSE.txt" LogicalName="time-zone-places.LICENSE.txt" />
+    <EmbeddedResource Include="Assets/nodatime.LICENSE.txt" LogicalName="nodatime.LICENSE.txt" />
     <EmbeddedResource Include="Assets/animated-icons.json.gz" LogicalName="animated-icons.json.gz" />
     <!-- Расширение Google Flow Geo Bypass (MIT): распаковывается в папку и подключается в браузере кнопкой «Загрузить распакованное» -->
     <EmbeddedResource Include="Assets/google-flow/*" LogicalName="google-flow/%(Filename)%(Extension)" />
@@ -51,6 +54,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="NodaTime" Version="3.3.7" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>

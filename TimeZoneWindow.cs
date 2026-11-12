@@ -16,7 +16,13 @@ internal static class TimeZoneWindow
 
     private enum Scope { Browser, Code, Apps, Windows }
 
-    private sealed record ZoneRow(TimeZoneSettings.Zone Zone, TimeZoneInfo Info, string Name, string Offset);
+    private sealed record ZoneRow(TimeZonePlaces.Choice Zone, string Offset)
+    {
+        public string Name => Zone.Name;
+        public string Country => Zone.Country;
+        public string Id => Zone.Id;
+        public string Label => Zone.Label;
+    }
 
     internal static void Show(Action<string> log) => DnexDialog.Present(Build(log));
 
@@ -56,17 +62,11 @@ internal static class TimeZoneWindow
             : DateTimeOffset.UtcNow;
         TimeZoneInfo CurrentZone() => Storage.TestCopy ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
 
-        var openedAt = UtcNow();
-        var zones = TimeZoneSettings.Zones(english).Select(zone =>
-        {
-            var info = TimeZoneInfo.FindSystemTimeZoneById(zone.WindowsId);
-            var name = zone.WindowsId == "UTC"
-                ? Loc.T("Всемирное время")
-                : zone.Name[(zone.Name.IndexOf(')') + 1)..].Trim().Replace(" Standard Time", "", StringComparison.Ordinal);
-            return new ZoneRow(zone, info, name, FormatOffset(info.GetUtcOffset(openedAt)));
-        }).ToArray();
-        var selected = zones.FirstOrDefault(row => row.Info.Id == CurrentZone().Id) ?? zones.FirstOrDefault();
-        var search = new TextBox { Tag = Loc.T("Город, название или UTC"), Padding = new Thickness(34, 7, 38, 7) };
+        var places = TimeZonePlaces.List(english);
+        var selected = TimeZonePlaces.Default(places, CurrentZone().Id) ?? places.FirstOrDefault();
+        ZoneRow[] rows = [];
+        bool WindowsScope() => scope is Scope.Apps or Scope.Windows;
+        var search = new TextBox { Tag = Loc.T("Город, страна или UTC"), Padding = new Thickness(34, 7, 38, 7) };
         AutomationProperties.SetName(search, Loc.T(SearchLabel));
         var searchBox = new Grid { Margin = new Thickness(0, 10, 0, 8) };
         searchBox.Children.Add(search);
@@ -90,9 +90,7 @@ internal static class TimeZoneWindow
 
         var zonePicker = new ListBox
         {
-            ItemsSource = zones,
-            SelectedItem = selected,
-            Height = 231,
+            Height = 230,
             Background = System.Windows.Media.Brushes.Transparent,
             BorderThickness = new Thickness(0),
             Padding = new Thickness(0),
@@ -104,14 +102,14 @@ internal static class TimeZoneWindow
         AutomationProperties.SetName(zonePicker, Loc.T(Title));
         zonePicker.Loaded += (_, _) => ScrollToSelected();
 
-        var empty = Ui.Hint(Loc.T("Пояса не найдены. Попробуйте другое название или смещение UTC."), 0);
+        var empty = Ui.Hint(Loc.T("Пояса не найдены. Попробуйте другой город, страну или смещение UTC."), 0);
         empty.Margin = new Thickness(10, 18, 10, 0);
         empty.Visibility = Visibility.Collapsed;
         var zoneResults = new Grid();
         zoneResults.Children.Add(zonePicker);
         zoneResults.Children.Add(empty);
         var picker = new StackPanel();
-        picker.Children.Add(Heading("Выберите пояс"));
+        picker.Children.Add(Heading("Город и страна"));
         picker.Children.Add(searchBox);
         picker.Children.Add(zoneResults);
 
@@ -170,8 +168,8 @@ internal static class TimeZoneWindow
 
         void UpdateResultsHeight(double availableHeight)
         {
-            int maxRows = availableHeight >= 820 ? 10 : 7;
-            zonePicker.Height = 33 * Math.Clamp(zonePicker.Items.Count, 3, maxRows);
+            int maxRows = availableHeight >= 820 ? 7 : 5;
+            zonePicker.Height = 46 * Math.Clamp(zonePicker.Items.Count, 2, maxRows);
         }
 
         void ScrollToSelected()
@@ -192,16 +190,21 @@ internal static class TimeZoneWindow
                 return;
             }
 
-            var shown = TimeZoneInfo.ConvertTime(now, row.Info);
-            previewName.Text = row.Name;
+            var shown = row.Zone.At(now, WindowsScope());
+            previewName.Text = row.Label;
             time.Text = shown.ToString("HH:mm", culture);
             date.Text = $"{shown.ToString("d MMMM yyyy", culture)}  ·  {FormatOffset(shown.Offset)}";
         }
 
         void RefreshAction()
         {
-            bool hasZone = zonePicker.SelectedItem is ZoneRow;
-            action.IsEnabled = scope == Scope.Apps || hasZone;
+            var zone = (zonePicker.SelectedItem as ZoneRow)?.Zone;
+            action.IsEnabled = scope switch
+            {
+                Scope.Apps => true,
+                Scope.Windows => zone?.Windows != null,
+                _ => zone?.IanaId != null,
+            };
             action.Content = Loc.T(scope switch
             {
                 Scope.Apps => "Выбрать системный пояс",
@@ -229,8 +232,9 @@ internal static class TimeZoneWindow
             guide.ToolTip = scope == Scope.Browser
                 ? Loc.T("Если пункта нет, включите «Protocol Monitor» в DevTools: F1, раздел «Experiments».")
                 : null;
-            RefreshAction();
-            Ui.SetStatus(status, "");
+            var now = UtcNow();
+            rows = places.Select(zone => new ZoneRow(zone, FormatOffset(zone.At(now, WindowsScope()).Offset))).ToArray();
+            RefreshResults();
         }
 
         void Copy(string text, string success)
@@ -241,7 +245,7 @@ internal static class TimeZoneWindow
 
         async Task ApplyAsync()
         {
-            if (busy) return;
+            if (busy || !action.IsEnabled) return;
             if (scope == Scope.Apps) { windows.IsChecked = true; windows.Focus(); return; }
             if (zonePicker.SelectedItem is not ZoneRow row) return;
             var zone = row.Zone;
@@ -251,13 +255,13 @@ internal static class TimeZoneWindow
             picker.IsHitTestVisible = false;
             try
             {
-                if (scope == Scope.Windows)
+                if (scope == Scope.Windows && zone.Windows is { } systemZone)
                 {
                     if (!DnexDialog.Ask("Изменить часовой пояс Windows?",
-                        $"Выбран «{zone.Name}». Новое время будет отображаться во всех программах.",
+                        $"Выбран «{zone.Label}». Новое время будет отображаться во всех программах.",
                         "Изменить пояс", danger: true, windowTitle: Title)) return;
                     Ui.SetStatus(status, Loc.T("Применяю часовой пояс…"));
-                    var changed = await TimeZoneSettings.ApplyWindowsAsync(zone.WindowsId);
+                    var changed = await TimeZoneSettings.ApplyWindowsAsync(systemZone.Id);
                     RefreshClock();
                     if (!changed) log("Windows не применила часовой пояс");
                     Ui.SetStatus(status, Loc.T(changed ? "Часовой пояс Windows изменен" : "Windows не применила часовой пояс. Проверьте права или настройки времени."), !changed);
@@ -292,21 +296,38 @@ internal static class TimeZoneWindow
         foreach (var (option, target) in scopeOptions)
             option.Checked += (_, _) => { scope = target; RefreshScope(); };
 
-        search.TextChanged += (_, _) =>
+        void RefreshResults()
         {
-            clearSearch.Visibility = search.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            var words = search.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-            var matches = zones.Where(row => Matches(row, words)).ToArray();
+            var words = TimeZonePlaces.SearchWords(search.Text);
+            var matches = rows.Where(row => row.Zone.Matches(words, row.Offset)).ToArray();
             filtering = true;
             zonePicker.ItemsSource = matches;
-            zonePicker.SelectedItem = matches.Contains(selected) ? selected : null;
+            zonePicker.SelectedItem = matches.FirstOrDefault(row => row.Zone == selected);
             filtering = false;
             UpdateResultsHeight(dock.ActualHeight);
             empty.Visibility = matches.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             ScrollToSelected();
+            RefreshSelection();
+        }
+
+        void RefreshSelection()
+        {
             RefreshClock();
             RefreshAction();
-            Ui.SetStatus(status, "");
+            var zone = (zonePicker.SelectedItem as ZoneRow)?.Zone;
+            var message = zone == null ? "" : scope switch
+            {
+                Scope.Windows when zone.Windows == null => "Для этого места доступна настройка в браузере или в командной строке",
+                Scope.Browser or Scope.Code when zone.IanaId == null => "Этот пояс доступен только в Windows",
+                _ => "",
+            };
+            Ui.SetStatus(status, Loc.T(message), message.Length > 0);
+        }
+
+        search.TextChanged += (_, _) =>
+        {
+            clearSearch.Visibility = search.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+            RefreshResults();
         };
         search.PreviewKeyDown += (_, e) =>
         {
@@ -322,10 +343,8 @@ internal static class TimeZoneWindow
         zonePicker.SelectionChanged += (_, _) =>
         {
             if (filtering) return;
-            if (zonePicker.SelectedItem is ZoneRow row) selected = row;
-            RefreshClock();
-            RefreshAction();
-            Ui.SetStatus(status, "");
+            if (zonePicker.SelectedItem is ZoneRow row) selected = row.Zone;
+            RefreshSelection();
         };
         window.PreviewKeyDown += (_, e) =>
         {
@@ -348,7 +367,6 @@ internal static class TimeZoneWindow
             else clockTimer.Stop();
         };
         root.Unloaded += (_, _) => clockTimer.Stop();
-        RefreshClock();
         RefreshScope();
         return window;
     }
@@ -386,13 +404,5 @@ internal static class TimeZoneWindow
     {
         var absolute = offset.Duration();
         return $"UTC{(offset < TimeSpan.Zero ? "-" : "+")}{absolute.Hours:00}:{absolute.Minutes:00}";
-    }
-
-    private static bool Matches(ZoneRow row, string[] words)
-    {
-        var offset = row.Offset;
-        var shortOffset = offset[4] == '0' ? offset.Remove(4, 1) : offset;
-        var names = $"{row.Zone.Name} {row.Zone.WindowsId} {row.Zone.IanaId} {row.Zone.IanaId?.Replace('_', ' ')} {row.Name} {offset} {shortOffset}";
-        return words.All(word => names.Contains(word.Replace('−', '-'), StringComparison.OrdinalIgnoreCase));
     }
 }

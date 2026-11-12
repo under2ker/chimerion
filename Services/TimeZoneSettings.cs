@@ -1,28 +1,13 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using NodaTime.TimeZones;
 
 namespace Dnex.Services;
 
 internal static class TimeZoneSettings
 {
     private static readonly SemaphoreSlim WindowsChange = new(1, 1);
-
-    internal sealed record Zone(string WindowsId, string Name, string? IanaId);
-
-    internal static IReadOnlyList<Zone> Zones(bool english) => TimeZoneInfo.GetSystemTimeZones()
-        .Select(zone => new Zone(zone.Id, DisplayName(zone, english),
-            TimeZoneInfo.TryConvertWindowsIdToIanaId(zone.Id, out var id) ? id : null))
-        .ToArray();
-
-    internal static string DisplayName(TimeZoneInfo zone, bool english)
-    {
-        if (!english) return zone.DisplayName;
-        var offset = zone.BaseUtcOffset;
-        var sign = offset < TimeSpan.Zero ? "-" : "+";
-        var absolute = offset.Duration();
-        return $"(UTC{sign}{absolute.Hours:00}:{absolute.Minutes:00}) {zone.Id}";
-    }
 
     /// <summary>Часовой пояс действует в процессе Claude Code и его дочерних процессах до выхода.</summary>
     internal static string ClaudeCodeCommand(string ianaId)
@@ -41,7 +26,7 @@ internal static class TimeZoneSettings
 
     private static bool KnownIana(string id) => id.Length > 0 &&
         id.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+') &&
-        TimeZoneInfo.TryConvertIanaIdToWindowsId(id, out _);
+        (TzdbDateTimeZoneSource.Default.CanonicalIdMap.ContainsKey(id) || TimeZoneInfo.TryConvertIanaIdToWindowsId(id, out _));
 
     internal static ProcessStartInfo WindowsCommand(string windowsId)
     {
