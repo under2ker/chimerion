@@ -84,6 +84,7 @@ $Plan = @(
     @{ n = "diag-tickets";    nav = "Диагностика";        c = @("Мои обращения*"); dialog = $true },
     @{ n = "speed";           nav = "Тест скорости";      expect = "Скорость DNS" },
     @{ n = "accounts";        nav = "Аккаунты";           expect = "Как беречь аккаунт" },
+    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("Claude Code", "Claude в браузере", "Claude Desktop", "Вся Windows"); back = "Закрыть выбор пояса" },
     @{ n = "journal";         nav = "Журнал";             expect = "Сохранить в файл"; tabs = @("Все", "Успех*", "Предупреждения*", "Ошибки*") },   # к названию добавляется число записей
     @{ n = "settings";        nav = "Настройки";          expect = "Отмена"; tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
     @{ n = "settings-twodns"; nav = "Настройки";          c = @("Два DNS", "Настроить два DNS"); dialog = $true },
@@ -93,12 +94,16 @@ $Plan = @(
     @{ n = "compact";                                     c = @("Компактно"); expect = "Полный вид"; back = "Полный вид" }
 )
 # Никогда не нажимать, даже если имя совпало случайно. Ссылки (Hyperlink) и галочки не нажимаются никогда
-$Deny = '^(Защита|Включено|Выключено|Подключить.*|Отключить|Сохранить|Отправить.*|Очистить|Купить.*|Написать.*|Подробнее|Найти новые серверы|Подобрать .*|Запустить тест|Перепроверить|Проверить .*|Включить.*|Убрать|Открыть.*|Экспорт.*|Импорт.*|Вернуть .*|Рекомендуемые значения|English|Русский|Светлая|Темная|Текст лицензии|История изменений|Баг-репорты|Идеи|Скопировать.*|Сохранить в файл|Папка журналов|Отчет в один клик|Канал в Telegram|Сайт chimerion\.dev|Версия.*|Новое обращение)$'
+$Deny = '^(Защита|Включено|Выключено|Подключить.*|Отключить|Сохранить|Отправить.*|Очистить|Купить.*|Написать.*|Подробнее|Найти новые серверы|Подобрать .*|Запустить тест|Перепроверить|Проверить .*|Включить.*|Убрать|Открыть.*|Экспорт.*|Импорт.*|Вернуть .*|Рекомендуемые значения|English|Русский|Светлая|Темная|Текст лицензии|История изменений|Баг-репорты|Идеи|Скопировать.*|Применить в Windows|Изменить пояс|Сохранить в файл|Папка журналов|Отчет в один клик|Канал в Telegram|Сайт chimerion\.dev|Версия.*|Новое обращение)$'
 
 # ================= Исполнитель одного прохода =================
 function Run-Pass([string]$pass, [int]$appId) {
     $script:pass = $pass
     $script:wantLight = $pass -like "light-*"
+    $script:englishNames = if ($pass -like "*-en") {
+        Add-Type -AssemblyName System.Web.Extensions
+        [System.Web.Script.Serialization.JavaScriptSerializer]::new().DeserializeObject([IO.File]::ReadAllText((Join-Path $repo "i18n/en.json")))
+    } else { @{} }
     $script:fails = New-Object System.Collections.Generic.List[string]
     $script:count = 0; $script:last = 0L; $script:page = $null
     $script:pid_ = $appId
@@ -129,7 +134,7 @@ function Run-Pass([string]$pass, [int]$appId) {
                 elseif ($s.tabs) {
                     foreach ($t in $s.tabs) { if (Press $t) { Shoot "$label-$(($t -replace '[*\\/:?"<>| ]', '').ToLower())" $s.expect $stable } }
                 } else { Shoot $label $s.expect $stable }
-                if ($s.back) { Press $s.back | Out-Null; $script:last = 0L }
+                if ($s.back) { Press $s.back | Out-Null; $script:last = 0L; $script:page = $null }
             }
             if (-not $ok) { $script:page = $null }   # что-то пошло не так: следующий шаг откроет свою страницу заново
             Write-Host ("[{0}] {1,-16} {2,5:0.0} с  (+{3:0.0})" -f $pass, $s.n, $sw.Elapsed.TotalSeconds, ($sw.Elapsed.TotalSeconds - $t0))
@@ -180,7 +185,14 @@ function Find-El($scope, [string]$name, [int]$maxMs = 4000) {
     return $null
 }
 
+function UiName([string]$name) {
+    if ($script:englishNames.ContainsKey($name)) { return $script:englishNames[$name] }
+    return $name
+}
+
 function Press([string]$name, $scope = $script:root) {
+    if ($name -match $Deny) { Fail "«$name» в запрете, не нажато"; return $false }
+    $name = UiName $name
     $t0 = $sw.Elapsed.TotalMilliseconds
     try {
         # Страница могла перестроиться между поиском и нажатием: следующая попытка ищет элемент заново
@@ -223,7 +235,7 @@ function Shoot([string]$label, [string]$expect, [int]$stable = 1200) {
     $script:count++
     $t0 = $sw.Elapsed.TotalMilliseconds
     # В фоне, пока снимается кадр: проверка страницы и поиск области прокрутки
-    $check = if ($expect) { [UiShot]::ExpectAsync($script:main, $expect, 4000) }
+    $check = if ($expect) { [UiShot]::ExpectAsync($script:main, (UiName $expect), 4000) }
     $scroll = if (-not $NoScroll) { [UiShot]::FindScrollAsync($script:main) }
     $script:last = [UiShot]::Save($script:main, (File $label), $script:last, 400, $stable)
     T "снимок $label" $t0

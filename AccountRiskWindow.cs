@@ -22,6 +22,7 @@ internal sealed class AccountRiskWindow
     private readonly Func<(AccountRisk.Result Result, Freshness Fresh, string? Pinned)> _source;
     private readonly Action<string> _pin;
     private readonly Action _openBrowser;
+    private readonly Action<string> _log;
     private readonly StackPanel _state = new();
 
     /// <summary>Когда страну последний раз измерили при текущем подключении; NetChanged — после смены сети еще не мерили.</summary>
@@ -55,18 +56,19 @@ internal sealed class AccountRiskWindow
             "Надежный пароль для почты или аккаунта, через который входите, и двухэтапная проверка, если она доступна."),
     };
 
-    public static void Show(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser)
+    public static void Show(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser, Action<string> log)
     {
         if (_open != null) { DnexDialog.Present(_open._w); _open.Render(); return; }
-        _open = new AccountRiskWindow(source, pin, openBrowser);
+        _open = new AccountRiskWindow(source, pin, openBrowser, log);
         DnexDialog.Present(_open._w);
     }
 
-    private AccountRiskWindow(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser)
+    private AccountRiskWindow(Func<(AccountRisk.Result, Freshness, string?)> source, Action<string> pin, Action openBrowser, Action<string> log)
     {
         _source = source;
         _pin = pin;
         _openBrowser = openBrowser;
+        _log = log;
         _w = DnexDialog.CreateWindow(Title, Ui.Narrow + 40);
         _w.Closed += (_, _) => _open = null;
         _w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _w.Close(); };
@@ -260,6 +262,9 @@ internal sealed class AccountRiskWindow
         box.Children.Add(Ui.Hint("Список устройств, с которых выполнен вход, в настройках аккаунта Claude", 4));
         box.Children.Add(Ui.Action("Открыть настройки Claude", "Strong", () => AutoStart.OpenUrl(ClaudeSettingsUrl))
             .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); b.ToolTip = "Откроется в браузере"; }));
+
+        box.Children.Add(Ui.Action(TimeZoneWindow.Title, "Ghost", () => TimeZoneWindow.Show(_log))
+            .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); }));
 
         box.Children.Add(Ui.Separator().With(s => s.Margin = new Thickness(0, 18, 0, 12)));
         box.Children.Add(new TextBlock { Text = "Что именно сервисы считают подозрительным, снаружи не знает никто. Чаще всего блокируют за частую смену страны и за адреса из черных списков: за этим страница и следит.",

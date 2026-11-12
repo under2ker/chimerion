@@ -61,7 +61,7 @@ public partial class MainWindow
 
     /// <summary>Страница «Аккаунты»: только по уже собранным данным, без новых запросов.</summary>
     private void AccountRisk_Click(object sender, System.Windows.RoutedEventArgs e) =>
-        AccountRiskWindow.Show(AccountRiskNow, PinCountry, () => BrowserCheckWindow.Show(BrowserCheckState));
+        AccountRiskWindow.Show(AccountRiskNow, PinCountry, () => BrowserCheckWindow.Show(BrowserCheckState), Log);
 
     /// <summary>
     /// Оценка по последней проверке подключения. Страна берется только у сервисов, которые открылись через Smart DNS:

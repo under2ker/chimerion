@@ -152,7 +152,7 @@ public partial class MainWindow
         "Режим" => ModeToggle,
         "Диагностика" => DiagToggle,
         "Тест скорости" => SpeedButton,
-        AccountRiskWindow.Title or BrowserCheckWindow.Title => AccountRiskButton,
+        AccountRiskWindow.Title or BrowserCheckWindow.Title or TimeZoneWindow.Title => AccountRiskButton,
         "Помощь" => HelpToggle,
         "Журнал" => LogToggle,
         "Настройки" => SettingsButton,
