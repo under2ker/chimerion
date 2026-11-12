@@ -32,7 +32,7 @@ public sealed class SiteWatch
     /// <summary>Сколько сайтов держать в списке.</summary>
     public const int MaxSites = 300;
 
-    // Новые значения только в конце: число сохраняется в sites.json
+    // Новые значения только в конце: в sites.json значение хранится строкой (JsonStringEnumConverter), но порядок держим на случай чтения числом. Старая версия программы незнакомое значение не прочитает
     public enum Verdict { Unknown, Ok, NoDns, DownForAll, Blocked, Refused, NotProxied, Unreachable }
 
     public sealed class Site
