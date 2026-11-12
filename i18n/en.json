@@ -2834,5 +2834,7 @@
  "Город, страна или UTC": "City, country or UTC offset",
  "Город и страна": "City and country",
  "Пояса не найдены. Попробуйте другой город, страну или смещение UTC.": "No time zones found. Try another city, country or UTC offset.",
- "Для этого места доступна настройка в браузере или в командной строке": "For this location, use the browser or command-line setting"
+ "Для этого места доступна настройка в браузере или в командной строке": "For this location, use the browser or command-line setting",
+ "Все страны": "All countries",
+ "Город или UTC": "City or UTC offset"
 }

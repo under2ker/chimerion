@@ -10,7 +10,15 @@ CLDR = "49.0.0"
 CLDR_ROOT = f"https://raw.githubusercontent.com/unicode-org/cldr-json/{CLDR}"
 ASSETS = Path(__file__).resolve().parents[1] / "Assets"
 
+COUNTRY_ALIASES = {
+    "NL": ("Нидерландов", "Нидерландах", "Голландия", "Голландии", "Holland"),
+}
+
 EXTRA_CITIES = {
+    "Eindhoven": ("Europe/Amsterdam", "NL", "Эйндховен", "Eindhoven"),
+    "Rotterdam": ("Europe/Amsterdam", "NL", "Роттердам", "Rotterdam"),
+    "The_Hague": ("Europe/Amsterdam", "NL", "Гаага", "The Hague"),
+    "Utrecht": ("Europe/Amsterdam", "NL", "Утрехт", "Utrecht"),
     "Beijing": ("Asia/Shanghai", "CN", "Пекин", "Beijing"),
     "Delhi": ("Asia/Kolkata", "IN", "Нью-Дели", "New Delhi"),
     "Munich": ("Europe/Berlin", "DE", "Мюнхен", "Munich"),
@@ -66,7 +74,7 @@ def main():
                         "En": names["en"].get(zone, default)}
         labels = [countries[language][country] for language in ("ru", "en")]
         short = [countries[language].get(f"{country}-alt-short", labels[i]) for i, language in enumerate(("ru", "en"))]
-        aliases = " ".join(dict.fromkeys(labels + short))
+        aliases = " ".join(dict.fromkeys([*labels, *short, *COUNTRY_ALIASES.get(country, ())]))
         territories[country] = {"Ru": short[0], "En": labels[1], "Aliases": aliases}
     for key, (zone, country, ru, en) in EXTRA_CITIES.items():
         if not any(row["Country"] == country and row["En"] == en for row in places.values()):

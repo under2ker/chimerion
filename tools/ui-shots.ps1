@@ -331,6 +331,28 @@ function Test-TimeZoneSearch([string]$label, [int]$stable) {
         if ($inputBox.Current.Value -ne "" -or -not [UiShot]::ExpectAsync($script:main, "19:30", 4000).GetAwaiter().GetResult()) {
             Fail "Часовой пояс: после очистки поиска выбранный пояс должен остаться"
         }
+        $countryId = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "time-zone-country")
+        $country = Wait-TimeZoneElement $countryId "Страна"
+        $dropdown = $country.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
+        $dropdown.Expand()
+        $countries = $country.GetCurrentPattern([Windows.Automation.ItemContainerPattern]::Pattern)
+        $timer.Restart()
+        do {
+            $netherlands = $countries.FindItemByProperty($null, $AE::AutomationIdProperty, "NL")
+            if ($netherlands) { break }
+            Start-Sleep -Milliseconds 30
+        } while ($timer.ElapsedMilliseconds -lt 4000)
+        if (-not $netherlands) { throw "в списке стран нет Нидерландов" }
+        $netherlands.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        if ($dropdown.Current.ExpandCollapseState -eq [Windows.Automation.ExpandCollapseState]::Expanded) { $dropdown.Collapse() }
+
+        $amsterdamId = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "Europe/Amsterdam")
+        $amsterdam = Wait-TimeZoneElement $amsterdamId "Europe/Amsterdam"
+        $amsterdam.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        if ($script:root.FindFirst("Descendants", $berlin)) {
+            Fail "Часовой пояс: фильтр Нидерландов показал город из другой страны"
+        }
+        Shoot "$label-netherlands" "11:30" $stable
     } catch {
         Fail "Часовой пояс: поиск не прошел: $($_.Exception.Message)"
     }

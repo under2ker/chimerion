@@ -12,7 +12,7 @@ internal static class TimeZonePlaces
     private sealed record Place(string Zone, string Country, string Ru, string En);
     private sealed record Catalog(Dictionary<string, Country> Countries, Dictionary<string, Place> Places);
 
-    internal sealed record Choice(string Id, string Name, string Country, string SearchNames, string? IanaId, TimeZoneInfo? Windows)
+    internal sealed record Choice(string Id, string Name, string Country, string CountryCode, string SearchNames, string? IanaId, TimeZoneInfo? Windows)
     {
         internal string Label => Country.Length == 0 ? Name : $"{Name}, {Country}";
 
@@ -55,7 +55,7 @@ internal static class TimeZonePlaces
             var windows = WindowsFor(place.Zone);
             if (windows != null) used.Add(windows.Id);
             var search = $"{place.Ru} {place.En} {country.Aliases} {place.Zone} {place.Zone.Replace('_', ' ')}";
-            locations.Add(new Choice(id, name, region, search, place.Zone, windows));
+            locations.Add(new Choice(id, name, region, place.Country, search, place.Zone, windows));
         }
 
         var culture = CultureInfo.GetCultureInfo(english ? "en-US" : "ru-RU");
@@ -67,7 +67,7 @@ internal static class TimeZonePlaces
             var name = zone.Id == "UTC" ? (english ? "Coordinated Universal Time" : "Всемирное время")
                 : english ? zone.Id.Replace(" Standard Time", "", StringComparison.Ordinal)
                 : zone.DisplayName[(zone.DisplayName.IndexOf(')') + 1)..].Trim();
-            return new Choice(zone.Id, name, "", $"{name} {zone.Id} {iana}", iana, zone);
+            return new Choice(zone.Id, name, "", "", $"{name} {zone.Id} {iana}", iana, zone);
         }).ToArray();
         return fallback.Where(zone => zone.Id == "UTC")
             .Concat(locations.OrderBy(zone => zone.Name, order).ThenBy(zone => zone.Country, order))

@@ -15,6 +15,7 @@ internal static class TimeZoneWindow
     private const string SearchLabel = "Поиск часового пояса";
 
     private enum Scope { Browser, Code, Apps, Windows }
+    private sealed record CountryOption(string Code, string Name);
 
     private sealed record ZoneRow(TimeZonePlaces.Choice Zone, string Offset)
     {
@@ -64,6 +65,22 @@ internal static class TimeZoneWindow
 
         var places = TimeZonePlaces.List(english);
         var selected = TimeZonePlaces.Default(places, CurrentZone().Id) ?? places.FirstOrDefault();
+        var allCountries = new CountryOption("", Loc.T("Все страны"));
+        var countries = places.Where(place => place.CountryCode.Length > 0)
+            .Select(place => new CountryOption(place.CountryCode, place.Country))
+            .Distinct().OrderBy(option => option.Name, StringComparer.Create(culture, ignoreCase: true));
+        var countryPicker = new ComboBox
+        {
+            ItemsSource = countries.Prepend(allCountries).ToArray(),
+            SelectedItem = allCountries,
+            DisplayMemberPath = nameof(CountryOption.Name),
+            Style = (Style)window.Resources["TimeZoneCountryPicker"],
+            Width = 155,
+            Margin = new Thickness(8, 0, 0, 0),
+        };
+        TextSearch.SetTextPath(countryPicker, nameof(CountryOption.Name));
+        AutomationProperties.SetName(countryPicker, Loc.T("Страна"));
+        AutomationProperties.SetAutomationId(countryPicker, "time-zone-country");
         ZoneRow[] rows = [];
         bool WindowsScope() => scope is Scope.Apps or Scope.Windows;
         var search = new TextBox { Tag = Loc.T("Город, страна или UTC"), Padding = new Thickness(34, 7, 38, 7) };
@@ -109,7 +126,11 @@ internal static class TimeZoneWindow
         zoneResults.Children.Add(zonePicker);
         zoneResults.Children.Add(empty);
         var picker = new StackPanel();
-        picker.Children.Add(Heading("Город и страна"));
+        var pickerHeader = new DockPanel();
+        DockPanel.SetDock(countryPicker, Dock.Right);
+        pickerHeader.Children.Add(countryPicker);
+        pickerHeader.Children.Add(Heading("Город и страна").With(label => label.VerticalAlignment = VerticalAlignment.Center));
+        picker.Children.Add(pickerHeader);
         picker.Children.Add(searchBox);
         picker.Children.Add(zoneResults);
 
@@ -299,7 +320,9 @@ internal static class TimeZoneWindow
         void RefreshResults()
         {
             var words = TimeZonePlaces.SearchWords(search.Text);
-            var matches = rows.Where(row => row.Zone.Matches(words, row.Offset)).ToArray();
+            var country = (countryPicker.SelectedItem as CountryOption)?.Code ?? "";
+            var matches = rows.Where(row => (country.Length == 0 || row.Zone.CountryCode == country) &&
+                row.Zone.Matches(words, row.Offset)).ToArray();
             filtering = true;
             zonePicker.ItemsSource = matches;
             zonePicker.SelectedItem = matches.FirstOrDefault(row => row.Zone == selected);
@@ -323,6 +346,13 @@ internal static class TimeZoneWindow
             };
             Ui.SetStatus(status, Loc.T(message), message.Length > 0);
         }
+
+        countryPicker.SelectionChanged += (_, _) =>
+        {
+            search.Tag = Loc.T(countryPicker.SelectedItem is not CountryOption { Code.Length: > 0 } ? "Город, страна или UTC" : "Город или UTC");
+            if (search.Text.Length == 0) RefreshResults();
+            else search.Clear();
+        };
 
         search.TextChanged += (_, _) =>
         {

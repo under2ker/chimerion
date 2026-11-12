@@ -164,7 +164,7 @@
   "NF": {"Ru": "о-в Норфолк", "En": "Norfolk Island", "Aliases": "о-в Норфолк Norfolk Island"},
   "NG": {"Ru": "Нигерия", "En": "Nigeria", "Aliases": "Нигерия Nigeria"},
   "NI": {"Ru": "Никарагуа", "En": "Nicaragua", "Aliases": "Никарагуа Nicaragua"},
-  "NL": {"Ru": "Нидерланды", "En": "Netherlands", "Aliases": "Нидерланды Netherlands"},
+  "NL": {"Ru": "Нидерланды", "En": "Netherlands", "Aliases": "Нидерланды Netherlands Нидерландов Нидерландах Голландия Голландии Holland"},
   "NO": {"Ru": "Норвегия", "En": "Norway", "Aliases": "Норвегия Norway"},
   "NP": {"Ru": "Непал", "En": "Nepal", "Aliases": "Непал Nepal"},
   "NR": {"Ru": "Науру", "En": "Nauru", "Aliases": "Науру Nauru"},
@@ -563,6 +563,7 @@
   "Australia/Sydney": {"Zone": "Australia/Sydney", "Country": "AU", "Ru": "Сидней", "En": "Sydney"},
   "Beijing": {"Zone": "Asia/Shanghai", "Country": "CN", "Ru": "Пекин", "En": "Beijing"},
   "Delhi": {"Zone": "Asia/Kolkata", "Country": "IN", "Ru": "Нью-Дели", "En": "New Delhi"},
+  "Eindhoven": {"Zone": "Europe/Amsterdam", "Country": "NL", "Ru": "Эйндховен", "En": "Eindhoven"},
   "Europe/Amsterdam": {"Zone": "Europe/Amsterdam", "Country": "NL", "Ru": "Амстердам", "En": "Amsterdam"},
   "Europe/Andorra": {"Zone": "Europe/Andorra", "Country": "AD", "Ru": "Андорра", "En": "Andorra"},
   "Europe/Astrakhan": {"Zone": "Europe/Astrakhan", "Country": "RU", "Ru": "Астрахань", "En": "Astrakhan"},
@@ -671,8 +672,11 @@
   "Pacific/Tongatapu": {"Zone": "Pacific/Tongatapu", "Country": "TO", "Ru": "Тонгатапу", "En": "Tongatapu"},
   "Pacific/Wake": {"Zone": "Pacific/Wake", "Country": "UM", "Ru": "Уэйк", "En": "Wake Island"},
   "Pacific/Wallis": {"Zone": "Pacific/Wallis", "Country": "WF", "Ru": "Уоллис", "En": "Wallis & Futuna"},
+  "Rotterdam": {"Zone": "Europe/Amsterdam", "Country": "NL", "Ru": "Роттердам", "En": "Rotterdam"},
   "Saint_Petersburg": {"Zone": "Europe/Moscow", "Country": "RU", "Ru": "Санкт-Петербург", "En": "Saint Petersburg"},
   "San_Francisco": {"Zone": "America/Los_Angeles", "Country": "US", "Ru": "Сан-Франциско", "En": "San Francisco"},
-  "Seattle": {"Zone": "America/Los_Angeles", "Country": "US", "Ru": "Сиэтл", "En": "Seattle"}
+  "Seattle": {"Zone": "America/Los_Angeles", "Country": "US", "Ru": "Сиэтл", "En": "Seattle"},
+  "The_Hague": {"Zone": "Europe/Amsterdam", "Country": "NL", "Ru": "Гаага", "En": "The Hague"},
+  "Utrecht": {"Zone": "Europe/Amsterdam", "Country": "NL", "Ru": "Утрехт", "En": "Utrecht"}
  }
 }

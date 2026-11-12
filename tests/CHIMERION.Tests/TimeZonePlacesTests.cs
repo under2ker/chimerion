@@ -45,11 +45,30 @@ public class TimeZonePlacesTests
         Assert.Equal(TimeSpan.FromHours(-8), usa["America/Los_Angeles"].At(instant, windows: false).Offset);
     }
 
+    [Theory]
+    [InlineData("Нидерланды")]
+    [InlineData("Нидерландов")]
+    [InlineData("Голландия")]
+    [InlineData("Holland")]
+    [InlineData("Netherlands")]
+    public void Finds_the_Dutch_cities_by_country_name(string query)
+    {
+        var cities = TimeZonePlaces.List(english: false).Where(place => place.CountryCode == "NL").ToArray();
+        Assert.Equal(new[] { "Амстердам", "Гаага", "Роттердам", "Утрехт", "Эйндховен" },
+            cities.Select(city => city.Name));
+        Assert.All(cities, city =>
+        {
+            Assert.True(city.Matches(TimeZonePlaces.SearchWords(query), "UTC+01:00"));
+            Assert.Equal("Europe/Amsterdam", city.IanaId);
+            Assert.Equal("W. Europe Standard Time", city.Windows?.Id);
+        });
+    }
     [Fact]
     public void Contains_geographic_choices_and_all_native_Windows_zones()
     {
         var choices = TimeZonePlaces.List(english: true);
         Assert.True(choices.Count(place => place.Country.Length > 0) >= 400);
+        Assert.Equal(247, choices.Where(place => place.CountryCode.Length > 0).Select(place => place.CountryCode).Distinct().Count());
         Assert.Equal(choices.Count, choices.Select(place => place.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         var nativeIds = choices.Select(place => place.Windows?.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.All(TimeZoneInfo.GetSystemTimeZones(), zone => Assert.Contains(zone.Id, nativeIds));

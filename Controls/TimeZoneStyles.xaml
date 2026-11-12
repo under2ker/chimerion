@@ -37,6 +37,77 @@
         </Setter>
     </Style>
 
+    <Style x:Key="TimeZoneCountryPicker" TargetType="ComboBox">
+        <Setter Property="MinHeight" Value="30"/>
+        <Setter Property="MaxDropDownHeight" Value="330"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="ToolTip" Value="{Binding SelectedItem.Name, RelativeSource={RelativeSource Self}}"/>
+        <Setter Property="ItemContainerStyle">
+            <Setter.Value>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="AutomationProperties.AutomationId" Value="{Binding Code}"/>
+                    <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="item" Background="Transparent" Padding="9,6" CornerRadius="6">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="item" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="item" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <Border x:Name="field" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource ControlBorder}"
+                                BorderThickness="1" CornerRadius="7"/>
+                        <ToggleButton Focusable="False" ClickMode="Press" Cursor="Hand"
+                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="Transparent"/>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <TextBlock Text="{Binding SelectedItem.Name, RelativeSource={RelativeSource TemplatedParent}}" TextTrimming="CharacterEllipsis"
+                                   Margin="10,0,28,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                        <controls:Icon Kind="chevron-down" Size="12" Margin="0,0,10,0" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource Muted}" IsHitTestVisible="False"/>
+                        <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False"
+                               IsOpen="{TemplateBinding IsDropDownOpen}" PopupAnimation="Fade" VerticalOffset="4">
+                            <Border Background="{DynamicResource MenuBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1"
+                                    CornerRadius="8" Padding="4" Width="258" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="field" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="field" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style x:Key="TimeZoneItem" TargetType="ListBoxItem">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="AutomationProperties.Name" Value="{Binding Label}"/>
