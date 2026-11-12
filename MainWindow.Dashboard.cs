@@ -138,19 +138,16 @@ public partial class MainWindow
         var heroFacts = new Grid { Margin = new Thickness(0, 18, 0, 0) };
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
-        var smartValue = new Grid();
-        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        smartValue.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        // WrapPanel: в узком окне флаг и плашка уходят на следующую строку, а название занимает всю ширину карточки
+        var smartValue = new WrapPanel { Orientation = Orientation.Horizontal };
+        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
         _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
-        Grid.SetColumn(_dashboardSmartFlag, 1); Grid.SetColumn(_dashboardSmartChipBox, 2);
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
         _dashboardSmartHint = Ui.Hint("", 2); // страна сервера и страна для ИИ переносятся на вторую строку, а не обрезаются
         DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, _dashboardSmartHint);
-        _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis };
+        _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         _dashboardPlainHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, _dashboardPlainHint);
         _dashboardUptime = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold };
@@ -508,13 +505,15 @@ public partial class MainWindow
             row.Action.Content = why ? "Подробнее" : "Открыть";
             row.Action.Tag = why ? "why" : null;
             row.Action.ToolTip = why ? "Проверить по шагам, почему не открывается" : row.Url;
+            // Три кнопки «Открыть» подряд: для дикторов к действию добавляем название сервиса
+            System.Windows.Automation.AutomationProperties.SetName(row.Action, Loc.T(why ? "Подробнее" : "Открыть") + " — " + name);
         }
         _dashboardChecked.Text = snap == null ? "Еще не проверялось" : $"Проверено в {snap.Taken:HH:mm}" + (DateTime.Now - snap.Taken > TimeSpan.FromMinutes(30) ? ", данные могли устареть" : "");
         DashboardCheckProgressState(_dashboardProbeProgress, _dashboardChecking);
         _dashboardProbe.IsHitTestVisible = !_dashboardChecking && !_busyConn;
         _dashboardProbe.Content = _dashboardChecking ? "Проверяю…" : "Проверить все";
 
-        // Обход и Telegram
+        // Telegram и YouTube
         DashboardCheckProgressState(_dashboardSiteProgress, _dashboardSitesChecking);
         _dashboardSiteProbe.IsHitTestVisible = !_dashboardSitesChecking;
         _dashboardSiteProbe.Content = _dashboardSitesChecking ? "Проверяю…" : "Проверить сайты";

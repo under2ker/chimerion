@@ -168,7 +168,13 @@ public partial class MainWindow
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);
-        if (MaxIcon != null) MaxIcon.Kind = WindowState == WindowState.Maximized ? "copy" : "square";
+        if (MaxIcon == null) return;
+        bool max = WindowState == WindowState.Maximized;
+        MaxIcon.Kind = max ? "copy" : "square";
+        // Подсказка и имя для дикторов меняются вместе со значком
+        var maxName = Loc.T(max ? "Восстановить окно" : "Развернуть");
+        MaxButton.ToolTip = maxName;
+        System.Windows.Automation.AutomationProperties.SetName(MaxButton, maxName);
         if (IsLoaded) Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(ApplyResponsive));
     }
 
@@ -300,6 +306,7 @@ public partial class MainWindow
         ServerGrid.RowStyle = compact ? (Style)FindResource("RowCompact") : null;
         ServerGrid.Tag = compact ? "compact" : null; // по нему строки прячут текст статуса (см. XAML)
         ModeButtonText.Text = compact ? "Полный вид" : "Компактно";
+        System.Windows.Automation.AutomationProperties.SetName(ModeButton, Loc.T(ModeButtonText.Text));
         ((Controls.Icon)((StackPanel)ModeButton.Content).Children[0]).Kind = compact ? "expand" : "shrink";
         if (compact)
         {

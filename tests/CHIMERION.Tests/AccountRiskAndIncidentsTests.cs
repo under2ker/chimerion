@@ -108,7 +108,7 @@ public class AccountRiskAndIncidentsTests
         var off = Incidents.Describe(new Incidents.Incident("discord.com", false, 80, 9, since), "Rostelecom (AS12389)");
         Assert.Contains("У пользователей Rostelecom (AS12389)", off);
         Assert.Contains("не открывается Discord", off);
-        Assert.Contains("«Обход и Telegram»", off);
+        Assert.Contains("«Telegram и YouTube»", off);
         var on = Incidents.Describe(new Incidents.Incident("youtube.com", true, 80, 9, since), "AS1");
         Assert.Contains("обход перестал открывать YouTube", on);
         Assert.DoesNotContain("ё", off + on);

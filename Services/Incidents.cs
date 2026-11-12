@@ -91,8 +91,8 @@ public static class Incidents
         var since = DateTimeOffset.FromUnixTimeSeconds(i.Since * 3600).ToLocalTime();
         var when = since.Date == DateTime.Today ? $"примерно с {since:HH:mm}" : $"с {since.Day} {RuMonth(since.Month)}";
         return i.Bypass
-            ? $"У пользователей {net} {when} обход перестал открывать {NameOf(i.Site)}. Попробуйте другую стратегию в «Обход и Telegram»"
-            : $"У пользователей {net} {when} не открывается {NameOf(i.Site)}. Включить обход можно в «Обход и Telegram»";
+            ? $"У пользователей {net} {when} обход перестал открывать {NameOf(i.Site)}. Попробуйте другую стратегию в «Telegram и YouTube»"
+            : $"У пользователей {net} {when} не открывается {NameOf(i.Site)}. Включить обход можно в «Telegram и YouTube»";
     }
 
     private static string RuMonth(int m) => new[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" }[m - 1];

@@ -242,6 +242,10 @@ public static class Loc
     /// <summary>Перевести текстовые свойства элемента и следить, чтобы новый текст из кода тоже переводился.</summary>
     private static void Attach(DependencyObject d)
     {
+        // Имя для экранных дикторов, заданное по-русски в разметке, переводится так же, как видимый текст
+        if (d is UIElement && System.Windows.Automation.AutomationProperties.GetName(d) is { Length: > 0 } an &&
+            (Cyr.IsMatch(an) || Originals.TryGetValue(d, out var nameMap) && nameMap.ContainsKey(System.Windows.Automation.AutomationProperties.NameProperty)))
+            Prop(d, System.Windows.Automation.AutomationProperties.NameProperty);
         switch (d)
         {
             case TextBlock tb:
