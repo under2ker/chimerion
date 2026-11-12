@@ -1,0 +1,82 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:Dnex.Controls">
+    <Style x:Key="TimeZoneScope" TargetType="RadioButton">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="card" Padding="12,9,12,9" MinHeight="64" CornerRadius="11" BorderThickness="1"
+                            BorderBrush="{DynamicResource Border}" Background="{DynamicResource Surface}">
+                        <Grid>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                            <Border x:Name="focus" Margin="-9,-6" BorderThickness="1" CornerRadius="8"
+                                    BorderBrush="{DynamicResource Focus}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                            <controls:Icon x:Name="selected" Kind="circle-check" Size="15" Animated="False"
+                                           Foreground="{DynamicResource Accent}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="card" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="focus" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="card" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                            <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            <Setter TargetName="selected" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="TimeZoneItem" TargetType="ListBoxItem">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+        <Setter Property="AutomationProperties.AutomationId" Value="{Binding Zone.WindowsId}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,1,4,1"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Border x:Name="row" Padding="9,6" CornerRadius="7" BorderThickness="1"
+                            BorderBrush="Transparent" Background="Transparent">
+                        <Grid>
+                            <ContentPresenter VerticalAlignment="Center"/>
+                            <Border x:Name="focus" Margin="-6,-3" BorderThickness="1" CornerRadius="4"
+                                    BorderBrush="{DynamicResource Focus}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="row" Property="Background" Value="{DynamicResource SurfaceHover}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="focus" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="row" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                            <Setter TargetName="row" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            <Setter Property="FontWeight" Value="SemiBold"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <DataTemplate x:Key="TimeZoneRow">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Offset}" Foreground="{DynamicResource Muted}"
+                       FontSize="12" Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" Margin="9,0,0,0"/>
+            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+        </DockPanel>
+    </DataTemplate>
+</ResourceDictionary>

@@ -71,6 +71,7 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 # (имя элемента, * — шаблон); expect: что должно быть на странице; tabs: вкладки; dialog: шаг открывает окно;
 # sub: что нажать внутри окна (вложенное окно); back: чем вернуться; stable: ожидание стабильного кадра, мс;
 # wait: сколько ждать окно, мс (перед формой обращения идет диагностика до 20 с)
+# zoneSearch: проверка поиска поясов. collapse: свернуть меню на время шага.
 $Plan = @(
     @{ n = "main";            nav = "Главная";            expect = "ИИ-сервисы" },
     @{ n = "servers";         nav = "Серверы";            expect = "Проверка подключения"; tabs = @("Рабочие", "Все", "Избранные"); stable = 500 },
@@ -84,7 +85,8 @@ $Plan = @(
     @{ n = "diag-tickets";    nav = "Диагностика";        c = @("Мои обращения*"); dialog = $true },
     @{ n = "speed";           nav = "Тест скорости";      expect = "Скорость DNS" },
     @{ n = "accounts";        nav = "Аккаунты";           expect = "Как беречь аккаунт" },
-    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("Claude Code", "Claude в браузере", "Claude Desktop", "Вся Windows"); back = "Закрыть выбор пояса" },
+    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("Claude Code", "Claude в браузере", "Claude Desktop", "Вся Windows"); zoneSearch = $true; back = "Закрыть выбор пояса" },
+    @{ n = "accounts-zone-collapsed"; nav = "Аккаунты"; c = @("Часовой пояс"); collapse = $true; expect = "Время в выбранном поясе"; back = "Закрыть выбор пояса" },
     @{ n = "journal";         nav = "Журнал";             expect = "Сохранить в файл"; tabs = @("Все", "Успех*", "Предупреждения*", "Ошибки*") },   # к названию добавляется число записей
     @{ n = "settings";        nav = "Настройки";          expect = "Отмена"; tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
     @{ n = "settings-twodns"; nav = "Настройки";          c = @("Два DNS", "Настроить два DNS"); dialog = $true },
@@ -126,16 +128,38 @@ function Run-Pass([string]$pass, [int]$appId) {
             $t0 = $sw.Elapsed.TotalSeconds
             $ok = $true
             if ($s.nav -and $s.nav -ne $script:page) { $ok = Press $s.nav; $script:page = $s.nav }
+            $menuCollapsed = $false
+            if ($ok -and $s.collapse) { $menuCollapsed = Toggle-Menu; $ok = $menuCollapsed }
             foreach ($c in $s.c) { if ($ok) { $ok = Press $c } }
             if ($ok) {
                 $stable = if ($s.stable) { $s.stable } else { 1200 }
                 $label = "$tag-$($s.n)"
                 if ($s.dialog) { Shoot-Dialogs $label $s.sub $(if ($s.wait) { $s.wait } else { 4000 }) }
                 elseif ($s.tabs) {
-                    foreach ($t in $s.tabs) { if (Press $t) { Shoot "$label-$(($t -replace '[*\\/:?"<>| ]', '').ToLower())" $s.expect $stable } }
+                    foreach ($t in $s.tabs) {
+                        if (-not (Press $t)) { continue }
+                        $expect = $s.expect
+                        if ($s.zoneSearch) {
+                            $expect = switch ($t) {
+                                "Claude Code" { "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем." }
+                                "Claude в браузере" { "На вкладке Claude нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor»." }
+                                "Claude Desktop" { "Выбрать системный пояс" }
+                                "Вся Windows" { "Применить в Windows" }
+                            }
+                            if (-not [UiShot]::ExpectAsync($script:main, (UiName $expect), 4000).GetAwaiter().GetResult()) {
+                                Fail "Часовой пояс: не открылся режим «$t»"
+                                continue
+                            }
+                        }
+                        Shoot "$label-$(($t -replace '[*\\/:?"<>| ]', '').ToLower())" $expect $stable
+                    }
+                } elseif ($s.collapse -and -not [UiShot]::ExpectAsync($script:main, (UiName $s.expect), 4000).GetAwaiter().GetResult()) {
+                    Fail "Часовой пояс не открылся при свернутом меню"
                 } else { Shoot $label $s.expect $stable }
+                if ($s.zoneSearch) { Test-TimeZoneSearch $label $stable }
                 if ($s.back) { Press $s.back | Out-Null; $script:last = 0L; $script:page = $null }
             }
+            if ($menuCollapsed) { Toggle-Menu | Out-Null }
             if (-not $ok) { $script:page = $null }   # что-то пошло не так: следующий шаг откроет свою страницу заново
             Write-Host ("[{0}] {1,-16} {2,5:0.0} с  (+{3:0.0})" -f $pass, $s.n, $sw.Elapsed.TotalSeconds, ($sw.Elapsed.TotalSeconds - $t0))
         }
@@ -243,6 +267,61 @@ function Shoot([string]$label, [string]$expect, [int]$stable = 1200) {
     if ((([UiShot]::LastLuma) -gt 110) -ne $script:wantLight) { Fail "$label`: тема не та (средняя яркость $([int][UiShot]::LastLuma))" }
     $t0 = $sw.Elapsed.TotalMilliseconds
     if ($scroll -and $scroll.Result) { Shoot-Scroll $label $stable $scroll.Result; T "прокрутка" $t0 }
+}
+
+function Toggle-Menu {
+    try {
+        $id = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "PanelCollapseButton")
+        $button = $script:root.FindFirst("Descendants", $id)
+        $button.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+        return $true
+    } catch {
+        Fail "Не удалось переключить меню: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function Wait-TimeZoneElement($condition, [string]$label) {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        $el = $script:root.FindFirst("Descendants", $condition)
+        if ($el) { return $el }
+        Start-Sleep -Milliseconds 30
+    } while ($timer.ElapsedMilliseconds -lt 4000)
+    throw "нет элемента «$label»"
+}
+
+function Test-TimeZoneSearch([string]$label, [int]$stable) {
+    if (-not (Press "Claude Desktop") -or -not (Press "Выбрать системный пояс")) { return }
+    if (-not [UiShot]::ExpectAsync($script:main, (UiName "Применить в Windows"), 4000).GetAwaiter().GetResult()) {
+        Fail "Часовой пояс: переход из Claude Desktop не открыл настройки Windows"
+    }
+    if (-not (Press "Claude Code")) { return }
+    try {
+        $name = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, (UiName "Поиск часового пояса"))
+        $search = Wait-TimeZoneElement $name "Поиск часового пояса"
+        $inputBox = $search.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+        $inputBox.SetValue("NoSuchTimeZone")
+        $empty = UiName "Пояса не найдены. Попробуйте другое название или смещение UTC."
+        $copy = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, (UiName "Скопировать команду"))
+        $copyButton = Wait-TimeZoneElement $copy "Скопировать команду"
+        if (-not [UiShot]::ExpectAsync($script:main, $empty, 4000).GetAwaiter().GetResult() -or $copyButton.Current.IsEnabled) {
+            Fail "Часовой пояс: пустой поиск должен показывать подсказку и отключать копирование"
+        }
+        $inputBox.SetValue("UTC+9 Tokyo")
+        $tokyo = New-Object Windows.Automation.PropertyCondition($AE::AutomationIdProperty, "Tokyo Standard Time")
+        $item = Wait-TimeZoneElement $tokyo "Tokyo Standard Time"
+        $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
+        Shoot "$label-search" "19:30" $stable
+        if (-not (Press "Очистить поиск")) { return }
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        while ($inputBox.Current.Value -ne "" -and $timer.ElapsedMilliseconds -lt 4000) { Start-Sleep -Milliseconds 30 }
+        if ($inputBox.Current.Value -ne "" -or -not [UiShot]::ExpectAsync($script:main, "19:30", 4000).GetAwaiter().GetResult()) {
+            Fail "Часовой пояс: после очистки поиска выбранный пояс должен остаться"
+        }
+    } catch {
+        Fail "Часовой пояс: поиск не прошел: $($_.Exception.Message)"
+    }
 }
 
 # Окна, открытые шагом: ждем появления, снимаем, жмем sub внутри (вложенные окна), закрываем без сохранения
