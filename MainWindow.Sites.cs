@@ -103,8 +103,8 @@ public partial class MainWindow
                 // Домены нейросетей проверяет мониторинг сервисов; второй поток запросов к ним с вашего адреса не нужен
                 if (SplitDns.SuffixDomains.Any(d => s.Host.Equals(d, StringComparison.OrdinalIgnoreCase))) continue;
                 if (smart && !connected) continue;
-                // Имя сайта уходит на проверку снаружи только при согласии «Помогать общей карте серверов»
-                var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, allowOutside: _settings.CrowdConsent == true, CancellationToken.None);
+                // Имя сайта уходит на проверку снаружи в фоне только при согласии «Помогать общей карте серверов»; по кнопке «Проверить все» (force) всегда: человек сам попросил
+                var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, allowOutside: force || _settings.CrowdConsent == true, CancellationToken.None);
                 if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) changes.Add(ch);
                 checkedNow.Add(s);
             }

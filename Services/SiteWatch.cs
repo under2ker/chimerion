@@ -202,6 +202,7 @@ public sealed class SiteWatch
 
     private static async Task<bool?> OutsideAsync(string host, CancellationToken ct)
     {
+        if (Storage.NoUpload) return null; // тестовая копия данных (снимки, прогоны) имена сайтов на реальный сервер не шлет
         try
         {
             using var resp = await Probe.GetAsync($"{Crowd.BaseUrl()}/v1/probe?host={Uri.EscapeDataString(host)}", ct).ConfigureAwait(false);
