@@ -1,12 +1,12 @@
 ﻿# Развертывание общей карты серверов на Cloudflare (Workers + D1) и подключение Telegram-бота.
-# Запуск: powershell -ExecutionPolicy Bypass -File "E:\CHIMERION\Проекты\Windows\backend\crowd\deploy.ps1"
+# Запуск: powershell -ExecutionPolicy Bypass -File "C:\CHIMERION\Проекты\Windows\backend\crowd\deploy.ps1"
 # Нужно: npx wrangler login (уже сделан для R2) и токен бота в пользовательской переменной TG_BOT_TOKEN.
-# Секреты не печатаются. Ключ администратора и адрес сервера сохраняются в E:\CHIMERION\Служебное\Подпись (вне репозитория).
+# Секреты не печатаются. Ключ администратора и адрес сервера сохраняются в C:\CHIMERION\Служебное\Подпись (вне репозитория).
 $ErrorActionPreference = 'Stop'
 # Windows PowerShell 5.1 по умолчанию пробует старый TLS, и запрос к Worker обрывается
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Set-Location $PSScriptRoot
-$signing = 'E:\CHIMERION\Служебное\Подпись'
+$signing = 'C:\CHIMERION\Служебное\Подпись'
 
 function Random-Secret { -join ((1..40) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }) }
 function Put-Secret([string]$name, [string]$value) {
@@ -60,7 +60,7 @@ $usageSalt = if (Test-Path $usageFile) { (Get-Content $usageFile -Raw).Trim() } 
 Set-Content -Path $usageFile -Value $usageSalt -Encoding ascii -NoNewline
 Put-Secret 'USAGE_SALT' $usageSalt
 # Секрет пересылки общий с ботом на VPS (CROWD_RELAY_SECRET): постоянный, иначе бот не сможет передавать сюда сообщения.
-# Создает его E:\CHIMERION\Проекты\DNS-панель\tools\tg-relay-setup.ps1
+# Создает его C:\CHIMERION\Проекты\DNS-панель\tools\tg-relay-setup.ps1
 $relayFile = Join-Path $signing 'crowd-relay.txt'
 if (Test-Path $relayFile) { Put-Secret 'TG_WEBHOOK_SECRET' (Get-Content $relayFile -Raw).Trim() }
 else { Write-Output 'Нет signing\crowd-relay.txt: запустите tg-relay-setup.ps1, иначе бот не передаст сюда сообщения' }

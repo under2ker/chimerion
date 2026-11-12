@@ -12,7 +12,7 @@
   .\tools\ui-shots.ps1 -Sequential                # проходы по очереди (если машина слабая)
   .\tools\ui-shots.ps1 -Trace                     # время каждого нажатия и снимка
 
-  Итог: папка E:\CHIMERION\ui-shots\<дата> с PNG, index.html (все снимки, изменившиеся отмечены, рядом карта
+  Итог: папка C:\CHIMERION\ui-shots\<дата> с PNG, index.html (все снимки, изменившиеся отмечены, рядом карта
   отличий) и report.txt. Код выхода 1, если какой-то шаг не открылся или не нашел своей страницы.
 
   Скорость:
@@ -38,7 +38,7 @@
 #>
 param(
     [string]$Out,
-    [string]$DataDir = "E:\CHIMERION\tiktok-01\data",
+    [string]$DataDir = "C:\CHIMERION\tiktok-01\data",
     [string[]]$Themes = @("dark", "light"),
     [string[]]$Langs = @("ru"),
     [string[]]$Sizes = @(),          # пусто: окно в том размере, в каком программа открылась сама
@@ -59,7 +59,7 @@ $ErrorActionPreference = "Stop"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 $repo = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $repo "bin\Debug\net8.0-windows\CHIMERION.exe"
-$shotsRoot = "E:\CHIMERION\ui-shots"
+$shotsRoot = "C:\CHIMERION\ui-shots"
 $run = Join-Path $env:TEMP "chimerion-ui-shots"
 if (-not $Out) { $Out = Join-Path $shotsRoot (Get-Date -Format "yyyy-MM-dd_HH-mm-ss") }
 function Split-List($v) { @($v | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) }   # -File передает «a,b» одной строкой
