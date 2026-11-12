@@ -263,7 +263,9 @@ internal sealed class AccountRiskWindow
         box.Children.Add(Ui.Action("Открыть настройки Claude", "Strong", () => AutoStart.OpenUrl(ClaudeSettingsUrl))
             .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); b.ToolTip = "Откроется в браузере"; }));
 
-        box.Children.Add(Ui.Action(TimeZoneWindow.Title, "Ghost", () => TimeZoneWindow.Show(_log))
+        box.Children.Add(new TextBlock { Text = TimeZoneWindow.Title, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 18, 0, 0) });
+        box.Children.Add(Ui.Hint("Какое время показывать Claude Code, Claude в браузере и всей Windows", 4));
+        box.Children.Add(Ui.Action("Выбрать пояс", "Strong", () => TimeZoneWindow.Show(_log))
             .With(b => { b.HorizontalAlignment = HorizontalAlignment.Left; b.Margin = new Thickness(0, 10, 0, 0); }));
 
         box.Children.Add(Ui.Separator().With(s => s.Margin = new Thickness(0, 18, 0, 12)));

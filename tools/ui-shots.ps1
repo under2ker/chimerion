@@ -85,8 +85,8 @@ $Plan = @(
     @{ n = "diag-tickets";    nav = "Диагностика";        c = @("Мои обращения*"); dialog = $true },
     @{ n = "speed";           nav = "Тест скорости";      expect = "Скорость DNS" },
     @{ n = "accounts";        nav = "Аккаунты";           expect = "Как беречь аккаунт" },
-    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("В браузере", "Claude Code", "Приложения Windows", "Вся Windows"); zoneSearch = $true; back = "Закрыть выбор пояса" },
-    @{ n = "accounts-zone-collapsed"; nav = "Аккаунты"; c = @("Часовой пояс"); collapse = $true; expect = "Время в выбранном поясе"; back = "Закрыть выбор пояса" },
+    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Выбрать пояс"); expect = "Где изменить время"; tabs = @("В браузере", "Claude Code", "Приложения Windows", "Вся Windows"); zoneSearch = $true; back = "Закрыть выбор пояса" },
+    @{ n = "accounts-zone-collapsed"; nav = "Аккаунты"; c = @("Выбрать пояс"); collapse = $true; expect = "Время в выбранном поясе"; back = "Закрыть выбор пояса" },
     @{ n = "journal";         nav = "Журнал";             expect = "Сохранить в файл"; tabs = @("Все", "Успех*", "Предупреждения*", "Ошибки*") },   # к названию добавляется число записей
     @{ n = "settings";        nav = "Настройки";          expect = "Отмена"; tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
     @{ n = "settings-twodns"; nav = "Настройки";          c = @("Два DNS", "Настроить два DNS"); dialog = $true },

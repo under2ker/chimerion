@@ -2779,6 +2779,8 @@
  "не проверялся": "not checked",
  "Серверы с другой страной выхода не подключатся сами": "Servers with a different exit country won't connect on their own",
  "Часовой пояс": "Time zone",
+ "Какое время показывать Claude Code, Claude в браузере и всей Windows": "Which time zone to show Claude Code, Claude in the browser and all of Windows",
+ "Выбрать пояс": "Choose time zone",
  "Claude в браузере": "Claude in the browser",
  "Вся Windows": "All of Windows",
  "Выберите, где и какое время нужно показать": "Choose where to use the time zone",
