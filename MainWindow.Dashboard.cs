@@ -779,7 +779,7 @@ public partial class MainWindow
         try
         {
             var hosts = new[] { "youtube.com", "discord.com", "t.me" };
-            var results = await Task.WhenAll(hosts.Select(h => SiteWatch.CheckAsync(h, false, CancellationToken.None)));
+            var results = await Task.WhenAll(hosts.Select(h => SiteWatch.CheckAsync(h, false, allowOutside: true, CancellationToken.None)));
             for (int i = 0; i < hosts.Length; i++) _dashboardSiteResults[hosts[i]] = (results[i].Item1, DateTime.Now);
             DashboardMessage("Проверка сайтов завершена.");
         }

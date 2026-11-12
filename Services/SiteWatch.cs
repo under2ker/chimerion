@@ -13,7 +13,9 @@ namespace Dnex.Services;
 /// DNS не находит адрес или Smart DNS перестал его подменять.
 ///
 /// Все происходит на компьютере. Наружу имя сайта уходит только когда он не открылся: на сервер общей карты, чтобы
-/// проверить его снаружи. Список сайтов хранится в sites.json (только имена и итоги проверок) и не отправляется.
+/// проверить его снаружи. В фоне это делается только при согласии «Помогать общей карте серверов»; по нажатию
+/// «Проверить» (сам человек просит проверить сайт) проверка снаружи идет всегда. Список сайтов хранится в sites.json
+/// (только имена и итоги проверок) и не отправляется.
 /// </summary>
 public sealed class SiteWatch
 {
@@ -30,7 +32,8 @@ public sealed class SiteWatch
     /// <summary>Сколько сайтов держать в списке.</summary>
     public const int MaxSites = 300;
 
-    public enum Verdict { Unknown, Ok, NoDns, DownForAll, Blocked, Refused, NotProxied }
+    // Новые значения только в конце: число сохраняется в sites.json
+    public enum Verdict { Unknown, Ok, NoDns, DownForAll, Blocked, Refused, NotProxied, Unreachable }
 
     public sealed class Site
     {
@@ -172,6 +175,7 @@ public sealed class SiteWatch
         Verdict.Blocked => "блокирует провайдер",
         Verdict.Refused => "закрыт для России",
         Verdict.NotProxied => "Smart DNS перестал подменять адрес",
+        Verdict.Unreachable => "не удается соединиться",
         _ => "еще не проверен",
     };
 
@@ -183,6 +187,7 @@ public sealed class SiteWatch
         Verdict.Blocked => "Снаружи России открывается. Поможет zapret",
         Verdict.Refused => "Поможет Smart DNS, который поддерживает этот сайт",
         Verdict.NotProxied => "Смените сервер",
+        Verdict.Unreachable => "Снаружи России не проверяли, поэтому причина неизвестна. Включите «Помогать общей карте серверов» или проверьте сайт кнопкой «Проверить»",
         _ => "",
     };
 
@@ -234,12 +239,17 @@ public sealed class SiteWatch
     /// Проверить сайт и разобрать причину. smartDns — сайт должен идти через Smart DNS (домены ИИ и наборы «Двух DNS»):
     /// тогда отказ по региону значит, что сервер перестал его подменять.
     /// </summary>
-    public static async Task<(Verdict, string?)> CheckAsync(string host, bool smartDns, CancellationToken ct)
+    /// <param name="allowOutside">
+    /// Можно ли отправить имя сайта на проверку снаружи России (сервер общей карты). Фоновое наблюдение разрешает это только
+    /// при согласии «Помогать общей карте»; кнопки «Проверить» (человек сам просит проверить сайт) разрешают всегда.
+    /// </param>
+    public static async Task<(Verdict, string?)> CheckAsync(string host, bool smartDns, bool allowOutside, CancellationToken ct)
     {
+        Task<bool?> Ask() => allowOutside ? Outside(host, ct) : Task.FromResult<bool?>(null);
         var (dns, status, body) = await Local(host, ct).ConfigureAwait(false);
         if (!dns)
         {
-            var outside = await Outside(host, ct).ConfigureAwait(false);
+            var outside = await Ask().ConfigureAwait(false);
             return outside == false ? (Verdict.DownForAll, "сайт не отвечает и снаружи России") : (Verdict.NoDns, null);
         }
         if (status is { } code)
@@ -249,12 +259,13 @@ public sealed class SiteWatch
             if (region) return (smartDns ? Verdict.NotProxied : Verdict.Refused, $"ответ {code}");
             if (code is >= 500 and not 503)
             {
-                var outside = await Outside(host, ct).ConfigureAwait(false);
+                var outside = await Ask().ConfigureAwait(false);
                 return outside == false ? (Verdict.DownForAll, $"ответ {code}, снаружи тоже не отвечает") : (Verdict.Ok, $"ответ {code}");
             }
             return (Verdict.Ok, null);
         }
         // Соединиться не удалось: снаружи открывается — значит, режут по пути к вам, иначе сайт лежит
+        if (!allowOutside) return (Verdict.Unreachable, "не удалось соединиться; снаружи России не проверяли");
         var up = await Outside(host, ct).ConfigureAwait(false);
         return up switch
         {

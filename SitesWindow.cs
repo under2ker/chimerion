@@ -52,8 +52,8 @@ internal sealed class SitesWindow
         body.Children.Add(head);
         body.Children.Add(_list);
         root.Children.Add(Ui.Card(body, bottom: 0).With(c => c.Padding = new Thickness(18, 16, 12, 12)));
-        root.Children.Add(Ui.Hint("Программа сама замечает сайты, которыми вы пользуетесь, и проверяет их в фоне. Список хранится только у вас, " +
-                                  "наружу уходит лишь имя сайта, который не открылся", 10).With(t => t.FontSize = 11));
+        root.Children.Add(Ui.Hint("Программа сама замечает сайты, которыми вы пользуетесь, и проверяет их в фоне. Список хранится только у вас. " +
+                                  "Имя сайта, который не открылся, можно проверить снаружи России: в фоне это делается только при включенной галочке «Помогать общей карте серверов», по кнопке «Проверить» всегда", 10).With(t => t.FontSize = 11));
         View = root;
     }
 
@@ -114,7 +114,7 @@ internal sealed class SitesWindow
     {
         // Как в фоновом круге: домен ИИ при подключении должен идти через Smart DNS
         bool smart = DnsSwitcher.GetActive() != null && SplitDns.SuffixDomains.Any(x => s.Host.Equals(x, StringComparison.OrdinalIgnoreCase));
-        var (v, d) = await SiteWatch.CheckAsync(s.Host, smart, CancellationToken.None);
+        var (v, d) = await SiteWatch.CheckAsync(s.Host, smart, allowOutside: true, CancellationToken.None); // кнопка «Проверить»
         _watch.Apply(s, v, d, DateTime.Now);
         _watch.Save();
     }
@@ -122,7 +122,7 @@ internal sealed class SitesWindow
     /// <summary>Неработающий сайт: имя и короткий статус цветом, строка совета, действия. Сделанное действие видно отметкой.</summary>
     private FrameworkElement BadRow(SiteWatch.Site s)
     {
-        string color = s.State == SiteWatch.Verdict.DownForAll ? "Warn" : "Bad";
+        string color = s.State is SiteWatch.Verdict.DownForAll or SiteWatch.Verdict.Unreachable ? "Warn" : "Bad";
         var box = new StackPanel { Margin = new Thickness(0, 0, 6, 8) };
 
         var head = new DockPanel();

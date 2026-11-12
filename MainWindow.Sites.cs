@@ -103,7 +103,8 @@ public partial class MainWindow
                 // Домены нейросетей проверяет мониторинг сервисов; второй поток запросов к ним с вашего адреса не нужен
                 if (SplitDns.SuffixDomains.Any(d => s.Host.Equals(d, StringComparison.OrdinalIgnoreCase))) continue;
                 if (smart && !connected) continue;
-                var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, CancellationToken.None);
+                // Имя сайта уходит на проверку снаружи только при согласии «Помогать общей карте серверов»
+                var (v, detail) = await SiteWatch.CheckAsync(s.Host, smart, allowOutside: _settings.CrowdConsent == true, CancellationToken.None);
                 if (_sites.Apply(s, v, detail, DateTime.Now) is { } ch) changes.Add(ch);
                 checkedNow.Add(s);
             }
@@ -136,7 +137,7 @@ public partial class MainWindow
         if (_siteAlerts.Count >= 3) return;
         _siteAlerts.Enqueue(DateTime.Now);
         if (!ch.Down) { Notify(text, "Ok", logLine: null, feature: FeatureSites); return; }
-        Notify(text, s.State == SiteWatch.Verdict.DownForAll ? "Warn" : "Bad", logLine: null, feature: FeatureSites);
+        Notify(text, s.State is SiteWatch.Verdict.DownForAll or SiteWatch.Verdict.Unreachable ? "Warn" : "Bad", logLine: null, feature: FeatureSites);
         if (_tray != null && !IsVisible) _balloonClick = () => { ShowFromTray(); OpenSites(); };
     }
 

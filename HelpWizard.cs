@@ -271,7 +271,7 @@ internal sealed class HelpWizard
                 End(Lvl.Bad, "Причина: нет подключения. Нажмите «Подключить лучший»");
                 return;
             }
-            var (v, detail) = await SiteWatch.CheckAsync(host, smart, CancellationToken.None);
+            var (v, detail) = await SiteWatch.CheckAsync(host, smart, allowOutside: true, CancellationToken.None); // человек сам нажал «Проверить»
             var rep = await SiteCheck.CheckAsync(host);
             foreach (var l in rep.Lines) Step(Lvl.Info, l);
             switch (v)

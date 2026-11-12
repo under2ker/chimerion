@@ -78,7 +78,7 @@ public class SiteWatchTests
             {
                 SiteWatch.Local = (_, _) => Task.FromResult(local);
                 SiteWatch.Outside = (_, _) => Task.FromResult(outside);
-                return (await SiteWatch.CheckAsync("example.com", smart, CancellationToken.None)).Item1;
+                return (await SiteWatch.CheckAsync("example.com", smart, allowOutside: true, CancellationToken.None)).Item1;
             }
             Assert.Equal(SiteWatch.Verdict.Ok, await Case((true, 200, null), null));
             Assert.Equal(SiteWatch.Verdict.Ok, await Case((true, 403, "<html>Forbidden</html>"), null)); // просто 403: сайт жив
@@ -90,6 +90,33 @@ public class SiteWatchTests
             Assert.Equal(SiteWatch.Verdict.DownForAll, await Case((false, null, null), false));
             Assert.Equal(SiteWatch.Verdict.Refused, await Case((true, 403, "{\"error\":{\"code\":\"unsupported_country_region_territory\"}}"), true));
             Assert.Equal(SiteWatch.Verdict.NotProxied, await Case((true, 403, "Request not allowed"), true, smart: true));
+        }
+        finally { (SiteWatch.Local, SiteWatch.Outside) = (oldLocal, oldOut); }
+    }
+
+    [Fact]
+    public async Task Outside_check_is_never_called_when_it_is_not_allowed()
+    {
+        var (oldLocal, oldOut) = (SiteWatch.Local, SiteWatch.Outside);
+        try
+        {
+            int calls = 0;
+            SiteWatch.Outside = (_, _) => { calls++; return Task.FromResult<bool?>(true); };
+            async Task<SiteWatch.Verdict> Case((bool, int?, string?) local, bool allow)
+            {
+                SiteWatch.Local = (_, _) => Task.FromResult(local);
+                return (await SiteWatch.CheckAsync("example.com", false, allow, CancellationToken.None)).Item1;
+            }
+            // Запрещено: ни в одной из трех веток (нет DNS, ответ 5xx, нет соединения) имя сайта наружу не уходит
+            Assert.Equal(SiteWatch.Verdict.NoDns, await Case((false, null, null), false));
+            Assert.Equal(SiteWatch.Verdict.Ok, await Case((true, 502, null), false));
+            Assert.Equal(SiteWatch.Verdict.Unreachable, await Case((true, null, null), false)); // не «блокирует провайдер»: снаружи не смотрели
+            Assert.Equal(0, calls);
+            // Разрешено: проверка снаружи вызывается в каждой ветке
+            await Case((false, null, null), true);
+            await Case((true, 502, null), true);
+            Assert.Equal(SiteWatch.Verdict.Blocked, await Case((true, null, null), true));
+            Assert.Equal(3, calls);
         }
         finally { (SiteWatch.Local, SiteWatch.Outside) = (oldLocal, oldOut); }
     }
