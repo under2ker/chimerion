@@ -82,8 +82,8 @@ public partial class MainWindow
         ("Сайт chimerion.dev", "globe", () => AutoStart.OpenUrl("https://chimerion.dev")),
     };
 
-    /// <summary>Низ меню панели управления: те же ссылки кнопками меню и карточка обновления.</summary>
-    private FrameworkElement CreatePanelBottom()
+    /// <summary>Низ меню панели управления: три ссылки кнопками меню. Карточка обновления отдельно и закреплена (PanelUpdateHost).</summary>
+    private FrameworkElement CreatePanelLinks()
     {
         var box = new StackPanel(); // отступ сверху задает блок CHIMERION DNS и «Помощь» над ним
         var style = (Style)FindResource("PanelNavButton");
@@ -100,7 +100,6 @@ public partial class MainWindow
             _panelLinkTexts.Add(text);
             _panelLinkButtons[title] = b;
         }
-        box.Children.Add(CreateUpdateCard());
         return box;
     }
 
@@ -132,7 +131,7 @@ public partial class MainWindow
     {
         // В узком меню на карточку 38 px: с обычными отступами (4 слева, 8 справа) значок 30 px не помещался и обрезался
         // справа. Отступы по 4 с каждой стороны: значок ровно по центру меню и целиком
-        foreach (var v in _updateCards.Where(c => ReferenceEquals(c.Card.Parent, PanelUpdateHost.Content)))
+        foreach (var v in _updateCards.Where(c => ReferenceEquals(c.Card.Parent, PanelUpdateHost)))
         {
             v.Text.Opacity = expanded ? 1 : 0;
             v.Card.BorderThickness = new Thickness(expanded ? 1 : 0);

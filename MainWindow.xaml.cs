@@ -110,7 +110,8 @@ public partial class MainWindow : Window
         WatchVpn();
         TitleVersion.Text = UpdateChecker.CurrentVersion.ToString();
         UpdateTitleId();
-        PanelUpdateHost.Content = CreatePanelBottom();
+        PanelUpdateHost.Content = CreateUpdateCard();
+        PanelLinksHost.Content = CreatePanelLinks();
         InitPages();
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;

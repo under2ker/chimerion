@@ -113,15 +113,12 @@
                     <TextBlock x:Name="PanelCollapseText" Text="Меню" FontSize="13" FontWeight="SemiBold"
                                VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis"/>
                 </DockPanel>
-                <!-- Карточка обновления: единственное место проверки новой версии, наполняется в коде (MainWindow.Update.cs) -->
+                <!-- Карточка обновления: единственное место проверки новой версии, наполняется в коде (MainWindow.Update.cs). Закреплена внизу и не прокручивается -->
                 <ContentControl x:Name="PanelUpdateHost" DockPanel.Dock="Bottom" Focusable="False"/>
-                <!-- Над ссылками внизу: личный Smart DNS и справка. Пункты подсвечиваются, как разделы меню -->
-                <StackPanel x:Name="PanelBottomNav" DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                    <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
-                    <Button x:Name="HelpToggle" AutomationProperties.Name="Помощь" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
-                                  Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></Button>
-                </StackPanel>
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer x:Name="PanelScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <!-- Одна прокрутка на все пункты: пока места хватает, нижний блок (CHIMERION DNS, Помощь, ссылки) прижат к низу, в низком окне он уходит под прокрутку вместе со всем меню -->
+                    <Grid MinHeight="{Binding ViewportHeight, ElementName=PanelScroll}">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <StackPanel x:Name="PanelNavItems">
                 <!-- Порядок: основное (главная, серверы), возможности, проверки, настройки. Справка, CHIMERION DNS и ссылки внизу меню.
                      Подписи групп (Tag="navgroup") в узком меню прозрачны, в компактном виде скрыты -->
@@ -155,6 +152,17 @@
                 <Button x:Name="DataButton" Visibility="Collapsed" Click="OpenData_Click" Style="{StaticResource PanelNavButton}"
                         ToolTip="Открыть папку с настройками и списком"><StackPanel Orientation="Horizontal"><controls:Icon Kind="folder" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelDataText" Text="Данные"/></StackPanel></Button>
                     </StackPanel>
+                    <StackPanel Grid.Row="1" VerticalAlignment="Bottom">
+                <!-- Над ссылками внизу: личный Smart DNS и справка. Пункты подсвечиваются, как разделы меню -->
+                <StackPanel x:Name="PanelBottomNav" Margin="0,8,0,0">
+                    <Button x:Name="ChimerionDnsButton" Click="ChimerionDns_Click" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center" ToolTip="Личный Smart DNS: преимущества, цены и где купить" AutomationProperties.Name="CHIMERION DNS"><StackPanel Orientation="Horizontal"><controls:Icon Kind="star" Size="16" Margin="0,0,10,0" Foreground="{DynamicResource Promo}"/><TextBlock Text="CHIMERION DNS"/></StackPanel></Button>
+                    <Button x:Name="HelpToggle" AutomationProperties.Name="Помощь" Style="{StaticResource PanelNavButton}" VerticalAlignment="Center"
+                                  Click="HelpToggle_Click" ToolTip="Не открывается нейросеть или сайт, сайты под наблюдением, Smart DNS на телефоне"><StackPanel Orientation="Horizontal"><controls:Icon Kind="circle-help" Size="16" Margin="0,0,10,0"/><TextBlock x:Name="PanelHelpText" Text="Помощь"/></StackPanel></Button>
+                </StackPanel>
+                    <!-- Три ссылки внизу меню (сбой, Telegram, сайт), наполняются в коде -->
+                    <ContentControl x:Name="PanelLinksHost" Focusable="False"/>
+                    </StackPanel>
+                    </Grid>
                 </ScrollViewer>
             </DockPanel>
         </Border>
