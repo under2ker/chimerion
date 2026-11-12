@@ -85,7 +85,7 @@ $Plan = @(
     @{ n = "diag-tickets";    nav = "Диагностика";        c = @("Мои обращения*"); dialog = $true },
     @{ n = "speed";           nav = "Тест скорости";      expect = "Скорость DNS" },
     @{ n = "accounts";        nav = "Аккаунты";           expect = "Как беречь аккаунт" },
-    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("Claude Code", "Claude в браузере", "Claude Desktop", "Вся Windows"); zoneSearch = $true; back = "Закрыть выбор пояса" },
+    @{ n = "accounts-zone";   nav = "Аккаунты";           c = @("Часовой пояс"); expect = "Где изменить время"; tabs = @("В браузере", "Claude Code", "Приложения Windows", "Вся Windows"); zoneSearch = $true; back = "Закрыть выбор пояса" },
     @{ n = "accounts-zone-collapsed"; nav = "Аккаунты"; c = @("Часовой пояс"); collapse = $true; expect = "Время в выбранном поясе"; back = "Закрыть выбор пояса" },
     @{ n = "journal";         nav = "Журнал";             expect = "Сохранить в файл"; tabs = @("Все", "Успех*", "Предупреждения*", "Ошибки*") },   # к названию добавляется число записей
     @{ n = "settings";        nav = "Настройки";          expect = "Отмена"; tabs = @("Основные", "Приватность", "Проверка серверов", "Сторож и трей", "Два DNS", "Внешний вид", "Данные", "О программе") },
@@ -136,14 +136,17 @@ function Run-Pass([string]$pass, [int]$appId) {
                 $label = "$tag-$($s.n)"
                 if ($s.dialog) { Shoot-Dialogs $label $s.sub $(if ($s.wait) { $s.wait } else { 4000 }) }
                 elseif ($s.tabs) {
+                    if ($s.zoneSearch -and -not [UiShot]::ExpectAsync($script:main, (UiName "Claude, ChatGPT и Gemini"), 4000).GetAwaiter().GetResult()) {
+                        Fail "Часовой пояс: в режиме браузера не перечислены сервисы"
+                    }
                     foreach ($t in $s.tabs) {
                         if (-not (Press $t)) { continue }
                         $expect = $s.expect
                         if ($s.zoneSearch) {
                             $expect = switch ($t) {
                                 "Claude Code" { "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем." }
-                                "Claude в браузере" { "На вкладке Claude нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor»." }
-                                "Claude Desktop" { "Выбрать системный пояс" }
+                                "В браузере" { "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor»." }
+                                "Приложения Windows" { "Выбрать системный пояс" }
                                 "Вся Windows" { "Применить в Windows" }
                             }
                             if (-not [UiShot]::ExpectAsync($script:main, (UiName $expect), 4000).GetAwaiter().GetResult()) {
@@ -292,11 +295,11 @@ function Wait-TimeZoneElement($condition, [string]$label) {
 }
 
 function Test-TimeZoneSearch([string]$label, [int]$stable) {
-    if (-not (Press "Claude Desktop") -or -not (Press "Выбрать системный пояс")) { return }
+    if (-not (Press "Приложения Windows") -or -not (Press "Выбрать системный пояс")) { return }
     if (-not [UiShot]::ExpectAsync($script:main, (UiName "Применить в Windows"), 4000).GetAwaiter().GetResult()) {
-        Fail "Часовой пояс: переход из Claude Desktop не открыл настройки Windows"
+        Fail "Часовой пояс: переход из режима приложений не открыл настройки Windows"
     }
-    if (-not (Press "Claude Code")) { return }
+    if (-not (Press "В браузере")) { return }
     try {
         $name = New-Object Windows.Automation.PropertyCondition($AE::NameProperty, (UiName "Поиск часового пояса"))
         $search = Wait-TimeZoneElement $name "Поиск часового пояса"

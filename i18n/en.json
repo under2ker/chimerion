@@ -2823,5 +2823,12 @@
  "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем.": "Copy and paste the command into PowerShell. Claude starts in the selected time zone.",
  "Вставьте команду в нижнее поле и нажмите Enter. Закройте DevTools, чтобы вернуть обычное время.": "Paste the command into the bottom field and press Enter. Close DevTools to restore your usual time zone.",
  "После выхода из Claude Code прежний пояс восстановится.": "Your previous time zone is restored when you exit Claude Code.",
- "Очистить поиск": "Clear search"
+ "Очистить поиск": "Clear search",
+ "В браузере": "In the browser",
+ "Claude, ChatGPT и Gemini": "Claude, ChatGPT and Gemini",
+ "Приложения Windows": "Windows apps",
+ "Через системный пояс": "Uses the Windows time zone",
+ "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor».": "Open the service tab in Chrome or Edge. Press F12, then Ctrl+Shift+P and choose «Show Protocol monitor».",
+ "Для Claude Desktop и приложения ChatGPT пояс можно выбрать в настройке Windows. Она действует на все программы.": "Use the Windows time zone setting for Claude Desktop and the ChatGPT app. This applies to all apps.",
+ "Вставьте команду внизу и нажмите Enter. Закройте DevTools для сброса.": "Paste into the bottom field and press Enter. Close DevTools to reset."
 }

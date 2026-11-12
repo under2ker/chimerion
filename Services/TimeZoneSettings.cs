@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace Dnex.Services;
 
-internal static class ClaudeTimeZone
+internal static class TimeZoneSettings
 {
     private static readonly SemaphoreSlim WindowsChange = new(1, 1);
 
@@ -25,7 +25,7 @@ internal static class ClaudeTimeZone
     }
 
     /// <summary>Часовой пояс действует в процессе Claude Code и его дочерних процессах до выхода.</summary>
-    internal static string CodeCommand(string ianaId)
+    internal static string ClaudeCodeCommand(string ianaId)
     {
         if (!KnownIana(ianaId)) throw new ArgumentException("Неизвестный часовой пояс", nameof(ianaId));
         return "& { $previousZone = [Environment]::GetEnvironmentVariable('TZ', 'Process'); " +

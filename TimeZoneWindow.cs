@@ -14,9 +14,9 @@ internal static class TimeZoneWindow
     internal const string Title = "Часовой пояс";
     private const string SearchLabel = "Поиск часового пояса";
 
-    private enum Scope { Code, Browser, Desktop, Windows }
+    private enum Scope { Browser, Code, Apps, Windows }
 
-    private sealed record ZoneRow(ClaudeTimeZone.Zone Zone, TimeZoneInfo Info, string Name, string Offset);
+    private sealed record ZoneRow(TimeZoneSettings.Zone Zone, TimeZoneInfo Info, string Name, string Offset);
 
     internal static void Show(Action<string> log) => DnexDialog.Present(Build(log));
 
@@ -35,16 +35,16 @@ internal static class TimeZoneWindow
         root.Children.Add(DnexDialog.Header(DialogKind.Info, Loc.T(Title),
             Loc.T("Посмотрите время в нужном поясе перед применением"), glyph: "globe"));
 
-        Scope scope = Scope.Code;
+        Scope scope = Scope.Browser;
         var scopePicker = new UniformGrid { Columns = 2, Margin = new Thickness(0, 0, -8, 8) };
         var scopeStyle = (Style)window.Resources["TimeZoneScope"];
+        var browser = ScopeTile(scopeStyle, "В браузере", "Claude, ChatGPT и Gemini", "globe");
         var code = ScopeTile(scopeStyle, "Claude Code", "На время сеанса", "scroll-text");
-        var browser = ScopeTile(scopeStyle, "Claude в браузере", "Текущая вкладка", "globe");
-        var desktop = ScopeTile(scopeStyle, "Claude Desktop", "Использует пояс Windows", "claude");
+        var apps = ScopeTile(scopeStyle, "Приложения Windows", "Через системный пояс", "layout-dashboard");
         var windows = ScopeTile(scopeStyle, "Вся Windows", "Все программы", "settings");
-        var scopeOptions = new[] { (code, Scope.Code), (browser, Scope.Browser), (desktop, Scope.Desktop), (windows, Scope.Windows) };
+        var scopeOptions = new[] { (browser, Scope.Browser), (code, Scope.Code), (apps, Scope.Apps), (windows, Scope.Windows) };
         foreach (var (option, _) in scopeOptions) scopePicker.Children.Add(option);
-        code.IsChecked = true;
+        browser.IsChecked = true;
         scopePicker.SizeChanged += (_, e) => scopePicker.Columns = e.NewSize.Width >= 900 ? 4 : 2;
         root.Children.Add(Ui.Section(Loc.T("Где изменить время"), first: true));
         root.Children.Add(scopePicker);
@@ -57,7 +57,7 @@ internal static class TimeZoneWindow
         TimeZoneInfo CurrentZone() => Storage.TestCopy ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
 
         var openedAt = UtcNow();
-        var zones = ClaudeTimeZone.Zones(english).Select(zone =>
+        var zones = TimeZoneSettings.Zones(english).Select(zone =>
         {
             var info = TimeZoneInfo.FindSystemTimeZoneById(zone.WindowsId);
             var name = zone.WindowsId == "UTC"
@@ -201,10 +201,10 @@ internal static class TimeZoneWindow
         void RefreshAction()
         {
             bool hasZone = zonePicker.SelectedItem is ZoneRow;
-            action.IsEnabled = scope == Scope.Desktop || hasZone;
+            action.IsEnabled = scope == Scope.Apps || hasZone;
             action.Content = Loc.T(scope switch
             {
-                Scope.Desktop => "Выбрать системный пояс",
+                Scope.Apps => "Выбрать системный пояс",
                 Scope.Windows => "Применить в Windows",
                 _ => "Скопировать команду",
             });
@@ -214,14 +214,14 @@ internal static class TimeZoneWindow
         {
             guide.Text = Loc.T(scope switch
             {
-                Scope.Browser => "На вкладке Claude нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor».",
-                Scope.Desktop => "Claude Desktop берет время из Windows. Перейдите к системной настройке, чтобы применить выбранный пояс.",
+                Scope.Browser => "Откройте нужную вкладку в Chrome или Edge. Нажмите F12, затем Ctrl+Shift+P и выберите «Show Protocol monitor».",
+                Scope.Apps => "Для Claude Desktop и приложения ChatGPT пояс можно выбрать в настройке Windows. Она действует на все программы.",
                 Scope.Windows => "После подтверждения пояс изменится во всех программах. Прежний пояс можно вернуть здесь же.",
                 _ => "Скопируйте команду и вставьте ее в PowerShell. Claude запустится с выбранным временем.",
             });
             guideDetails.Text = Loc.T(scope switch
             {
-                Scope.Browser => "Вставьте команду в нижнее поле и нажмите Enter. Закройте DevTools, чтобы вернуть обычное время.",
+                Scope.Browser => "Вставьте команду внизу и нажмите Enter. Закройте DevTools для сброса.",
                 Scope.Code => "После выхода из Claude Code прежний пояс восстановится.",
                 _ => "",
             });
@@ -242,7 +242,7 @@ internal static class TimeZoneWindow
         async Task ApplyAsync()
         {
             if (busy) return;
-            if (scope == Scope.Desktop) { windows.IsChecked = true; windows.Focus(); return; }
+            if (scope == Scope.Apps) { windows.IsChecked = true; windows.Focus(); return; }
             if (zonePicker.SelectedItem is not ZoneRow row) return;
             var zone = row.Zone;
             busy = true;
@@ -257,7 +257,7 @@ internal static class TimeZoneWindow
                         $"Выбран «{zone.Name}». Новое время будет отображаться во всех программах.",
                         "Изменить пояс", danger: true, windowTitle: Title)) return;
                     Ui.SetStatus(status, Loc.T("Применяю часовой пояс…"));
-                    var changed = await ClaudeTimeZone.ApplyWindowsAsync(zone.WindowsId);
+                    var changed = await TimeZoneSettings.ApplyWindowsAsync(zone.WindowsId);
                     RefreshClock();
                     if (!changed) log("Windows не применила часовой пояс");
                     Ui.SetStatus(status, Loc.T(changed ? "Часовой пояс Windows изменен" : "Windows не применила часовой пояс. Проверьте права или настройки времени."), !changed);
@@ -268,11 +268,11 @@ internal static class TimeZoneWindow
                 }
                 else if (scope == Scope.Browser)
                 {
-                    Copy(ClaudeTimeZone.BrowserCommand(zone.IanaId), "Команда скопирована. Вставьте ее в Protocol monitor.");
+                    Copy(TimeZoneSettings.BrowserCommand(zone.IanaId), "Команда скопирована. Вставьте ее в Protocol monitor.");
                 }
                 else
                 {
-                    Copy(ClaudeTimeZone.CodeCommand(zone.IanaId), "Команда скопирована. Вставьте ее в PowerShell.");
+                    Copy(TimeZoneSettings.ClaudeCodeCommand(zone.IanaId), "Команда скопирована. Вставьте ее в PowerShell.");
                 }
             }
             catch (Exception)
