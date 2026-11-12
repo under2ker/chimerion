@@ -242,10 +242,12 @@ public sealed class SiteWatch
     /// </summary>
     /// <param name="allowOutside">
     /// Можно ли отправить имя сайта на проверку снаружи России (сервер общей карты). Фоновое наблюдение разрешает это только
-    /// при согласии «Помогать общей карте»; кнопки «Проверить» (человек сам просит проверить сайт) разрешают всегда.
+    /// при согласии «Помогать общей карте»; кнопки «Проверить» и «Проверить все» (человек сам просит проверить сайт) разрешают всегда.
+    /// В тестовой копии данных (Storage.NoUpload) наружу не отправляется ничего, и итог честный: «снаружи не проверяли».
     /// </param>
     public static async Task<(Verdict, string?)> CheckAsync(string host, bool smartDns, bool allowOutside, CancellationToken ct)
     {
+        if (Storage.NoUpload) allowOutside = false; // снимки и прогоны на копии данных не шлют имена сайтов на реальный сервер
         Task<bool?> Ask() => allowOutside ? Outside(host, ct) : Task.FromResult<bool?>(null);
         var (dns, status, body) = await Local(host, ct).ConfigureAwait(false);
         if (!dns)
