@@ -140,10 +140,10 @@ public partial class MainWindow
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
         // WrapPanel: в узком окне флаг и плашка уходят на следующую строку, а название занимает всю ширину карточки
         var smartValue = new WrapPanel { Orientation = Orientation.Horizontal };
-        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-        _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
+        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0) };
+        _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
-        _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
+        _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 2, 0, 2), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
         _dashboardSmartHint = Ui.Hint("", 2); // страна сервера и страна для ИИ переносятся на вторую строку, а не обрезаются
         DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, _dashboardSmartHint);
