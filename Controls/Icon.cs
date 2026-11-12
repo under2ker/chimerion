@@ -175,8 +175,6 @@ public sealed class Icon : Viewbox
     }
 
     /// <summary>Контуры через «|»: каждый своей фигурой, как отдельные элементы в исходном SVG.</summary>
-    internal static Geometry ParseData(string data) => Parse(data);
-
     private static Geometry Parse(string data)
     {
         var parts = data.Split('|');
@@ -185,6 +183,9 @@ public sealed class Icon : Viewbox
         foreach (var p in parts) g.Children.Add(Geometry.Parse(p.Trim()));
         return g;
     }
+
+    /// <summary>Тот же разбор для меню трея (TrayIcons): оно рисует значки само.</summary>
+    internal static Geometry ParseData(string data) => Parse(data);
 
     private void Build()
     {

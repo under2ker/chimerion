@@ -55,11 +55,11 @@ internal sealed class TrayRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = !e.Item.Enabled ? Muted : e.Item.ForeColor == Color.Empty || e.Item is ToolStripMenuItem ? Text : e.Item.ForeColor;
+        e.TextColor = ItemColor(e.Item);
         // Значок (его название лежит в Tag пункта) в общей колонке; пункт со значком ставит текст в колонку текста,
-        // без значка (подменю без картинок) текст стоит на краю колонки значков
+        // пункт без значка (или с неизвестным названием) ставит текст на край колонки значков
         var kind = e.Item.Tag as string;
-        var hasIcon = kind != null;
+        var hasIcon = kind != null && (kind.StartsWith("dot") || Dnex.Controls.Icon.Outline.ContainsKey(kind));
         if (hasIcon) DrawIcon(e, kind!);
         var left = (hasIcon ? TrayLayout.TextX : TrayLayout.IconX) - e.Item.Bounds.X; // Bounds.X: пункт и надпись WinForms ставит с разным отступом
         var right = e.Item is ToolStripMenuItem { HasDropDownItems: true } ? 30 : 14;
@@ -73,14 +73,21 @@ internal sealed class TrayRenderer : ToolStripProfessionalRenderer
         if (e.Item is ToolStripMenuItem { HasDropDownItems: true } mi) DrawChevron(e.Graphics, mi.Width - 18, mi.Height / 2f);
     }
 
+    /// <summary>
+    /// Цвет текста и значка берется из палитры при каждой отрисовке, поэтому смена темы подхватывается сама.
+    /// Статус соединения: Tag «dot» (подключено) и «dot-off» (нет): зеленый или приглушенный. Недоступный пункт приглушен.
+    /// </summary>
+    private static Color ItemColor(ToolStripItem item) =>
+        !item.Enabled ? Muted : (item.Tag as string) switch { "dot" => Palette.Get("Ok"), "dot-off" => Muted, _ => Text };
+
     /// <summary>Значок или точка статуса в колонке значков: по центру строки, цвет как у текста пункта.</summary>
     private static void DrawIcon(ToolStripItemTextRenderEventArgs e, string kind)
     {
-        var color = !e.Item.Enabled ? Muted : e.Item.ForeColor == Color.Empty || e.Item is ToolStripMenuItem ? Text : e.Item.ForeColor;
+        var color = ItemColor(e.Item);
         var x = TrayLayout.IconX - e.Item.Bounds.X;
         var y = (e.Item.Height - TrayIcons.Size) / 2;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        if (kind == "dot")
+        if (kind.StartsWith("dot"))
         {
             // Точка статуса соединения: круг 8 px посередине колонки значков
             using var b = new SolidBrush(color);

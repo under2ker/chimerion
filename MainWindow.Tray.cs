@@ -141,7 +141,7 @@ public partial class MainWindow
         menu.Opened += (_, _) => TrayMenu.Round(menu);
         var pad = new System.Windows.Forms.Padding(12, 8, 12, 8);
         // Строки статуса не выделяются при наведении: это надписи, а не пункты.
-        _trayStatus = new System.Windows.Forms.ToolStripLabel("Не подключено") { Padding = pad, Tag = "dot" };
+        _trayStatus = new System.Windows.Forms.ToolStripLabel("Не подключено") { Padding = pad, Tag = "dot-off" };
         menu.Items.Add(_trayStatus);
         _trayPing = new TrayPingStrip();
         menu.Items.Add(new System.Windows.Forms.ToolStripControlHost(_trayPing)
@@ -244,7 +244,7 @@ public partial class MainWindow
             {
                 i.AutoSize = false;
                 i.Size = new System.Drawing.Size(width - 8, 32);
-                i.Padding = new System.Windows.Forms.Padding(6, 8, 12, 8); // 8 (сдвиг WinForms) + 6 = линия текста пунктов (14)
+                i.Padding = new System.Windows.Forms.Padding(6, 8, 12, 8); // положение текста задает отрисовка (Tray.cs, TrayLayout), от этого отступа оно не зависит
                 i.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             }
         }
@@ -273,7 +273,7 @@ public partial class MainWindow
     {
         if (_trayStatus == null || _tray == null) return;
         _trayStatus.Text = name == null ? "Не подключено" : DnsServer.Clip(name, 26);
-        _trayStatus.ForeColor = Palette.Get(name == null ? "Muted" : "Ok");
+        _trayStatus.Tag = name == null ? "dot-off" : "dot"; // цвет текста и точки выбирает отрисовка (Tray.cs, ItemColor)
         if (_trayPing != null)
             _trayPing.SetPing(srv?.LatencyMs, srv?.LatencyMs == null ? "Пинг: —" : $"Пинг: {srv.PingText} мс");
         if (_trayStab != null)
