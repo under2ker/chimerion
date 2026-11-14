@@ -22,8 +22,8 @@ public partial class MainWindow
     {
         var icon = new Controls.Icon { Kind = "arrow-left-right", Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(Controls.Icon.ForegroundProperty, "Accent");
-        var title = new TextBlock { Text = "Два DNS", FontSize = 15, FontWeight = FontWeights.SemiBold };
-        _dashboardSplitHint = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+        var title = new TextBlock { Text = "Два DNS", FontSize = 16, FontWeight = FontWeights.SemiBold };
+        _dashboardSplitHint = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextWrapping = TextWrapping.Wrap; });
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
         titleLine.Children.Add(title); titleLine.Children.Add(Ui.HelpMark("Два DNS", "Нейросети идут через Smart DNS, а все остальные сайты через общий DNS (Cloudflare, Google и другие). Остальные сайты открываются так же, как без программы. Выключено: весь интернет идет через Smart DNS."));

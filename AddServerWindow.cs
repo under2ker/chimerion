@@ -55,7 +55,7 @@ internal static class AddServerForm
 /// <summary>
 /// Окно «Добавить сервер»: название, IP и адрес DoH. Сетка как у остальных окон: поля окна Ui.Root (24 по бокам),
 /// 16 между блоками, 6 от подписи до поля. Ошибка у своего поля: красная рамка (FieldError) и текст прямо под полем,
-/// исчезают, как только поле начинают исправлять. Введенное не теряется. Кнопки в нижней строке: «Добавить» основная справа.
+/// исчезают после повторной проверки при вводе, когда значение стало верным. Введенное не теряется. Кнопки в нижней строке: «Добавить» основная справа.
 /// </summary>
 internal static class AddServerWindow
 {
@@ -100,6 +100,15 @@ internal static class AddServerWindow
         root.Children.Add(dohField.Panel);
 
         var fields = new[] { primaryField, secondaryField, dohField };
+        // Повторная проверка при вводе: ошибка у поля уходит, только когда оно стало верным. Новую ошибку при вводе не показываем
+        void Recheck()
+        {
+            var (_, text, which) = AddServerForm.Validate(name.Text, primary.Text, secondary.Text, doh.Text);
+            var still = which switch { AddServerField.Primary => primaryField, AddServerField.Secondary => secondaryField, AddServerField.Doh => dohField, _ => null };
+            foreach (var f in fields)
+                if (f.HasError) f.SetError(f == still ? text : null);
+        }
+        foreach (var box in new[] { primary, secondary, doh }) box.TextChanged += (_, _) => Recheck();
         void Submit()
         {
             var (server, text, which) = AddServerForm.Validate(name.Text, primary.Text, secondary.Text, doh.Text);
@@ -152,16 +161,16 @@ internal static class AddServerWindow
                 .Ref(TextBlock.ForegroundProperty, "Bad");
             Panel.Children.Add(_error);
             System.Windows.Automation.AutomationProperties.SetName(box, label);
-            // Начали исправлять — ошибка уходит, чтобы красная рамка не висела над уже другим текстом
-            box.TextChanged += (_, _) => { if (_error.Visibility == Visibility.Visible) SetError(null); };
         }
+
+        public bool HasError => _error.Visibility == Visibility.Visible;
 
         public void SetError(string? text)
         {
             _error.Text = text ?? "";
             _error.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
             Controls.FieldError.SetIsError(Box, text != null);
-            System.Windows.Automation.AutomationProperties.SetHelpText(Box, text ?? "");
+            System.Windows.Automation.AutomationProperties.SetHelpText(Box, Services.Loc.T(text ?? "")); // для диктора: на языке интерфейса
         }
     }
 }

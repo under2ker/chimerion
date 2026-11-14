@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Dnex.Controls"
         Title="CHIMERION" Icon="/Assets/chimerion-logo.png" Height="1040" Width="1600"
-        MinHeight="760" MinWidth="1000" WindowStartupLocation="CenterScreen"
+        MinHeight="700" MinWidth="1000" WindowStartupLocation="CenterScreen"
         Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}"
         FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13"
         TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"

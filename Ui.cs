@@ -32,7 +32,7 @@ internal static class Ui
         var badge = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(8), Child = icon }
             .Ref(Border.BackgroundProperty, "Muted");
         var body = new StackPanel { MaxWidth = 320 };
-        body.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        body.Children.Add(new TextBlock { Text = title, FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
         body.Children.Add(new TextBlock { Text = text, FontSize = 12, LineHeight = 17, TextWrapping = TextWrapping.Wrap });
         var tip = new ToolTip { Content = body, Placement = PlacementMode.Bottom };
         // Настоящая кнопка (видна диктору и автоматизации), но без своего оформления: только кружок

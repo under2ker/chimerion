@@ -39,9 +39,9 @@ internal static class FlowWindow
         Button remove = null!;
         remove = Ui.Action("Убрать", "Ghost", () => RemoveExtension(current, status, log, Render));
         var close = Ui.Action("Закрыть", "Ghost", w.Close).With(b => b.IsCancel = true);
-        var credit = new TextBlock { Text = "Google Flow Geo Bypass, MIT", FontSize = 12, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, ToolTip = FlowExtension.SourceUrl }
-            .Ref(TextBlock.ForegroundProperty, "Muted");
-        credit.MouseLeftButtonUp += (_, _) => AutoStart.OpenUrl(FlowExtension.SourceUrl);
+        // Ссылка на авторов — кнопка: открывается и мышью, и с клавиатуры (Tab, Enter)
+        var credit = Ui.Action("Google Flow Geo Bypass, MIT", "Ghost", () => AutoStart.OpenUrl(FlowExtension.SourceUrl))
+            .With(b => { b.FontSize = 12; b.MinWidth = 0; b.Margin = new Thickness(0); b.Padding = new Thickness(8, 4, 8, 4); b.ToolTip = FlowExtension.SourceUrl; b.VerticalAlignment = VerticalAlignment.Center; b.HorizontalAlignment = HorizontalAlignment.Left; });
         root.Children.Add(Ui.Footer(credit, open, close, remove));
         w.Content = root;
 

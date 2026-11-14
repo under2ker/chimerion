@@ -117,7 +117,7 @@ public partial class MainWindow
         DockPanel.SetDock(_dashboardHeroBadge, Dock.Left); heroTop.Children.Add(_dashboardHeroBadge);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         _dashboardTitle = new TextBlock { FontSize = 26, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
-        _dashboardDescription = new TextBlock { FontSize = 14, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
+        _dashboardDescription = new TextBlock { FontSize = 13, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
         _dashboardHeroMode = Ui.Hint("", 3);
         heroText.Children.Add(_dashboardTitle); heroText.Children.Add(_dashboardDescription); heroText.Children.Add(_dashboardHeroMode);
         heroTop.Children.Add(heroText);
@@ -127,28 +127,28 @@ public partial class MainWindow
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
         // WrapPanel: в узком окне флаг и плашка уходят на следующую строку, а название занимает всю ширину карточки
         var smartValue = new WrapPanel { Orientation = Orientation.Horizontal };
-        _dashboardSmartName = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0) };
+        _dashboardSmartName = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0) };
         _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 2, 0, 2), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
         _dashboardSmartHint = Ui.Hint("", 2); // в карточку не вставляется: страна выхода показана под заголовком защиты
         DashboardFact(heroFacts, 0, "globe", "Smart DNS", smartValue, null, ("Smart DNS", "DNS-сервер, который направляет ChatGPT, Claude и Gemini через сервер в другой стране, поэтому нейросети открываются. Это не VPN: остальные сайты идут напрямую, как обычно.")); // страна выхода стоит в первой строке карточки, под заголовком
-        _dashboardPlainDns = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+        _dashboardPlainDns = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         _dashboardPlainHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, null, ("Обычный DNS", "Адрес DNS, через который сейчас открываются все остальные сайты. Если включены «Два DNS», это выбранный общий DNS, например Cloudflare.")); // пояснение в подсказке
-        _dashboardUptime = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold };
+        _dashboardUptime = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold };
         _dashboardUptimeHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
 
         // Подключено, но не все нейросети открываются: заметно и с переходом к проверке причины
-        _dashboardWarnText = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn");
+        _dashboardWarnText = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap }.Ref(TextBlock.ForegroundProperty, "Warn");
         var why = Ui.Action("Почему?", "Strong", () => OpenHelp(HelpWindow.Tab.NotOpening)).With(b => { b.Margin = new Thickness(12, 0, 0, 0); b.Padding = new Thickness(12, 4, 12, 5); b.VerticalAlignment = VerticalAlignment.Center; });
         var warnRow = new DockPanel();
         DockPanel.SetDock(why, Dock.Right); warnRow.Children.Add(why);
         var warnIcon = new Controls.Icon { Kind = "triangle-alert", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Warn");
         DockPanel.SetDock(warnIcon, Dock.Left); warnRow.Children.Add(warnIcon); warnRow.Children.Add(_dashboardWarnText);
-        _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed }
+        _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed }
             .Ref(Border.BackgroundProperty, "ChipWarn");
         var heroContent = new StackPanel { Margin = new Thickness(20, 12, 20, 12) };
         heroContent.Children.Add(heroTop); heroContent.Children.Add(_dashboardWarn); heroContent.Children.Add(heroFacts);
@@ -363,7 +363,7 @@ public partial class MainWindow
     {
         var image = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         image.SetResourceReference(Image.SourceProperty, resource);
-        return new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(9), Child = image }.Ref(Border.BackgroundProperty, "Surface2");
+        return new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Child = image }.Ref(Border.BackgroundProperty, "Surface2");
     }
 
     /// <summary>Строка сервиса: значок, название и подпись, состояние с цветной точкой и пояснением, действие справа.</summary>
@@ -377,8 +377,8 @@ public partial class MainWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12.5; t.TextWrapping = TextWrapping.NoWrap; t.TextTrimming = TextTrimming.CharacterEllipsis; }));
+        text.Children.Add(new TextBlock { Text = name, FontSize = 13, FontWeight = FontWeights.SemiBold });
+        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12; t.TextWrapping = TextWrapping.NoWrap; t.TextTrimming = TextTrimming.CharacterEllipsis; }));
         Grid.SetColumn(text, 1); g.Children.Add(text);
         var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
@@ -472,9 +472,9 @@ public partial class MainWindow
         if (help is { } h) line.Children.Add(Ui.HelpMark(h.Title, h.Text).With(m => m.Margin = new Thickness(3, 0, 6, 0)));
         value.Margin = new Thickness(0, 0, 8, 0); value.VerticalAlignment = VerticalAlignment.Center;
         line.Children.Add(value);
-        if (hint != null) { hint.FontSize = 12.5; hint.Margin = new Thickness(0); hint.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(hint); }
+        if (hint != null) { hint.FontSize = 12; hint.Margin = new Thickness(0); hint.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(hint); }
         Grid.SetColumn(line, 1); row.Children.Add(line);
-        var card = new Border { Padding = new Thickness(12, 7, 12, 7), CornerRadius = new CornerRadius(10), Child = row };
+        var card = new Border { Padding = new Thickness(12, 7, 12, 7), CornerRadius = new CornerRadius(8), Child = row };
         card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card);
     }
 
@@ -746,6 +746,17 @@ public partial class MainWindow
                 row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "SurfaceHover");
                 row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
                 row.MouseLeftButtonUp += (_, _) => { _dashboardPickId = target.Id; RefreshDashboardServers(DnsSwitcher.GetActive()); };
+                // С клавиатуры: Tab выделяет строку (рамка фокуса), Enter или пробел выбирают; полное имя и адрес в подсказке
+                row.Focusable = true;
+                row.FocusVisualStyle = (Style)FindResource("FocusRing");
+                row.ToolTip = $"{PrivacyGuard.Mask(s.ShortName)}, {s.Address}: выбрать этот сервер";
+                System.Windows.Automation.AutomationProperties.SetName(row, $"{PrivacyGuard.Mask(s.ShortName)}, {s.Address}");
+                row.KeyDown += (_, e) =>
+                {
+                    if (e.Key is not (System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)) return;
+                    e.Handled = true;
+                    _dashboardPickId = target.Id; RefreshDashboardServers(DnsSwitcher.GetActive());
+                };
             }
             _dashboardServers.Children.Add(row);
         }

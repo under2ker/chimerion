@@ -17,8 +17,8 @@ public partial class MainWindow
     {
         var icon = new Controls.Icon { Kind = "clock", Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(Controls.Icon.ForegroundProperty, "Accent");
-        var title = new TextBlock { Text = "Часовой пояс", FontSize = 15, FontWeight = FontWeights.SemiBold };
-        _dashboardZoneHint = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
+        var title = new TextBlock { Text = "Часовой пояс", FontSize = 16, FontWeight = FontWeights.SemiBold };
+        _dashboardZoneHint = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextWrapping = TextWrapping.Wrap; });
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
         titleLine.Children.Add(title); titleLine.Children.Add(Ui.HelpMark("Часовой пояс", "Какое время видят Claude, ChatGPT и сайты в браузере. Пояс можно сменить для вкладки браузера, для приложений или для всей Windows, например под страну, из которой нейросети вас видят."));

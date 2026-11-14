@@ -109,7 +109,7 @@ internal sealed class ModeWindow
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
         var modeName = current is { } c ? _modes.First(m => m.Id == c).Title : "свой набор";
         var badge = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 3, 10, 4), VerticalAlignment = VerticalAlignment.Center,
-                                 Child = new TextBlock { Text = current != null ? $"Сейчас: {modeName}" : "Сейчас: свой набор", FontSize = 12.5, FontWeight = FontWeights.SemiBold }
+                                 Child = new TextBlock { Text = current != null ? $"Сейчас: {modeName}" : "Сейчас: свой набор", FontSize = 12, FontWeight = FontWeights.SemiBold }
                                      .Ref(TextBlock.ForegroundProperty, current != null ? "Accent" : "Muted") }
             .Ref(Border.BackgroundProperty, current != null ? "AccentSoft" : "Surface2");
         DockPanel.SetDock(badge, Dock.Right); head.Children.Add(badge);
@@ -141,11 +141,11 @@ internal sealed class ModeWindow
         else glyph.Children.Add(new Controls.Icon { Kind = icon!, Size = 20 }.Ref(Controls.Icon.ForegroundProperty, on ? "Ok" : "Muted"));
         DockPanel.SetDock(glyph, Dock.Left); row.Children.Add(glyph);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(Ui.Hint(title, 0).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; }));
+        text.Children.Add(Ui.Hint(title, 0).With(t => { t.FontSize = 12; t.TextWrapping = TextWrapping.Wrap; }));
         var state = new DockPanel { Margin = new Thickness(0, 3, 0, 0), LastChildFill = true };
         state.Children.Add(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(System.Windows.Shapes.Shape.FillProperty, on ? "Ok" : "Muted").With(e => DockPanel.SetDock(e, Dock.Left)));
-        state.Children.Add(new TextBlock { Text = value, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = value }
+        state.Children.Add(new TextBlock { Text = value, FontSize = 13, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap }
             .Ref(TextBlock.ForegroundProperty, on ? "Ok" : "Text"));
         text.Children.Add(state);
         row.Children.Add(text);
@@ -157,7 +157,7 @@ internal sealed class ModeWindow
     {
         var body = new DockPanel { LastChildFill = false };
         var head = new DockPanel();
-        var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(11), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top,
+        var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top,
                                 Child = new Controls.Icon { Kind = m.Icon, Size = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
                                     .Ref(Controls.Icon.ForegroundProperty, current ? "OnToggle" : "Accent") }
             .Ref(Border.BackgroundProperty, current ? "Accent" : "AccentSoft");
@@ -209,8 +209,8 @@ internal sealed class ModeWindow
         };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
         row.Children.Add(new Controls.Icon { Kind = kind, Size = 14, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, color));
-        row.Children.Add(new TextBlock { Text = part + ": ", FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
-        row.Children.Add(new TextBlock { Text = text, FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color));
+        row.Children.Add(new TextBlock { Text = part + ": ", FontSize = 13, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
+        row.Children.Add(new TextBlock { Text = text, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, color == "Muted" ? "Text" : color));
         if (note == null) return row;
         var block = new StackPanel();
         block.Children.Add(row);

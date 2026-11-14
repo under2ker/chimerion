@@ -78,7 +78,7 @@ $Plan = @(
     @{ n = "servers-graph";   nav = "Серверы";            c = @("График качества"); dialog = $true },
     @{ n = "addserver";                                   c = @("Добавить сервер"); dialog = $true },
     @{ n = "mode";            nav = "Режим";              expect = "Готовые режимы" },
-    @{ n = "tools";           nav = "Telegram и YouTube"; expect = "Как это работает" },
+    @{ n = "tools";           nav = "Telegram и YouTube"; expect = "Если не работает" },   # «Как это работает» по ТЗ спрятано в «?»
     @{ n = "flow";            nav = "Google Flow";        expect = "Как подключить"; tabs = @("Chrome", "Edge", "Яндекс Браузер") },
     @{ n = "diag";            nav = "Диагностика";        expect = "Проверить сайт" },
     @{ n = "diag-history";    nav = "Диагностика";        c = @("История сети"); dialog = $true },

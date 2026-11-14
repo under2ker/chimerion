@@ -113,7 +113,7 @@ internal sealed class ToolsWindow
         root.Children.Add(Ui.InfoTiles(Troubles, 2));
 
         var credits = Ui.Hint("Открытый код: TG WS Proxy (Flowseal), zapret (bol-van, Flowseal), лицензия MIT", 0)
-            .With(t => { t.FontSize = 11; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; t.VerticalAlignment = VerticalAlignment.Center; });
+            .With(t => { t.FontSize = 11; t.TextWrapping = TextWrapping.Wrap; t.VerticalAlignment = VerticalAlignment.Center; });
         credits.ToolTip = string.Join("\n", tools.Select(t => t.Authors)) + "\nCHIMERION ставит официальные релизы с GitHub после проверки контрольной суммы";
         root.Children.Add(Ui.Footer(credits, Ui.Action("Проверить обновления", "Ghost", () => _ = CheckUpdatesAsync(quiet: false))));
         _w.Content = Ui.WindowContent(root);
@@ -217,7 +217,7 @@ internal sealed class ToolsWindow
             img.SetResourceReference(Image.SourceProperty, key);
             logos.Children.Add(img);
         }
-        c.Badge = new Border { Width = tg ? 46 : 58, Height = 46, CornerRadius = new CornerRadius(13), Child = logos, BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0) };
+        c.Badge = new Border { Width = tg ? 46 : 58, Height = 46, CornerRadius = new CornerRadius(8), Child = logos, BorderThickness = new Thickness(2), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 14, 0) };
         c.Toggle = new Controls.Switch { Width = 56, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(12, 4, 0, 0),
                                          ToolTip = tg ? "Включить или выключить TG WS Proxy" : "Включить или выключить обход zapret" };
         System.Windows.Automation.AutomationProperties.SetName(c.Toggle, tg ? "Telegram" : "YouTube и Discord");
@@ -228,7 +228,7 @@ internal sealed class ToolsWindow
         DockPanel.SetDock(c.Toggle, Dock.Right); head.Children.Add(c.Toggle);
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
-        titleLine.Children.Add(new TextBlock { Text = tg ? "Telegram" : "YouTube и Discord", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        titleLine.Children.Add(new TextBlock { Text = tg ? "Telegram" : "YouTube и Discord", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         var how = HowItWorks[tg ? 0 : 1];
         titleLine.Children.Add(Ui.HelpMark(how.Item1, how.Item2));
         titles.Children.Add(titleLine);
@@ -236,7 +236,7 @@ internal sealed class ToolsWindow
         head.Children.Add(titles);
 
         c.Dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
-        c.State = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        c.State = new TextBlock { FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var state = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, Gap, 0, 0) };
         state.Children.Add(c.Dot); state.Children.Add(c.State);
 
@@ -284,6 +284,37 @@ internal sealed class ToolsWindow
         foreach (var c in _cards) RenderCard(c);
         RenderSettings();
         RenderPick();
+        OnePrimary();
+    }
+
+    /// <summary>
+    /// Одна основная кнопка на окно (ТЗ): самая срочная остается синей, остальные становятся обычными.
+    /// Порядок срочности: удалить службу zapret, включить лучшую стратегию, подключить Telegram, подобрать стратегию.
+    /// </summary>
+    private void OnePrimary()
+    {
+        var primary = (Style)Application.Current.Resources["Primary"];
+        var strong = (Style)Application.Current.Resources["Strong"];
+        var all = _cards.SelectMany(c => c.Actions.Children.OfType<Button>())
+            .Concat(Descendants<Button>(_pickHost))
+            .Where(b => b.Style == primary && b.Visibility == Visibility.Visible).ToList();
+        static int Rank(Button b) => b.Content as string switch
+        {
+            "Удалить службу zapret" => 0,
+            string s when s.StartsWith("Включить лучшую") => 1,
+            "Подключить Telegram" => 2,
+            _ => 3,
+        };
+        foreach (var b in all.OrderBy(Rank).Skip(1)) b.Style = strong;
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject d) where T : DependencyObject
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(d).OfType<DependencyObject>())
+        {
+            if (child is T t) yield return t;
+            foreach (var x in Descendants<T>(child)) yield return x;
+        }
     }
 
     private void RenderCard(ToolCard c)
@@ -392,11 +423,14 @@ internal sealed class ToolsWindow
         var s = _settings;
         var current = z.State.Strategy ?? ZapretTool.DefaultStrategy;
         s.StrategyText.Text = ZapretTool.StrategyTitle(current);
+        // Текст на кнопке может обрезаться: полный виден в подсказке, она открывается и при фокусе с клавиатуры
+        s.Strategy.ToolTip = s.StrategyText.Text;
         var best = _pick?.FirstOrDefault(r => r.File != null && r.Score > 0);
         s.StrategyHint.Text = best == null ? "Лучшую найдет «Подобрать стратегию»"
             : best.File == current ? $"Включена лучшая по подбору ({best.Score} из {best.MaxScore})" : $"Лучшая по подбору: {best.Title}";
         s.SitesText.Text = $"{z.SitesCount(BypassCatalog.LoadCached())} доменов";
         s.SourceText.Text = z.State.IpSetSource is { } id && RemoteLists.Get(id) is { } rl ? rl.Title : "Сборка zapret";
+        s.Source.ToolTip = s.SourceText.Text;
         _syncing = true;
         s.Auto.IsChecked = z.State.AutoApplyBest;
         s.IpSet.IsChecked = z.State.IpSet;
@@ -477,7 +511,7 @@ internal sealed class ToolsWindow
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var badge = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+        var badge = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
                                  Child = new Controls.Icon { Kind = icon, Size = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Muted") }
             .Ref(Border.BackgroundProperty, "Surface2");
         g.Children.Add(badge);
@@ -611,7 +645,7 @@ internal sealed class ToolsWindow
             bool chosen = r.File == current, isTop = ReferenceEquals(r, top);
             var g = PickGrid(sites);
             var name = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            name.Children.Add(new TextBlock { Text = r.Title, FontWeight = chosen ? FontWeights.SemiBold : FontWeights.Normal, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center });
+            name.Children.Add(new TextBlock { Text = r.Title, FontWeight = chosen ? FontWeights.SemiBold : FontWeights.Normal, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
             if (isTop) name.Children.Add(Ui.Badge());
             g.Children.Add(name);
             int c = 1;
