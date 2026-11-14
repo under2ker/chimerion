@@ -198,7 +198,10 @@ public partial class MainWindow
             EnsureShown();
             if (!DnexDialog.Ask("«Два DNS» здесь не сработают", gpo, "Все равно включить", windowTitle: "Два DNS")) return;
         }
-        var text = !enable ? "Два DNS выключены" : preset == null ? "Два DNS включены" : $"Два DNS включены, общий DNS «{preset.Name}»";
+        bool was = s.Enabled;
+        // Выключенный режим при выборе общего DNS только запоминает выбор: ничего применять и переподключать не нужно
+        var text = !enable ? (preset != null && !was ? $"Общий DNS для «Два DNS»: «{preset.Name}»" : "Два DNS выключены")
+                 : preset == null ? "Два DNS включены" : $"Два DNS включены, общий DNS «{preset.Name}»";
         await ChangeSettingAsync(text, () =>
         {
             s.Enabled = enable;
@@ -206,7 +209,7 @@ public partial class MainWindow
             s.GeneralName = preset.Name;
             s.GeneralAddresses = preset.Addresses.ToList();
             s.GeneralDoh = preset.Doh;
-        }, ApplySplitChangeAsync);
+        }, enable || was ? ApplySplitChangeAsync : null);
     }
 
     /// <summary>Автозапуск лежит не в settings.json, а в Windows: меняется через AutoStart, с тем же «Отменить».</summary>

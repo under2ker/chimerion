@@ -92,7 +92,7 @@ public partial class MainWindow
 
     private void SetupDashboard()
     {
-        var page = new StackPanel { Margin = new Thickness(24, 20, 24, 24), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var page = new StackPanel { Margin = new Thickness(20, 12, 20, 12), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // ----- Карточка защиты: знак, состояние, большой переключатель и три факта -----
         var heroTop = new DockPanel();
@@ -108,7 +108,7 @@ public partial class MainWindow
             try { await DashboardConnectAsync(); }
             finally { _dashboardPowerTarget = null; RefreshDashboard(); }
         };
-        _dashboardPowerText = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 104 };
+        _dashboardPowerText = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 104 };
         power.Children.Add(_dashboardPower); power.Children.Add(_dashboardPowerText);
         DockPanel.SetDock(power, Dock.Right); heroTop.Children.Add(power);
         // Платный CHIMERION DNS: золотая плашка в свободной середине карточки, между заголовком и переключателем
@@ -116,26 +116,26 @@ public partial class MainWindow
         DockPanel.SetDock(promo, Dock.Right); heroTop.Children.Add(promo);
         // На узком окне плашка не теснит заголовок и описание: прячется, пока места меньше, чем нужно всем трем частям
         heroTop.SizeChanged += (_, _) => promo.Visibility = heroTop.ActualWidth >= 1000 ? Visibility.Visible : Visibility.Collapsed;
-        _dashboardHeroMark = new Controls.Icon { Kind = "circle-check", Size = 34, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        _dashboardHeroIcon = new Border { Width = 64, Height = 64, CornerRadius = new CornerRadius(32), Child = _dashboardHeroMark,
+        _dashboardHeroMark = new Controls.Icon { Kind = "circle-check", Size = 28, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        _dashboardHeroIcon = new Border { Width = 54, Height = 54, CornerRadius = new CornerRadius(27), Child = _dashboardHeroMark,
                                           HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         // Волна при включении и бегущее кольцо, пока защита включается или выключается
-        _dashboardRipple = new Ellipse { Width = 64, Height = 64, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5), RenderTransform = _dashboardRippleScale };
+        _dashboardRipple = new Ellipse { Width = 54, Height = 54, Opacity = 0, IsHitTestVisible = false, RenderTransformOrigin = new Point(.5, .5), RenderTransform = _dashboardRippleScale };
         _dashboardRipple.SetResourceReference(Shape.FillProperty, "Ok");
-        _dashboardSpinner = new Ellipse { Width = 76, Height = 76, StrokeThickness = 3, Opacity = 0, IsHitTestVisible = false, StrokeDashCap = PenLineCap.Round,
+        _dashboardSpinner = new Ellipse { Width = 64, Height = 64, StrokeThickness = 3, Opacity = 0, IsHitTestVisible = false, StrokeDashCap = PenLineCap.Round,
                                           StrokeDashArray = new DoubleCollection { 16, 64 }, RenderTransformOrigin = new Point(.5, .5), RenderTransform = _dashboardSpin };
         _dashboardSpinner.SetResourceReference(Shape.StrokeProperty, "Accent");
-        _dashboardHeroBadge = new Grid { Width = 78, Height = 78, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        _dashboardHeroBadge = new Grid { Width = 66, Height = 66, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
         _dashboardHeroBadge.Children.Add(_dashboardRipple); _dashboardHeroBadge.Children.Add(_dashboardSpinner); _dashboardHeroBadge.Children.Add(_dashboardHeroIcon);
         DockPanel.SetDock(_dashboardHeroBadge, Dock.Left); heroTop.Children.Add(_dashboardHeroBadge);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        _dashboardTitle = new TextBlock { FontSize = 30, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
-        _dashboardDescription = new TextBlock { FontSize = 15, Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
+        _dashboardTitle = new TextBlock { FontSize = 26, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap };
+        _dashboardDescription = new TextBlock { FontSize = 14, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap };
         _dashboardHeroMode = Ui.Hint("", 3);
         heroText.Children.Add(_dashboardTitle); heroText.Children.Add(_dashboardDescription); heroText.Children.Add(_dashboardHeroMode);
         heroTop.Children.Add(heroText);
 
-        var heroFacts = new Grid { Margin = new Thickness(0, 18, 0, 0) };
+        var heroFacts = new Grid { Margin = new Thickness(0, 12, 0, 0) };
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
         // WrapPanel: в узком окне флаг и плашка уходят на следующую строку, а название занимает всю ширину карточки
@@ -161,9 +161,9 @@ public partial class MainWindow
         DockPanel.SetDock(why, Dock.Right); warnRow.Children.Add(why);
         var warnIcon = new Controls.Icon { Kind = "triangle-alert", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Controls.Icon.ForegroundProperty, "Warn");
         DockPanel.SetDock(warnIcon, Dock.Left); warnRow.Children.Add(warnIcon); warnRow.Children.Add(_dashboardWarnText);
-        _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 16, 0, 0), Visibility = Visibility.Collapsed }
+        _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed }
             .Ref(Border.BackgroundProperty, "ChipWarn");
-        var heroContent = new StackPanel { Margin = new Thickness(22, 20, 22, 20) };
+        var heroContent = new StackPanel { Margin = new Thickness(20, 14, 20, 14) };
         heroContent.Children.Add(heroTop); heroContent.Children.Add(_dashboardWarn); heroContent.Children.Add(heroFacts);
         var heroLayer = new Grid();
         heroLayer.SizeChanged += (_, e) => heroLayer.Clip = new RectangleGeometry(new Rect(e.NewSize), 11, 11);
@@ -176,9 +176,10 @@ public partial class MainWindow
         _dashboardHero.SetResourceReference(Border.BackgroundProperty, "Surface");
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
         page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
+        page.Children.Add(BuildDashboardSplit()); // «Два DNS» одной карточкой (MainWindow.DashboardSplit.cs)
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
-        var services = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        var services = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         services.ColumnDefinitions.Add(new ColumnDefinition()); services.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardProbe = DashboardHeaderButton("Проверить все", () => _ = DashboardProbeAsync());
         var ai = new StackPanel();
@@ -198,7 +199,7 @@ public partial class MainWindow
             ai.Children.Add(DashboardRow(DashboardLogo(logo), name, domain, dot, status, note, open));
             _dashboardServiceRows[name] = (dot, status, note, open, url);
         }
-        var aiCard = Ui.Card(ai, bottom: 0); aiCard.Padding = new Thickness(14, 12, 14, 8); aiCard.Margin = new Thickness(0, 0, 6, 0);
+        var aiCard = Ui.Card(ai, bottom: 0); aiCard.Padding = new Thickness(14, 10, 14, 4); aiCard.Margin = new Thickness(0, 0, 6, 0);
         services.Children.Add(aiCard);
 
         _dashboardSiteProbe = DashboardHeaderButton("Проверить сайты", () => _ = DashboardSitesAsync());
@@ -223,7 +224,7 @@ public partial class MainWindow
             extra.Children.Add(DashboardRow(symbol, name, sub, dot, status, site, toggle));
             _dashboardToolRows.Add((toggle, status, dot, tool));
         }
-        var extraCard = Ui.Card(extra, bottom: 0); extraCard.Padding = new Thickness(14, 12, 14, 8); extraCard.Margin = new Thickness(6, 0, 0, 0);
+        var extraCard = Ui.Card(extra, bottom: 0); extraCard.Padding = new Thickness(14, 10, 14, 4); extraCard.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(extraCard, 1); services.Children.Add(extraCard);
         page.Children.Add(services);
 
@@ -233,7 +234,7 @@ public partial class MainWindow
             DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); }),
             DashboardHeaderButton("Подобрать автоматически", () => _ = AutoPickAsync()).With(b => b.ToolTip = "Программа сама пробует лучшие серверы по очереди и остается на том, через который открываются нейросети. Страну выхода не меняет")));
         _dashboardServers = new StackPanel(); serversBox.Children.Add(_dashboardServers);
-        var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 12, 14, 10); serversCard.Margin = new Thickness(0, 12, 0, 0);
+        var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 10, 14, 6); serversCard.Margin = new Thickness(0, 8, 0, 0);
         page.Children.Add(serversCard);
 
         // ----- Журнал: последние строки как в журнале программы -----
@@ -241,31 +242,45 @@ public partial class MainWindow
         logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", OpenLog)));
         // При малом числе событий карточка ниже, без пустоты
         _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2) }; logBox.Children.Add(_dashboardEvents);
-        var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 12, 14, 12); logCard.Margin = new Thickness(0, 12, 0, 0);
+        var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 10, 14, 10); logCard.Margin = new Thickness(0, 8, 0, 0);
         page.Children.Add(logCard);
 
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = page };
+        // Главная должна помещаться без прокрутки. Журнал занимает только оставшееся место: не хватает на три строки, он
+        // скрыт (открывается кнопкой «Журнал» в меню). Если не помещается и без журнала, вся страница слегка уменьшается
+        var scale = new ScaleTransform(1, 1);
+        var scaleHost = new Border { Child = page, LayoutTransform = scale };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = scaleHost };
         // Левое меню общее для всей программы (MainWindow.xaml), у главной своего нет
         var layout = new Grid();
         layout.Children.Add(scroll);
         int lastLayout = -1;
         layout.SizeChanged += (_, e) =>
         {
-            double available = e.NewSize.Width;
+            double available = e.NewSize.Width / scale.ScaleX;
             int mode = available < 640 ? 0 : available < 960 ? 1 : 2;
             if (mode == lastLayout) return;
             lastLayout = mode;
-            page.Margin = mode == 0 ? new Thickness(12, 14, 12, 16) : new Thickness(24, 20, 24, 24);
+            page.Margin = mode == 0 ? new Thickness(12, 10, 12, 10) : new Thickness(20, 12, 20, 12);
             DashboardReflow(heroFacts, mode == 0 ? 1 : 3);
             DashboardReflow(services, mode < 2 ? 1 : 2);
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             _dashboardModeGrid.Columns = mode == 0 ? 2 : 4;
+            _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
-        // Журнал занимает оставшуюся высоту окна: строк столько, сколько помещается, а не пустота под ним
+        const double LogLine = 22, LogChrome = 70, MinScale = .7;
         void FitLog()
         {
-            double other = page.ActualHeight + page.Margin.Top + page.Margin.Bottom - _dashboardEvents.ActualHeight;
-            int lines = Math.Clamp((int)((scroll.ViewportHeight - other) / 22), 6, 40);
+            double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
+            if (viewport <= 0 || page.ActualHeight <= 0) return;
+            double logH = logCard.Visibility == Visibility.Visible ? logCard.ActualHeight + logCard.Margin.Top : 0;
+            double fixedH = page.ActualHeight - logH + page.Margin.Top + page.Margin.Bottom; // все, кроме журнала, в обычном масштабе
+            int lines = (int)((viewport - fixedH - logCard.Margin.Top - LogChrome) / LogLine);
+            bool showLog = lines >= 3;
+            double want = showLog ? 1 : Math.Clamp(viewport / fixedH, MinScale, 1);
+            if (Math.Abs(scale.ScaleX - want) > .004) scale.ScaleX = scale.ScaleY = want;
+            var vis = showLog ? Visibility.Visible : Visibility.Collapsed;
+            if (logCard.Visibility != vis) logCard.Visibility = vis;
+            lines = Math.Clamp(lines, 3, 40);
             if (lines == _dashboardLogLines) return;
             _dashboardLogLines = lines;
             _dashboardEventsSignature = null;
@@ -287,7 +302,7 @@ public partial class MainWindow
 
     private static DockPanel DashboardPanelHeader(string title, TextBlock? hint, params Button?[] actions)
     {
-        var d = new DockPanel { Margin = new Thickness(2, 0, 0, 8) };
+        var d = new DockPanel { Margin = new Thickness(2, 0, 0, 6) };
         bool first = true;
         foreach (var action in actions.OfType<Button>())
         {
@@ -305,18 +320,18 @@ public partial class MainWindow
 
     private static Border DashboardLogo(string resource)
     {
-        var image = new Image { Width = 22, Height = 22, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var image = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         image.SetResourceReference(Image.SourceProperty, resource);
-        return new Border { Width = 38, Height = 38, CornerRadius = new CornerRadius(10), Child = image }.Ref(Border.BackgroundProperty, "Surface2");
+        return new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(9), Child = image }.Ref(Border.BackgroundProperty, "Surface2");
     }
 
     /// <summary>Строка сервиса: значок, название и подпись, состояние с цветной точкой и пояснением, действие справа.</summary>
     private static Border DashboardRow(FrameworkElement symbol, string name, string sub, Ellipse dot, TextBlock status, TextBlock note, FrameworkElement action)
     {
-        var g = new Grid { MinHeight = 52 };
+        var g = new Grid { MinHeight = 44 };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         // Название фиксированной ширины, состояние сразу за ним: элементы одной строки читаются вместе
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(175) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(205) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
@@ -329,7 +344,7 @@ public partial class MainWindow
         state.Children.Add(line); state.Children.Add(note);
         Grid.SetColumn(state, 2); g.Children.Add(state);
         action.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(action, 3); g.Children.Add(action);
-        return new Border { Child = g, Padding = new Thickness(4, 4, 4, 4), BorderThickness = new Thickness(0, 1, 0, 0) }.Ref(Border.BorderBrushProperty, "Border");
+        return new Border { Child = g, Padding = new Thickness(4, 2, 4, 2), BorderThickness = new Thickness(0, 1, 0, 0) }.Ref(Border.BorderBrushProperty, "Border");
     }
 
     /// <summary>Фирменный узор сайта: мягкое свечение и тонкие диагональные полосы, без влияния на ввод.</summary>
@@ -405,15 +420,15 @@ public partial class MainWindow
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = new Controls.Icon { Kind = kind, Size = 24, Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
+        var icon = new Controls.Icon { Kind = kind, Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
         icon.SetResourceReference(Controls.Icon.ForegroundProperty, "Accent");
         row.Children.Add(icon);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(Ui.Hint(label, 0).With(t => t.FontSize = 13));
-        value.Margin = new Thickness(0, 4, 0, 0); text.Children.Add(value);
+        value.Margin = new Thickness(0, 2, 0, 0); text.Children.Add(value);
         if (hint != null) { hint.FontSize = 12.5; text.Children.Add(hint); }
         Grid.SetColumn(text, 1); row.Children.Add(text);
-        var card = new Border { Padding = new Thickness(14, 12, 14, 12), CornerRadius = new CornerRadius(10), Child = row };
+        var card = new Border { Padding = new Thickness(12, 8, 12, 8), CornerRadius = new CornerRadius(10), Child = row };
         card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card);
     }
 
@@ -525,6 +540,7 @@ public partial class MainWindow
         RefreshToolSwitches();
 
         RefreshDashboardModes();
+        RefreshDashboardSplit();
         RefreshDashboardServers(active);
         RefreshDashboardEvents();
     }
@@ -676,7 +692,7 @@ public partial class MainWindow
                 Grid.SetColumn(connect, 5); g.Children.Add(connect);
             }
             else { Grid.SetColumn(chip, 5); g.Children.Add(chip); }
-            var row = new Border { Child = g, Padding = new Thickness(6, 7, 6, 7), CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
+            var row = new Border { Child = g, Padding = new Thickness(6, 4, 6, 4), CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
                                    Cursor = used ? null : System.Windows.Input.Cursors.Hand, ToolTip = used ? "Сейчас подключено" : picked ? null : "Выбрать этот сервер" };
             if (used || picked) row.SetResourceReference(Border.BackgroundProperty, picked ? "AccentSoft" : "Surface2");
             else
@@ -731,7 +747,7 @@ public partial class MainWindow
 
     private static ProgressBar DashboardCheckProgress() => new()
     {
-        Height = 4, Margin = new Thickness(0, 0, 0, 8), Visibility = Visibility.Collapsed,
+        Height = 4, Margin = new Thickness(0, 0, 0, 6), Visibility = Visibility.Collapsed,
         IsHitTestVisible = false, Value = 50
     };
 

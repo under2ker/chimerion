@@ -46,7 +46,7 @@ public partial class MainWindow
             DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon); row.Children.Add(texts);
             var tile = new Controls.ClickTile
             {
-                Child = row, Padding = new Thickness(12, 10, 12, 10), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
+                Child = row, Padding = new Thickness(10, 7, 10, 7), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
                 Margin = new Thickness(0, 0, 8, 0), ToolTip = m.Hint,
             };
             AutomationProperties.SetName(tile, "Режим: " + m.Title);
@@ -56,8 +56,8 @@ public partial class MainWindow
         }
         box.Children.Add(_dashboardModeGrid);
         var card = Ui.Card(box, bottom: 0);
-        card.Padding = new Thickness(14, 12, 14, 12);
-        card.Margin = new Thickness(0, 12, 0, 0);
+        card.Padding = new Thickness(14, 10, 14, 6);
+        card.Margin = new Thickness(0, 8, 0, 0);
         return card;
     }
 
