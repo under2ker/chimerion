@@ -26,14 +26,12 @@ internal static class FlowWindow
         var body = new StackPanel();
         // Слева браузер, состояние и шаги; справа как это работает и вопросы. В узком окне одно под другим
         var side = new StackPanel();
-        side.Children.Add(Ui.Section("Как это работает", first: true));
-        side.Children.Add(Ui.Card(Ui.Hint("Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними, VPN не нужен. Генерацию Google все равно может не дать", 0, "Text"), bottom: 0));
-        side.Children.Add(Ui.Section("Частые вопросы"));
+        side.Children.Add(Ui.Section("Если что-то не так", first: true));
         side.Children.Add(Ui.InfoTiles(Faq, 1));
         root.Children.Add(Ui.Columns(body, side, 860, 3, 2));
         var status = Ui.Status();
 
-        var open = Ui.Action("Открыть Flow", "Primary", () =>
+        var open = Ui.Action("Открыть Flow", "Strong", () =>
         {
             // В выбранном браузере, а не в браузере по умолчанию; не получилось, тогда в браузере по умолчанию
             if (current == null || !FlowExtension.Launch(current, FlowExtension.FlowUrl)) AutoStart.OpenUrl(FlowExtension.FlowUrl);
@@ -44,7 +42,7 @@ internal static class FlowWindow
         var credit = new TextBlock { Text = "Google Flow Geo Bypass, MIT", FontSize = 12, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, ToolTip = FlowExtension.SourceUrl }
             .Ref(TextBlock.ForegroundProperty, "Muted");
         credit.MouseLeftButtonUp += (_, _) => AutoStart.OpenUrl(FlowExtension.SourceUrl);
-        root.Children.Add(Ui.Footer(credit, open, remove, close));
+        root.Children.Add(Ui.Footer(credit, open, close, remove));
         w.Content = root;
 
         void Render()
@@ -59,7 +57,13 @@ internal static class FlowWindow
                 body.Children.Add(bar);
             }
             var state = current == null ? FlowExtension.State.NotConnected : FlowExtension.StateIn(current);
-            body.Children.Add(Ui.Section("Состояние", first: browsers.Count <= 1));
+            // «Как это работает» — справка, а не шаг: в знак «?» у заголовка
+            var stateHead = new StackPanel { Orientation = Orientation.Horizontal };
+            stateHead.Children.Add(Ui.Section("Состояние", first: browsers.Count <= 1).With(t => t.VerticalAlignment = VerticalAlignment.Center));
+            stateHead.Children.Add(Ui.HelpMark("Как это работает",
+                "Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними, VPN не нужен.\nРаботает только на flow.google.com и ничего не отправляет в сеть. Код открыт, лицензия MIT.")
+                .With(h => h.Margin = new Thickness(h.Margin.Left, browsers.Count <= 1 ? 4 : 20, 0, 8)));
+            body.Children.Add(stateHead);
             body.Children.Add(StateCard(current, state));
 
             if (state != FlowExtension.State.Enabled)
@@ -91,6 +95,8 @@ internal static class FlowWindow
             }
             body.Children.Add(status);
             remove.Visibility = FlowExtension.Prepared ? Visibility.Visible : Visibility.Collapsed;
+            // Одна основная кнопка: пока не подключено, главное — шаги; подключено — открыть Flow
+            open.Style = (Style)Application.Current.FindResource(state == FlowExtension.State.Enabled ? "Primary" : "Strong");
         }
 
         // Человек подключает расширение в браузере и возвращается: тогда и проверяем, без фоновых опросов
@@ -103,7 +109,6 @@ internal static class FlowWindow
 
     private static readonly (string, string)[] Faq =
     {
-        ("Что оно видит", "Работает только на flow.google.com и ничего не отправляет в сеть. Код открыт, лицензия MIT"),
         ("Flow открылся, а генерации нет", "Google может ограничивать доступ на своих серверах, это расширение не обходит"),
         ("Как убрать", "Отключите или удалите его на странице расширений браузера. Кнопка «Убрать» внизу удаляет и папку расширения"),
     };
@@ -129,18 +134,18 @@ internal static class FlowWindow
         Grid.SetColumn(text, 1);
         row.Children.Add(text);
         var card = Ui.Card(row, bottom: 0);
-        card.Padding = new Thickness(16, 12, 16, 12);
+        card.Padding = new Thickness(16);
         return card;
     }
 
     /// <summary>Шаг инструкции: номер, что сделать, пояснение и необязательная кнопка справа.</summary>
     private static Grid Step(int n, string title, string hint, Button? action)
     {
-        var g = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        var g = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.Children.Add(new TextBlock { Text = n.ToString(), FontWeight = FontWeights.SemiBold, FontSize = 15, Margin = new Thickness(0, -1, 0, 0) }
+        g.Children.Add(new TextBlock { Text = n.ToString(), FontWeight = FontWeights.SemiBold, FontSize = 16, Margin = new Thickness(0, -2, 0, 0) }
             .Ref(TextBlock.ForegroundProperty, "Accent"));
         var text = new StackPanel();
         text.Children.Add(new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap });

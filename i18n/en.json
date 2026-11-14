@@ -2877,5 +2877,8 @@
  "Нужны только нейросети → «Только ИИ».\nТормозят YouTube, Discord или Telegram → «Все сразу».\nПровайдер мешает онлайн-играм → «Игры».\nНужен обычный интернет → «Все выключить».\nРежим можно включить и из трея: правая кнопка по значку → «Режим».": "Only AI services needed → «AI only».\nYouTube, Discord or Telegram are slow → «Everything».\nThe provider gets in the way of online games → «Games».\nPlain internet needed → «Turn everything off».\nYou can also switch modes from the tray: right-click the icon → «Mode».",
  "Ускорение Telegram и обход для YouTube и Discord": "Telegram acceleration and a bypass for YouTube and Discord",
  "Пояснение: Telegram": "Explanation: Telegram",
- "Пояснение: YouTube и Discord": "Explanation: YouTube and Discord"
+ "Пояснение: YouTube и Discord": "Explanation: YouTube and Discord",
+ "Если что-то не так": "If something is wrong",
+ "Пояснение: Как это работает": "Explanation: How it works",
+ "Расширение меняет в браузере один флаг проверки страны. IP и аккаунт остаются прежними, VPN не нужен.\nРаботает только на flow.google.com и ничего не отправляет в сеть. Код открыт, лицензия MIT.": "The extension changes one country-check flag in the browser. Your IP and account stay the same, no VPN needed.\nIt works only on flow.google.com and sends nothing to the network. Open source, MIT license."
 }
