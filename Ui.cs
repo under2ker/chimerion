@@ -21,11 +21,15 @@ internal static class Ui
     /// </summary>
     public static FrameworkElement HelpMark(string title, string text)
     {
-        // Сплошной светлый кружок с толстым знаком вопроса цветом фона карточки, как привычный значок справки:
-        // наибольший контраст и в темной, и в светлой теме
-        var icon = new Controls.Icon { Kind = "question", Size = 16, StrokeWidth = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            .Ref(Controls.Icon.ForegroundProperty, "Surface");
-        var badge = new Border { Width = 19, Height = 19, CornerRadius = new CornerRadius(9.5), Child = icon }
+        // Сплошной светлый кружок со знаком вопроса цветом фона карточки, как привычный значок справки. Знак буквой шрифта,
+        // а не контуром: Segoe UI выровнен под мелкий размер и на 16 пикселях читается четче нарисованного пути
+        var icon = new TextBlock
+        {
+            Text = "?", FontFamily = new FontFamily("Segoe UI"), FontSize = 12, FontWeight = FontWeights.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -1, 0, 0),
+        }.Ref(TextBlock.ForegroundProperty, "Surface");
+        TextOptions.SetTextFormattingMode(icon, TextFormattingMode.Display);
+        var badge = new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(8), Child = icon }
             .Ref(Border.BackgroundProperty, "Muted");
         var body = new StackPanel { MaxWidth = 320 };
         body.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
@@ -35,14 +39,14 @@ internal static class Ui
         var face = new FrameworkElementFactory(typeof(ContentPresenter));
         var mark = new Button
         {
-            Style = null, Template = new ControlTemplate(typeof(Button)) { VisualTree = face }, Content = badge, Width = 22, Height = 22,
+            Style = null, Template = new ControlTemplate(typeof(Button)) { VisualTree = face }, Content = badge, Width = 20, Height = 20,
             Cursor = Cursors.Help, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), ToolTip = tip,
         };
         ToolTipService.SetInitialShowDelay(mark, 150);
         ToolTipService.SetShowDuration(mark, 60000);
         void Lit(bool on)
         {
-            icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "OnAccentButton" : "Surface");
+            icon.SetResourceReference(TextBlock.ForegroundProperty, on ? "OnAccentButton" : "Surface");
             badge.SetResourceReference(Border.BackgroundProperty, on ? "Accent" : "Muted");
         }
         mark.MouseEnter += (_, _) => Lit(true);
