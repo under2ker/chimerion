@@ -21,11 +21,12 @@ internal static class Ui
     /// </summary>
     public static FrameworkElement HelpMark(string title, string text)
     {
-        // Заполненный кружок с рамкой и толстым знаком вопроса цветом текста: читается и на темной, и на светлой теме
-        var icon = new Controls.Icon { Kind = "question", Size = 16, StrokeWidth = 2.6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            .Ref(Controls.Icon.ForegroundProperty, "Text");
-        var badge = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = icon }
-            .Ref(Border.BackgroundProperty, "Surface2").Ref(Border.BorderBrushProperty, "ControlBorder");
+        // Сплошной светлый кружок с толстым знаком вопроса цветом фона карточки, как привычный значок справки:
+        // наибольший контраст и в темной, и в светлой теме
+        var icon = new Controls.Icon { Kind = "question", Size = 16, StrokeWidth = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "Surface");
+        var badge = new Border { Width = 19, Height = 19, CornerRadius = new CornerRadius(9.5), Child = icon }
+            .Ref(Border.BackgroundProperty, "Muted");
         var body = new StackPanel { MaxWidth = 320 };
         body.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
         body.Children.Add(new TextBlock { Text = text, FontSize = 12, LineHeight = 17, TextWrapping = TextWrapping.Wrap });
@@ -41,9 +42,8 @@ internal static class Ui
         ToolTipService.SetShowDuration(mark, 60000);
         void Lit(bool on)
         {
-            icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "Accent" : "Text");
-            badge.SetResourceReference(Border.BackgroundProperty, on ? "AccentSoft" : "Surface2");
-            badge.SetResourceReference(Border.BorderBrushProperty, on ? "Accent" : "ControlBorder");
+            icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "OnAccentButton" : "Surface");
+            badge.SetResourceReference(Border.BackgroundProperty, on ? "Accent" : "Muted");
         }
         mark.MouseEnter += (_, _) => Lit(true);
         mark.MouseLeave += (_, _) => Lit(mark.IsKeyboardFocused);
