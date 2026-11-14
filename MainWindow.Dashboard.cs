@@ -78,7 +78,8 @@ public partial class MainWindow
 
     private void SetupDashboard()
     {
-        var page = new StackPanel { Margin = new Thickness(20, 12, 20, 12), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
+        // VerticalAlignment.Top: иначе область прокрутки растягивает страницу до высоты окна и подгонка видит чужую высоту
+        var page = new StackPanel { Margin = new Thickness(20, 12, 20, 12), MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top };
 
         // ----- Карточка защиты: знак, состояние, большой переключатель и три факта -----
         var heroTop = new DockPanel();
@@ -163,7 +164,7 @@ public partial class MainWindow
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
-        var services = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        var services = new Grid { Margin = new Thickness(0, 8, 0, 0) };
         services.ColumnDefinitions.Add(new ColumnDefinition()); services.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardProbe = DashboardHeaderButton("Проверить все", () => _ = DashboardProbeAsync());
         var ai = new StackPanel();
@@ -231,11 +232,12 @@ public partial class MainWindow
         var layout = new Grid();
         layout.Children.Add(scroll);
         int lastLayout = -1;
+        const double TwoColumns = 1100; // ширина (в обычном масштабе), от которой нейросети и дополнительные сервисы стоят рядом
         layout.SizeChanged += (_, e) =>
         {
-            double available = e.NewSize.Width / scale.ScaleX;
-            int mode = available < 640 ? 0 : available < 960 ? 1 : 2;
-            if (mode == lastLayout) return;
+            double available = e.NewSize.Width / Math.Min(scale.ScaleX, 1); // увеличение страницы на выбор раскладки не влияет
+            int mode = available < 640 ? 0 : available < TwoColumns ? 1 : 2; // две колонки сервисов только когда им хватает места без обрезания подписей
+            if (mode == lastLayout) { Fit(); return; }
             lastLayout = mode;
             page.Margin = mode == 0 ? new Thickness(12, 10, 12, 10) : new Thickness(20, 12, 20, 12);
             DashboardReflow(heroFacts, mode == 0 ? 1 : 3, new[] { 1.5, 1, 1.1 }); // первой ячейке больше места: имя сервера, флаг и плашка в одну строку
@@ -243,14 +245,19 @@ public partial class MainWindow
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             _dashboardModeGrid.Columns = mode == 0 ? 2 : 4;
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
+            Fit();
         };
-        const double MinScale = .65;
+        const double MinScale = .65, MaxScale = 1.2;
         void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
             if (viewport <= 0 || page.ActualHeight <= 0) return;
             double contentH = page.ActualHeight + page.Margin.Top + page.Margin.Bottom; // в обычном масштабе
-            double want = Math.Clamp(viewport / contentH, MinScale, 1);
+            // Высокое окно: страница слегка увеличивается и занимает его целиком, без пустой полосы внизу.
+            // Но не шире, чем позволяет выбранная раскладка (две колонки от 1100, одна от 640 в обычном масштабе)
+            double minWidth = lastLayout == 2 ? TwoColumns : lastLayout == 1 ? 640 : 0;
+            double max = minWidth > 0 && layout.ActualWidth > 0 ? Math.Clamp(layout.ActualWidth / minWidth, 1, MaxScale) : 1;
+            double want = Math.Clamp(viewport / contentH, MinScale, max);
             if (Math.Abs(scale.ScaleX - want) > .004) scale.ScaleX = scale.ScaleY = want;
         }
         scroll.SizeChanged += (_, _) => Fit();
