@@ -17,8 +17,6 @@ public partial class MainWindow
     private readonly DispatcherTimer _dashboardTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private TextBlock _dashboardTitle = null!, _dashboardDescription = null!, _dashboardChecked = null!, _dashboardMessage = null!, _dashboardHeroMode = null!;
     private TextBlock _dashboardSiteYoutube = null!, _dashboardSiteDiscord = null!, _dashboardSiteTelegram = null!;
-    private StackPanel _dashboardEvents = null!;
-    private string? _dashboardEventsSignature;
     private Border _dashboardHero = null!, _dashboardHeroIcon = null!;
     private Button _dashboardProbe = null!, _dashboardSiteProbe = null!;
     private ProgressBar _dashboardProbeProgress = null!, _dashboardSiteProgress = null!;
@@ -45,7 +43,6 @@ public partial class MainWindow
     private StackPanel _dashboardServers = null!;
     private string? _dashboardServersSignature;
     private bool _dashboardSyncing; // обновление переключателей из кода не должно запускать действия
-    private int _dashboardLogLines = 6;
     private Grid _dashboardHeroBadge = null!;
     private Border _dashboardHeroGlow = null!;
     private Ellipse _dashboardSpinner = null!, _dashboardRipple = null!;
@@ -177,6 +174,7 @@ public partial class MainWindow
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
         page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
         page.Children.Add(BuildDashboardSplit()); // «Два DNS» одной карточкой (MainWindow.DashboardSplit.cs)
+        page.Children.Add(BuildDashboardZone()); // часовой пояс (MainWindow.DashboardZone.cs)
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
         var services = new Grid { Margin = new Thickness(0, 8, 0, 0) };
@@ -237,16 +235,7 @@ public partial class MainWindow
         var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 10, 14, 6); serversCard.Margin = new Thickness(0, 8, 0, 0);
         page.Children.Add(serversCard);
 
-        // ----- Журнал: последние строки как в журнале программы -----
-        var logBox = new StackPanel();
-        logBox.Children.Add(DashboardPanelHeader("Журнал", null, DashboardHeaderButton("Открыть журнал", OpenLog)));
-        // При малом числе событий карточка ниже, без пустоты
-        _dashboardEvents = new StackPanel { Margin = new Thickness(2, 2, 2, 2) }; logBox.Children.Add(_dashboardEvents);
-        var logCard = Ui.Card(logBox, bottom: 0); logCard.Padding = new Thickness(14, 10, 14, 10); logCard.Margin = new Thickness(0, 8, 0, 0);
-        page.Children.Add(logCard);
-
-        // Главная должна помещаться без прокрутки. Журнал занимает только оставшееся место: не хватает на три строки, он
-        // скрыт (открывается кнопкой «Журнал» в меню). Если не помещается и без журнала, вся страница слегка уменьшается
+        // Главная должна помещаться без прокрутки: если высоты окна не хватает, вся страница слегка уменьшается
         var scale = new ScaleTransform(1, 1);
         var scaleHost = new Border { Child = page, LayoutTransform = scale };
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = scaleHost };
@@ -267,27 +256,17 @@ public partial class MainWindow
             _dashboardModeGrid.Columns = mode == 0 ? 2 : 4;
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
-        const double LogLine = 22, LogChrome = 70, MinScale = .7;
-        void FitLog()
+        const double MinScale = .7;
+        void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
             if (viewport <= 0 || page.ActualHeight <= 0) return;
-            double logH = logCard.Visibility == Visibility.Visible ? logCard.ActualHeight + logCard.Margin.Top : 0;
-            double fixedH = page.ActualHeight - logH + page.Margin.Top + page.Margin.Bottom; // все, кроме журнала, в обычном масштабе
-            int lines = (int)((viewport - fixedH - logCard.Margin.Top - LogChrome) / LogLine);
-            bool showLog = lines >= 3;
-            double want = showLog ? 1 : Math.Clamp(viewport / fixedH, MinScale, 1);
+            double contentH = page.ActualHeight + page.Margin.Top + page.Margin.Bottom; // в обычном масштабе
+            double want = Math.Clamp(viewport / contentH, MinScale, 1);
             if (Math.Abs(scale.ScaleX - want) > .004) scale.ScaleX = scale.ScaleY = want;
-            var vis = showLog ? Visibility.Visible : Visibility.Collapsed;
-            if (logCard.Visibility != vis) logCard.Visibility = vis;
-            lines = Math.Clamp(lines, 3, 40);
-            if (lines == _dashboardLogLines) return;
-            _dashboardLogLines = lines;
-            _dashboardEventsSignature = null;
-            RefreshDashboardEvents();
         }
-        scroll.SizeChanged += (_, _) => FitLog();
-        page.SizeChanged += (_, _) => FitLog();
+        scroll.SizeChanged += (_, _) => Fit();
+        page.SizeChanged += (_, _) => Fit();
         DashboardHost.Content = layout;
         Loaded += (_, _) => RefreshDashboard();
         _dashboardTimer.Tick += (_, _) => RefreshDashboard(); _dashboardTimer.Start();
@@ -541,8 +520,8 @@ public partial class MainWindow
 
         RefreshDashboardModes();
         RefreshDashboardSplit();
+        RefreshDashboardZone();
         RefreshDashboardServers(active);
-        RefreshDashboardEvents();
     }
 
     /// <summary>
@@ -711,26 +690,6 @@ public partial class MainWindow
         foreach (var w in new[] { 30.0, -1.7, -1.3, -0.7, -0.9, -1 }) // ровно по ширине, без провала между названием и страной
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = w < 0 ? new GridLength(-w, GridUnitType.Star) : new GridLength(w) });
         return g;
-    }
-
-    private void RefreshDashboardEvents()
-    {
-        var recent = _log.TakeLast(_dashboardLogLines).ToArray();
-        var signature = string.Join("|", recent.Select(e => $"{e.Time.Ticks}:{e.Text}"));
-        if (signature == _dashboardEventsSignature) return;
-        _dashboardEventsSignature = signature;
-        _dashboardEvents.Children.Clear();
-        if (recent.Length == 0) { _dashboardEvents.Children.Add(Ui.Hint("Событий пока нет", 0)); return; }
-        var mono = new FontFamily("Cascadia Mono, Consolas");
-        foreach (var entry in recent)
-        {
-            var (tag, color) = entry.Level switch { LogLevel.Ok => ("OK  ", "Ok"), LogLevel.Warn => ("WARN", "Warn"), LogLevel.Error => ("ERR ", "Bad"), _ => ("INFO", "Muted") };
-            var line = new TextBlock { FontFamily = mono, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 2), ToolTip = PrivacyGuard.Mask(entry.Text) };
-            line.Inlines.Add(new System.Windows.Documents.Run(entry.Time.ToString("HH:mm:ss") + "  ").With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Muted")));
-            line.Inlines.Add(new System.Windows.Documents.Run($"[{tag}]  ").With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, color)));
-            line.Inlines.Add(new System.Windows.Documents.Run(PrivacyGuard.Mask(entry.Text).Trim()).With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, entry.Level is LogLevel.Info ? "Text" : color)));
-            _dashboardEvents.Children.Add(line);
-        }
     }
 
     private string DashboardSiteStatus(string host)
