@@ -166,6 +166,7 @@ public partial class MainWindow
         });
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add(TrayItem("Открыть", () => ShowFromTray(), "layout-dashboard"));
+        menu.Items.Add(TrayItem("Поиск и команды", OpenPalette, "search"));
         menu.Items.Add(TrayItem("Переключить на лучший", () => _ = SwitchToBestAsync(), "arrow-left-right"));
         menu.Items.Add(TrayItem("Не открывается…", () => { ShowFromTray(); OpenHelpWizard(); }, "circle-help"));
         menu.Items.Add(TrayItem("Сайты", () => { ShowFromTray(); OpenSites(); }, "globe"));

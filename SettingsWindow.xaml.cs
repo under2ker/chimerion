@@ -229,6 +229,9 @@ public partial class SettingsWindow : Window
         }
     }
 
+    /// <summary>Открыть вкладку снаружи (палитра Ctrl+K): General, Privacy, Check, Watch, Split, Look, Data, About.</summary>
+    public void ShowTab(string name) => ShowPage(name);
+
     /// <summary>Открыть вкладку по имени страницы (General, Check, Watch...).</summary>
     private void ShowPage(string name)
     {

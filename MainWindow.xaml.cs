@@ -286,6 +286,13 @@ public partial class MainWindow : Window
     /// <summary>Ctrl+Z во всем окне. В поле ввода работает его собственная отмена текста.</summary>
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        // Ctrl+K: поиск по действиям и настройкам. Работает и в поле ввода: там Ctrl+K ничего другого не делает
+        if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            OpenPalette();
+            return;
+        }
         if (e.Key == Key.Z && Keyboard.Modifiers == ModifierKeys.Control && _undo != null && Keyboard.FocusedElement is not TextBox)
         {
             e.Handled = true;
