@@ -175,6 +175,7 @@ public partial class MainWindow
         _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(0); page.Children.Add(_dashboardHero);
         _dashboardHero.SetResourceReference(Border.BackgroundProperty, "Surface");
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
+        page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
         var services = new Grid { Margin = new Thickness(0, 12, 0, 0) };
@@ -258,6 +259,7 @@ public partial class MainWindow
             DashboardReflow(heroFacts, mode == 0 ? 1 : 3);
             DashboardReflow(services, mode < 2 ? 1 : 2);
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
+            _dashboardModeGrid.Columns = mode == 0 ? 2 : 4;
         };
         // Журнал занимает оставшуюся высоту окна: строк столько, сколько помещается, а не пустота под ним
         void FitLog()
@@ -522,6 +524,7 @@ public partial class MainWindow
         _dashboardSiteTelegram.Text = DashboardSiteStatus("t.me");
         RefreshToolSwitches();
 
+        RefreshDashboardModes();
         RefreshDashboardServers(active);
         RefreshDashboardEvents();
     }
