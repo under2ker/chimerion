@@ -212,8 +212,8 @@ public partial class MainWindow
         var extraCard = Ui.Card(extra, bottom: 0); extraCard.Padding = new Thickness(14, 10, 14, 4); extraCard.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(extraCard, 1); services.Children.Add(extraCard);
         page.Children.Add(services);
-        page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
-        page.Children.Add(BuildDashboardSettings()); // «Два DNS» и часовой пояс одним спокойным блоком (MainWindow.DashboardSplit.cs)
+        var modesCard = BuildDashboardModes(); page.Children.Add(modesCard); // режим в один щелчок (MainWindow.DashboardModes.cs)
+        var settingsCard = BuildDashboardSettings(); page.Children.Add(settingsCard); // «Два DNS» и часовой пояс одним спокойным блоком (MainWindow.DashboardSplit.cs)
 
         // ----- Лучшие серверы: три самых надежных, щелчок подключает -----
         var serversBox = new StackPanel();
@@ -232,10 +232,12 @@ public partial class MainWindow
         var layout = new Grid();
         layout.Children.Add(scroll);
         int lastLayout = -1;
-        const double TwoColumns = 1100; // ширина (в обычном масштабе), от которой нейросети и дополнительные сервисы стоят рядом
+        var gapped = new FrameworkElement[] { services, modesCard, settingsCard, serversCard };
+        double extraGap = 0;
+        const double TwoColumns = 1040; // ширина окна под страницу, от которой нейросети и дополнительные сервисы стоят рядом
         layout.SizeChanged += (_, e) =>
         {
-            double available = e.NewSize.Width / Math.Min(scale.ScaleX, 1); // увеличение страницы на выбор раскладки не влияет
+            double available = e.NewSize.Width; // только реальная ширина: если учитывать масштаб, раскладка и масштаб раскачивают друг друга
             int mode = available < 640 ? 0 : available < TwoColumns ? 1 : 2; // две колонки сервисов только когда им хватает места без обрезания подписей
             if (mode == lastLayout) { Fit(); return; }
             lastLayout = mode;
@@ -247,18 +249,22 @@ public partial class MainWindow
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             Fit();
         };
-        const double MinScale = .65, MaxScale = 1.2;
+        const double MinScale = .6, Gap = 8, MaxExtraGap = 24;
+        // Свободная высота уходит в промежутки между карточками, а не в увеличение страницы: увеличение меняет ширину,
+        // подписи переносятся иначе, высота снова меняется, и масштаб бесконечно прыгал туда-обратно
         void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
             if (viewport <= 0 || page.ActualHeight <= 0) return;
-            double contentH = page.ActualHeight + page.Margin.Top + page.Margin.Bottom; // в обычном масштабе
-            // Высокое окно: страница слегка увеличивается и занимает его целиком, без пустой полосы внизу.
-            // Но не шире, чем позволяет выбранная раскладка (две колонки от 1100, одна от 640 в обычном масштабе)
-            double minWidth = lastLayout == 2 ? TwoColumns : lastLayout == 1 ? 640 : 0;
-            double max = minWidth > 0 && layout.ActualWidth > 0 ? Math.Clamp(layout.ActualWidth / minWidth, 1, MaxScale) : 1;
-            double want = Math.Clamp(viewport / contentH, MinScale, max);
-            if (Math.Abs(scale.ScaleX - want) > .004) scale.ScaleX = scale.ScaleY = want;
+            // Высота без добавленных промежутков, в обычном масштабе (страница прижата к верху, ActualHeight настоящая)
+            double contentH = page.ActualHeight - extraGap * gapped.Length + page.Margin.Top + page.Margin.Bottom;
+            double want = Math.Clamp(viewport / contentH, MinScale, 1);
+            // Рост масштаба только заметным шагом: мелкие колебания от переноса подписей не раскачивают страницу
+            if (want < scale.ScaleX - .004 || want > scale.ScaleX + .02 || (want == 1 && scale.ScaleX != 1)) scale.ScaleX = scale.ScaleY = want;
+            double extra = scale.ScaleX >= 1 ? Math.Floor(Math.Clamp((viewport - contentH) / gapped.Length, 0, MaxExtraGap)) : 0;
+            if (extra == extraGap) return;
+            extraGap = extra;
+            foreach (var g in gapped) g.Margin = new Thickness(g.Margin.Left, Gap + extra, g.Margin.Right, g.Margin.Bottom);
         }
         scroll.SizeChanged += (_, _) => Fit();
         page.SizeChanged += (_, _) => Fit();
@@ -696,7 +702,7 @@ public partial class MainWindow
         if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Сайт {DashboardSiteVerdict(site.State)} · {ShortTime(time)}";
         return "Сайт не проверялся";
     }
-    private static string ShortTime(DateTime t) => t.Date == DateTime.Today ? $"{t:HH:mm}" : $"{t:dd.MM HH:mm}";
+    private static string ShortTime(DateTime t) => t.Date == DateTime.Today ? $"{t:HH:mm}" : $"{t:dd.MM}"; // точное время в подсказке не нужно: подпись должна влезать
     internal static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
     {
         SiteWatch.Verdict.Ok => "открывается", SiteWatch.Verdict.Unknown => "без результата", _ => "не открывается"
