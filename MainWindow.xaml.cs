@@ -47,6 +47,7 @@ public partial class MainWindow : Window
             Toast.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, Motion(300)));
         };
 
+        _freshInstall = !System.IO.File.Exists(System.IO.Path.Combine(Storage.Dir, SettingsFile)); // до загрузки: LoadOrCreate файл создаст
         _settings = LoadSettings();
         // Хранилище: блокировки файлов в журнал, а настройки, не прочитанные из-за блокировки, перечитываются
         Storage.Trace = msg => Log(msg);
@@ -199,6 +200,7 @@ public partial class MainWindow : Window
             _ = StartToolsAsync();
             _ = RefreshFlowExtensionAsync();
             _ = RefreshTrayServicesAsync(); // первая проверка сервисов для трея сразу после запуска
+            _ = MaybeShowFirstRunAsync(); // только при самом первом запуске; до вопроса об общей карте
             StartCrowd();
             InitSupport();
             StartSiteWatch();

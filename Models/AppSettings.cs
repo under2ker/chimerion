@@ -134,6 +134,8 @@ public class AppSettings
     public bool CloseToTray { get; set; } = true;
     /// <summary>Сочетания клавиш из любой программы: Ctrl+Alt+D защита, Ctrl+Alt+K поиск. Выключены, пока человек не включит сам.</summary>
     public bool GlobalHotkeys { get; set; }
+    /// <summary>Окно первого запуска уже показывали (см. Services/FirstRun.cs). Повторно открывается командой палитры.</summary>
+    public bool FirstRunDone { get; set; }
     public int Parallelism { get; set; } = 24;
 
     /// <summary>Не добавлять эти адреса при парсинге (обычные публичные резолверы).</summary>

@@ -53,7 +53,7 @@ public partial class MainWindow
     /// </summary>
     private void AskCrowdConsent()
     {
-        if (!IsVisible) return;
+        if (!IsVisible || _firstRunOpen) return; // при открытом приветствии не спрашиваем: вопрос зададут сразу после него
         if (_settings.CrowdConsent == null)
         {
             bool yes = DnexDialog.Ask("Помогать общей карте серверов?",

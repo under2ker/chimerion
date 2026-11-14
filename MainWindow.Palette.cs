@@ -83,6 +83,8 @@ public partial class MainWindow
             Add("Настройки: " + title, GroupGo, "settings", words, InWindow(() => OpenSettingsTab(t)));
         }
         Add("CHIMERION DNS", GroupGo, "star", "личный платный smart dns цены купить", InWindow(() => ChimerionDns_Click(this, new RoutedEventArgs())));
+        Add("Показать приветствие: что вам нужно", GroupGo, "circle-help", "первый запуск начало мастер первичная настройка welcome",
+            InWindow(() => _ = MaybeShowFirstRunAsync(forced: true)));
         Add("Помощь", GroupGo, "circle-help", "справка вопрос", InWindow(() => HelpToggle_Click(this, new RoutedEventArgs())));
         Add("Не открывается нейросеть или сайт", GroupGo, "circle-help", "помощь мастер не работает ошибка", InWindow(OpenHelpWizard));
         Add("Сайты под наблюдением", GroupGo, "globe", "watch следить мониторинг", InWindow(OpenSites));
