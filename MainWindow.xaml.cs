@@ -116,6 +116,7 @@ public partial class MainWindow : Window
         _undoTimer.Tick += (_, _) => UndoTick();
         PreviewKeyDown += Window_PreviewKeyDown;
         Closing += OnClosing;
+        MemoryTrimmer.Attach(this); // скрыто в трей или свернуто: возвращаем системе неиспользуемую память
     }
 
     private bool _initStarted;
@@ -124,6 +125,7 @@ public partial class MainWindow : Window
     public Task StartHiddenAsync()
     {
         Log("Запуск вместе с Windows: программа в трее");
+        MemoryTrimmer.Schedule(TimeSpan.FromSeconds(20)); // окна нет: сжимаем после стартовых проверок
         return InitAsync();
     }
 
