@@ -165,6 +165,7 @@ public partial class MainWindow
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
         var services = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        var aiRows = new List<Border>(); var extraRows = new List<Border>(); // строки двух карточек: i-я слева и i-я справа растут вместе
         services.ColumnDefinitions.Add(new ColumnDefinition()); services.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardProbe = DashboardHeaderButton("Проверить все", () => _ = DashboardProbeAsync());
         var ai = new StackPanel();
@@ -181,7 +182,7 @@ public partial class MainWindow
             var open = Ui.Action("Открыть", "Strong", () => { }); open.Padding = new Thickness(12, 5, 12, 6); open.Margin = new Thickness(10, 0, 0, 0); open.MinWidth = 104;
             var target = name;
             open.Click += (_, _) => { if (open.Tag as string == "why") OpenHelp(HelpWindow.Tab.NotOpening); else AutoStart.OpenUrl(_dashboardServiceRows[target].Url); };
-            ai.Children.Add(DashboardRow(DashboardLogo(logo), name, domain, dot, status, note, open));
+            var aiRow = DashboardRow(DashboardLogo(logo), name, domain, dot, status, note, open); ai.Children.Add(aiRow); aiRows.Add(aiRow);
             _dashboardServiceRows[name] = (dot, status, note, open, url);
         }
         var aiCard = Ui.Card(ai, bottom: 0); aiCard.Padding = new Thickness(14, 10, 14, 4); aiCard.Margin = new Thickness(0, 0, 6, 0);
@@ -206,7 +207,7 @@ public partial class MainWindow
             System.Windows.Automation.AutomationProperties.SetName(toggle, name);
             WireToolSwitch(toggle, tool);
             var symbol = DashboardLogo(kind); // фирменный логотип, как у нейросетей
-            extra.Children.Add(DashboardRow(symbol, name, sub, dot, status, site, toggle));
+            var extraRow = DashboardRow(symbol, name, sub, dot, status, site, toggle); extra.Children.Add(extraRow); extraRows.Add(extraRow);
             _dashboardToolRows.Add((toggle, status, dot, tool));
         }
         var extraCard = Ui.Card(extra, bottom: 0); extraCard.Padding = new Thickness(14, 10, 14, 4); extraCard.Margin = new Thickness(6, 0, 0, 0);
@@ -232,11 +233,10 @@ public partial class MainWindow
         var layout = new Grid();
         layout.Children.Add(scroll);
         int lastLayout = -1;
-        // Единый отступ между блоками «Защита», «Сервисы», «Режим», «Два DNS и часовой пояс», «Лучшие серверы».
-        // Не растет с высотой окна: свободное место остается под таблицей серверов
-        const double BlockGap = 12;
-        foreach (var block in new FrameworkElement[] { services, modesCard, settingsCard, serversCard })
-            block.Margin = new Thickness(block.Margin.Left, BlockGap, block.Margin.Right, 0);
+        double pageSide = 20;
+        int applied = 0; // сколько пикселей высоты сейчас добавлено внутрь блоков
+        var blocks = new FrameworkElement[] { services, modesCard, settingsCard, serversCard }; // у «Защиты» отступ сверху задает поле страницы
+        var settingsBox = (Panel)settingsCard.Child;
         const double TwoColumns = 1040; // ширина окна под страницу, от которой нейросети и дополнительные сервисы стоят рядом
         layout.SizeChanged += (_, e) =>
         {
@@ -244,7 +244,7 @@ public partial class MainWindow
             int mode = available < 640 ? 0 : available < TwoColumns ? 1 : 2; // две колонки сервисов только когда им хватает места без обрезания подписей
             if (mode == lastLayout) { Fit(); return; }
             lastLayout = mode;
-            page.Margin = mode == 0 ? new Thickness(12, 10, 12, 10) : new Thickness(20, 12, 20, 12);
+            pageSide = mode == 0 ? 12 : 20; // верх и низ страницы задает Fit: 12 DIP, как между блоками
             DashboardReflow(heroFacts, mode == 0 ? 1 : 3, new[] { 1.5, 1, 1.1 }); // первой ячейке больше места: имя сервера, флаг и плашка в одну строку
             DashboardReflow(services, mode < 2 ? 1 : 2);
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -252,18 +252,67 @@ public partial class MainWindow
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             Fit();
         };
-        const double MinScale = .6;
+        const double MinScale = .6, Gap = 12; // Gap: 12 DIP между пятью блоками, над первым и под таблицей серверов
+        // Высота окна раскладывается так: шесть отступов по 12 DIP постоянны (в пикселях экрана), свободная высота поровну
+        // уходит внутрь пяти блоков (отступы строк, плиток, вокруг статуса), размер текста и кнопок не меняется. Окно ниже
+        // страницы: сначала убирается добавленная высота, потом страница уменьшается целиком, отступы остаются по 12 пикселей.
+        // Ширина при этом не меняется, поэтому раскладка и высота не раскачивают друг друга.
         void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
             if (viewport <= 0 || page.ActualHeight <= 0) return;
-            // Страница прижата к верху, поэтому ActualHeight настоящая, а не растянутая до высоты окна
-            double contentH = page.ActualHeight + page.Margin.Top + page.Margin.Bottom; // в обычном масштабе
-            // Только уменьшение, если окно ниже страницы. Увеличения нет: оно меняет ширину, подписи переносятся иначе,
-            // высота снова меняется, и масштаб бесконечно прыгал туда-обратно
-            double want = Math.Clamp(viewport / contentH, MinScale, 1);
-            // Рост масштаба только заметным шагом: мелкие колебания от переноса подписей не раскачивают страницу
-            if (want < scale.ScaleX - .004 || want > scale.ScaleX + .02 || (want == 1 && scale.ScaleX != 1)) scale.ScaleX = scale.ScaleY = want;
+            double gapNow = page.Margin.Top; // все шесть отступов одинаковые
+            // Высота блоков без добавок и без отступов, в обычном масштабе (страница прижата к верху, ActualHeight настоящая)
+            // В одну колонку между карточками «ИИ-сервисы» и «Дополнительные сервисы» еще один такой же отступ
+            var second = lastLayout < 2 && services.Children.Count > 1 ? services.Children[1] as FrameworkElement : null;
+            double natural = page.ActualHeight - applied - blocks.Length * gapNow - (second?.Margin.Top ?? 0);
+            double fixedGaps = (blocks.Length + 2 + (second != null ? 1 : 0)) * Gap;
+            double want = Math.Clamp((viewport - fixedGaps) / natural, MinScale, 1);
+            // Уменьшение сразу, рост масштаба только заметным шагом: мелкие колебания от переноса подписей не раскачивают страницу
+            if (want < scale.ScaleX || want > scale.ScaleX + .02 || (want == 1 && scale.ScaleX != 1)) scale.ScaleX = scale.ScaleY = want;
+            double s = scale.ScaleX;
+            double gap = Gap / s; // после масштаба на экране ровно 12
+            page.Margin = new Thickness(pageSide, gap, pageSide, gap);
+            foreach (var block in blocks) block.Margin = new Thickness(block.Margin.Left, gap, block.Margin.Right, 0);
+            // Карточки сервисов друг под другом: между ними тоже 12 пикселей на экране
+            if (second != null) second.Margin = new Thickness(0, gap, 0, 0);
+            // Остаток высоты (в том числе пока масштаб не дорос до нужного) уходит внутрь блоков, под таблицей ровно 12
+            int extra = Math.Max(0, (int)Math.Floor((viewport - fixedGaps) / s - natural));
+            GrowBlocks(extra);
+        }
+        // Слоты роста каждого блока: сколько мест, куда можно добавить высоту, и как ее туда положить
+        void GrowBlocks(int extra)
+        {
+            bool pairs = lastLayout == 2 && aiRows.Count == extraRows.Count;
+            int serviceSlots = pairs ? aiRows.Count : aiRows.Count + extraRows.Count;
+            int tileCols = Math.Max(1, _dashboardModeGrid.Columns);
+            int tileRows = (_dashboardModeTiles.Count + tileCols - 1) / tileCols;
+            var serverRows = _dashboardServers.Children.OfType<Border>().ToList();
+            int[] slots = { 3, serviceSlots, tileRows, 2, serverRows.Count }; // защита, сервисы, режим, Два DNS и пояс, серверы
+            int used = slots.Count(x => x > 0);
+            var share = new int[slots.Length];
+            for (int i = 0, k = 0; i < slots.Length; i++)
+                if (slots[i] > 0) { share[i] = extra / used + (k < extra % used ? 1 : 0); k++; }
+            int[] Split(int total, int n) { var r = new int[n]; for (int i = 0; i < n; i++) r[i] = total / n + (i < total % n ? 1 : 0); return r; }
+
+            var hero = Split(share[0], 3); // над статусом, между статусом и полосой DNS, под полосой
+            heroContent.Margin = new Thickness(20, 12 + hero[0], 20, 12 + hero[2]);
+            heroFacts.Margin = new Thickness(0, 10 + hero[1], 0, 0);
+
+            var svc = Split(share[1], Math.Max(1, serviceSlots));
+            for (int i = 0; i < aiRows.Count; i++) aiRows[i].Padding = DashboardGrow(DashboardRowPad, svc[i]);
+            for (int i = 0; i < extraRows.Count; i++) extraRows[i].Padding = DashboardGrow(DashboardRowPad, svc[pairs ? i : aiRows.Count + i]);
+
+            var tiles = Split(share[2], Math.Max(1, tileRows));
+            for (int i = 0; i < _dashboardModeTiles.Count; i++) _dashboardModeTiles[i].Tile.Padding = DashboardGrow(DashboardTilePad, tiles[i / tileCols]);
+
+            var set = Split(share[3], 2);
+            settingsBox.Children[0].SetValue(MarginProperty, DashboardGrow(new Thickness(0), set[0]));
+            settingsBox.Children[2].SetValue(MarginProperty, DashboardGrow(new Thickness(0), set[1]));
+
+            _dashboardServerRowExtra = Split(share[4], Math.Max(1, serverRows.Count));
+            for (int i = 0; i < serverRows.Count; i++) serverRows[i].Padding = DashboardGrow(DashboardServerPad, _dashboardServerRowExtra[i]);
+            applied = share.Sum();
         }
         scroll.SizeChanged += (_, _) => Fit();
         page.SizeChanged += (_, _) => Fit();
@@ -325,7 +374,7 @@ public partial class MainWindow
         state.Children.Add(line); state.Children.Add(note);
         Grid.SetColumn(state, 2); g.Children.Add(state);
         action.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(action, 3); g.Children.Add(action);
-        return new Border { Child = g, Padding = new Thickness(4, 2, 4, 2), BorderThickness = new Thickness(0, 1, 0, 0) }.Ref(Border.BorderBrushProperty, "Border");
+        return new Border { Child = g, Padding = DashboardRowPad, BorderThickness = new Thickness(0, 1, 0, 0) }.Ref(Border.BorderBrushProperty, "Border");
     }
 
     /// <summary>Фирменный узор сайта: мягкое свечение и тонкие диагональные полосы, без влияния на ввод.</summary>
@@ -643,6 +692,7 @@ public partial class MainWindow
         }
         head.Margin = new Thickness(6, 0, 6, 4);
         _dashboardServers.Children.Add(head);
+        int rowIndex = 0;
         foreach (var s in top)
         {
             bool used = s.Id == active?.ServerId, picked = s.Id == _dashboardPickId;
@@ -673,7 +723,8 @@ public partial class MainWindow
                 Grid.SetColumn(connect, 5); g.Children.Add(connect);
             }
             else { Grid.SetColumn(chip, 5); g.Children.Add(chip); }
-            var row = new Border { Child = g, Padding = new Thickness(6, 4, 6, 4), CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
+            int grow = rowIndex < _dashboardServerRowExtra.Length ? _dashboardServerRowExtra[rowIndex] : 0; rowIndex++;
+            var row = new Border { Child = g, Padding = DashboardGrow(DashboardServerPad, grow), CornerRadius = new CornerRadius(8), Background = Brushes.Transparent,
                                    Cursor = used ? null : System.Windows.Input.Cursors.Hand, ToolTip = used ? "Сейчас подключено" : picked ? null : "Выбрать этот сервер" };
             if (used || picked) row.SetResourceReference(Border.BackgroundProperty, picked ? "AccentSoft" : "Surface2");
             else
@@ -685,6 +736,12 @@ public partial class MainWindow
             _dashboardServers.Children.Add(row);
         }
     }
+
+    private int[] _dashboardServerRowExtra = Array.Empty<int>(); // прибавка высоты строк «Лучших серверов» (Fit на Главной)
+    private static readonly Thickness DashboardRowPad = new(4, 2, 4, 2), DashboardTilePad = new(10, 7, 10, 7), DashboardServerPad = new(6, 4, 6, 4);
+
+    /// <summary>Отступ с прибавкой высоты: половина сверху, половина снизу, содержимое остается по центру.</summary>
+    private static Thickness DashboardGrow(Thickness b, int extra) => new(b.Left, b.Top + extra / 2, b.Right, b.Bottom + extra - extra / 2);
 
     private static Grid DashboardServerGrid()
     {

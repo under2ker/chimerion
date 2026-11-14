@@ -47,7 +47,7 @@ public partial class MainWindow
             DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon); row.Children.Add(texts);
             var tile = new Controls.ClickTile
             {
-                Child = row, Padding = new Thickness(10, 7, 10, 7), CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
+                Child = row, Padding = DashboardTilePad, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
                 Margin = new Thickness(0, 0, 8, 0), ToolTip = m.Hint,
             };
             AutomationProperties.SetName(tile, "Режим: " + m.Title);
