@@ -1,6 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
+using Dnex.Services;
 
 namespace Dnex;
 
@@ -11,6 +15,47 @@ namespace Dnex;
 /// </summary>
 internal static class Ui
 {
+    /// <summary>
+    /// Маленький знак вопроса рядом с непонятным названием. Облачко с объяснением появляется при наведении почти сразу,
+    /// по щелчку (повторный щелчок прячет) и при переходе клавишей Tab. Для экранного диктора: имя «Пояснение: …» и сам текст.
+    /// </summary>
+    public static FrameworkElement HelpMark(string title, string text)
+    {
+        var icon = new Controls.Icon { Kind = "circle-help", Size = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "Muted");
+        var body = new StackPanel { MaxWidth = 320 };
+        body.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
+        body.Children.Add(new TextBlock { Text = text, FontSize = 12, LineHeight = 17, TextWrapping = TextWrapping.Wrap });
+        var tip = new ToolTip { Content = body, Placement = PlacementMode.Bottom };
+        // Настоящая кнопка (видна диктору и автоматизации), но без своего фона и рамки: только значок
+        var face = new FrameworkElementFactory(typeof(Border));
+        face.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        face.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        face.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
+        var mark = new Button
+        {
+            Style = null, Template = new ControlTemplate(typeof(Button)) { VisualTree = face }, Content = icon, Width = 20, Height = 20,
+            Cursor = Cursors.Help, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), ToolTip = tip,
+        };
+        ToolTipService.SetInitialShowDelay(mark, 150);
+        ToolTipService.SetShowDuration(mark, 60000);
+        void Lit(bool on) => icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "Accent" : "Muted");
+        mark.MouseEnter += (_, _) => Lit(true);
+        mark.MouseLeave += (_, _) => Lit(mark.IsKeyboardFocused);
+        mark.Click += (_, _) => { tip.PlacementTarget = mark; tip.IsOpen = !tip.IsOpen; };
+        // По Tab облачко открывается само; после щелчка мышью фокус тоже приходит, но тогда открывает и закрывает только щелчок
+        mark.GotKeyboardFocus += (_, _) =>
+        {
+            Lit(true);
+            if (InputManager.Current.MostRecentInputDevice is KeyboardDevice) { tip.PlacementTarget = mark; tip.IsOpen = true; }
+        };
+        mark.LostKeyboardFocus += (_, _) => { Lit(false); tip.IsOpen = false; };
+        mark.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && tip.IsOpen) { tip.IsOpen = false; e.Handled = true; } };
+        AutomationProperties.SetName(mark, "Пояснение: " + title); // русский: переводит общий обработчик Loc вместе с видимым текстом
+        AutomationProperties.SetHelpText(mark, Loc.T(text));
+        return mark;
+    }
+
     /// <summary>Ширина окон с настройками и списками и ширина коротких диалогов.</summary>
     public const double Wide = 600, Narrow = 480;
 

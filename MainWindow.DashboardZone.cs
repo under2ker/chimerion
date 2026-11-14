@@ -20,7 +20,9 @@ public partial class MainWindow
         var title = new TextBlock { Text = "Часовой пояс", FontSize = 15, FontWeight = FontWeights.SemiBold };
         _dashboardZoneHint = Ui.Hint("", 1).With(t => { t.FontSize = 12; t.TextTrimming = TextTrimming.CharacterEllipsis; t.TextWrapping = TextWrapping.NoWrap; });
         var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-        texts.Children.Add(title); texts.Children.Add(_dashboardZoneHint);
+        var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
+        titleLine.Children.Add(title); titleLine.Children.Add(Ui.HelpMark("Часовой пояс", "Какое время видят Claude, ChatGPT и сайты в браузере. Пояс можно сменить для вкладки браузера, для приложений или для всей Windows, например под страну, из которой нейросети вас видят."));
+        texts.Children.Add(titleLine); texts.Children.Add(_dashboardZoneHint);
         var choose = DashboardHeaderButton("Выбрать пояс", () => TimeZoneWindow.Show(Log));
         choose.ToolTip = "Какое время показывать Claude Code, Claude в браузере и всей Windows";
         AutomationProperties.SetName(choose, "Выбрать часовой пояс");

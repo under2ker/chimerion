@@ -133,10 +133,10 @@ public partial class MainWindow
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 2, 0, 2), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
         _dashboardSmartHint = Ui.Hint("", 2); // в карточку не вставляется: страна выхода показана под заголовком защиты
-        DashboardFact(heroFacts, 0, "globe", "Smart DNS", smartValue, null); // страна выхода стоит в первой строке карточки, под заголовком
+        DashboardFact(heroFacts, 0, "globe", "Smart DNS", smartValue, null, ("Smart DNS", "DNS-сервер, который направляет ChatGPT, Claude и Gemini через сервер в другой стране, поэтому нейросети открываются. Это не VPN: остальные сайты идут напрямую, как обычно.")); // страна выхода стоит в первой строке карточки, под заголовком
         _dashboardPlainDns = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         _dashboardPlainHint = Ui.Hint("", 2);
-        DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, null); // пояснение в подсказке
+        DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, null, ("Обычный DNS", "Адрес DNS, через который сейчас открываются все остальные сайты. Если включены «Два DNS», это выбранный общий DNS, например Cloudflare.")); // пояснение в подсказке
         _dashboardUptime = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold };
         _dashboardUptimeHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
@@ -190,7 +190,7 @@ public partial class MainWindow
 
         _dashboardSiteProbe = DashboardHeaderButton("Проверить сайты", () => _ = DashboardSitesAsync());
         var extra = new StackPanel();
-        extra.Children.Add(DashboardPanelHeader("Дополнительные сервисы", null, _dashboardSiteProbe));
+        extra.Children.Add(DashboardHelp(DashboardPanelHeader("Дополнительные сервисы", null, _dashboardSiteProbe), "Дополнительные сервисы", "YouTube и Discord: обход замедления через zapret. Это не VPN: он меняет первые пакеты соединения так, чтобы провайдер не замедлял трафик.\nTelegram: TG WS Proxy, прокси на этом компьютере для Telegram Desktop.\n«Запущен отдельно»: программа запущена не из CHIMERION, управляйте ею там."));
         _dashboardSiteProgress = DashboardCheckProgress();
         extra.Children.Add(_dashboardSiteProgress);
         _dashboardSiteYoutube = Ui.Hint("", 1); _dashboardSiteDiscord = Ui.Hint("", 1); _dashboardSiteTelegram = Ui.Hint("", 1);
@@ -221,6 +221,7 @@ public partial class MainWindow
         serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Нажмите на сервер, и в его строке появится «Подключить»", 0).With(h => h.ToolTip = "Смену страны выхода программа подтвердит отдельно"),
             DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); }),
             DashboardHeaderButton("Подобрать автоматически", () => _ = AutoPickAsync()).With(b => b.ToolTip = "Программа сама пробует лучшие серверы по очереди и остается на том, через который открываются нейросети. Страну выхода не меняет")));
+        DashboardHelp((DockPanel)serversBox.Children[0], "Лучшие серверы", "Три самых надежных рабочих сервера Smart DNS.\nПинг: за сколько миллисекунд приходит ответ, меньше лучше.\nСтабильность: доля удачных проверок, в скобках сколько раз проверяли.\n«Подобрать автоматически»: программа сама пробует лучшие серверы и остается на том, через который открываются нейросети.");
         _dashboardServers = new StackPanel(); serversBox.Children.Add(_dashboardServers);
         var serversCard = Ui.Card(serversBox, bottom: 0); serversCard.Padding = new Thickness(14, 10, 14, 6); serversCard.Margin = new Thickness(0, 8, 0, 0);
         page.Children.Add(serversCard);
@@ -346,6 +347,18 @@ public partial class MainWindow
         return d;
     }
 
+    /// <summary>Знак вопроса с пояснением сразу за названием карточки.</summary>
+    private static DockPanel DashboardHelp(DockPanel header, string title, string text)
+    {
+        var texts = header.Children.OfType<StackPanel>().Last();
+        var name = (UIElement)texts.Children[0];
+        texts.Children.RemoveAt(0);
+        var line = new StackPanel { Orientation = Orientation.Horizontal };
+        line.Children.Add(name); line.Children.Add(Ui.HelpMark(title, text));
+        texts.Children.Insert(0, line);
+        return header;
+    }
+
     private static Border DashboardLogo(string resource)
     {
         var image = new Image { Width = 20, Height = 20, Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -446,7 +459,7 @@ public partial class MainWindow
     }
 
     /// <summary>Факт одной строкой: значок, подпись, значение и при желании короткое пояснение (в узком окне переносится).</summary>
-    private static void DashboardFact(Grid grid, int index, string kind, string label, FrameworkElement value, TextBlock? hint)
+    private static void DashboardFact(Grid grid, int index, string kind, string label, FrameworkElement value, TextBlock? hint, (string Title, string Text)? help = null)
     {
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -455,7 +468,8 @@ public partial class MainWindow
         icon.SetResourceReference(Controls.Icon.ForegroundProperty, "Accent");
         row.Children.Add(icon);
         var line = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        line.Children.Add(Ui.Hint(label, 0).With(t => { t.FontSize = 13; t.Margin = new Thickness(0, 0, 8, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
+        line.Children.Add(Ui.Hint(label, 0).With(t => { t.FontSize = 13; t.Margin = new Thickness(0, 0, help == null ? 8 : 0, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
+        if (help is { } h) line.Children.Add(Ui.HelpMark(h.Title, h.Text).With(m => m.Margin = new Thickness(3, 0, 6, 0)));
         value.Margin = new Thickness(0, 0, 8, 0); value.VerticalAlignment = VerticalAlignment.Center;
         line.Children.Add(value);
         if (hint != null) { hint.FontSize = 12.5; hint.Margin = new Thickness(0); hint.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(hint); }

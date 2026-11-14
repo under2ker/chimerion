@@ -33,6 +33,7 @@ public partial class MainWindow
         _dashboardModeState = Ui.Hint("", 0);
         box.Children.Add(DashboardPanelHeader("Режим", _dashboardModeState,
             DashboardHeaderButton("Что меняет каждый режим", OpenModeWindow)));
+        DashboardHelp((DockPanel)box.Children[0], "Режим", "Включает нужный набор одним щелчком.\n«Только ИИ»: нейросети через Smart DNS, остальное как было.\n«Все сразу»: еще быстрый Telegram и обход замедления YouTube и Discord.\n«Игры»: обход и для игр, DNS и Telegram не меняются.\n«Все выключить»: DNS вашей сети, ускорение Telegram и обход выключены. Верхний переключатель выключает только Smart DNS.");
         _dashboardModeGrid = new UniformGrid { Columns = 4, Margin = new Thickness(0, 0, -8, 0) }; // край плиток вровень с краем карточки
         for (int i = 0; i < Modes.Length; i++)
         {
