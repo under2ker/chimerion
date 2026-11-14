@@ -130,24 +130,29 @@ public partial class MainWindow
         return await Task.Run(() => ReportLines(all));
     }
 
-    private static IEnumerable<string> ReportLines(List<LogEntry> all)
+    internal static IEnumerable<string> ReportLines(List<LogEntry> all)
     {
+        // Сначала сводка: сеансы, сбои с причиной, смена доступа к сервисам. По ней проблема видна без чтения всего журнала
+        var result = LogDigest.Build(all.Select(l => (l.Time, l.Text)).ToList());
         var lines = all.Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}").ToList();
         // Действия пользователя и состояние окон выносятся отдельно: иначе их вытесняют тысячи строк проверок серверов
         var actions = lines.Where(IsUserAction).ToList();
-        var result = new List<string>();
         if (actions.Count > 0)
         {
+            result.Add("");
             result.Add($"=== Действия пользователя (клики, окна, выбор; последние {Math.Min(actions.Count, ReportActionLines)} из {actions.Count}) ===");
             result.AddRange(actions.Skip(Math.Max(0, actions.Count - ReportActionLines)));
-            result.Add("=== Весь журнал ===");
         }
-        if (lines.Count > ReportLogLines)
+        // Подробности проверки списка серверов (чужие серверы) уже сведены в сводке: без них в отчет помещаются дни, а не часы
+        var main = all.Where(l => !LogDigest.IsServerListNoise(l.Text)).Select(l => $"{l.Time:dd.MM HH:mm:ss} {l.Text}").ToList();
+        result.Add("");
+        result.Add($"=== Журнал без подробностей проверки списка серверов (строк {main.Count} из {lines.Count}) ===");
+        if (main.Count > ReportLogLines)
         {
-            result.Add($"(показаны последние {ReportLogLines} строк из {lines.Count}; весь журнал: окно «Журнал», «Скопировать журнал за 3 дня»)");
-            result.AddRange(lines.Skip(lines.Count - ReportLogLines));
+            result.Add($"(показаны последние {ReportLogLines} строк; весь журнал: окно «Журнал», «Скопировать журнал за 3 дня»)");
+            result.AddRange(main.Skip(main.Count - ReportLogLines));
         }
-        else result.AddRange(lines);
+        else result.AddRange(main);
         return result;
     }
 }

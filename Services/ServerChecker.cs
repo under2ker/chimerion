@@ -451,13 +451,21 @@ public class ServerChecker
                 while (len < buf.Length && (n = await st.ReadAsync(buf.AsMemory(len), ct).ConfigureAwait(false)) > 0) len += n;
             var body = System.Text.Encoding.UTF8.GetString(buf, 0, len);
             int code = (int)resp.StatusCode;
-            var verdict = isWeb ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())
+            var location = resp.Headers.Location?.ToString();
+            var verdict = isWeb ? ServiceAccess.ClassifyWeb(t, code, body, location)
                                 : ServiceAccess.Classify(t, code, body);
+            // Google ведет на «sorry», но сам пропускает без капчи (тем же адресом прокси): в браузере сайт открывается
+            bool sorry = isWeb && verdict == ServiceAccess.Result.Closed && ServiceAccess.IsGoogleSorry(location);
+            if (sorry && await ServiceAccess.GoogleSorryPassesAsync(http, location!, ct).ConfigureAwait(false))
+            {
+                operation.Detail($"HTTP {code}; прочитано={len} байт; Google «sorry» пропускает без капчи");
+                return (Probe.Ok, $"HTTP {code}, Google пропускает без капчи");
+            }
             operation.Detail($"HTTP {code}; прочитано={len} байт; результат={verdict}");
             return verdict switch
             {
                 ServiceAccess.Result.Open => (Probe.Ok, $"HTTP {code}"),
-                ServiceAccess.Result.Closed when isWeb && (resp.Headers.Location?.ToString().Contains("google.com/sorry") ?? false)
+                ServiceAccess.Result.Closed when sorry
                     => (Probe.Blocked, "Google показывает капчу на адресе прокси (в браузере ее иногда можно пройти)"),
                 ServiceAccess.Result.Closed => (Probe.Blocked, $"HTTP {code}, доступ закрыт"),
                 _ => (Probe.Error, $"HTTP {code}, сервис не отвечает нормально"),

@@ -202,7 +202,13 @@ public static class Diagnostics
         {
             if (!t.IsInstalled) { items.Add(new DiagItem(DiagLevel.Info, $"{t.Title}: не установлено")); continue; }
             string upd;
-            try { await t.CheckAsync(ct); upd = t.UpdateAvailable ? $", доступна {t.Latest!.Version}" : ", последняя версия"; }
+            // Версия могла не записаться (инструмент поставлен до учета версий): тогда «последняя» не утверждаем
+            try
+            {
+                await t.CheckAsync(ct);
+                upd = t.UpdateAvailable ? $", доступна {t.Latest!.Version}"
+                    : t.InstalledVersion == null ? $", последняя на GitHub {t.Latest!.Version}" : ", последняя версия";
+            }
             catch (ToolException e) { upd = ", обновления не проверены: " + e.Message; }
             var running = t.IsRunning();
             var strategy = t is ZapretTool ? $", стратегия {ZapretTool.StrategyTitle(t.State.Strategy ?? ZapretTool.DefaultStrategy)}{(t.State.Games ? ", с играми" : "")}" : "";
@@ -210,7 +216,7 @@ public static class Diagnostics
             var (act, actText) = t.State.Enabled && !running ? ($"tool:{t.Id}", "Запустить")
                                : t.UpdateAvailable ? ("tools", "Обновить") : ((string?)null, (string?)null);
             items.Add(new DiagItem(level, $"{t.Title}: {(running ? "работает" : t.State.Enabled ? "включено, но не работает" : "выключено")}",
-                $"версия {t.InstalledVersion}{upd}{strategy}", act, actText));
+                $"версия {t.InstalledVersion?.ToString() ?? "не записана"}{upd}{strategy}", act, actText));
         }
 
         Mark("Обновления");
@@ -310,7 +316,7 @@ public static class Diagnostics
     private static readonly Regex Location = new(@"(?im)(?:город|city|region|регион|область|провайдер|provider)\s*[:=]\s*[^,;\r\n]+", RegexOptions.Compiled);
 
     /// <summary>Убирает адреса, учетные данные и известные личные данные из журнала и отчета.</summary>
-    public static string Sanitize(string text, string? publicIp, string? userName = null)
+    public static string Sanitize(string text, string? publicIp, string? userName = null, string? machineName = null)
     {
         if (!string.IsNullOrEmpty(publicIp))
         {
@@ -334,8 +340,43 @@ public static class Diagnostics
         text = Regex.Replace(text, @"(?:\[IP\]|\[локальный IP\]) \([^()\n]*\)", "[IP] ([место скрыто])");
         var user = userName ?? Environment.UserName;
         if (user.Length >= 1) text = Regex.Replace(text, $@"(?<=\\Users\\){Regex.Escape(user)}(?=\\|$)", "[пользователь]", RegexOptions.IgnoreCase);
+        // Имя пользователя и компьютера встречаются не только в путях: в названии своего сервера из панели
+        // («DNS CHIMERION — Ivanov PC»), в сообщениях Windows. Заменяется целое слово, общие имена вроде Admin не трогаем
+        text = ReplaceName(text, user, "[пользователь]");
+        text = ReplaceName(text, machineName ?? Environment.MachineName, "[компьютер]");
+        text = UrlSecrets(text);
         return Email.Replace(text, "[почта]");
     }
+
+    private static readonly HashSet<string> GenericNames = new(StringComparer.OrdinalIgnoreCase)
+        { "user", "users", "admin", "administrator", "owner", "guest", "home", "default", "public", "system", "пользователь", "администратор" };
+
+    private static string ReplaceName(string text, string? name, string mark)
+    {
+        name = name?.Trim();
+        if (string.IsNullOrEmpty(name) || name.Length < 3 || GenericNames.Contains(name)) return text;
+        return Regex.Replace(text, $@"(?<![\p{{L}}\p{{N}}_]){Regex.Escape(name)}(?![\p{{L}}\p{{N}}_])", mark, RegexOptions.IgnoreCase);
+    }
+
+    // Знак препинания в конце (точка, запятая, скобка) к адресу не относится
+    private static readonly Regex Url = new(@"\b[a-z][a-z0-9+.-]{1,15}://[^\s""'<>«»]*[^\s""'<>«».,;:!?)\]]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex TokenSegment = new(@"(?<=/)(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{16,}(?=/|$)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Секреты в адресах: параметры после «?» (сеансы, ключи) и части пути, похожие на ключ доступа (личный адрес DoH
+    /// вида https://dns.example/dns-query/ab12cd34…). Домен и обычный путь остаются: по ним видно, о каком сервисе речь.
+    /// </summary>
+    private static string UrlSecrets(string text) => Url.Replace(text, m =>
+    {
+        var u = m.Value;
+        int q = u.IndexOfAny(new[] { '?', '#' });
+        var tail = q >= 0 ? "?[скрыто]" : "";
+        if (q >= 0) u = u[..q];
+        int start = u.IndexOf("://", StringComparison.Ordinal) + 3;
+        int slash = u.IndexOf('/', start);
+        if (slash > 0) u = u[..slash] + TokenSegment.Replace(u[slash..], "[ключ]");
+        return u + tail;
+    });
 
     /// <summary>
     /// Ссылка на новый issue с заполненным текстом. Длина ссылки ограничена (браузеры и GitHub режут длинные),

@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Dnex.Models;
 
 namespace Dnex.Services;
@@ -66,6 +67,35 @@ public static class ServiceAccess
         if (code == 403)
             return ChallengeMarkers.Any(m => body.Contains(m, StringComparison.OrdinalIgnoreCase)) ? Result.Open : Result.Closed;
         return code >= 200 && code < 500 ? Result.Open : Result.Error;
+    }
+
+    /// <summary>Редирект на проверку Google «sorry» (капча или проверка «вы не робот»).</summary>
+    public static bool IsGoogleSorry(string? location) =>
+        location != null && location.Contains("google.com/sorry", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Ответ страницы «sorry»: Google пропускает дальше без капчи. Так бывает, когда адрес выхода помечен мягко:
+    /// страница сразу уводит обратно на сайт с отметкой GOOGLE_ABUSE_EXEMPTION, браузер проходит этот шаг незаметно
+    /// и сайт открывается. С настоящей капчей ответ другой: 429 или страница с капчей.
+    /// </summary>
+    public static bool PassesWithoutCaptcha(int code, string? location) =>
+        code is >= 300 and < 400 && location != null && location.Contains("GOOGLE_ABUSE_EXEMPTION", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Открыть страницу «sorry» тем же клиентом (тот же маршрут, что у браузера) и узнать, пропускает ли Google без капчи.
+    /// Только https и только google.com: на чужой адрес из ответа запрос не уходит.
+    /// </summary>
+    public static async Task<bool> GoogleSorryPassesAsync(HttpClient http, string location, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(location, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps
+            || !(u.Host.Equals("google.com", StringComparison.OrdinalIgnoreCase) || u.Host.EndsWith(".google.com", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        try
+        {
+            using var resp = await SupportTrace.GetAsync(http, location, HttpCompletionOption.ResponseHeadersRead, ct, "Проверка Google «sorry»").ConfigureAwait(false);
+            return PassesWithoutCaptcha((int)resp.StatusCode, resp.Headers.Location?.ToString());
+        }
+        catch (Exception) when (!ct.IsCancellationRequested) { return false; }
     }
 
     /// <summary>Один и тот же сайт: совпадают два последних уровня домена (accounts.google.com и www.google.com).</summary>

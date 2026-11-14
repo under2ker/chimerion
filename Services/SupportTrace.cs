@@ -114,7 +114,11 @@ internal static class SupportTrace
         return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>Сообщение исключения может содержать ответ сервера или секрет. Сохраняем тип, коды и стек методов.</summary>
+    /// <summary>
+    /// Сообщение исключения может содержать ответ сервера или секрет. Сохраняем тип, коды и стек методов.
+    /// Служебные кадры ожидания задач (TaskAwaiter, ExceptionDispatchInfo) в стек не идут: они одинаковы у всех сбоев
+    /// и вытесняли место, где сбой случился. Методы async пишутся своими именами, без «&lt;Имя&gt;d__12.MoveNext».
+    /// </summary>
     public static string Error(Exception exception)
     {
         var parts = new List<string>();
@@ -122,12 +126,37 @@ internal static class SupportTrace
         {
             var codes = e is SocketException socket ? $"; socket={socket.SocketErrorCode}" :
                 e is HttpRequestException http ? $"; HTTP={(int?)http.StatusCode}; сеть={http.HttpRequestError}" : "";
-            var frames = new StackTrace(e, false).GetFrames()?.Take(8)
-                .Select(f => f.GetMethod()).Where(m => m != null)
-                .Select(m => $"{m!.DeclaringType?.Name}.{m.Name}");
+            if (e is TaskCanceledException { InnerException: TimeoutException }) codes += "; тайм-аут";
+            var frames = new StackTrace(e, false).GetFrames()?
+                .Select(f => f.GetMethod()).Where(m => m != null && !IsPlumbing(m))
+                .Select(m => FrameName(m!)).Distinct().Take(6);
             parts.Add($"{e.GetType().Name}; HResult=0x{e.HResult:X8}{codes}; стек={string.Join(" > ", frames ?? [])}");
         }
         return string.Join("; причина: ", parts);
+    }
+
+    private static bool IsPlumbing(System.Reflection.MethodBase m)
+    {
+        var type = m.DeclaringType;
+        var ns = type?.Namespace ?? "";
+        var name = type?.Name ?? "";
+        return ns.StartsWith("System.Runtime.CompilerServices", StringComparison.Ordinal)
+               || ns.StartsWith("System.Runtime.ExceptionServices", StringComparison.Ordinal)
+               || name.StartsWith("TaskAwaiter", StringComparison.Ordinal)
+               || name.StartsWith("ValueTaskAwaiter", StringComparison.Ordinal)
+               || name.StartsWith("ConfiguredTaskAwaitable", StringComparison.Ordinal)
+               || name.StartsWith("ConfiguredValueTaskAwaitable", StringComparison.Ordinal)
+               || name.StartsWith("AsyncTaskMethodBuilder", StringComparison.Ordinal)
+               || name == "ExecutionContext";
+    }
+
+    /// <summary>«&lt;ResolveUdpAsync&gt;d__5.MoveNext» → «DnsWire.ResolveUdpAsync»: имя метода, а не машины состояний.</summary>
+    internal static string FrameName(System.Reflection.MethodBase m)
+    {
+        var type = m.DeclaringType;
+        if (type != null && type.Name.StartsWith('<') && type.Name.IndexOf('>') is > 1 and var end)
+            return $"{type.DeclaringType?.Name ?? "?"}.{type.Name[1..end]}";
+        return $"{type?.Name}.{m.Name}";
     }
 
     internal sealed class Operation : IDisposable
@@ -162,7 +191,9 @@ internal static class SupportTrace
 
         public void Fail(Exception exception)
         {
-            _outcome = exception is OperationCanceledException ? "отменено или истекло время ожидания" : "ошибка";
+            // Тайм-аут HttpClient приходит как TaskCanceledException с TimeoutException внутри: это не отмена
+            _outcome = exception is TaskCanceledException { InnerException: TimeoutException } || exception is TimeoutException ? "истекло время ожидания"
+                     : exception is OperationCanceledException ? "отменено или истекло время ожидания" : "ошибка";
             Detail(Error(exception));
         }
 

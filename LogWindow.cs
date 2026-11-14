@@ -85,6 +85,15 @@ internal sealed class LogWindow
         PrivacyGuard.ForExport(string.Join(Environment.NewLine,
             items.Select(x => $"[{(withDate ? x.Time.ToString("dd.MM HH:mm:ss") : x.TimeText)}] {x.Text}")));
 
+    /// <summary>Журнал за 3 дня целиком, а перед ним сводка (сеансы, сбои, смена доступа): так его читают при разборе.</summary>
+    internal static string FormatWithDigest(IReadOnlyList<LogEntry> items)
+    {
+        var body = Format(items, true);
+        if (body.Length == 0) return "";
+        var digest = PrivacyGuard.ForExport(string.Join(Environment.NewLine, LogDigest.Build(items.Select(x => (x.Time, x.Text)).ToList())));
+        return digest + Environment.NewLine + Environment.NewLine + "=== Журнал ===" + Environment.NewLine + body;
+    }
+
     private LogWindow(Window? owner, ObservableCollection<LogEntry> log, Func<Task<List<LogEntry>>> stored, Action clear)
     {
         _log = log; _stored = stored; _clear = clear;
@@ -384,7 +393,7 @@ internal sealed class LogWindow
         {
             Done("Собираю журнал…");
             var all = await AllForExportAsync();
-            var text = await Task.Run(() => Format(all, true));
+            var text = await Task.Run(() => FormatWithDigest(all));
             if (text.Length == 0) Done("Копировать нечего", warn: true);
             else if (Ui.CopyText(text)) Done($"Журнал за 3 дня скопирован: {all.Count} строк");
             else Done("Буфер обмена занят другой программой: сохраните журнал в файл", warn: true);
@@ -421,7 +430,7 @@ internal sealed class LogWindow
         try
         {
             var all = await AllForExportAsync();
-            await Task.Run(() => File.WriteAllText(dlg.FileName, Format(all, true)));
+            await Task.Run(() => File.WriteAllText(dlg.FileName, FormatWithDigest(all)));
             Done($"Сохранено строк: {all.Count}");
         }
         catch (Exception ex) { Done("Не удалось сохранить: " + ex.Message, warn: true); }

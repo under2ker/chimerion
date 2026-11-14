@@ -149,7 +149,10 @@ public static class ConnectionProbe
 
     private static async Task<ServiceState> ProbeServiceAsync(AppSettings st, CheckTarget t, HttpClient http, CancellationToken ct, bool web = false, bool light = false)
     {
-        using var operation = SupportTrace.Begin($"Сервис {SupportTrace.Service(t.Name)}; сайт={web}; облегченная={light}", ct);
+        // Дополнительный адрес сервиса (auth.openai.com) пишется с именем: иначе его итог в журнале не отличить от основного сайта
+        // Только у известных сервисов: адрес своего сервиса человека в журнал не пишем
+        var extra = t.Name.Contains(':') && SupportTrace.Service(t.Name) != "свой сервис" ? $" ({t.Host})" : "";
+        using var operation = SupportTrace.Begin($"Сервис {SupportTrace.Service(t.Name)}{extra}; сайт={web}; облегченная={light}", ct);
         string resolved = "—";
         bool proxied = false, compared = false;
         try
@@ -238,7 +241,13 @@ public static class ConnectionProbe
             web ? "Проверка сайта сервиса" : "Проверка API сервиса");
         var body = await ReadLimitedAsync(resp, ct);
         int code = (int)resp.StatusCode;
-        return web ? ServiceAccess.ClassifyWeb(t, code, body, resp.Headers.Location?.ToString())
-                   : ServiceAccess.Classify(t, code, body);
+        var location = resp.Headers.Location?.ToString();
+        if (!web) return ServiceAccess.Classify(t, code, body);
+        var verdict = ServiceAccess.ClassifyWeb(t, code, body, location);
+        // Google ведет на «sorry», но сам пропускает без капчи: в браузере сайт открывается, это не закрытый доступ
+        if (verdict == ServiceAccess.Result.Closed && ServiceAccess.IsGoogleSorry(location)
+            && await ServiceAccess.GoogleSorryPassesAsync(http, location!, ct))
+            return ServiceAccess.Result.Open;
+        return verdict;
     }
 }

@@ -149,11 +149,31 @@ public static class AutoStart
         // запущена вторая копия из другой папки (например, свежая сборка): автозапуск остается за прежней
         if (File.Exists(old))
         {
-            log($"Автозапуск запускает другую копию программы: {old}. Чтобы запускалась эта, включите автозапуск заново в настройках");
+            // Версия той копии в сообщении: по нему сразу видно, что при включении компьютера стартует старая программа
+            log(OtherCopyVersion(old) is { } v
+                ? $"Автозапуск запускает другую копию программы ({OtherCopyNote(v, UpdateChecker.CurrentVersion)}): {old}. Чтобы запускалась эта, включите автозапуск заново в настройках"
+                : $"Автозапуск запускает другую копию программы: {old}. Чтобы запускалась эта, включите автозапуск заново в настройках");
             return Task.CompletedTask;
         }
         if (WriteRunKey(CommandFor(exe))) log("Автозапуск: путь к программе обновлен");
         return Task.CompletedTask;
+    }
+
+    /// <summary>Версия файла другой копии программы (три числа) или null, если ее не прочитать.</summary>
+    private static Version? OtherCopyVersion(string exe)
+    {
+        try
+        {
+            return Version.TryParse(FileVersionInfo.GetVersionInfo(exe).FileVersion, out var v) ? new Version(v.Major, v.Minor, Math.Max(v.Build, 0)) : null;
+        }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>«версия 0.1.167, старее этой» — пояснение к копии, которую запускает автозапуск.</summary>
+    internal static string OtherCopyNote(Version other, Version current)
+    {
+        var cur = new Version(current.Major, current.Minor, Math.Max(current.Build, 0));
+        return other < cur ? $"версия {other}, старее этой" : other > cur ? $"версия {other}, новее этой" : $"версия {other}, та же";
     }
 
     /// <summary>Запущена из автозагрузки: окно не показываем, только трей.</summary>

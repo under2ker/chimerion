@@ -112,16 +112,30 @@ internal static class SupportTraceUi
         return string.Join("; ", parts);
     }
 
+    /// <summary>
+    /// Короткий путь к элементу: окно, части с именем или меткой из исходника и сам элемент. Безымянные рамки и панели
+    /// между ними сводятся к «…»: полный путь занимал по 300 знаков в каждой строке и ничего не добавлял.
+    /// </summary>
     internal static string Describe(DependencyObject? element)
     {
         var parts = new List<string>();
+        bool skipped = false;
+        int i = 0;
         foreach (var node in Ancestors(element).Take(16))
         {
             var id = (string)node.GetValue(IdentityProperty);
             var name = node is FrameworkElement fe ? fe.Name : "";
-            parts.Add(node.GetType().Name + (id.Length > 0 ? $"({id})" : name.Length > 0 ? $"#{name}" : $"[{Index(node)}]"));
+            bool keep = i++ == 0 || node is Window || id.Length > 0 || name.Length > 0;
+            if (keep)
+            {
+                if (skipped) parts.Add("…");
+                skipped = false;
+                parts.Add(node.GetType().Name + (id.Length > 0 ? $"({id})" : name.Length > 0 ? $"#{name}" : $"[{Index(node)}]"));
+            }
+            else skipped = true;
             if (node is Window) break;
         }
+        if (skipped) parts.Add("…");
         parts.Reverse();
         return string.Join("/", parts);
     }
