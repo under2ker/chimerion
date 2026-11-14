@@ -21,25 +21,30 @@ internal static class Ui
     /// </summary>
     public static FrameworkElement HelpMark(string title, string text)
     {
-        var icon = new Controls.Icon { Kind = "circle-help", Size = 14, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            .Ref(Controls.Icon.ForegroundProperty, "Muted");
+        // Заполненный кружок с рамкой и толстым знаком вопроса цветом текста: читается и на темной, и на светлой теме
+        var icon = new Controls.Icon { Kind = "question", Size = 16, StrokeWidth = 2.6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "Text");
+        var badge = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Child = icon }
+            .Ref(Border.BackgroundProperty, "Surface2").Ref(Border.BorderBrushProperty, "ControlBorder");
         var body = new StackPanel { MaxWidth = 320 };
         body.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 3) });
         body.Children.Add(new TextBlock { Text = text, FontSize = 12, LineHeight = 17, TextWrapping = TextWrapping.Wrap });
         var tip = new ToolTip { Content = body, Placement = PlacementMode.Bottom };
-        // Настоящая кнопка (видна диктору и автоматизации), но без своего фона и рамки: только значок
-        var face = new FrameworkElementFactory(typeof(Border));
-        face.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-        face.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
-        face.AppendChild(new FrameworkElementFactory(typeof(ContentPresenter)));
+        // Настоящая кнопка (видна диктору и автоматизации), но без своего оформления: только кружок
+        var face = new FrameworkElementFactory(typeof(ContentPresenter));
         var mark = new Button
         {
-            Style = null, Template = new ControlTemplate(typeof(Button)) { VisualTree = face }, Content = icon, Width = 20, Height = 20,
+            Style = null, Template = new ControlTemplate(typeof(Button)) { VisualTree = face }, Content = badge, Width = 22, Height = 22,
             Cursor = Cursors.Help, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), ToolTip = tip,
         };
         ToolTipService.SetInitialShowDelay(mark, 150);
         ToolTipService.SetShowDuration(mark, 60000);
-        void Lit(bool on) => icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "Accent" : "Muted");
+        void Lit(bool on)
+        {
+            icon.SetResourceReference(Controls.Icon.ForegroundProperty, on ? "Accent" : "Text");
+            badge.SetResourceReference(Border.BackgroundProperty, on ? "AccentSoft" : "Surface2");
+            badge.SetResourceReference(Border.BorderBrushProperty, on ? "Accent" : "ControlBorder");
+        }
         mark.MouseEnter += (_, _) => Lit(true);
         mark.MouseLeave += (_, _) => Lit(mark.IsKeyboardFocused);
         mark.Click += (_, _) => { tip.PlacementTarget = mark; tip.IsOpen = !tip.IsOpen; };
