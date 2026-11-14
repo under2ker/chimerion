@@ -2863,5 +2863,16 @@
  "Какое время видят Claude, ChatGPT и сайты в браузере. Пояс можно сменить для вкладки браузера, для приложений или для всей Windows, например под страну, из которой нейросети вас видят.": "What time Claude, ChatGPT and sites in the browser see. You can change the zone for a browser tab, for apps or for all of Windows, for example to match the country AI services see you from.",
  "Пояснение: Часовой пояс": "Explanation: Time zone",
  "Три самых надежных рабочих сервера Smart DNS.\nПинг: за сколько миллисекунд приходит ответ, меньше лучше.\nСтабильность: доля удачных проверок, в скобках сколько раз проверяли.\n«Подобрать автоматически»: программа сама пробует лучшие серверы и остается на том, через который открываются нейросети.": "The three most reliable working Smart DNS servers.\nPing: how many milliseconds a reply takes, lower is better.\nStability: share of successful checks, in brackets how many checks were made.\n“Pick automatically”: the app tries the best servers itself and stays on the one AI services open through.",
- "Пояснение: Лучшие серверы": "Explanation: Best servers"
+ "Пояснение: Лучшие серверы": "Explanation: Best servers",
+ "Нужен IP вида 203.0.113.10, без порта": "Use an IP like 203.0.113.10, without a port",
+ "Укажите основной IP или адрес DoH": "Enter the primary IP or a DoH address",
+ "Нужен IP, адрес DoH или оба": "An IP, a DoH address, or both",
+ "Например, 203.0.113.10": "For example, 203.0.113.10",
+ "Например, https://dns.example.com/dns-query": "For example, https://dns.example.com/dns-query",
+ "Пояснение: Адрес DoH": "Explanation: DoH address",
+ "DNS через HTTPS: адрес из описания сервера, начинается с https://. Можно указать вместо IP или вместе с ним.": "DNS over HTTPS: the address from the server description, it starts with https://. It can be used instead of an IP or together with it.",
+ "Готовые наборы: DNS для нейросетей, ускорение Telegram и обход": "Presets: DNS for AI services, Telegram acceleration and bypass",
+ "Ctrl+1…4 включает режим по порядку": "Ctrl+1…4 turns on a mode by order",
+ "Пояснение: Как выбрать режим": "Explanation: How to choose a mode",
+ "Нужны только нейросети → «Только ИИ».\nТормозят YouTube, Discord или Telegram → «Все сразу».\nПровайдер мешает онлайн-играм → «Игры».\nНужен обычный интернет → «Все выключить».\nРежим можно включить и из трея: правая кнопка по значку → «Режим».": "Only AI services needed → «AI only».\nYouTube, Discord or Telegram are slow → «Everything».\nThe provider gets in the way of online games → «Games».\nPlain internet needed → «Turn everything off».\nYou can also switch modes from the tray: right-click the icon → «Mode»."
 }

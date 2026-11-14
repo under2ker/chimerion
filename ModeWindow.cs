@@ -28,10 +28,11 @@ internal sealed class ModeWindow
     private readonly Func<State> _state;
     private readonly Func<int, Action<string>, Task<List<string>>> _apply;
     private readonly StackPanel _now = new();
-    private readonly UniformGrid _tiles = new() { Columns = 2, Margin = new Thickness(0, 0, -10, 0) }; // отступ справа у плиток: край сетки вровень с карточкой выше
-    private readonly StackPanel _progress = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 12, 0, 0) };
+    private readonly UniformGrid _tiles = new() { Columns = 2, Margin = new Thickness(0, 0, -Gap, -Gap) }; // плитки с отступом 16 справа и снизу: край сетки вровень с карточкой выше
+    private readonly StackPanel _progress = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, Gap, 0, 0) };
     private readonly TextBlock _stage = Ui.Hint("", 6);
     private readonly TextBlock _result = Ui.Hint("", 0);
+    private const double Gap = 16;
     private bool _busy;
     private int? _running;
 
@@ -73,29 +74,26 @@ internal sealed class ModeWindow
         };
 
         var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Режим", "Включите нужное одним щелчком: DNS для нейросетей, ускорение Telegram и обход для YouTube и Discord", glyph: "sliders-horizontal"));
+        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Режим", "Готовые наборы: DNS для нейросетей, ускорение Telegram и обход", glyph: "sliders-horizontal"));
 
         var nowCard = Ui.Card(_now, bottom: 0);
-        nowCard.Padding = new Thickness(18, 14, 18, 14);
+        nowCard.Padding = new Thickness(Gap);
         root.Children.Add(nowCard);
 
-        root.Children.Add(Ui.Section("Готовые режимы"));
+        var section = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 24, 0, 8) };
+        section.Children.Add(Ui.Section("Готовые режимы").With(t => { t.Margin = new Thickness(2, 0, 0, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
+        section.Children.Add(Ui.HelpMark("Как выбрать режим", "Нужны только нейросети → «Только ИИ».\nТормозят YouTube, Discord или Telegram → «Все сразу».\nПровайдер мешает онлайн-играм → «Игры».\nНужен обычный интернет → «Все выключить».\nРежим можно включить и из трея: правая кнопка по значку → «Режим»."));
+        root.Children.Add(section);
         root.Children.Add(_tiles);
         _progress.Children.Add(new ProgressBar { IsIndeterminate = true });
         _progress.Children.Add(_stage);
         root.Children.Add(_progress);
-        _result.Margin = new Thickness(2, 10, 0, 0);
+        _result.Margin = new Thickness(2, Gap, 0, 0);
         _result.Visibility = Visibility.Collapsed;
         root.Children.Add(_result);
-        var choose = _modes.Where(m => Situations.ContainsKey(m.Title)).Select(m => Situations[m.Title]).ToList();
-        if (choose.Count > 0)
-        {
-            root.Children.Add(Ui.Section("Как выбрать режим"));
-            root.Children.Add(Ui.InfoTiles(choose, 4, 200));
-        }
 
         var close = Ui.Action("Закрыть", "Ghost", () => { if (!_busy) _w.Close(); }).With(b => b.IsCancel = true);
-        root.Children.Add(Ui.Footer(Ui.Hint("Режим можно включить и из трея: правая кнопка по значку → «Режим». Ctrl+1…4 включает режим по порядку", 0)
+        root.Children.Add(Ui.Footer(Ui.Hint("Ctrl+1…4 включает режим по порядку", 0)
             .With(t => { t.FontSize = 12; t.VerticalAlignment = VerticalAlignment.Center; }), close));
         _w.Content = Ui.WindowContent(root);
         Render();
@@ -108,7 +106,7 @@ internal sealed class ModeWindow
 
         // Сейчас: три части с понятным состоянием
         _now.Children.Clear();
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
         var modeName = current is { } c ? _modes.First(m => m.Id == c).Title : "свой набор";
         var badge = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(10, 3, 10, 4), VerticalAlignment = VerticalAlignment.Center,
                                  Child = new TextBlock { Text = current != null ? $"Сейчас: {modeName}" : "Сейчас: свой набор", FontSize = 12.5, FontWeight = FontWeights.SemiBold }
@@ -147,26 +145,17 @@ internal sealed class ModeWindow
         var state = new DockPanel { Margin = new Thickness(0, 3, 0, 0), LastChildFill = true };
         state.Children.Add(new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(System.Windows.Shapes.Shape.FillProperty, on ? "Ok" : "Muted").With(e => DockPanel.SetDock(e, Dock.Left)));
-        state.Children.Add(new TextBlock { Text = value, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis }
+        state.Children.Add(new TextBlock { Text = value, FontSize = 14, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = value }
             .Ref(TextBlock.ForegroundProperty, on ? "Ok" : "Text"));
         text.Children.Add(state);
         row.Children.Add(text);
         return row;
     }
 
-    /// <summary>Как выбрать: по одной жизненной ситуации на режим, с названием режима в ответе.</summary>
-    private static readonly Dictionary<string, (string, string)> Situations = new()
-    {
-        ["Только ИИ"] = ("Нужны только нейросети", "«Только ИИ»: ChatGPT, Claude и Gemini через Smart DNS, ускорение Telegram и обход выключатся"),
-        ["Все сразу"] = ("Тормозят YouTube, Discord или Telegram", "«Все сразу»: нейросети, ускорение Telegram и обход включатся вместе"),
-        ["Игры"] = ("Провайдер мешает онлайн-играм", "«Игры»: обход zapret заработает и для игр, DNS и Telegram не меняются"),
-        ["Все выключить"] = ("Нужен обычный интернет", "«Все выключить»: DNS вашей сети, без ускорения Telegram и обхода"),
-    };
-
     /// <summary>Плитка режима: значок, название, метки, пояснение, что изменится по частям и кнопка.</summary>
     private FrameworkElement Tile(ModeInfo m, State s, bool current)
     {
-        var body = new StackPanel();
+        var body = new DockPanel { LastChildFill = false };
         var head = new DockPanel();
         var icon = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(11), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top,
                                 Child = new Controls.Icon { Kind = m.Icon, Size = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
@@ -181,25 +170,27 @@ internal sealed class ModeWindow
         titles.Children.Add(line);
         titles.Children.Add(Ui.Hint(m.Hint, 3));
         head.Children.Add(titles);
-        body.Children.Add(head);
+        DockPanel.SetDock(head, Dock.Top); body.Children.Add(head);
 
         // Что изменится: по каждой части отдельной строкой, без догадок
-        var changes = new StackPanel { Margin = new Thickness(52, 12, 0, 0) };
+        var changes = new StackPanel { Margin = new Thickness(52, Gap, 0, 0) };
         changes.Children.Add(new TextBlock { Text = "Что изменится", FontSize = 12, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) }
             .Ref(TextBlock.ForegroundProperty, "Muted"));
+        DockPanel.SetDock(changes, Dock.Top);
         changes.Children.Add(Change("Smart DNS", m.Dns, s.Dns, false, s.Dns ? null : s.HasWorkingServers ? null : "нет рабочих серверов: сначала найдите их"));
         changes.Children.Add(Change("Telegram", m.Telegram, s.Telegram || s.TelegramForeign, false, s.TelegramForeign && m.Telegram == Target.Off ? "ваша копия не выключается" : null));
         changes.Children.Add(Change("Обход zapret", m.Zapret, s.Zapret, s.ZapretGames, null));
-        body.Children.Add(changes);
 
         bool runningThis = _running == m.Id;
         var go = Ui.Action(current ? "Уже включен" : runningThis ? "Включаю…" : $"Включить «{m.Title}»", m.Recommended && !current ? "Primary" : "Strong", () => _ = ApplyAsync(m))
-            .With(b => { b.Margin = new Thickness(52, 12, 0, 0); b.HorizontalAlignment = HorizontalAlignment.Left; b.IsEnabled = !current && !_busy; });
+            .With(b => { b.Margin = new Thickness(52, Gap, 0, 0); b.HorizontalAlignment = HorizontalAlignment.Left; b.IsEnabled = !current && !_busy; });
+        DockPanel.SetDock(go, Dock.Bottom);
         body.Children.Add(go);
+        body.Children.Add(changes);
 
         var card = Ui.Card(body, selected: current, bottom: 0);
-        card.Padding = new Thickness(16, 14, 16, 14);
-        card.Margin = new Thickness(0, 0, 10, 10);
+        card.Padding = new Thickness(Gap);
+        card.Margin = new Thickness(0, 0, Gap, Gap);
         return card;
     }
 
