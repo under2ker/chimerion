@@ -232,8 +232,11 @@ public partial class MainWindow
         var layout = new Grid();
         layout.Children.Add(scroll);
         int lastLayout = -1;
-        var gapped = new FrameworkElement[] { services, modesCard, settingsCard, serversCard };
-        double extraGap = 0;
+        // Единый отступ между блоками «Защита», «Сервисы», «Режим», «Два DNS и часовой пояс», «Лучшие серверы».
+        // Не растет с высотой окна: свободное место остается под таблицей серверов
+        const double BlockGap = 12;
+        foreach (var block in new FrameworkElement[] { services, modesCard, settingsCard, serversCard })
+            block.Margin = new Thickness(block.Margin.Left, BlockGap, block.Margin.Right, 0);
         const double TwoColumns = 1040; // ширина окна под страницу, от которой нейросети и дополнительные сервисы стоят рядом
         layout.SizeChanged += (_, e) =>
         {
@@ -249,22 +252,18 @@ public partial class MainWindow
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             Fit();
         };
-        const double MinScale = .6, Gap = 8, MaxExtraGap = 24;
-        // Свободная высота уходит в промежутки между карточками, а не в увеличение страницы: увеличение меняет ширину,
-        // подписи переносятся иначе, высота снова меняется, и масштаб бесконечно прыгал туда-обратно
+        const double MinScale = .6;
         void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
             if (viewport <= 0 || page.ActualHeight <= 0) return;
-            // Высота без добавленных промежутков, в обычном масштабе (страница прижата к верху, ActualHeight настоящая)
-            double contentH = page.ActualHeight - extraGap * gapped.Length + page.Margin.Top + page.Margin.Bottom;
+            // Страница прижата к верху, поэтому ActualHeight настоящая, а не растянутая до высоты окна
+            double contentH = page.ActualHeight + page.Margin.Top + page.Margin.Bottom; // в обычном масштабе
+            // Только уменьшение, если окно ниже страницы. Увеличения нет: оно меняет ширину, подписи переносятся иначе,
+            // высота снова меняется, и масштаб бесконечно прыгал туда-обратно
             double want = Math.Clamp(viewport / contentH, MinScale, 1);
             // Рост масштаба только заметным шагом: мелкие колебания от переноса подписей не раскачивают страницу
             if (want < scale.ScaleX - .004 || want > scale.ScaleX + .02 || (want == 1 && scale.ScaleX != 1)) scale.ScaleX = scale.ScaleY = want;
-            double extra = scale.ScaleX >= 1 ? Math.Floor(Math.Clamp((viewport - contentH) / gapped.Length, 0, MaxExtraGap)) : 0;
-            if (extra == extraGap) return;
-            extraGap = extra;
-            foreach (var g in gapped) g.Margin = new Thickness(g.Margin.Left, Gap + extra, g.Margin.Right, g.Margin.Bottom);
         }
         scroll.SizeChanged += (_, _) => Fit();
         page.SizeChanged += (_, _) => Fit();
@@ -393,7 +392,7 @@ public partial class MainWindow
             Grid.SetRow(child, i / columns); Grid.SetColumn(child, i % columns);
             int span = i == grid.Children.Count - 1 ? columns - i % columns : 1;
             Grid.SetColumnSpan(child, span);
-            child.Margin = new Thickness(i % columns == 0 ? 0 : 5, i < columns ? 0 : 10, i % columns + span == columns ? 0 : 5, 0);
+            child.Margin = new Thickness(i % columns == 0 ? 0 : 5, i < columns ? 0 : 12, i % columns + span == columns ? 0 : 5, 0); // 12, как между блоками
         }
     }
 
