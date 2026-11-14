@@ -198,6 +198,8 @@
                                 <TextBlock Text="Стартует в трее без прав администратора. Права спросит, только чтобы вернуть DNS" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="CloseToTrayBox" Content="Крестик прячет программу в трей (рекомендуем)" Margin="0,14,0,0"/>
                                 <TextBlock Text="Подключение продолжает работать, программа открывается из трея" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
+                                <CheckBox x:Name="HotkeysBox" Content="Сочетания клавиш из любой программы" Margin="0,14,0,0"/>
+                                <TextBlock Text="Ctrl+Alt+D включает и выключает защиту, Ctrl+Alt+K открывает поиск по действиям. Работают, даже когда программа в трее. Если сочетание занято другой программой, CHIMERION об этом скажет" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                                 <CheckBox x:Name="StartCompactBox" Content="Открывать программу в компактном виде" Margin="0,14,0,0"/>
                                 <TextBlock Text="Узкое окно с кнопкой подключения и рабочими серверами. Если выключено, открывается в том виде, в каком закрыли" Style="{StaticResource FieldHint}" Margin="26,4,0,0"/>
                             </StackPanel>

@@ -70,6 +70,7 @@ public partial class SettingsWindow : Window
         TimeoutBox.Text = settings.TimeoutSeconds.ToString();
         ParallelBox.Text = settings.Parallelism.ToString();
         CloseToTrayBox.IsChecked = settings.CloseToTray;
+        HotkeysBox.IsChecked = settings.GlobalHotkeys;
         CheckUpdatesBox.IsChecked = settings.CheckUpdates;
         AutoStartBox.IsChecked = AutoStart.IsEnabled(); // источник правды — автозагрузка Windows, а не файл настроек
         TrayMinutesBox.Text = settings.TrayCheckMinutes.ToString();
@@ -354,7 +355,7 @@ public partial class SettingsWindow : Window
         PingBox.Text = d.PingRefreshMinutes.ToString();
         CloseToTrayBox.IsChecked = CheckUpdatesBox.IsChecked = AutoStartBox.IsChecked = BackupBox.IsChecked = SafetyBox.IsChecked = SiteWatchBox.IsChecked = AllowSwitchBox.IsChecked = true;
         _country = null; BuildCountryPicker();
-        StartCompactBox.IsChecked = AutoSwitchBox.IsChecked = false;
+        StartCompactBox.IsChecked = AutoSwitchBox.IsChecked = HotkeysBox.IsChecked = false;
         // Скрытие данных и общая карта — личный выбор: не сбрасываем (выключить стример мод посреди трансляции опасно)
         ErrorText.Foreground = (System.Windows.Media.Brush)FindResource("Muted");
         ErrorText.Text = "Рекомендуемые значения расставлены. Нажмите «Сохранить»";
@@ -375,6 +376,7 @@ public partial class SettingsWindow : Window
         _settings.TimeoutSeconds = timeout;
         _settings.Parallelism = parallel;
         _settings.CloseToTray = CloseToTrayBox.IsChecked == true;
+        _settings.GlobalHotkeys = HotkeysBox.IsChecked == true;
         _settings.CheckUpdates = CheckUpdatesBox.IsChecked == true;
         if (AutoStartBox.IsChecked != AutoStart.IsEnabled())
         {

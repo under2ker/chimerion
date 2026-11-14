@@ -132,6 +132,8 @@ public class AppSettings
 
     /// <summary>Крестик окна прячет программу в трей (подключение продолжает работать). Выход — из меню трея.</summary>
     public bool CloseToTray { get; set; } = true;
+    /// <summary>Сочетания клавиш из любой программы: Ctrl+Alt+D защита, Ctrl+Alt+K поиск. Выключены, пока человек не включит сам.</summary>
+    public bool GlobalHotkeys { get; set; }
     public int Parallelism { get; set; } = 24;
 
     /// <summary>Не добавлять эти адреса при парсинге (обычные публичные резолверы).</summary>

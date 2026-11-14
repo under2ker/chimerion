@@ -107,6 +107,8 @@ public partial class MainWindow
         AddFlag("сворачивание в трей при закрытии", "log-out", "закрыть крестик трей значок", () => _settings.CloseToTray, v => _settings.CloseToTray = v);
         AddFlag("запуск в компактном виде", "shrink", "маленькое окно старт", () => _settings.StartCompact, v => _settings.StartCompact = v);
         AddFlag("проверка обновлений программы", "circle-arrow-up", "обновления версия update", () => _settings.CheckUpdates, v => _settings.CheckUpdates = v);
+        AddFlag("сочетания клавиш из любой программы (Ctrl+Alt+D защита, Ctrl+Alt+K поиск)", "settings", "горячие клавиши хоткей hotkey быстро",
+            () => _settings.GlobalHotkeys, v => _settings.GlobalHotkeys = v);
         AddFlag("режим скрытия данных", "eye-off", "приватность запись экрана стрим скрыть", () => _settings.PrivacyMode, v => _settings.PrivacyMode = v);
         AddFlag("автосмена сервера, если сервис перестал открываться", "arrow-left-right", "сторож авто переключение сбой",
             () => _settings.AutoSwitchOnServiceDown, v => _settings.AutoSwitchOnServiceDown = v);
@@ -151,6 +153,7 @@ public partial class MainWindow
     private void ApplySettingsEffects()
     {
         ApplyTimerSettings();
+        ApplyGlobalHotkeys();
         ThemeColors.Apply(_settings.Colors, _settings.Theme);
         PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
         Loc.SetLanguage(_settings.Language);

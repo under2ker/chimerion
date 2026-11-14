@@ -68,6 +68,7 @@ public partial class MainWindow : Window
         PrivacyGuard.Changed += OnPrivacyChanged;
         SetupTray(); // после настроек: пункты сервисов берутся из списка проверок
         ApplyTimerSettings();
+        ApplyGlobalHotkeys();
         ApplyCountryPin();
         _pingTimer.Tick += async (_, _) => await RefreshPingsAsync();
         _pingTimer.Start();
@@ -400,6 +401,7 @@ public partial class MainWindow : Window
         {
             _settings = LoadSettings();
             ApplyTimerSettings();
+            ApplyGlobalHotkeys();
             ApplyCountryPin();
             _view?.Refresh();
             UpdateTopList();
@@ -411,6 +413,7 @@ public partial class MainWindow : Window
                     Log("Автозапуск вернуть не удалось");
                 _settings = LoadSettings();
                 ApplyTimerSettings();
+                ApplyGlobalHotkeys();
                 ThemeColors.Apply(_settings.Colors, _settings.Theme); // отмена возвращает и прежние цвета
                 // и режим скрытия данных с языком: раньше файл возвращался, а окна оставались скрытыми от записи
                 PrivacyGuard.Set(_settings.PrivacyMode, _settings.PrivacyHideWindows);
@@ -434,6 +437,8 @@ public partial class MainWindow : Window
         if (_initStarted && !_restarting) Updater.ConfirmStarted(); // дошли до штатного выхода: новая версия рабочая
         // Сначала убираем значок: пользователь видит, что программа закрылась, пока выключаются инструменты
         _updateResultTimer.Stop();
+        _hotkeys?.Dispose(); // сочетания возвращаются системе
+        _hotkeys = null;
         _dashboardTimer.Stop();
         _trayTimer.Stop();
         if (_tray != null)
