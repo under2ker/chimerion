@@ -28,6 +28,7 @@ internal sealed class ToolsWindow
     private bool _busy;
     private Tool? _busyTool;
     private string _verb = "Загрузка";
+    private const double Gap = 16, Near = 8;
     private bool _syncing; // переключатели ставятся из кода: действия не запускать
 
     private readonly List<ToolCard> _cards = new();
@@ -90,12 +91,12 @@ internal sealed class ToolsWindow
         _w.Closed += (_, _) => { _pickCts?.Cancel(); _open = null; ThemeColors.Changed -= repaint; };
         var root = Ui.Root();
         root.Children.Add(DnexDialog.Header(DialogKind.Info, "Telegram и YouTube",
-            "Ускорение Telegram и обход замедления YouTube и Discord одним переключателем", glyph: "zap"));
+            "Ускорение Telegram и обход для YouTube и Discord", glyph: "zap"));
 
         // Две карточки рядом: у каждой свой переключатель, состояние и следующий шаг
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         int col = 0;
         foreach (var t in tools.OrderBy(t => t is TgProxyTool ? 0 : 1))
@@ -108,9 +109,7 @@ internal sealed class ToolsWindow
         root.Children.Add(grid);
         root.Children.Add(_settingsHost);
         root.Children.Add(_pickHost);
-        root.Children.Add(Ui.Section("Как это работает"));
-        root.Children.Add(Ui.InfoTiles(HowItWorks, 2));
-        root.Children.Add(Ui.Section("Если не работает"));
+        root.Children.Add(Ui.Section("Если не работает").With(t => t.Margin = new Thickness(2, 24, 0, Near)));
         root.Children.Add(Ui.InfoTiles(Troubles, 2));
 
         var credits = Ui.Hint("Открытый код: TG WS Proxy (Flowseal), zapret (bol-van, Flowseal), лицензия MIT", 0)
@@ -228,26 +227,30 @@ internal sealed class ToolsWindow
         DockPanel.SetDock(c.Badge, Dock.Left); head.Children.Add(c.Badge);
         DockPanel.SetDock(c.Toggle, Dock.Right); head.Children.Add(c.Toggle);
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        titles.Children.Add(new TextBlock { Text = tg ? "Telegram" : "YouTube и Discord", FontSize = 17, FontWeight = FontWeights.SemiBold });
-        titles.Children.Add(Ui.Hint(tg ? "TG WS Proxy: ускорение Telegram Desktop" : "zapret: обход замедления", 2).With(h => h.FontSize = 12));
+        var titleLine = new StackPanel { Orientation = Orientation.Horizontal };
+        titleLine.Children.Add(new TextBlock { Text = tg ? "Telegram" : "YouTube и Discord", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var how = HowItWorks[tg ? 0 : 1];
+        titleLine.Children.Add(Ui.HelpMark(how.Item1, how.Item2));
+        titles.Children.Add(titleLine);
+        titles.Children.Add(Ui.Hint(tg ? "TG WS Proxy" : "zapret", 2).With(h => h.FontSize = 12));
         head.Children.Add(titles);
 
         c.Dot = new Ellipse { Width = 8, Height = 8, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
         c.State = new TextBlock { FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var state = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 16, 0, 0) };
+        var state = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, Gap, 0, 0) };
         state.Children.Add(c.Dot); state.Children.Add(c.State);
 
         var about = Ui.Hint(tg ? "Telegram грузится быстрее и не обрывается. У прокси свой значок в трее"
-                               : "Ускоряет YouTube, Discord и сайты из вашего списка. Нужны права администратора", 6);
-        c.Next = Ui.Steps("", 10);
-        c.Actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
-        c.Bar = new ProgressBar { Minimum = 0, Maximum = 100, Margin = new Thickness(0, 12, 0, 0) };
-        c.Stage = Ui.Hint("", 6);
+                               : "Ускоряет YouTube, Discord и сайты из вашего списка. Нужны права администратора", Near);
+        c.Next = Ui.Steps("", Near);
+        c.Actions = new WrapPanel { Margin = new Thickness(0, Gap, 0, 0) };
+        c.Bar = new ProgressBar { Minimum = 0, Maximum = 100, Margin = new Thickness(0, Gap, 0, 0) };
+        c.Stage = Ui.Hint("", Near);
         c.Progress = new StackPanel { Visibility = Visibility.Collapsed };
         c.Progress.Children.Add(c.Bar); c.Progress.Children.Add(c.Stage);
-        c.Message = Ui.Hint("", 10);
+        c.Message = Ui.Hint("", Near);
         c.Version = Ui.Hint("", 0).With(h => h.FontSize = 11);
-        var footer = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 10, 0, 0), Margin = new Thickness(0, 14, 0, 0), Child = c.Version }
+        var footer = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 12, 0, 0), Margin = new Thickness(0, Gap, 0, 0), Child = c.Version }
             .Ref(Border.BorderBrushProperty, "Border");
         if (!tg) footer.ToolTip = "Антивирус может ругаться на драйвер WinDivert из сборки zapret: так бывает со всеми программами обхода";
 
@@ -257,7 +260,7 @@ internal sealed class ToolsWindow
         foreach (var e in new UIElement[] { head, state, about, c.Next, c.Actions, c.Progress, c.Message }) top.Children.Add(e);
         body.Children.Add(top);
         var card = Ui.Card(body, bottom: 0);
-        card.Padding = new Thickness(18, 16, 18, 14);
+        card.Padding = new Thickness(Gap, Gap, Gap, 12);
         c.Badge.Tag = card;
         _cards.Add(c);
         return c;
@@ -409,7 +412,7 @@ internal sealed class ToolsWindow
     {
         var s = new ZapretSettings();
         var body = new StackPanel();
-        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, Near) };
         head.Children.Add(new Controls.Icon { Kind = "sliders-horizontal", Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(Controls.Icon.ForegroundProperty, "Accent"));
         head.Children.Add(new TextBlock { Text = "Настройки обхода", FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
@@ -443,8 +446,8 @@ internal sealed class ToolsWindow
         body.Children.Add(SettingRow("activity", "Обход и для игр", Ui.Hint("Только если тормозят игры (порты выше 1023)", 2).With(h => h.FontSize = 11), s.Games));
 
         s.Card = Ui.Card(body, bottom: 0);
-        s.Card.Padding = new Thickness(18, 16, 18, 8);
-        s.Card.Margin = new Thickness(0, 12, 0, 0);
+        s.Card.Padding = new Thickness(Gap, Gap, Gap, Near);
+        s.Card.Margin = new Thickness(0, Gap, 0, 0);
         return s;
     }
 
@@ -570,7 +573,7 @@ internal sealed class ToolsWindow
         if (sig == null) return;
 
         var body = new StackPanel();
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
         var top = _pick!.FirstOrDefault(r => r.File != null && r.Score > 0);
         if (top != null && top.File != current)
         {
@@ -638,8 +641,8 @@ internal sealed class ToolsWindow
             body.Children.Add(row);
         }
         var card = Ui.Card(body, bottom: 0);
-        card.Padding = new Thickness(18, 16, 18, 12);
-        card.Margin = new Thickness(0, 12, 0, 0);
+        card.Padding = new Thickness(Gap, Gap, Gap, 12);
+        card.Margin = new Thickness(0, Gap, 0, 0);
         _pickHost.Children.Add(card);
     }
 

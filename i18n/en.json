@@ -2874,5 +2874,8 @@
  "Готовые наборы: DNS для нейросетей, ускорение Telegram и обход": "Presets: DNS for AI services, Telegram acceleration and bypass",
  "Ctrl+1…4 включает режим по порядку": "Ctrl+1…4 turns on a mode by order",
  "Пояснение: Как выбрать режим": "Explanation: How to choose a mode",
- "Нужны только нейросети → «Только ИИ».\nТормозят YouTube, Discord или Telegram → «Все сразу».\nПровайдер мешает онлайн-играм → «Игры».\nНужен обычный интернет → «Все выключить».\nРежим можно включить и из трея: правая кнопка по значку → «Режим».": "Only AI services needed → «AI only».\nYouTube, Discord or Telegram are slow → «Everything».\nThe provider gets in the way of online games → «Games».\nPlain internet needed → «Turn everything off».\nYou can also switch modes from the tray: right-click the icon → «Mode»."
+ "Нужны только нейросети → «Только ИИ».\nТормозят YouTube, Discord или Telegram → «Все сразу».\nПровайдер мешает онлайн-играм → «Игры».\nНужен обычный интернет → «Все выключить».\nРежим можно включить и из трея: правая кнопка по значку → «Режим».": "Only AI services needed → «AI only».\nYouTube, Discord or Telegram are slow → «Everything».\nThe provider gets in the way of online games → «Games».\nPlain internet needed → «Turn everything off».\nYou can also switch modes from the tray: right-click the icon → «Mode».",
+ "Ускорение Telegram и обход для YouTube и Discord": "Telegram acceleration and a bypass for YouTube and Discord",
+ "Пояснение: Telegram": "Explanation: Telegram",
+ "Пояснение: YouTube и Discord": "Explanation: YouTube and Discord"
 }
