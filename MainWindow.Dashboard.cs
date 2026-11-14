@@ -54,37 +54,26 @@ public partial class MainWindow
     private bool? _dashboardShownOn;
     private bool _dashboardSpinning;
 
-    /// <summary>Плашка CHIMERION DNS на главной: те же золотые цвета, что у строки в таблице серверов, цена из тарифов окна описания.</summary>
-    private static Border DashboardPromo()
+    /// <summary>Платный CHIMERION DNS на главной: небольшая золотая кнопка со звездой, цена и состав в подсказке и в окне описания.</summary>
+    private static Button DashboardPromo()
     {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var star = new Controls.Icon { Kind = "star", Solid = true, Size = 22, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
-            .Ref(Controls.Icon.ForegroundProperty, "Promo");
-        g.Children.Add(star);
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) };
-        var title = new TextBlock { FontSize = 14.5, FontWeight = FontWeights.SemiBold };
-        title.Inlines.Add(new System.Windows.Documents.Run("CHIMERION DNS"));
-        title.Inlines.Add(new System.Windows.Documents.Run("  Премиум") { FontSize = 12 }.With(r => r.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "Promo")));
-        text.Children.Add(title);
-        text.Children.Add(Ui.Hint($"Личный Smart DNS · от {ChimerionDnsInfo.Plans[0].Rub} ₽ за {ChimerionDnsInfo.Plans[0].Days} дней", 2));
-        Grid.SetColumn(text, 1);
-        g.Children.Add(text);
-        var more = Ui.Action("Подробнее", "Primary", ChimerionDnsWindow.Show).With(b =>
+        var plan = ChimerionDnsInfo.Plans[0];
+        var star = new Controls.Icon { Kind = "star", Solid = true, Size = 14, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center }
+            .Ref(Controls.Icon.ForegroundProperty, "OnPromoButton");
+        var line = new StackPanel { Orientation = Orientation.Horizontal };
+        line.Children.Add(star);
+        line.Children.Add(new TextBlock { Text = "CHIMERION DNS", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var b = Ui.Action("CHIMERION DNS", "Primary", ChimerionDnsWindow.Show).With(x =>
         {
-            b.Margin = new Thickness(0); b.Padding = new Thickness(14, 6, 14, 6); b.MinHeight = 32; b.VerticalAlignment = VerticalAlignment.Center;
-            b.SetResourceReference(Control.BackgroundProperty, "PromoButton");
-            b.SetResourceReference(Control.BorderBrushProperty, "PromoButton");
-            b.SetResourceReference(Control.ForegroundProperty, "OnPromoButton");
-            b.ToolTip = "Что входит, сколько стоит и где купить";
+            x.Content = line;
+            x.Margin = new Thickness(0, 0, 4, 0); x.Padding = new Thickness(12, 5, 12, 6); x.MinHeight = 30; x.VerticalAlignment = VerticalAlignment.Center;
+            x.SetResourceReference(Control.BackgroundProperty, "PromoButton");
+            x.SetResourceReference(Control.BorderBrushProperty, "PromoButton");
+            x.SetResourceReference(Control.ForegroundProperty, "OnPromoButton");
+            x.ToolTip = $"Личный Smart DNS · от {plan.Rub} ₽ за {plan.Days} дней. Что входит и где купить";
         });
-        Grid.SetColumn(more, 2);
-        g.Children.Add(more);
-        return new Border { Child = g, Padding = new Thickness(14, 10, 10, 10), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1),
-                            Margin = new Thickness(24, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, MaxWidth = 460 }
-            .Ref(Border.BackgroundProperty, "PromoChip").Ref(Border.BorderBrushProperty, "Promo");
+        System.Windows.Automation.AutomationProperties.SetName(b, "CHIMERION DNS Премиум");
+        return b;
     }
 
     private void SetupDashboard()
@@ -108,11 +97,11 @@ public partial class MainWindow
         _dashboardPowerText = new TextBlock { FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, MinWidth = 104 };
         power.Children.Add(_dashboardPower); power.Children.Add(_dashboardPowerText);
         DockPanel.SetDock(power, Dock.Right); heroTop.Children.Add(power);
-        // Платный CHIMERION DNS: золотая плашка в свободной середине карточки, между заголовком и переключателем
+        // Платный CHIMERION DNS: небольшая золотая кнопка между заголовком и переключателем
         var promo = DashboardPromo();
         DockPanel.SetDock(promo, Dock.Right); heroTop.Children.Add(promo);
         // На узком окне плашка не теснит заголовок и описание: прячется, пока места меньше, чем нужно всем трем частям
-        heroTop.SizeChanged += (_, _) => promo.Visibility = heroTop.ActualWidth >= 1000 ? Visibility.Visible : Visibility.Collapsed;
+        heroTop.SizeChanged += (_, _) => promo.Visibility = heroTop.ActualWidth >= 820 ? Visibility.Visible : Visibility.Collapsed;
         _dashboardHeroMark = new Controls.Icon { Kind = "circle-check", Size = 28, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         _dashboardHeroIcon = new Border { Width = 54, Height = 54, CornerRadius = new CornerRadius(27), Child = _dashboardHeroMark,
                                           HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -132,22 +121,22 @@ public partial class MainWindow
         heroText.Children.Add(_dashboardTitle); heroText.Children.Add(_dashboardDescription); heroText.Children.Add(_dashboardHeroMode);
         heroTop.Children.Add(heroText);
 
-        var heroFacts = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        var heroFacts = new Grid { Margin = new Thickness(0, 10, 0, 0) };
         for (int i = 0; i < 3; i++) heroFacts.ColumnDefinitions.Add(new ColumnDefinition());
         // Smart DNS для нейросетей: имя сервера, флаг и плашка состояния
         // WrapPanel: в узком окне флаг и плашка уходят на следующую строку, а название занимает всю ширину карточки
         var smartValue = new WrapPanel { Orientation = Orientation.Horizontal };
-        _dashboardSmartName = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0) };
+        _dashboardSmartName = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 8, 0) };
         _dashboardSmartFlag = new Image { Width = 18, Height = 12, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Stretch = Stretch.Uniform };
         _dashboardSmartChip = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold };
         _dashboardSmartChipBox = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(0, 2, 0, 2), VerticalAlignment = VerticalAlignment.Center, Child = _dashboardSmartChip };
         smartValue.Children.Add(_dashboardSmartName); smartValue.Children.Add(_dashboardSmartFlag); smartValue.Children.Add(_dashboardSmartChipBox);
-        _dashboardSmartHint = Ui.Hint("", 2); // страна сервера и страна для ИИ переносятся на вторую строку, а не обрезаются
-        DashboardFact(heroFacts, 0, "globe", "Smart DNS для нейросетей", smartValue, _dashboardSmartHint);
-        _dashboardPlainDns = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+        _dashboardSmartHint = Ui.Hint("", 2); // в карточку не вставляется: страна выхода показана под заголовком защиты
+        DashboardFact(heroFacts, 0, "globe", "Smart DNS", smartValue, null); // страна выхода стоит в первой строке карточки, под заголовком
+        _dashboardPlainDns = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         _dashboardPlainHint = Ui.Hint("", 2);
-        DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, _dashboardPlainHint);
-        _dashboardUptime = new TextBlock { FontSize = 17, FontWeight = FontWeights.SemiBold };
+        DashboardFact(heroFacts, 1, "arrow-left-right", "Обычный DNS", _dashboardPlainDns, null); // пояснение в подсказке
+        _dashboardUptime = new TextBlock { FontSize = 15.5, FontWeight = FontWeights.SemiBold };
         _dashboardUptimeHint = Ui.Hint("", 2);
         DashboardFact(heroFacts, 2, "activity", "Время работы", _dashboardUptime, _dashboardUptimeHint);
 
@@ -160,7 +149,7 @@ public partial class MainWindow
         DockPanel.SetDock(warnIcon, Dock.Left); warnRow.Children.Add(warnIcon); warnRow.Children.Add(_dashboardWarnText);
         _dashboardWarn = new Border { Child = warnRow, Padding = new Thickness(14, 9, 10, 9), CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed }
             .Ref(Border.BackgroundProperty, "ChipWarn");
-        var heroContent = new StackPanel { Margin = new Thickness(20, 14, 20, 14) };
+        var heroContent = new StackPanel { Margin = new Thickness(20, 12, 20, 12) };
         heroContent.Children.Add(heroTop); heroContent.Children.Add(_dashboardWarn); heroContent.Children.Add(heroFacts);
         var heroLayer = new Grid();
         heroLayer.SizeChanged += (_, e) => heroLayer.Clip = new RectangleGeometry(new Rect(e.NewSize), 11, 11);
@@ -172,12 +161,9 @@ public partial class MainWindow
         _dashboardHero = Ui.Card(heroLayer, bottom: 0); _dashboardHero.Padding = new Thickness(0); page.Children.Add(_dashboardHero);
         _dashboardHero.SetResourceReference(Border.BackgroundProperty, "Surface");
         _dashboardMessage = Ui.Hint("", 8); _dashboardMessage.Visibility = Visibility.Collapsed; page.Children.Add(_dashboardMessage);
-        page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
-        page.Children.Add(BuildDashboardSplit()); // «Два DNS» одной карточкой (MainWindow.DashboardSplit.cs)
-        page.Children.Add(BuildDashboardZone()); // часовой пояс (MainWindow.DashboardZone.cs)
 
         // ----- Две колонки: нейросети и дополнительные сервисы -----
-        var services = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+        var services = new Grid { Margin = new Thickness(0, 10, 0, 0) };
         services.ColumnDefinitions.Add(new ColumnDefinition()); services.ColumnDefinitions.Add(new ColumnDefinition());
         _dashboardProbe = DashboardHeaderButton("Проверить все", () => _ = DashboardProbeAsync());
         var ai = new StackPanel();
@@ -225,10 +211,12 @@ public partial class MainWindow
         var extraCard = Ui.Card(extra, bottom: 0); extraCard.Padding = new Thickness(14, 10, 14, 4); extraCard.Margin = new Thickness(6, 0, 0, 0);
         Grid.SetColumn(extraCard, 1); services.Children.Add(extraCard);
         page.Children.Add(services);
+        page.Children.Add(BuildDashboardModes()); // режим в один щелчок (MainWindow.DashboardModes.cs)
+        page.Children.Add(BuildDashboardSettings()); // «Два DNS» и часовой пояс одним спокойным блоком (MainWindow.DashboardSplit.cs)
 
         // ----- Лучшие серверы: три самых надежных, щелчок подключает -----
         var serversBox = new StackPanel();
-        serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Выберите строку и нажмите «Подключить». Смену страны выхода программа подтвердит отдельно", 0),
+        serversBox.Children.Add(DashboardPanelHeader("Лучшие серверы", Ui.Hint("Нажмите на сервер, и в его строке появится «Подключить»", 0).With(h => h.ToolTip = "Смену страны выхода программа подтвердит отдельно"),
             DashboardHeaderButton("Найти новые серверы", () => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); }),
             DashboardHeaderButton("Подобрать автоматически", () => _ = AutoPickAsync()).With(b => b.ToolTip = "Программа сама пробует лучшие серверы по очереди и остается на том, через который открываются нейросети. Страну выхода не меняет")));
         _dashboardServers = new StackPanel(); serversBox.Children.Add(_dashboardServers);
@@ -250,13 +238,13 @@ public partial class MainWindow
             if (mode == lastLayout) return;
             lastLayout = mode;
             page.Margin = mode == 0 ? new Thickness(12, 10, 12, 10) : new Thickness(20, 12, 20, 12);
-            DashboardReflow(heroFacts, mode == 0 ? 1 : 3);
+            DashboardReflow(heroFacts, mode == 0 ? 1 : 3, new[] { 1.5, 1, 1.1 }); // первой ячейке больше места: имя сервера, флаг и плашка в одну строку
             DashboardReflow(services, mode < 2 ? 1 : 2);
             _dashboardHeroBadge.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
             _dashboardModeGrid.Columns = mode == 0 ? 2 : 4;
             _dashboardSplitMore.Visibility = mode == 0 ? Visibility.Collapsed : Visibility.Visible;
         };
-        const double MinScale = .7;
+        const double MinScale = .65;
         void Fit()
         {
             double viewport = scroll.ActualHeight; // высота окна под страницу; ViewportHeight при изменении размера отстает на кадр
@@ -281,7 +269,7 @@ public partial class MainWindow
 
     private static DockPanel DashboardPanelHeader(string title, TextBlock? hint, params Button?[] actions)
     {
-        var d = new DockPanel { Margin = new Thickness(2, 0, 0, 6) };
+        var d = new DockPanel { Margin = new Thickness(2, 0, 0, 6), MinHeight = 40 }; // одна высота у заголовков соседних карточек
         bool first = true;
         foreach (var action in actions.OfType<Button>())
         {
@@ -316,10 +304,12 @@ public partial class MainWindow
         symbol.Margin = new Thickness(0, 0, 12, 0); symbol.VerticalAlignment = VerticalAlignment.Center; g.Children.Add(symbol);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = name, FontSize = 14, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(Ui.Hint(sub, 1).With(t => t.FontSize = 12.5));
+        text.Children.Add(Ui.Hint(sub, 1).With(t => { t.FontSize = 12.5; t.TextWrapping = TextWrapping.NoWrap; t.TextTrimming = TextTrimming.CharacterEllipsis; }));
         Grid.SetColumn(text, 1); g.Children.Add(text);
         var state = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
         var line = new StackPanel { Orientation = Orientation.Horizontal }; line.Children.Add(dot); line.Children.Add(status);
+        // Подпись состояния всегда в одну строку: иначе длинная подпись растягивает ряд и три ряда слева не совпадают с тремя справа
+        note.FontSize = 12; note.TextWrapping = TextWrapping.NoWrap; note.TextTrimming = TextTrimming.CharacterEllipsis;
         state.Children.Add(line); state.Children.Add(note);
         Grid.SetColumn(state, 2); g.Children.Add(state);
         action.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(action, 3); g.Children.Add(action);
@@ -378,10 +368,10 @@ public partial class MainWindow
         return nav;
     }
 
-    private static void DashboardReflow(Grid grid, int columns)
+    private static void DashboardReflow(Grid grid, int columns, double[]? weights = null)
     {
         grid.ColumnDefinitions.Clear(); grid.RowDefinitions.Clear();
-        for (int i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition());
+        for (int i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(weights != null && weights.Length == columns ? weights[i] : 1, GridUnitType.Star) });
         int rows = (grid.Children.Count + columns - 1) / columns;
         for (int i = 0; i < rows; i++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         for (int i = 0; i < grid.Children.Count; i++)
@@ -394,20 +384,22 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>Факт одной строкой: значок, подпись, значение и при желании короткое пояснение (в узком окне переносится).</summary>
     private static void DashboardFact(Grid grid, int index, string kind, string label, FrameworkElement value, TextBlock? hint)
     {
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = new Controls.Icon { Kind = kind, Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        var icon = new Controls.Icon { Kind = kind, Size = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
         icon.SetResourceReference(Controls.Icon.ForegroundProperty, "Accent");
         row.Children.Add(icon);
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(Ui.Hint(label, 0).With(t => t.FontSize = 13));
-        value.Margin = new Thickness(0, 2, 0, 0); text.Children.Add(value);
-        if (hint != null) { hint.FontSize = 12.5; text.Children.Add(hint); }
-        Grid.SetColumn(text, 1); row.Children.Add(text);
-        var card = new Border { Padding = new Thickness(12, 8, 12, 8), CornerRadius = new CornerRadius(10), Child = row };
+        var line = new WrapPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        line.Children.Add(Ui.Hint(label, 0).With(t => { t.FontSize = 13; t.Margin = new Thickness(0, 0, 8, 0); t.VerticalAlignment = VerticalAlignment.Center; }));
+        value.Margin = new Thickness(0, 0, 8, 0); value.VerticalAlignment = VerticalAlignment.Center;
+        line.Children.Add(value);
+        if (hint != null) { hint.FontSize = 12.5; hint.Margin = new Thickness(0); hint.VerticalAlignment = VerticalAlignment.Center; line.Children.Add(hint); }
+        Grid.SetColumn(line, 1); row.Children.Add(line);
+        var card = new Border { Padding = new Thickness(12, 7, 12, 7), CornerRadius = new CornerRadius(10), Child = row };
         card.SetResourceReference(Border.BackgroundProperty, "Surface"); Grid.SetColumn(card, index); grid.Children.Add(card);
     }
 
@@ -436,8 +428,12 @@ public partial class MainWindow
             : !on ? "Включите, чтобы открыть ChatGPT, Claude и Gemini"
             : aiServices.Count == 0 ? "Проверяю доступ к нейросетям…"
             : open == aiServices.Count ? "Доступ к ИИ-сервисам настроен" : "Smart DNS подключен, но открываются не все нейросети", 4);
+        var server = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
+        bool showPlace = on && settled && server != null && !string.IsNullOrEmpty(server.LocationCell);
+        // Страна выхода: в первой строке карточки, рядом с состоянием защиты
         Ui.SwapText(_dashboardHeroMode, switching ? "Это занимает несколько секунд" : !on ? "Остальной интернет работает как обычно"
-            : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS", 3);
+            : showPlace ? server!.LocationCell : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS", 3);
+        _dashboardHeroMode.ToolTip = showPlace ? server!.LocationTooltip : null;
         bool partial = on && settled && aiServices.Count > 0 && open < aiServices.Count;
         if (partial)
         {
@@ -463,7 +459,6 @@ public partial class MainWindow
         Ui.SwapText(_dashboardPowerText, switching ? (goingOn ? "Включаю…" : "Выключаю…") : on ? "Включено" : "Выключено");
         Ui.FadeBrush(_dashboardPowerText, TextBlock.ForegroundProperty, on && settled ? "Ok" : "Text");
 
-        var server = active == null ? null : _servers.FirstOrDefault(x => x.Id == active.ServerId);
         Ui.SwapText(_dashboardSmartName, active == null ? "Не подключен" : PrivacyGuard.Mask(server?.ShortName ?? active.Name));
         // Страна самого DNS-сервера и страна, откуда нейросети видят запросы, могут различаться: подписываем обе
         _dashboardSmartHint.Text = server == null ? (on ? "" : "Включите защиту") : server.LocationCell;
@@ -478,8 +473,9 @@ public partial class MainWindow
         Ui.FadeBrush(_dashboardSmartChip, TextBlock.ForegroundProperty, works ? "Ok" : aiServices.Count == 0 ? "Muted" : "Bad");
         _dashboardPlainDns.Text = snap == null ? "Еще не проверялся" : PrivacyGuard.Mask(snap.SystemDns);
         _dashboardPlainHint.Text = active?.Split == true ? $"Общий DNS: {active.GeneralName}" : on ? "Тот же Smart DNS" : "DNS вашей сети";
+        _dashboardPlainDns.ToolTip = _dashboardPlainHint.Text;
         Ui.SwapText(_dashboardUptime, on ? Uptime(DateTime.Now - active!.Since) : "Не подключено");
-        _dashboardUptimeHint.Text = on ? $"Подключено с {active!.Since:dd.MM HH:mm}" : "Нажмите переключатель";
+        _dashboardUptimeHint.Text = on ? $"с {active!.Since:dd.MM HH:mm}" : "нажмите переключатель";
 
         // Нейросети
         foreach (var (name, row) in _dashboardServiceRows)
@@ -615,12 +611,6 @@ public partial class MainWindow
         return t.Length > 80 ? t[..78] + "…" : t;
     }
 
-    private static string Ago(DateTime t)
-    {
-        var d = DateTime.Now - t;
-        return d.TotalMinutes < 60 ? $"в {t:HH:mm}" : d.TotalHours < 24 ? $"в {t:HH:mm}, {(int)d.TotalHours} ч назад" : $"{t:dd.MM HH:mm}, давно";
-    }
-
     private static string Cap(string t) => t.Length == 0 ? t : char.ToUpper(t[0]) + t[1..];
 
     /// <summary>Три самых надежных рабочих сервера (тот, к которому подключены, всегда в списке). Перестраивается, только если список изменился.</summary>
@@ -694,11 +684,12 @@ public partial class MainWindow
 
     private string DashboardSiteStatus(string host)
     {
-        // Состояние программы обхода показано строкой выше, здесь только проверка самого сайта и когда она была
-        if (_dashboardSiteResults.TryGetValue(host, out var result)) return $"Проверка сайта: {DashboardSiteVerdict(result.Verdict)} {Ago(result.Time)}";
-        if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Проверка сайта: {DashboardSiteVerdict(site.State)} {Ago(time)}";
+        // Состояние программы обхода показано строкой выше, здесь короткая подпись: что с сайтом и когда проверяли
+        if (_dashboardSiteResults.TryGetValue(host, out var result)) return $"Сайт {DashboardSiteVerdict(result.Verdict)} · {ShortTime(result.Time)}";
+        if (_sites.Sites.TryGetValue(host, out var site) && site.LastChecked is { } time) return $"Сайт {DashboardSiteVerdict(site.State)} · {ShortTime(time)}";
         return "Сайт не проверялся";
     }
+    private static string ShortTime(DateTime t) => t.Date == DateTime.Today ? $"{t:HH:mm}" : $"{t:dd.MM HH:mm}";
     internal static string DashboardSiteVerdict(SiteWatch.Verdict verdict) => verdict switch
     {
         SiteWatch.Verdict.Ok => "открывается", SiteWatch.Verdict.Unknown => "без результата", _ => "не открывается"
@@ -706,13 +697,13 @@ public partial class MainWindow
 
     private static ProgressBar DashboardCheckProgress() => new()
     {
-        Height = 4, Margin = new Thickness(0, 0, 0, 6), Visibility = Visibility.Collapsed,
+        Height = 3, Margin = new Thickness(0, 0, 0, 3), Visibility = Visibility.Hidden, // место занято всегда: ряды соседних карточек не сдвигаются
         IsHitTestVisible = false, Value = 50
     };
 
     private static void DashboardCheckProgressState(ProgressBar bar, bool checking)
     {
-        bar.Visibility = checking ? Visibility.Visible : Visibility.Collapsed;
+        bar.Visibility = checking ? Visibility.Visible : Visibility.Hidden;
         bar.IsIndeterminate = checking && SystemParameters.ClientAreaAnimation;
     }
 

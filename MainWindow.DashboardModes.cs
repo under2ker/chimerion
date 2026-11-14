@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 
 namespace Dnex;
 
@@ -19,7 +20,7 @@ public partial class MainWindow
     private int? _dashboardModeRunning;
 
     /// <summary>Короткая подпись под названием режима, пока он не включен.</summary>
-    private static readonly string[] ModeShort = { "нейросети", "ИИ, Telegram, обход", "обход для игр", "обычный интернет" };
+    private static readonly string[] ModeShort = { "нейросети", "ИИ, Telegram, обход", "обход для игр", "DNS сети, обходы выкл." };
 
     private static List<ModeWindow.ModeInfo>? _modeInfos;
     private static List<ModeWindow.ModeInfo> ModeInfos => _modeInfos ??=
@@ -72,7 +73,8 @@ public partial class MainWindow
             var (tile, icon, title, sub) = _dashboardModeTiles[i];
             bool cur = current == i, running = _dashboardModeRunning == i;
             tile.SetResourceReference(Border.BackgroundProperty, cur || running ? "AccentSoft" : "Surface2");
-            tile.SetResourceReference(Border.BorderBrushProperty, cur || running ? "Accent" : "Border");
+            if (cur || running) tile.SetResourceReference(Border.BorderBrushProperty, "Accent");
+            else { tile.ClearValue(Border.BorderBrushProperty); tile.BorderBrush = Brushes.Transparent; } // рамка только у включенного режима
             icon.SetResourceReference(Controls.Icon.ForegroundProperty, cur || running ? "Accent" : "Muted");
             Ui.SwapText(sub, running ? "Включаю…" : cur ? "сейчас включен" : ModeShort[i]);
             sub.SetResourceReference(TextBlock.ForegroundProperty, cur ? "Accent" : "Muted");

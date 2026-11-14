@@ -9,7 +9,7 @@ namespace Dnex;
 /// «Два DNS» одной карточкой на Главной: переключатель, выбор общего DNS и переход к подробным настройкам рядом. Раньше путь
 /// был «Настройки, вкладка, отдельное окно, пресет, галочка, Сохранить» (6 действий), теперь выбор и включение прямо здесь.
 /// Само изменение делает SetSplitDnsAsync (MainWindow.Palette.cs): предупреждение о групповых политиках, «Отменить»,
-/// переподключение. ОТКАТ: откатом коммита с пометкой «ОТКАТ: карточка Два DNS» (git revert).
+/// переподключение. ОТКАТ: откатом коммита с пометкой «ОТКАТ: карточка Два DNS» (git revert). Строка вставлена в общий блок BuildDashboardSettings.
 /// </summary>
 public partial class MainWindow
 {
@@ -18,7 +18,7 @@ public partial class MainWindow
     private Button _dashboardSplitMore = null!;
     private TextBlock _dashboardSplitHint = null!;
 
-    private Border BuildDashboardSplit()
+    private DockPanel BuildDashboardSplit()
     {
         var icon = new Controls.Icon { Kind = "arrow-left-right", Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(Controls.Icon.ForegroundProperty, "Accent");
@@ -52,7 +52,17 @@ public partial class MainWindow
         DockPanel.SetDock(_dashboardSplitMore, Dock.Right); row.Children.Add(_dashboardSplitMore);
         DockPanel.SetDock(_dashboardSplitPicker, Dock.Right); row.Children.Add(_dashboardSplitPicker);
         row.Children.Add(texts);
-        var card = Ui.Card(row, bottom: 0);
+        return row;
+    }
+
+    /// <summary>Спокойный блок под режимом: «Два DNS» и часовой пояс двумя строками в одной карточке, тонкая линия между ними.</summary>
+    private Border BuildDashboardSettings()
+    {
+        var box = new StackPanel();
+        box.Children.Add(BuildDashboardSplit());
+        box.Children.Add(new Border { Height = 1, Margin = new Thickness(0, 8, 0, 8) }.Ref(Border.BackgroundProperty, "Border"));
+        box.Children.Add(BuildDashboardZone());
+        var card = Ui.Card(box, bottom: 0);
         card.Padding = new Thickness(14, 8, 14, 8);
         card.Margin = new Thickness(0, 8, 0, 0);
         return card;

@@ -13,7 +13,7 @@ public partial class MainWindow
 {
     private TextBlock _dashboardZoneHint = null!;
 
-    private Border BuildDashboardZone()
+    private DockPanel BuildDashboardZone()
     {
         var icon = new Controls.Icon { Kind = "clock", Size = 20, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center }
             .Ref(Controls.Icon.ForegroundProperty, "Accent");
@@ -29,10 +29,7 @@ public partial class MainWindow
         DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
         DockPanel.SetDock(choose, Dock.Right); row.Children.Add(choose);
         row.Children.Add(texts);
-        var card = Ui.Card(row, bottom: 0);
-        card.Padding = new Thickness(14, 8, 14, 8);
-        card.Margin = new Thickness(0, 8, 0, 0);
-        return card;
+        return row;
     }
 
     /// <summary>Пояс Windows и местное время в нем. Вызывается из RefreshDashboard (раз в несколько секунд).</summary>
