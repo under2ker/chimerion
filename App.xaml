@@ -280,8 +280,15 @@
                             <Trigger Property="Text" Value="">
                                 <Setter TargetName="hint" Property="Visibility" Value="Visible"/>
                             </Trigger>
+                            <!-- Единые состояния полей: наведение, фокус, ошибка (ошибка последней: видна и в фокусе), отключено -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Muted}"/>
+                            </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            </Trigger>
+                            <Trigger Property="controls:FieldError.IsError" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Bad}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5"/>

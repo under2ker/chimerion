@@ -36,11 +36,27 @@ public class AddServerFormTests
     }
 
     [Theory]
+    [InlineData("2001:db8::53")]
+    [InlineData("203.0.113.10")]
+    public void Full_ipv4_and_ipv6_are_accepted(string ip)
+    {
+        var (server, error, _) = AddServerForm.Validate("", ip, "", "");
+        Assert.Null(error);
+        Assert.Equal(ip, server!.Primary);
+    }
+
+    [Theory]
     [InlineData("", "", "", "Primary", "Укажите основной IP")]
-    [InlineData("203.0.113.10:53", "", "", "Primary", "не похож на IP-адрес")]
+    [InlineData("203.0.113.10:53", "", "", "Primary", "Нужен IP вида")]
+    [InlineData("1.2.3", "", "", "Primary", "Нужен IP вида")]
+    [InlineData("203.0.113", "", "", "Primary", "Нужен IP вида")]
+    [InlineData("10", "", "", "Primary", "Нужен IP вида")]
+    [InlineData("abc", "", "https://dns.example.test/dns-query", "Primary", "Нужен IP вида")]
     [InlineData("", "", "http://dns.example.test/dns-query", "Doh", "https://")]
     [InlineData("", "", "dns.example.test", "Doh", "https://")]
-    [InlineData("203.0.113.10", "не адрес", "", "Secondary", "не адрес")]
+    [InlineData("203.0.113.10", "", "dns.example.test", "Doh", "https://")]
+    [InlineData("203.0.113.10", "не адрес", "", "Secondary", "Нужен IP вида")]
+    [InlineData("203.0.113.10", "198.51.100", "", "Secondary", "Нужен IP вида")]
     public void Wrong_input_points_to_its_field(string primary, string secondary, string doh, string expected, string text)
     {
         var (server, error, field) = AddServerForm.Validate("Имя", primary, secondary, doh);

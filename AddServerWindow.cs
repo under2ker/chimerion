@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,38 +14,53 @@ internal enum AddServerField { None, Primary, Secondary, Doh }
 /// <summary>Проверка полей формы добавления сервера: без окна, чтобы проверять ее тестами.</summary>
 internal static class AddServerForm
 {
+    private static readonly Regex Ipv4 = new(@"^\d{1,3}(\.\d{1,3}){3}$", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// IP-адрес в полной записи. IPAddress.TryParse сам по себе принимает и сокращенные «1.2.3» (это 1.2.0.3) или «10»,
+    /// поэтому опечатка с пропущенной частью адреса проходила как верный адрес. Здесь IPv4 только из четырех чисел, IPv6 с двоеточиями.
+    /// </summary>
+    public static bool IsIp(string s) =>
+        IPAddress.TryParse(s, out var ip) &&
+        (ip.AddressFamily == AddressFamily.InterNetwork ? Ipv4.IsMatch(s) : ip.AddressFamily == AddressFamily.InterNetworkV6 && s.Contains(':') && !s.Contains('%'));
+
     /// <summary>Сервер из полей формы или текст ошибки и поле, в котором она.</summary>
     public static (DnsServer? Server, string? Error, AddServerField Field) Validate(string? name, string? primary, string? secondary, string? doh)
     {
         primary = primary?.Trim() ?? "";
         secondary = secondary?.Trim() ?? "";
         doh = doh?.Trim() ?? "";
-        bool hasIp = IPAddress.TryParse(primary, out _);
-        bool hasDoh = Uri.TryCreate(doh, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps;
-        if (!hasIp && !hasDoh)
-        {
-            return (null,
-                primary.Length == 0 && doh.Length == 0 ? "Укажите основной IP (например 203.0.113.10) или адрес DoH"
-                : primary.Length > 0 ? $"«{primary}» не похож на IP-адрес: нужен вид 203.0.113.10, без порта и запятых"
-                : "Адрес DoH должен начинаться с https://",
-                primary.Length > 0 || doh.Length == 0 ? AddServerField.Primary : AddServerField.Doh);
-        }
-        if (secondary.Length > 0 && !IPAddress.TryParse(secondary, out _))
-            return (null, $"«{secondary}» не похож на IP-адрес", AddServerField.Secondary);
+        if (primary.Length == 0 && doh.Length == 0)
+            return (null, "Укажите основной IP или адрес DoH", AddServerField.Primary);
+        // Заполненное поле с ошибкой — всегда ошибка, даже если другое поле верное: иначе неверный IP или DoH молча терялся
+        if (primary.Length > 0 && !IsIp(primary))
+            return (null, "Нужен IP вида 203.0.113.10, без порта", AddServerField.Primary);
+        if (secondary.Length > 0 && !IsIp(secondary))
+            return (null, "Нужен IP вида 203.0.113.10, без порта", AddServerField.Secondary);
+        Uri? u = null;
+        if (doh.Length > 0 && !(Uri.TryCreate(doh, UriKind.Absolute, out u) && u.Scheme == Uri.UriSchemeHttps && u.Host.Length > 0))
+            return (null, "Адрес DoH должен начинаться с https://", AddServerField.Doh);
+        bool hasIp = primary.Length > 0;
         return (new DnsServer
         {
             Name = string.IsNullOrWhiteSpace(name) ? (hasIp ? primary : u!.Host) : name.Trim(),
-            Primary = hasIp ? primary : "",
+            Primary = primary,
             Secondary = secondary.Length > 0 ? secondary : null,
-            DohUrl = hasDoh ? doh : null,
+            DohUrl = doh.Length > 0 ? doh : null,
             Manual = true,
         }, null, AddServerField.None);
     }
 }
 
-/// <summary>Окно «Добавить сервер»: название, IP и адрес DoH. Ошибка ввода видна в самом окне, данные не теряются.</summary>
+/// <summary>
+/// Окно «Добавить сервер»: название, IP и адрес DoH. Сетка как у остальных окон: поля окна Ui.Root (24 по бокам),
+/// 16 между блоками, 6 от подписи до поля. Ошибка у своего поля: красная рамка (FieldError) и текст прямо под полем,
+/// исчезают, как только поле начинают исправлять. Введенное не теряется. Кнопки в нижней строке: «Добавить» основная справа.
+/// </summary>
 internal static class AddServerWindow
 {
+    private const double BlockGap = 16, LabelGap = 6;
+
     /// <summary>Показывает окно. Возвращает проверенный сервер или null, если окно закрыли.</summary>
     public static DnsServer? Ask()
     {
@@ -56,38 +73,43 @@ internal static class AddServerWindow
     {
         var w = DnexDialog.CreateWindow("Добавить сервер", Ui.Narrow);
         var root = Ui.Root();
-        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Добавить сервер", "Нужен IP, адрес DoH или оба. Название можно не указывать", glyph: "plus"));
+        root.Children.Add(DnexDialog.Header(DialogKind.Info, "Добавить сервер", "Нужен IP, адрес DoH или оба", glyph: "plus"));
 
-        var name = new TextBox { Tag = "Например, мой DNS" };
-        var primary = new TextBox { Tag = "203.0.113.10" };
+        var name = new TextBox { Tag = "Необязательно" };
+        var primary = new TextBox { Tag = "Например, 203.0.113.10" };
         var secondary = new TextBox { Tag = "Необязательно" };
-        var doh = new TextBox { Tag = "https://…/dns-query" };
-        var error = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, Margin = new Thickness(0, 12, 0, 0), Foreground = Ui.B("Warn"), Visibility = Visibility.Collapsed };
+        var doh = new TextBox { Tag = "Например, https://dns.example.com/dns-query" };
 
-        root.Children.Add(Field("Название", name, 0));
-        var ips = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+        var nameField = new Field("Название", name);
+        var primaryField = new Field("Основной IP", primary);
+        var secondaryField = new Field("Резервный IP", secondary);
+        var dohField = new Field("Адрес DoH", doh, Ui.HelpMark("Адрес DoH",
+            "DNS через HTTPS: адрес из описания сервера, начинается с https://. Можно указать вместо IP или вместе с ним."));
+
+        nameField.Panel.Margin = new Thickness(0, BlockGap, 0, 0);
+        root.Children.Add(nameField.Panel);
+        var ips = new Grid { Margin = new Thickness(0, BlockGap, 0, 0) };
         ips.ColumnDefinitions.Add(new ColumnDefinition());
         ips.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         ips.ColumnDefinitions.Add(new ColumnDefinition());
-        var first = Field("Основной IP", primary, 0);
-        var second = Field("Резервный IP", secondary, 0);
-        Grid.SetColumn(second, 2);
-        ips.Children.Add(first);
-        ips.Children.Add(second);
+        Grid.SetColumn(secondaryField.Panel, 2);
+        ips.Children.Add(primaryField.Panel);
+        ips.Children.Add(secondaryField.Panel);
         root.Children.Add(ips);
-        root.Children.Add(Field("Адрес DoH", doh, 12));
-        root.Children.Add(error);
+        dohField.Panel.Margin = new Thickness(0, BlockGap, 0, 0);
+        root.Children.Add(dohField.Panel);
 
+        var fields = new[] { primaryField, secondaryField, dohField };
         void Submit()
         {
-            var (server, text, field) = AddServerForm.Validate(name.Text, primary.Text, secondary.Text, doh.Text);
+            var (server, text, which) = AddServerForm.Validate(name.Text, primary.Text, secondary.Text, doh.Text);
+            foreach (var f in fields) f.SetError(null);
             if (server == null)
             {
-                error.Text = text;
-                error.Visibility = Visibility.Visible;
-                var box = field switch { AddServerField.Secondary => secondary, AddServerField.Doh => doh, _ => primary };
-                box.Focus();
-                box.SelectAll();
+                var bad = which switch { AddServerField.Secondary => secondaryField, AddServerField.Doh => dohField, _ => primaryField };
+                bad.SetError(text);
+                bad.Box.Focus();
+                bad.Box.SelectAll();
                 return;
             }
             added(server);
@@ -97,7 +119,7 @@ internal static class AddServerWindow
         var add = Ui.Action("Добавить", "Primary", Submit);
         var cancel = Ui.Action("Отмена", "Ghost", w.Close).With(b => b.IsCancel = true);
         var footer = Ui.Footer(null, add, cancel);
-        footer.Margin = new Thickness(0, 16, 0, 0);
+        footer.Margin = new Thickness(0, BlockGap + 4, 0, 0);
         root.Children.Add(footer);
 
         w.PreviewKeyDown += (_, e) =>
@@ -111,11 +133,35 @@ internal static class AddServerWindow
         return w;
     }
 
-    private static StackPanel Field(string label, TextBox box, double top)
+    /// <summary>Подпись (и при желании знак пояснения), поле и место для ошибки под полем.</summary>
+    private sealed class Field
     {
-        var panel = new StackPanel { Margin = new Thickness(0, top, 0, 0) };
-        panel.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = Ui.B("Muted"), Margin = new Thickness(0, 0, 0, 4) });
-        panel.Children.Add(box);
-        return panel;
+        public readonly StackPanel Panel = new();
+        public readonly TextBox Box;
+        private readonly TextBlock _error;
+
+        public Field(string label, TextBox box, FrameworkElement? help = null)
+        {
+            Box = box;
+            var caption = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, LabelGap) };
+            caption.Children.Add(new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Muted"));
+            if (help != null) caption.Children.Add(help);
+            Panel.Children.Add(caption);
+            Panel.Children.Add(box);
+            _error = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, LabelGap, 0, 0), Visibility = Visibility.Collapsed }
+                .Ref(TextBlock.ForegroundProperty, "Bad");
+            Panel.Children.Add(_error);
+            System.Windows.Automation.AutomationProperties.SetName(box, label);
+            // Начали исправлять — ошибка уходит, чтобы красная рамка не висела над уже другим текстом
+            box.TextChanged += (_, _) => { if (_error.Visibility == Visibility.Visible) SetError(null); };
+        }
+
+        public void SetError(string? text)
+        {
+            _error.Text = text ?? "";
+            _error.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
+            Controls.FieldError.SetIsError(Box, text != null);
+            System.Windows.Automation.AutomationProperties.SetHelpText(Box, text ?? "");
+        }
     }
 }
