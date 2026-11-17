@@ -298,7 +298,7 @@ internal sealed class ToolsWindow
         var all = _cards.SelectMany(c => c.Actions.Children.OfType<Button>())
             .Concat(Descendants<Button>(_pickHost))
             .Where(b => b.Style == primary && b.Visibility == Visibility.Visible).ToList();
-        static int Rank(Button b) => b.Content as string switch
+        static int Rank(Button b) => (b.Content as string) switch
         {
             "Удалить службу zapret" => 0,
             string s when s.StartsWith("Включить лучшую") => 1,

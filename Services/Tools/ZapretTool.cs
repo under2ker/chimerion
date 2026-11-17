@@ -202,8 +202,12 @@ public sealed class ZapretTool : Tool
         SaveState();
         foreach (var l in State.BigLists.Select(RemoteLists.Get).OfType<RemoteList>()) await RemoteLists.EnsureAsync(l);
         WriteUserList(catalog);
-        if (IsRunning() && State.Enabled) { await StopAsync(); await StartAsync(); }
+        // Перезапуск одним куском: два быстрых нажатия «В zapret» иначе запускали две копии winws.exe, вторая падала с кодом -1
+        await _winws.RunAsync(async () => { if (IsRunning() && State.Enabled) { await StopAsync(); await StartAsync(); } });
     }
+
+    /// <summary>Запуск, остановка и перезапуск winws.exe идут по одному: две копии одновременно не уживаются (драйвер WinDivert один).</summary>
+    private readonly AsyncGate _winws = new();
 
     /// <summary>
     /// Файл lists\list-general-user.txt, на который ссылаются все стратегии: свои сайты и наборы. Пустой список
@@ -283,7 +287,9 @@ public sealed class ZapretTool : Tool
         catch (Exception) { return false; }
     }
 
-    public override async Task StartAsync()
+    public override Task StartAsync() => _winws.RunAsync(StartCoreAsync);
+
+    private async Task StartCoreAsync()
     {
         EnsureNoForeignService();
         if (IsRunning())
@@ -307,7 +313,9 @@ public sealed class ZapretTool : Tool
     /// Перезапуск без участия человека: с правами напрямую, без них только через готовое задание Планировщика.
     /// Запрос прав Windows здесь не показывается никогда, даже если задание не сработало. True: обход снова работает.
     /// </summary>
-    public async Task<bool> RestartSilentlyAsync()
+    public Task<bool> RestartSilentlyAsync() => _winws.RunAsync(RestartSilentlyCoreAsync);
+
+    private async Task<bool> RestartSilentlyCoreAsync()
     {
         if (IsRunning() || ForeignServiceInstalled()) return IsRunning();
         var strategy = SavedStrategy();
@@ -586,7 +594,9 @@ public sealed class ZapretTool : Tool
         Kill(Process.GetProcessesByName("winws"));
     }
 
-    public override async Task StopAsync()
+    public override Task StopAsync() => _winws.RunAsync(StopCoreAsync);
+
+    private async Task StopCoreAsync()
     {
         if (!IsRunning()) return;
         // Без прав: остановка заданием Планировщика, без вопроса Windows (см. ZapretTask)
