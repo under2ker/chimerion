@@ -41,24 +41,25 @@
   <img src="docs/screenshots/chimerion-compact.png" width="190" alt="Компактный вид">
 </p>
 
-«Telegram и YouTube», «Режим» и «Диагностика»:
+«Режим», «Telegram и YouTube», «Помощь» и «Настройки»:
 
 <p>
-  <img src="docs/screenshots/chimerion-tools.png" width="270" alt="Telegram и YouTube">
-  <img src="docs/screenshots/chimerion-mode.png" width="270" alt="Режим">
-  <img src="docs/screenshots/chimerion-diagnostics.png" width="270" alt="Диагностика">
-</p>
-
-«Сайты для обхода», «Два DNS», «Помощь», «Журнал» и «Настройки»:
-
-<p>
-  <img src="docs/screenshots/chimerion-sites.png" width="270" alt="Сайты для обхода">
-  <img src="docs/screenshots/chimerion-split-dns.png" width="200" alt="Два DNS">
-  <img src="docs/screenshots/chimerion-help.png" width="340" alt="Помощь">
+  <img src="docs/screenshots/chimerion-mode.png" width="720" alt="Режим">
 </p>
 <p>
-  <img src="docs/screenshots/chimerion-log.png" width="410" alt="Журнал">
-  <img src="docs/screenshots/chimerion-settings.png" width="400" alt="Настройки">
+  <img src="docs/screenshots/chimerion-tools.png" width="720" alt="Telegram и YouTube">
+</p>
+<p>
+  <img src="docs/screenshots/chimerion-help.png" width="720" alt="Помощь">
+</p>
+<p>
+  <img src="docs/screenshots/chimerion-settings.png" width="720" alt="Настройки">
+</p>
+
+Окно «Два DNS»:
+
+<p>
+  <img src="docs/screenshots/chimerion-split-dns.png" width="330" alt="Два DNS">
 </p>
 
 На снимках выдуманные данные: адреса из диапазонов документации `203.0.113.0/24` и `198.51.100.0/24`, названия серверов условные.
