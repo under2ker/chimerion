@@ -34,6 +34,29 @@ public static class ServerListGuard
     public static bool IsMassHost(string? host) =>
         !string.IsNullOrEmpty(host) && MassHosts.Any(h => host.Equals(h, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>От скольких проверенных серверов «не ответил ни один» считается сбоем сети, а не мертвым списком.</summary>
+    public const int NoAnswerMinBatch = 5;
+
+    /// <summary>
+    /// В пакете проверены не меньше <see cref="NoAnswerMinBatch"/> серверов, и ни один не ответил. Так выглядит сеть, где
+    /// запросы к чужим DNS не проходят (фаервол, антивирус, VPN, провайдер): проверка «сеть есть» при этом успешна,
+    /// а все серверы «не работают». Защита по числу ранее работавших серверов тут не помогает: их не было с самого начала.
+    /// </summary>
+    public static bool NoneAnswered(IEnumerable<DnsServer> batch)
+    {
+        int failed = 0;
+        foreach (var s in batch)
+        {
+            if (s.Status is ServerStatus.Ok or ServerStatus.Partial) return false;
+            if (s.Status == ServerStatus.Fail) failed++;
+        }
+        return failed >= NoAnswerMinBatch;
+    }
+
+    /// <summary>Автоочистка оставила бы список без единого настоящего сервера: так убирать нельзя.</summary>
+    public static bool WouldEmptyList(IEnumerable<DnsServer> all, int junkCount) =>
+        junkCount > 0 && all.Count(s => !s.IsPromo) <= junkCount;
+
     /// <summary>Сервер, который нельзя убирать: работает, в избранном или к нему подключено.</summary>
     private static bool Keep(DnsServer s, Guid? connected) =>
         s.IsPromo || s.IsFavorite || s.Id == connected || s.Status is ServerStatus.Ok or ServerStatus.Partial;

@@ -178,6 +178,13 @@ public partial class MainWindow
         }
         var ct = BeginWork();
         int purgeStart = _purgeTotal;
+        // В списке нет ни одного настоящего сервера, а метки мусора не пускают найденные обратно: поиск ничего бы не добавил
+        if (!_servers.Any(s => !s.IsPromo) && _junk.Count > 0)
+        {
+            _junk.Clear();
+            try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
+            Log("Список пуст: метки мусора сняты, чтобы поиск мог вернуть серверы");
+        }
         // Строка прогресса обновляется не на каждой странице: счетчик времени показывает, что поиск идет
         var clock = System.Diagnostics.Stopwatch.StartNew();
         string lastProgress = "";
@@ -422,9 +429,16 @@ public partial class MainWindow
         var vpns = SystemCheck.ActiveVpns();
         bool vpnSkewed = vpns.Count > 0 && !outage;
         outage |= vpnSkewed;
+        // Ни один сервер не ответил, хотя до проверки «работавших» не было (защита выше тогда молчит): сеть пускает в интернет,
+        // но не к чужим DNS. Иначе все серверы за две проверки ушли бы в мусор, а поиск не принимал бы их 14 дней
+        bool noneAnswered = !outage && ServerListGuard.NoneAnswered(list);
+        outage |= noneAnswered;
 
         if (outage)
         {
+            // Найденные поиском серверы проверены впервые: их неудачу тоже не засчитываем
+            if (before == null)
+                foreach (var s in list) { s.ChecksTotal = 0; s.ChecksOk = 0; s.FailStreak = 0; s.TrimHistory(0); s.NotifyStability(); }
             foreach (var (s, c) in before ?? new())
             {
                 s.ChecksTotal = c.Total; s.ChecksOk = c.Ok; s.FailStreak = c.FailStreak;
@@ -438,10 +452,16 @@ public partial class MainWindow
                     "что будет без VPN. Автоочистка пропущена, стабильность не изменена. Выключите VPN и нажмите «Перепроверить»");
                 ShowToast("Работал VPN: проверка не засчитана, серверы не отправлены в мусор", "Warn");
             }
+            else if (noneAnswered)
+            {
+                Log($"Ни один из {list.Count(s => s.Status == ServerStatus.Fail)} проверенных серверов не ответил: похоже, запросы к чужим DNS блокирует " +
+                    "фаервол, антивирус, VPN или сеть. Список не тронут, стабильность не изменена. Проверьте это и нажмите «Перепроверить»");
+                ShowToast("Ни один сервер не ответил: список не тронут, проверьте фаервол, антивирус и VPN", "Warn");
+            }
             else Log(networkUp
                 ? $"Похоже на сбой сети: из {wereWorking.Count} работавших серверов разом перестали отвечать {broke}. Автоочистка пропущена, стабильность не изменена. Проверьте сеть и нажмите «Перепроверить»"
                 : "Сеть пропала во время проверки. Автоочистка пропущена, стабильность не изменена. Когда сеть вернется, нажмите «Перепроверить»");
-            if (!vpnSkewed) ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
+            if (!vpnSkewed && !noneAnswered) ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
         }
 
         SaveServers();
@@ -592,6 +612,12 @@ public partial class MainWindow
         var junk = _servers.Where(s => s.Id != activeId && s.Status != ServerStatus.Checking && !_purgeKeep.Contains(s.Id) && !s.Manual &&
                                        (SourceParser.IsNoise(s) || s.IsJunk)).ToList();
         if (junk.Count == 0) return 0;
+        // Нельзя оставить список без серверов: пустой список хуже мертвого, а вернуть серверы потом мешают метки мусора
+        if (ServerListGuard.WouldEmptyList(_servers, junk.Count))
+        {
+            if (!silent) Log($"Автоочистка пропущена: все {junk.Count} серверов нерабочие, список остался бы пустым");
+            return 0;
+        }
         // Для отмены: места в списке и прежние отметки в мусоре
         var undoInfo = junk.Select(s => (Server: s, Index: _servers.IndexOf(s),
                                          Junk: _junk.TryGetValue(s.Key, out var t) ? t : (DateTime?)null))

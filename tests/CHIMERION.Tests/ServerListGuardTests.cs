@@ -68,4 +68,36 @@ public class ServerListGuardTests
         Assert.InRange(ServerListGuard.MaxPerPage, 50, 300);
         Assert.InRange(ServerListGuard.MaxNewPerSearch, ServerListGuard.MaxPerPage, ServerListGuard.MaxServers);
     }
+
+    private static List<DnsServer> Batch(int n, ServerStatus status) =>
+        Enumerable.Range(1, n).Select(i => Srv("203.0.113." + i, null, status)).ToList();
+
+    [Fact]
+    public void NoServerAnsweredIsNetworkProblemNotDeadList()
+    {
+        // сеть пускает в интернет, но не к чужим DNS: все серверы «не работают», хотя раньше не работал ни один
+        Assert.True(ServerListGuard.NoneAnswered(Batch(ServerListGuard.NoAnswerMinBatch, ServerStatus.Fail)));
+        Assert.True(ServerListGuard.NoneAnswered(Batch(350, ServerStatus.Fail)));
+    }
+
+    [Fact]
+    public void FewOrMixedResultsAreNotNetworkProblem()
+    {
+        Assert.False(ServerListGuard.NoneAnswered(Batch(ServerListGuard.NoAnswerMinBatch - 1, ServerStatus.Fail)));
+        var mixed = Batch(20, ServerStatus.Fail); mixed[7].Status = ServerStatus.Partial;
+        Assert.False(ServerListGuard.NoneAnswered(mixed));
+        Assert.False(ServerListGuard.NoneAnswered(Batch(20, ServerStatus.Unknown)));   // непроверенные не считаются ответившими, но и сбоем тоже
+    }
+
+    [Fact]
+    public void AutoCleanNeverEmptiesTheList()
+    {
+        var all = Batch(10, ServerStatus.Fail);
+        Assert.True(ServerListGuard.WouldEmptyList(all, 10));
+        Assert.False(ServerListGuard.WouldEmptyList(all, 9));
+        Assert.False(ServerListGuard.WouldEmptyList(all, 0));
+        // строка CHIMERION DNS не считается настоящим сервером
+        all.Add(new DnsServer { Name = "promo", Primary = "203.0.113.200", IsPromo = true });
+        Assert.True(ServerListGuard.WouldEmptyList(all, 10));
+    }
 }

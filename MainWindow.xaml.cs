@@ -81,6 +81,9 @@ public partial class MainWindow : Window
         _junk = Storage.LoadOrCreate(JunkFile, () => new Dictionary<string, DateTime>());
         foreach (var k in _junk.Where(kv => DateTime.Now - kv.Value > JunkTtl).Select(kv => kv.Key).ToList()) _junk.Remove(k);
         foreach (var s in _servers) _known.Add(s.Key);
+        // Прежняя автоочистка могла убрать вообще все серверы (сеть не пускала к чужим DNS). Тогда метки мусора на 14 дней
+        // не пускают назад даже встроенный каталог, и список остается пустым. Пустой список лечим: метки снимаем
+        if (_servers.Count == 0 && _junk.Count > 0) { _junk.Clear(); try { Storage.Save(JunkFile, _junk); } catch (Exception) { } }
         // Встроенный каталог: новые сервисы появляются в списке сразу, еще до парсинга.
         foreach (var c in Catalog.Servers())
             if (!_junk.ContainsKey(c.Key) && _known.Add(c.Key)) _servers.Add(c);
