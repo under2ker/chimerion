@@ -4,6 +4,8 @@ using Xunit;
 
 namespace Dnex.Tests;
 
+// Окна и общий язык интерфейса: тест идет по одному, иначе чужой тест сбрасывает язык (сбой на медленном раннере GitHub)
+[Collection("scenarios")]
 public class FlowExtensionTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "chimerion-flow-" + Guid.NewGuid().ToString("N"));

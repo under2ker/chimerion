@@ -39,6 +39,8 @@ internal static class Wpf
     }
 }
 
+// Тесты меняют общий язык интерфейса (Loc.SetLanguage): идут по одному, иначе чужой тест сбрасывает язык (сбой на медленном раннере GitHub)
+[Collection("scenarios")]
 public class UiDesignTests
 {
     private static Color Res(string key) => ((SolidColorBrush)Application.Current.Resources[key]).Color;
