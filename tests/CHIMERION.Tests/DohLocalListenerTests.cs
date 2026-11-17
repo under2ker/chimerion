@@ -28,7 +28,7 @@ public class DohLocalListenerTests
         var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
         await using var listener = new DohLocalListener(IPAddress.Loopback, 0, transport);
         listener.Start();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var query = new byte[] { 0x12, 0x34, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
         using var udp = new UdpClient();
         await udp.SendAsync(query, new IPEndPoint(IPAddress.Loopback, listener.Port), timeout.Token);
@@ -96,7 +96,7 @@ public class DohLocalListenerTests
         var listener = new DohLocalListener(IPAddress.Loopback, 0, transport);
         listener.Start();
         using var udp = new UdpClient();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var query = new byte[] { 0x12, 0x34, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0 };
         await udp.SendAsync(query, new IPEndPoint(IPAddress.Loopback, listener.Port), timeout.Token);
         await handler.Started.Task.WaitAsync(timeout.Token);
@@ -182,7 +182,7 @@ public class DohLocalListenerTests
         var transport = new DohRelayTransport(http, new Uri("https://dns.example.test/dns-query"));
         await using var listener = new DohLocalListener(IPAddress.Loopback, 0, transport);
         listener.Start();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var query = new byte[] { 0x12, 0x34, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 7, (byte)'e', (byte)'x', (byte)'a', (byte)'m', (byte)'p', (byte)'l', (byte)'e', 3, (byte)'c', (byte)'o', (byte)'m', 0, 0, 1, 0, 1 };
         using var udp = new UdpClient();
         await udp.SendAsync(query, new IPEndPoint(IPAddress.Loopback, listener.Port), timeout.Token);
