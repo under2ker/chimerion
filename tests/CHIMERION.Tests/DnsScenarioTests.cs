@@ -33,6 +33,8 @@ public sealed class NetSim : IDisposable
         public string static6 { get; set; } = "";
         public bool v6 { get; set; } = true;
         public bool failSet { get; set; }
+        /// <summary>Сброс на автоматический DNS проходит, а установка статического адреса отказывает.</summary>
+        public bool failSetStatic { get; set; }
         /// <summary>Драйвер молча не включает IPv6 обратно.</summary>
         public bool failV6On { get; set; }
     }
@@ -196,6 +198,7 @@ public sealed class NetSim : IDisposable
         function Set-DnsClientServerAddress { [CmdletBinding()] param([int]$InterfaceIndex, [switch]$ResetServerAddresses, [string[]]$ServerAddresses)
           $s = SimLoad; $a = SimByIndex $s $InterfaceIndex
           if ($a.failSet) { throw "сбой установки DNS на адаптере $($a.name)" }
+          if ($a.failSetStatic -and -not $ResetServerAddresses) { throw "сбой установки статического DNS на адаптере $($a.name)" }
           if ($ResetServerAddresses) { $a.dns4 = @($a.dhcp4); $a.dns6 = @($a.dhcp6); $a.static4 = ''; $a.static6 = '' }
           else {
             $v4 = @($ServerAddresses | Where-Object { $_ -notmatch ':' }); $v6 = @($ServerAddresses | Where-Object { $_ -match ':' })
@@ -611,6 +614,30 @@ public class DnsScenarioTests
         await DnsSwitcher.RestoreAsync(write);
         Assert.Equal(new[] { "77.88.8.8" }, sim["Sim-Ethernet"].dns4);
         Assert.Equal("77.88.8.8", sim["Sim-Ethernet"].static4);
+    }
+
+    // Сброс на автоматический DNS прошел, а прежний статический адрес Windows не приняла: это не «восстановлено»,
+    // иначе копия удаляется, и адрес пользователя пропадает насовсем.
+    [Fact]
+    public async Task Disconnect_keeps_backup_when_original_static_dns_is_not_restored()
+    {
+        using var sim = new NetSim(OneEthernet(a => { a.static4 = "77.88.8.8"; a.dns4 = new() { "77.88.8.8" }; }));
+        var (log, write) = NewLog();
+        await DnsSwitcher.ApplyAsync(Server, new AppSettings(), write);
+        sim.Edit(s => s.adapters[0].failSetStatic = true);
+
+        await DnsSwitcher.RestoreAsync(write);
+
+        Assert.Contains(log, l => l.Contains("Исходный DNS не вернулся"));
+        Assert.DoesNotContain(log, l => l.Contains("Отключено: исходные настройки DNS восстановлены"));
+        Assert.True(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
+        Assert.Null(DnsSwitcher.GetActive());
+
+        // После исправления отказа повторное отключение возвращает адрес и только тогда убирает копию
+        sim.Edit(s => s.adapters[0].failSetStatic = false);
+        await DnsSwitcher.RestoreAsync(write);
+        Assert.Equal("77.88.8.8", sim["Sim-Ethernet"].static4);
+        Assert.False(File.Exists(Path.Combine(TestSetup.DataDir, "dns-backup.json")));
     }
 
     [Fact]

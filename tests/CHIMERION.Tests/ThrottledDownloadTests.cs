@@ -22,7 +22,7 @@ public class ThrottledDownloadTests
     }
 
     /// <summary>Локальный сервер: обычный запрос режется после 16 КБ, запрос куска отдается целиком.</summary>
-    private static (HttpListener Listener, string Url) Serve(byte[] content, bool throttle)
+    private static (HttpListener Listener, string Url) Serve(byte[] content, bool throttle, bool ranges = true)
     {
         int port = FreePort();
         var listener = new HttpListener();
@@ -39,7 +39,7 @@ public class ThrottledDownloadTests
                     try
                     {
                         var range = ctx.Request.Headers["Range"];
-                        ctx.Response.Headers["Accept-Ranges"] = "bytes";
+                        if (ranges) ctx.Response.Headers["Accept-Ranges"] = "bytes";
                         if (range != null && range.StartsWith("bytes="))
                         {
                             var p = range[6..].Split('-');
@@ -96,6 +96,25 @@ public class ThrottledDownloadTests
             Assert.Contains(stages, s => s.Contains("кусками"));
         }
         finally { (Updater.SlowAfter, Updater.StallAfter) = (slowAfter, stallAfter); listener.Stop(); }
+    }
+
+    // Сервер без поддержки Range замирает после первых байт: докачать кусками нельзя, но и ждать до ручной отмены тоже.
+    // Загрузка должна завершиться ошибкой, чтобы обновление взяло следующее зеркало.
+    [Fact]
+    public async Task Stalled_download_without_range_support_fails_instead_of_hanging()
+    {
+        var content = new byte[300 * 1024];
+        new Random(11).NextBytes(content);
+        var (listener, url) = Serve(content, throttle: true, ranges: false);
+        var old = Updater.NoRangeStallAfter;
+        try
+        {
+            Updater.NoRangeStallAfter = TimeSpan.FromSeconds(1);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            await Assert.ThrowsAsync<TimeoutException>(() => Download(url, new List<string>()));
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(15), $"ждали {watch.Elapsed.TotalSeconds:0.#} с");
+        }
+        finally { Updater.NoRangeStallAfter = old; listener.Stop(); }
     }
 
     [Fact]

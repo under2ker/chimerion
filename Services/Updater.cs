@@ -415,6 +415,8 @@ public static class Updater
     internal const int SlowBytesPerSecond = 24 * 1024;
     /// <summary>Сколько ждать, прежде чем судить о скорости, и сколько терпеть полную тишину.</summary>
     internal static TimeSpan SlowAfter = TimeSpan.FromSeconds(6), StallAfter = TimeSpan.FromSeconds(5);
+    /// <summary>Тишина без поддержки докачки (Range): куски не скачать, поэтому ждем дольше, но не бесконечно: потом следующее зеркало.</summary>
+    internal static TimeSpan NoRangeStallAfter = TimeSpan.FromSeconds(30);
     /// <summary>Кусок при докачке: меньше порога, после которого провайдеры режут соединение (15–30 КБ).</summary>
     internal const int ChunkSize = 14 * 1024;
 
@@ -431,7 +433,7 @@ public static class Updater
         cts.CancelAfter(GitHubMirrors.AttemptTimeout);
         using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cts.Token);
         resp.EnsureSuccessStatusCode();
-        cts.CancelAfter(Timeout.InfiniteTimeSpan); // ответ пришел: дальше ограничивает только таймаут клиента
+        cts.CancelAfter(Timeout.InfiniteTimeSpan); // ответ пришел: таймаут HttpClient тело не ограничивает, поэтому тишину ловит readCts ниже
         var total = resp.Content.Headers.ContentLength;
         bool ranges = resp.Headers.AcceptRanges.Contains("bytes") && total > 0;
         var finalUrl = resp.RequestMessage?.RequestUri?.ToString() ?? url; // после перенаправления GitHub: прямой адрес файла
@@ -451,10 +453,15 @@ public static class Updater
         while (true)
         {
             using var readCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-            if (ranges) readCts.CancelAfter(StallAfter);
+            readCts.CancelAfter(ranges ? StallAfter : NoRangeStallAfter);
             int n;
             try { n = await src.ReadAsync(buf, readCts.Token); }
-            catch (OperationCanceledException) when (!cts.IsCancellationRequested) { slow = true; break; } // тишина: замедление
+            catch (OperationCanceledException) when (!cts.IsCancellationRequested)
+            {
+                // Без Range докачать кусками нельзя: сообщаем о зависании, вызывающий код возьмет следующее зеркало
+                if (!ranges) throw new TimeoutException("сервер перестал отдавать данные");
+                slow = true; break; // тишина: замедление
+            }
             if (n == 0) break;
             await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
             done += n;

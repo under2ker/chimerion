@@ -406,11 +406,8 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Счетчики стабильности до проверки: если проверку испортил сбой сети, они возвращаются.</summary>
-    private sealed record CheckCounters(ServerStatus Status, int Total, int Ok, int FailStreak, int ServiceChecks, int AllOk, Dictionary<string, int> ServiceOk, int History);
-
-    private static Dictionary<DnsServer, CheckCounters> SnapshotCounters(IEnumerable<DnsServer> list) =>
-        list.ToDictionary(s => s, s => new CheckCounters(s.Status, s.ChecksTotal, s.ChecksOk, s.FailStreak, s.ServiceChecks, s.AllOk, new(s.ServiceOk), s.HistoryCount));
+    private static Dictionary<DnsServer, CheckSnapshot> SnapshotCounters(IEnumerable<DnsServer> list) =>
+        list.ToDictionary(s => s, CheckSnapshot.Take);
 
     /// <summary>
     /// После пакетной проверки: сохранение, итог, автоочистка. Защита от ложного карантина: если сети нет
@@ -418,7 +415,7 @@ public partial class MainWindow
     /// это сбой сети, а не серверов. Тогда автоочистка пропускается, а счетчики стабильности этой проверки
     /// откатываются, чтобы следующая проверка не отправила рабочие серверы в мусор.
     /// </summary>
-    private async Task FinishChecksAsync(List<DnsServer> list, Dictionary<DnsServer, CheckCounters>? before)
+    private async Task FinishChecksAsync(List<DnsServer> list, Dictionary<DnsServer, CheckSnapshot>? before)
     {
         bool networkUp = await SystemCheck.NetworkUpAsync();
         var wereWorking = before?.Where(kv => kv.Value.Status is ServerStatus.Ok or ServerStatus.Partial).Select(kv => kv.Key).ToList() ?? new();
@@ -437,20 +434,15 @@ public partial class MainWindow
         if (outage)
         {
             // Найденные поиском серверы проверены впервые: их неудачу тоже не засчитываем
+            // и их статус «Не работает» тоже: сбой сети не показатель сервера, пусть остаются непроверенными
             if (before == null)
-                foreach (var s in list) { s.ChecksTotal = 0; s.ChecksOk = 0; s.FailStreak = 0; s.TrimHistory(0); s.NotifyStability(); }
-            foreach (var (s, c) in before ?? new())
-            {
-                s.ChecksTotal = c.Total; s.ChecksOk = c.Ok; s.FailStreak = c.FailStreak;
-                s.ServiceChecks = c.ServiceChecks; s.AllOk = c.AllOk; s.ServiceOk = new(c.ServiceOk);
-                s.TrimHistory(c.History); // сбой сети не пишем в историю
-                s.NotifyStability();
-            }
+                foreach (var s in list) { s.ChecksTotal = 0; s.ChecksOk = 0; s.FailStreak = 0; s.TrimHistory(0); s.Status = ServerStatus.Unknown; s.LastError = null; s.NotifyStability(); }
+            foreach (var (s, c) in before ?? new()) c.Restore(s); // сбой сети не пишем ни в стабильность, ни в историю
             if (vpnSkewed)
             {
                 Log($"Во время проверки работал VPN ({string.Join(", ", vpns)}): запросы шли через него, и результат может не совпадать с тем, " +
                     "что будет без VPN. Автоочистка пропущена, стабильность не изменена. Выключите VPN и нажмите «Перепроверить»");
-                ShowToast("Работал VPN: проверка не засчитана, серверы не отправлены в мусор", "Warn");
+                ShowToast("Работал VPN: проверка не засчитана, серверы не в мусоре, показаны прошлые результаты", "Warn");
             }
             else if (noneAnswered)
             {
@@ -461,7 +453,7 @@ public partial class MainWindow
             else Log(networkUp
                 ? $"Похоже на сбой сети: из {wereWorking.Count} работавших серверов разом перестали отвечать {broke}. Автоочистка пропущена, стабильность не изменена. Проверьте сеть и нажмите «Перепроверить»"
                 : "Сеть пропала во время проверки. Автоочистка пропущена, стабильность не изменена. Когда сеть вернется, нажмите «Перепроверить»");
-            if (!vpnSkewed && !noneAnswered) ShowToast("Похоже на сбой сети: серверы не отправлены в мусор", "Warn");
+            if (!vpnSkewed && !noneAnswered) ShowToast("Похоже на сбой сети: серверы не в мусоре, показаны прошлые результаты", "Warn");
         }
 
         SaveServers();
