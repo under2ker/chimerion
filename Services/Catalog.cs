@@ -71,6 +71,14 @@ public static class Catalog
         "t.me dns chatgpt claude канал",
         "telegram канал рабочие DNS для нейросетей",
         "новый smart dns 2026 chatgpt",
+        // Рабочие сервисы из прошлых поисков: рядом с ними находятся похожие
+        "GeoHide DNS ChatGPT Gemini",
+        "Bezmezhau DNS ChatGPT Claude",
+        "dagami DNS нейросети",
+        // Англоязычные страницы и свежие списки
+        "smart dns chatgpt russia without vpn",
+        "dns for gemini claude russia 2026",
+        "список рабочих DNS для нейросетей 2026",
     };
 
     /// <summary>

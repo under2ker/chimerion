@@ -111,6 +111,19 @@ public static partial class SourceParser
 
     private sealed record Job(Uri Url, int Depth, string SourceName, string Type, int TgPage = 0);
 
+    /// <summary>Сколько подряд страниц без новых серверов терпит обход, прежде чем остановить поиск (кроме стартовых страниц).</summary>
+    internal const int StalePages = 300;
+
+    /// <summary>Обход выдохся: с последней находки обработано больше <see cref="StalePages"/> страниц. Стартовые страницы (глубина 0) не пропускаются.</summary>
+    internal static bool IsStale(int pageNo, int lastYieldAt, int depth) => depth >= 1 && pageNo - lastYieldAt > StalePages;
+
+    /// <summary>Адрес для очереди: канал Telegram становится лентой t.me/s/…, остальные ссылки t.me (боты, аккаунты, чаты) отбрасываются (null).</summary>
+    internal static Uri? PrepareUrl(Uri u)
+    {
+        var feed = TelegramToFeed(u);
+        return IsTelegramNonChannel(feed) ? null : feed;
+    }
+
     private static readonly HttpClient Http = CreateHttp();
 
     private static HttpClient CreateHttp()
@@ -166,7 +179,7 @@ public static partial class SourceParser
         var visited = new ConcurrentDictionary<string, byte>();
         var hostPages = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var exclude = st.ExcludeIps.ToHashSet();
-        int pages = 0, errors = 0;
+        int pages = 0, errors = 0, lastYieldAt = 0, staleLogged = 0;
 
         var level = new List<Job>();
         foreach (var s in st.Sources.Where(s => s.Enabled))
@@ -191,6 +204,11 @@ public static partial class SourceParser
         int outstanding = 0;
         void Enqueue(Job j)
         {
+            // Ссылки t.me: канал открываем лентой t.me/s/… (она идет через сервер общей карты), а боты, аккаунты и чаты
+            // страниц со списками не дают и по 16–30 с держат обходчик (в сегодняшнем поиске так зависло девять страниц)
+            var feed = PrepareUrl(j.Url);
+            if (feed == null) return;
+            if (!ReferenceEquals(feed, j.Url)) j = j with { Url = feed };
             if (visited.ContainsKey(j.Url.AbsoluteUri) || IsAdult(j.Url)) return;
             Interlocked.Increment(ref outstanding);
             Interlocked.Increment(ref queued);
@@ -217,7 +235,15 @@ public static partial class SourceParser
         {
                     if (!visited.TryAdd(job.Url.AbsoluteUri, 0)) return;
                     Interlocked.Decrement(ref queued);
-                    if (Interlocked.Increment(ref pages) > st.CrawlMaxPages) return;
+                    int pageNo = Interlocked.Increment(ref pages);
+                    if (pageNo > st.CrawlMaxPages) return;
+                    // Давно нет новых серверов: остаток очереди почти наверняка пустой. Стартовые страницы (глубина 0) обходим всегда
+                    if (IsStale(pageNo, Volatile.Read(ref lastYieldAt), job.Depth))
+                    {
+                        if (Interlocked.Exchange(ref staleLogged, 1) == 0)
+                            log($"Поиск завершается раньше лимита: последние {StalePages} страниц не дали новых серверов");
+                        return;
+                    }
                     Report(job.Url.Host);
 
                     string body;
@@ -276,7 +302,7 @@ public static partial class SourceParser
                             onFound?.Invoke(it); // показываем в списке сразу, не дожидаясь конца обхода
                         }
                     }
-                    if (added > 0) { log($"+{added}: {pageUrl}"); Report(job.Url.Host); }
+                    if (added > 0) { Volatile.Write(ref lastYieldAt, pageNo); log($"+{added}: {pageUrl}"); Report(job.Url.Host); }
 
                     // Поиск новых сервисов: у найденного DNS-хоста (dns.example.ru) открываем главную сайта —
                     // там обычно инструкция с IPv4-адресами, которых нет в статье, где сервис упомянули.
@@ -387,8 +413,10 @@ public static partial class SourceParser
                 // Все поисковики сразу: выдачи у них разные, а какой-то может не ответить или попросить капчу
                 var brave = SearchBraveAsync(q, queries.IndexOf(q), ct);
                 var ddg = SearchDuckDuckGoAsync(q, ct);
-                var bing = SearchBingAsync(q, ct);
-                var (b, d, g) = (await brave, await ddg, await bing);
+                var bing = SearchBingAsync(q, 1, ct);
+                // Bing сейчас единственный, кто отвечает без капчи: для первых запросов берем и вторую страницу выдачи
+                var bing2 = queries.IndexOf(q) < BingSecondPageQueries ? SearchBingAsync(q, 11, ct) : Task.FromResult(new List<Uri>());
+                var (b, d, g) = (await brave, await ddg, (await bing).Concat(await bing2).DistinctBy(u => u.AbsoluteUri).ToList());
                 Interlocked.Add(ref _engineHits[0], b.Count); Interlocked.Add(ref _engineHits[1], d.Count); Interlocked.Add(ref _engineHits[2], g.Count);
                 var urls = b.Concat(d).Concat(g).DistinctBy(u => u.AbsoluteUri).ToList();
                 // Посадочные страницы сервисов (в домене есть dns) — первыми.
@@ -420,7 +448,7 @@ public static partial class SourceParser
     }
 
     // Без входа GitHub дает 10 запросов поиска в минуту: держим шесть
-    private static readonly string[] GitHubQueries = { "dns chatgpt", "smart dns ai", "dns gemini claude", "ai dns russia", "smartdns russia", "doh chatgpt" };
+    private static readonly string[] GitHubQueries = { "dns chatgpt", "smart dns ai", "dns gemini claude", "ai dns russia", "smartdns russia", "doh chatgpt", "geohide dns", "smart dns chatgpt claude" };
 
     // Сколько ссылок дал каждый поисковик за этот поиск: Brave, DuckDuckGo, Bing
     private static readonly int[] _engineHits = new int[3];
@@ -536,11 +564,14 @@ public static partial class SourceParser
         catch (FormatException) { return null; }
     }
 
-    private static async Task<List<Uri>> SearchBingAsync(string q, CancellationToken ct)
+    /// <summary>Для скольких запросов брать вторую страницу выдачи Bing (параметр first=11).</summary>
+    private const int BingSecondPageQueries = 8;
+
+    private static async Task<List<Uri>> SearchBingAsync(string q, int first, CancellationToken ct)
     {
         try
         {
-            var html = await Http.GetStringAsync("https://www.bing.com/search?setlang=ru&q=" + Uri.EscapeDataString(q), ct);
+            var html = await Http.GetStringAsync("https://www.bing.com/search?setlang=ru&q=" + Uri.EscapeDataString(q) + (first > 1 ? "&first=" + first : ""), ct);
             var list = new List<Uri>();
             foreach (Match m in Regex.Matches(html, @"<li class=""b_algo""[^>]*>.*?<a[^>]*href=""(https?://[^""]+)""", RegexOptions.Singleline, TimeSpan.FromSeconds(2)))
                 if (TryUri(WebUtility.HtmlDecode(m.Groups[1].Value), out var u) && UnwrapBing(u) is { } real) list.Add(Normalize(real));

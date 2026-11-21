@@ -31,6 +31,15 @@ public static class ServerListGuard
     /// </summary>
     public static int Distinct(IEnumerable<DnsServer> items) => items.Select(i => i.Key).Distinct(StringComparer.OrdinalIgnoreCase).Count();
 
+    /// <summary>
+    /// Найденные поиском серверы, которые при первой проверке не ответили ни разу (сеть при этом была в порядке: при сбое
+    /// сети счетчики откатываются и сервер сюда не попадает). В основной список они не нужны: из 339 новых серверов в
+    /// одном поиске ответили 6, остальные раздували список до трехсот строк и ждали второй проверки. Подключенный и
+    /// добавленный вручную сервер не трогаем.
+    /// </summary>
+    public static List<DnsServer> DeadNewcomers(IEnumerable<DnsServer> added, Guid? activeId) =>
+        added.Where(s => !s.Manual && s.Id != activeId && s.Status == ServerStatus.Fail && s.ChecksTotal >= 1 && s.ChecksOk == 0).ToList();
+
     public static bool IsMassHost(string? host) =>
         !string.IsNullOrEmpty(host) && MassHosts.Any(h => host.Equals(h, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + h, StringComparison.OrdinalIgnoreCase));
 

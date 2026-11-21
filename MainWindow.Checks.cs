@@ -240,7 +240,8 @@ public partial class MainWindow
             });
 
             // Страницы, откуда пришли рабочие серверы: обходим первыми, там же появляются новые адреса
-            var seeds = _servers.Where(x => x.Status is ServerStatus.Ok or ServerStatus.Partial && !string.IsNullOrEmpty(x.SourceUrl))
+            // Не только сейчас рабочие, но и те, что хоть раз отвечали: страница, где они нашлись, дает новые адреса рядом
+            var seeds = _servers.Where(x => (x.Status is ServerStatus.Ok or ServerStatus.Partial || x.ChecksOk > 0) && !string.IsNullOrEmpty(x.SourceUrl))
                                 .GroupBy(x => x.SourceUrl!).OrderByDescending(g => g.Count()).Select(g => g.Key).Take(40).ToList();
             var found = await SourceParser.FetchAllAsync(_settings, Log, progress, OnFound, ct, seeds);
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background); // дождаться добавления
@@ -258,6 +259,7 @@ public partial class MainWindow
                     await Task.WhenAny(all, Task.Delay(500));
                 }
                 await FinishChecksAsync(added, before: null);
+                DropDeadNewcomers(added);
             }
             _ = ResolveLocationsAsync();
             int purged = _purgeTotal - purgeStart;
@@ -268,6 +270,23 @@ public partial class MainWindow
         finally { beat.Stop(); EndWork(); }
     }
 
+
+    /// <summary>
+    /// После поиска: найденные серверы, не ответившие при первой проверке, в список не попадают. Они уходят в метки мусора
+    /// на сутки (если поиск найдет их снова позже, их проверят заново). Список целиком не опустошаем.
+    /// </summary>
+    private void DropDeadNewcomers(List<DnsServer> added)
+    {
+        var dead = ServerListGuard.DeadNewcomers(added, DnsSwitcher.GetActive()?.ServerId);
+        if (dead.Count == 0) return;
+        if (ServerListGuard.WouldEmptyList(_servers, dead.Count)) return;
+        foreach (var s in dead) { _known.Remove(s.Key); _junk[s.Key] = DateTime.Now; }
+        try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
+        _purgeTotal += dead.Count;
+        using (_view?.DeferRefresh()) foreach (var s in dead) _servers.Remove(s);
+        SaveServers();
+        Log($"Из найденных не ответили при первой проверке {dead.Count}: в список не добавлены, повторно их проверят не раньше чем через сутки");
+    }
 
     private async void CheckAll_Click(object sender, RoutedEventArgs e) =>
         await RunChecksAsync(_view!.Cast<DnsServer>().ToList());
