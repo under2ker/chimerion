@@ -167,7 +167,7 @@ public partial class MainWindow
         List<Crowd.Found> found;
         try { found = await Crowd.DiscoverAsync(); }
         catch (Exception) { return; }
-        var keys = _servers.Select(Crowd.KeyOf).Where(k => k != null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var keys = _servers.Select(Crowd.KeyOf).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
         var added = new List<DnsServer>();
         foreach (var f in Crowd.PickNew(found, keys))
         {
