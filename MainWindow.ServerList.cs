@@ -582,11 +582,11 @@ public partial class MainWindow
     private async Task FadeOutAndRemoveAsync(IEnumerable<DnsServer> items)
     {
         var list = items.ToList();
-        // Большая пачка (сотни строк): без анимации и одним пакетом. Удаление по одной с пересортировкой таблицы
-        // на каждой строке подвешивало программу на минуты (930 строк в прогоне)
+        // Большая пачка (сотни строк): без анимации. Не через DeferRefresh: под ним любое изменение списка бросает
+        // InvalidOperationException (проверено тестом), а обычное удаление 300-900 строк занимает меньше 0,1 с
         if (list.Count > 50)
         {
-            using (_view?.DeferRefresh()) foreach (var s in list) _servers.Remove(s);
+            foreach (var s in list) _servers.Remove(s);
             SaveServers();
             return;
         }

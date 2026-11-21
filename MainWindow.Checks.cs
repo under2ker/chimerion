@@ -283,7 +283,9 @@ public partial class MainWindow
         foreach (var s in dead) { _known.Remove(s.Key); _junk[s.Key] = DateTime.Now; }
         try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
         _purgeTotal += dead.Count;
-        using (_view?.DeferRefresh()) foreach (var s in dead) _servers.Remove(s);
+        // Без DeferRefresh: таблица уже на экране, и WPF не позволяет менять позицию Current при отложенном обновлении
+        // (так упало в первом варианте). Автоочистка при запуске откладывает обновление только пока окно не показано
+        foreach (var s in dead) _servers.Remove(s);
         SaveServers();
         Log($"Из найденных не ответили при первой проверке {dead.Count}: в список не добавлены, повторно их проверят не раньше чем через сутки");
     }
@@ -640,7 +642,7 @@ public partial class MainWindow
         }
         try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
         _purgeTotal += junk.Count;
-        if (silent) using (_view?.DeferRefresh()) foreach (var s in junk) _servers.Remove(s);
+        if (silent) foreach (var s in junk) _servers.Remove(s); // без DeferRefresh: под ним WPF не дает менять список, см. FadeOutAndRemoveAsync
         else _ = FadeOutAndRemoveAsync(junk);
         SaveServers();
         if (!silent)
@@ -648,17 +650,15 @@ public partial class MainWindow
             Log($"Автоочистка: убрано нерабочих {junk.Count}, осталось {_servers.Count - junk.Count}");
             OfferUndo($"Убрано нерабочих серверов: {junk.Count}", () =>
             {
-                // Сотни строк возвращаются одним пакетом; таблица пересчитывается один раз после цикла
-                using (_view?.DeferRefresh())
+                // Без DeferRefresh: под ним WPF бросает исключение при вставке строки (проверено тестом). Сотни строк
+                // возвращаются меньше чем за 0,1 с и на настоящей таблице
+                foreach (var r in undoInfo)
                 {
-                    foreach (var r in undoInfo)
-                    {
-                        r.Server.Fading = false;             // строка, которая еще гаснет, остается в списке
-                        _purgeKeep.Add(r.Server.Id);         // возвращенные не убираются снова до перезапуска
-                        if (!_servers.Contains(r.Server)) _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
-                        _known.Add(r.Server.Key);
-                        if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
-                    }
+                    r.Server.Fading = false;             // строка, которая еще гаснет, остается в списке
+                    _purgeKeep.Add(r.Server.Id);         // возвращенные не убираются снова до перезапуска
+                    if (!_servers.Contains(r.Server)) _servers.Insert(Math.Clamp(r.Index, 0, _servers.Count), r.Server);
+                    _known.Add(r.Server.Key);
+                    if (r.Junk is { } t) _junk[r.Server.Key] = t; else _junk.Remove(r.Server.Key);
                 }
                 try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
                 _purgeTotal -= undoInfo.Count;
