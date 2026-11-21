@@ -59,6 +59,10 @@ public static class Crowd
     /// <see cref="NewVerified"/> проверенных сервером. Проверенных больше: сервер уже отсеял нерабочие, а пачка от
     /// одного поиска на VPS (50–60 адресов) иначе доходила бы до программы пять часов.
     /// </summary>
+    /// <summary>Кнопка «Загрузить готовый список»: все проверенные сервером CHIMERION, которых еще нет в списке, без лимита.</summary>
+    public static List<Found> ReadyList(IEnumerable<Found> found, ISet<string> known) =>
+        found.Where(f => f.Verified && !known.Contains(f.Server)).DistinctBy(f => f.Server, StringComparer.OrdinalIgnoreCase).ToList();
+
     public static List<Found> PickNew(IEnumerable<Found> found, ISet<string> known)
     {
         var fresh = found.Where(f => !known.Contains(f.Server)).ToList();

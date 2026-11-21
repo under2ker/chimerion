@@ -29,3 +29,18 @@ public class CrowdVerifiedTests
         Assert.Equal(10, Crowd.PickNew(found, new HashSet<string>()).Count);
     }
 }
+
+public class ReadyListTests
+{
+    [Fact]
+    public void Ready_list_takes_all_verified_new_ones_without_limit()
+    {
+        var found = Enumerable.Range(0, 60).Select(i => new Crowd.Found("10.3.0." + i, null, null, 0, 0, 0, true))
+            .Append(new Crowd.Found("10.3.0.5", null, null, 0, 0, 0, true))          // повтор
+            .Append(new Crowd.Found("10.4.0.1", null, null, 90, 30, 3)).ToList();     // от пользователей: не для этой кнопки
+        var known = new HashSet<string> { "10.3.0.0" };
+        var r = Crowd.ReadyList(found, known);
+        Assert.Equal(59, r.Count);
+        Assert.All(r, f => Assert.True(f.Verified));
+    }
+}

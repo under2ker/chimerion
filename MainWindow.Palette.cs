@@ -98,6 +98,7 @@ public partial class MainWindow
         Add("Проверить YouTube, Discord и Telegram", GroupDo, "globe", "сайты доступность", () => { EnsureShown(); return DashboardSitesAsync(); });
         Add("Подобрать сервер автоматически", GroupDo, "check", "автоподбор лучший", () => { EnsureShown(); return AutoPickAsync(); });
         Add("Переключить на лучший сервер", GroupDo, "arrow-left-right", "смена сервера лучший", () => { EnsureShown(); return SwitchToBestAsync(); });
+        Add("Загрузить готовый список серверов", GroupDo, "download", "готовый список сервер chimerion скачать smart dns", InWindow(() => { ShowControlPanel(); LoadReady_Click(this, new RoutedEventArgs()); }));
         Add("Найти новые серверы", GroupDo, "download", "поиск источники скачать список", InWindow(() => { ShowControlPanel(); Fetch_Click(this, new RoutedEventArgs()); }));
         Add("Перепроверить все серверы", GroupDo, "refresh-cw", "проверка список обновить", InWindow(() => { ShowControlPanel(); CheckAll_Click(this, new RoutedEventArgs()); }));
         if (_undo != null) Add("Отменить последнее действие", GroupDo, "x", "undo назад вернуть ctrl z", RunUndoAsync);

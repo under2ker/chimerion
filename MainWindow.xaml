@@ -334,6 +334,8 @@
                         Padding="10,9" Margin="4,0,0,0" ToolTip="Режим проверки: глубокая, только ChatGPT, Claude или Gemini"><controls:Icon Kind="chevron-down" Size="14"/></Button>
                 <Button Content="График качества" Click="Quality_Click" Style="{StaticResource Strong}" Margin="8,0,0,0"
                         ToolTip="Как выбранный сервер отвечал за последние 14 дней: время ответа и проверки без ответа"/>
+                <Button Content="Загрузить готовый список" Click="LoadReady_Click" Style="{StaticResource Strong}" Margin="8,0,8,0"
+                        ToolTip="Smart DNS, которые нашел и проверил сервер CHIMERION. Быстрее поиска: загружаются сразу и проверяются у вас, нерабочие удаляются"/>
                 <Button Content="Найти новые серверы" Click="Fetch_Click" Style="{StaticResource Primary}"
                         ToolTip="Поиск по источникам и в интернете; найденные проверяются автоматически, нерабочие удаляются"/>
             </StackPanel>
