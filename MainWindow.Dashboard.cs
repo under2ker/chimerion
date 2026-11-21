@@ -37,6 +37,9 @@ public partial class MainWindow
     private Controls.Icon _dashboardHeroMark = null!;
     private readonly Dictionary<string, (Ellipse Dot, TextBlock Status, TextBlock Note, Button Action, string Url)> _dashboardServiceRows = new();
     private Border _dashboardWarn = null!;
+    // Помехи браузера (свой безопасный DNS, прокси Windows): читаются из файлов, поэтому не чаще раза в минуту
+    private DateTime _dashboardBrowserAt;
+    private List<SystemCheck.Issue> _dashboardBrowserIssues = new();
     private TextBlock _dashboardWarnText = null!, _dashboardSmartHint = null!;
     private Guid? _dashboardPickId; // выбранный в «Лучших серверах», но еще не подключенный
     private readonly List<(Controls.Switch Toggle, TextBlock Status, Ellipse Dot, Func<Tool> Tool)> _dashboardToolRows = new();
@@ -482,6 +485,17 @@ public partial class MainWindow
     private static string Uptime(TimeSpan t) =>
         t.TotalDays >= 1 ? $"{(int)t.TotalDays} д {t.Hours} ч" : t.TotalHours >= 1 ? $"{(int)t.TotalHours} ч {t.Minutes} мин" : $"{Math.Max(1, t.Minutes)} мин";
 
+    /// <summary>Браузер мимо DNS системы: сайт открывается напрямую с настоящего адреса, и CHIMERION в нем не действует.</summary>
+    private List<SystemCheck.Issue> DashboardBrowserIssues()
+    {
+        if (DateTime.Now - _dashboardBrowserAt > TimeSpan.FromSeconds(60))
+        {
+            _dashboardBrowserAt = DateTime.Now;
+            try { _dashboardBrowserIssues = SystemCheck.BrowserIssues(); } catch (Exception) { _dashboardBrowserIssues = new(); }
+        }
+        return _dashboardBrowserIssues;
+    }
+
     private void RefreshDashboard()
     {
         if (!IsVisible || DashboardHost.Visibility != Visibility.Visible) return;
@@ -510,14 +524,24 @@ public partial class MainWindow
             : showPlace ? server!.LocationCell : active!.Split ? "Нейросети через Smart DNS, остальной трафик через обычный DNS" : "Весь трафик идет через Smart DNS", 3);
         _dashboardHeroMode.ToolTip = showPlace ? server!.LocationTooltip : null;
         bool partial = on && settled && aiServices.Count > 0 && open < aiServices.Count;
+        var browser = on && settled ? DashboardBrowserIssues() : new List<SystemCheck.Issue>();
+        var warnLines = new List<string>();
         if (partial)
         {
             var closed = aiServices.Where(x => !x.Access.StartsWith("✓")).Select(x => x.Name).ToList();
-            _dashboardWarnText.Text = $"Открываются {open} из {aiServices.Count} нейросетей: {string.Join(", ", closed)} {(closed.Count == 1 ? "не открывается" : "не открываются")}";
+            warnLines.Add($"Открываются {open} из {aiServices.Count} нейросетей: {string.Join(", ", closed)} {(closed.Count == 1 ? "не открывается" : "не открываются")}");
         }
-        _dashboardWarn.Visibility = partial ? Visibility.Visible : Visibility.Collapsed;
-        DashboardHeroGlow(on && settled && !partial ? 1 : switching && goingOn || partial ? .4 : 0);
-        Ui.FadeBrush(_dashboardHero, Border.BorderBrushProperty, partial ? "Warn" : on && settled ? "Ok" : switching ? "Accent" : "Border", 420);
+        if (browser.Count > 0)
+        {
+            // Сайт идет мимо CHIMERION: Gemini и другие сервисы видят настоящий адрес и пишут «страна не поддерживается»
+            var b = browser[0];
+            warnLines.Add($"{b.Title}. {b.Fix} Пока это включено, Gemini и другие сайты в браузере могут писать «страна не поддерживается»" + (browser.Count > 1 ? $" (еще помех: {browser.Count - 1}, см. «Диагностика»)." : "."));
+        }
+        bool warn = warnLines.Count > 0;
+        if (warn) _dashboardWarnText.Text = string.Join(Environment.NewLine, warnLines);
+        _dashboardWarn.Visibility = warn ? Visibility.Visible : Visibility.Collapsed;
+        DashboardHeroGlow(on && settled && !warn ? 1 : switching && goingOn || warn ? .4 : 0);
+        Ui.FadeBrush(_dashboardHero, Border.BorderBrushProperty, warn ? "Warn" : on && settled ? "Ok" : switching ? "Accent" : "Border", 420);
         Ui.FadeBrush(_dashboardHeroIcon, Border.BackgroundProperty, on && settled ? "Ok" : "Surface2", 420);
         _dashboardHeroMark.Kind = on && settled ? "circle-check" : "shield-check";
         _dashboardHeroMark.SetResourceReference(Controls.Icon.ForegroundProperty, on && settled ? "OnToggle" : switching ? "Accent" : "Muted");
