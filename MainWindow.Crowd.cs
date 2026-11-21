@@ -169,20 +169,27 @@ public partial class MainWindow
         catch (Exception) { return; }
         var keys = _servers.Select(Crowd.KeyOf).Where(k => k != null).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var added = new List<DnsServer>();
-        foreach (var f in found.Where(f => !keys.Contains(f.Server)).Take(10))
+        foreach (var f in Crowd.PickNew(found, keys))
         {
             if (Crowd.ToServer(f) is not { } s || _junk.ContainsKey(s.Key) || !_known.Add(s.Key)) continue;
             _servers.Add(s);
             added.Add(s);
         }
         if (added.Count == 0) return;
-        Log($"Общая карта: добавлено серверов {added.Count}, которые работают у других пользователей. Проверяю");
+        int byServer = added.Count(s => found.Any(f => f.Verified && f.Server.Equals(Crowd.KeyOf(s), StringComparison.OrdinalIgnoreCase)));
+        Log(byServer > 0
+            ? $"Общая карта: добавлено серверов {added.Count}, из них проверены сервером CHIMERION {byServer}. Проверяю"
+            : $"Общая карта: добавлено серверов {added.Count}, которые работают у других пользователей. Проверяю");
         SaveServers();
         foreach (var s in added)
         {
             if (_busyConn) break;
             await CheckOneAsync(s, null);
         }
+        // Не ответившие здесь в список не нужны, как и после поиска. Но если не ответил никто или работает VPN, это сеть,
+        // а не серверы: тогда никого не убираем
+        if (!ServerListGuard.NoneAnswered(added) && SystemCheck.ActiveVpns().Count == 0 && await SystemCheck.NetworkUpAsync())
+            DropDeadNewcomers(added);
     }
 
     /// <summary>Строка «У вашего провайдера» для блока лучших: сервер, доля удачных проверок в той же сети и их число.</summary>

@@ -48,7 +48,22 @@ public static class Crowd
     public sealed record Item(string Server, string Service, bool Ok, string? Name, string? Url = null);
 
     /// <summary>Сервер, который у многих работает (общая карта): ключ, имя, адрес DoH, доля удачных, проверок, сетей провайдеров.</summary>
-    public sealed record Found(string Server, string? Name, string? Url, int Rate, int Checks, int Nets);
+    /// <param name="Verified">Нашел и проверил сервер CHIMERION (поиск на VPS): адрес отвечает и подменяет адреса нейросетей.</param>
+    public sealed record Found(string Server, string? Name, string? Url, int Rate, int Checks, int Nets, bool Verified = false);
+
+    /// <summary>Сколько новых серверов за один обмен с общей картой: от пользователей и проверенных сервером CHIMERION.</summary>
+    public const int NewFromUsers = 10, NewVerified = 30;
+
+    /// <summary>
+    /// Новые для этого списка серверы из общей карты: не больше <see cref="NewFromUsers"/> от пользователей и
+    /// <see cref="NewVerified"/> проверенных сервером. Проверенных больше: сервер уже отсеял нерабочие, а пачка от
+    /// одного поиска на VPS (50–60 адресов) иначе доходила бы до программы пять часов.
+    /// </summary>
+    public static List<Found> PickNew(IEnumerable<Found> found, ISet<string> known)
+    {
+        var fresh = found.Where(f => !known.Contains(f.Server)).ToList();
+        return fresh.Where(f => !f.Verified).Take(NewFromUsers).Concat(fresh.Where(f => f.Verified).Take(NewVerified)).ToList();
+    }
 
     public sealed class Queue
     {
@@ -201,7 +216,8 @@ public static class Crowd
         {
             string? Str(string n) => e.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
             int Int(string n) => e.TryGetProperty(n, out var v) && v.TryGetInt32(out var i) ? i : 0;
-            if (Str("server") is { Length: > 0 } server) list.Add(new Found(server, Str("name"), Str("url"), Int("rate"), Int("checks"), Int("nets")));
+            bool verified = e.TryGetProperty("verified", out var vf) && vf.ValueKind == JsonValueKind.True;
+            if (Str("server") is { Length: > 0 } server) list.Add(new Found(server, Str("name"), Str("url"), Int("rate"), Int("checks"), Int("nets"), verified));
         }
         return list;
     }
