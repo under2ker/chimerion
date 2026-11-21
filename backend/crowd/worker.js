@@ -11,6 +11,7 @@
 // POST /v1/tickets статусы и ответы по своим обращениям (по секретным токенам, которые знает только программа).
 // POST /tg-setup    подключить бота (заголовок X-Admin-Key): адрес вебхука и команды.
 // GET  /v1/discover серверы, которые у многих работают: программы добавляют их к себе и проверяют сами.
+//                   Плюс Smart DNS, которые нашел и проверил наш сервер (POST /v1/verified, с ключом администратора).
 // GET  /v1/probe    открывается ли сайт снаружи России (с узла Cloudflare): «лежит у всех» или «не открывается у вас».
 // GET  /v1/services состояние ChatGPT, Claude и Gemini по их страницам статуса.
 // GET  /v1/ios      профиль DNS для iPhone (.mobileconfig) с DoH выбранного сервера.
@@ -678,7 +679,44 @@ export async function discover(env) {
      WHERE hour >= ? GROUP BY s.server
      HAVING SUM(ok) + SUM(fail) >= 20 AND SUM(ok) * 100 >= 70 * (SUM(ok) + SUM(fail)) AND COUNT(DISTINCT asn) >= 2
      ORDER BY SUM(ok) DESC LIMIT 100`).bind(h - 24).all();
-  return (res.results || []).map((r) => ({ server: r.server, name: r.name || r.server, url: r.url || null, rate: Math.round((100 * r.ok) / (r.ok + r.fail)), checks: r.ok + r.fail, nets: r.nets }));
+  const out = (res.results || []).map((r) => ({ server: r.server, name: r.name || r.server, url: r.url || null, rate: Math.round((100 * r.ok) / (r.ok + r.fail)), checks: r.ok + r.fail, nets: r.nets }));
+  // Проверенные сервером: после серверов от пользователей, свежие (двое суток) и быстрые первыми
+  const have = new Set(out.map((x) => x.server));
+  const v = await env.DB.prepare("SELECT server, name, url FROM verified WHERE seen >= ? ORDER BY seen DESC, ms ASC LIMIT ?")
+    .bind(h - VERIFIED_HOURS, VERIFIED_MAX).all().catch(() => ({ results: [] }));
+  for (const r of v.results || []) if (!have.has(r.server)) out.push({ server: r.server, name: r.name, url: r.url || null, rate: 0, checks: 0, nets: 0, verified: true });
+  return out;
+}
+
+const VERIFIED_HOURS = 48, VERIFIED_MAX = 80;
+
+/**
+ * Итог поиска на сервере CHIMERION: адреса, которые отвечают и подменяют адреса нейросетей. Только с ключом
+ * администратора. Каждый адрес проверяется по формату; запись обновляет час последней проверки.
+ */
+export async function putVerified(req, env) {
+  const text = await req.text();
+  if (text.length > MAX_BODY) return json({ error: "too large" }, 413);
+  let body;
+  try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
+  const list = Array.isArray(body?.servers) ? body.servers.slice(0, 200) : [];
+  const h = nowHour();
+  const rows = [];
+  for (const s of list) {
+    const server = String(s?.server || "").trim().toLowerCase();
+    if (!(IPV4_RE.test(server) || HOST_RE.test(server))) continue;
+    let url = null;
+    if (!IPV4_RE.test(server)) {
+      try { const u = new URL(String(s.url || "")); if (u.protocol === "https:" && u.hostname === server) url = u.origin + u.pathname; } catch {}
+      if (!url) url = `https://${server}/dns-query`;
+    }
+    const name = cleanName(s?.name) || server;
+    const ms = Number.isFinite(s?.ms) ? Math.max(0, Math.min(60000, Math.round(s.ms))) : null;
+    rows.push(env.DB.prepare("INSERT INTO verified (server, name, url, ms, seen) VALUES (?, ?, ?, ?, ?) ON CONFLICT (server) DO UPDATE SET name = excluded.name, url = excluded.url, ms = excluded.ms, seen = excluded.seen").bind(server, name, url, ms, h));
+  }
+  rows.push(env.DB.prepare("DELETE FROM verified WHERE seen < ?").bind(h - 7 * 24));
+  await env.DB.batch(rows);
+  return json({ ok: true, saved: rows.length - 1 });
 }
 
 /** Открывается ли сайт с узла Cloudflare. Любой HTTP-ответ, даже 403 от защиты от ботов, значит «сайт жив». */
@@ -969,6 +1007,7 @@ export default {
       if (req.method === "GET" && url.pathname === "/v1/pages") return await pages(env);
       // Ручной запуск ночного поиска (проверка): только с ключом администратора
       if (req.method === "POST" && url.pathname === "/v1/search-run" && env.ADMIN_KEY && req.headers.get("x-admin-key") === env.ADMIN_KEY) return json(await runSearch(env, url.searchParams.get("reset") === "1"));
+      if (req.method === "POST" && url.pathname === "/v1/verified" && env.ADMIN_KEY && req.headers.get("x-admin-key") === env.ADMIN_KEY) return await putVerified(req, env);
       if (req.method === "GET" && url.pathname === "/") return await statusPage(env, ctx);
       return new Response("not found", { status: 404 });
     } catch (e) {

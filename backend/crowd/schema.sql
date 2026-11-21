@@ -116,3 +116,11 @@ CREATE TABLE IF NOT EXISTS meta (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS verified (
+  server  TEXT PRIMARY KEY,          -- IP или хост DoH
+  name    TEXT NOT NULL,             -- сайт, где адрес нашелся
+  url     TEXT,                      -- полный адрес DoH
+  ms      INTEGER,                   -- время ответа с сервера, мс
+  seen    INTEGER NOT NULL           -- час последней удачной проверки
+);
+CREATE INDEX IF NOT EXISTS verified_seen ON verified (seen);
