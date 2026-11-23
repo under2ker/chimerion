@@ -56,9 +56,11 @@ public sealed class UpdateScenarioTests : IDisposable
         _links = Directory.CreateDirectory(Path.Combine(_dir, "links")).FullName;
         Shortcuts.Folders = () => new[] { _links };
         HotfixChannel.BaseUrl = ""; // настоящий бакет тестам не нужен, сценарии с R2 включают свой адрес
+        HotfixChannel.MirrorUrls = Array.Empty<string>(); // и настоящее зеркало тоже
     }
 
     private static readonly string RealHotfixBase = HotfixChannel.BaseUrl;
+    private static readonly string[] RealMirrors = HotfixChannel.MirrorUrls;
 
     private readonly string _links;
     private static readonly Func<IEnumerable<string>> DefaultFolders = Shortcuts.Folders;
@@ -73,6 +75,7 @@ public sealed class UpdateScenarioTests : IDisposable
         Updater.ExePathOverride = null;
         Shortcuts.Folders = DefaultFolders;
         HotfixChannel.BaseUrl = RealHotfixBase;
+        HotfixChannel.MirrorUrls = RealMirrors;
         File.Delete(Storage.PathOf("update-pending.json"));
         if (Directory.Exists(Storage.PathOf("backup"))) Directory.Delete(Storage.PathOf("backup"), true);
         _key.Dispose();
@@ -539,22 +542,23 @@ public sealed class UpdateScenarioTests : IDisposable
     private const string R2 = "https://updates.example.r2.dev";
 
     /// <summary>Быстрое исправление в «бакете»: архив, его подпись, подписанный манифест.</summary>
-    private HotfixChannel.Manifest PublishHotfix(Version hv, byte[]? zip = null, string notes = "Срочно поправлено отключение", ECDsa? signer = null)
+    private HotfixChannel.Manifest PublishHotfix(Version hv, byte[]? zip = null, string notes = "Срочно поправлено отключение", ECDsa? signer = null, string at = R2)
     {
         zip ??= Zip("CHIMERION.exe", NewExe);
         var name = $"CHIMERION-{hv.ToString(3)}-win-x64.zip";
         string Sig(byte[] data) => Convert.ToBase64String((signer ?? _key).SignData(data, HashAlgorithmName.SHA256));
-        _gh.Files[$"{R2}/{name}"] = zip;
-        _gh.Files[$"{R2}/{name}.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(zip));
+        _gh.Files[$"{at}/{name}"] = zip;
+        _gh.Files[$"{at}/{name}.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(zip));
         var json = System.Text.Json.JsonSerializer.Serialize(new { version = hv.ToString(3), notes, zip = name, sha256 = Convert.ToHexString(SHA256.HashData(zip)), date = "2026-10-26" });
         var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-        _gh.Files[$"{R2}/latest.json"] = bytes;
-        _gh.Files[$"{R2}/latest.json.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(bytes));
+        _gh.Files[$"{at}/latest.json"] = bytes;
+        _gh.Files[$"{at}/latest.json.sig"] = System.Text.Encoding.ASCII.GetBytes(Sig(bytes));
         return HotfixChannel.Parse(json, Sig(bytes), Updater.TrustedKey)!;
     }
 
     private void UseR2()
     {
+        HotfixChannel.MirrorUrls = Array.Empty<string>();
         HotfixChannel.BaseUrl = R2;
         HotfixChannel.Http = new HttpClient(_gh);
     }
@@ -607,6 +611,76 @@ public sealed class UpdateScenarioTests : IDisposable
             Assert.Null(await HotfixChannel.CheckAsync(CancellationToken.None));
         }
         finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    // ---------- Свое зеркало в России ----------
+
+    private const string Ru = "https://ru.example.test";
+
+    private void UseMirror()
+    {
+        UseR2();
+        HotfixChannel.MirrorUrls = new[] { Ru + "/" };
+    }
+
+    [Fact]
+    public async Task Mirror_delivers_update_when_R2_and_GitHub_are_blocked()
+    {
+        UseMirror();
+        try
+        {
+            PublishHotfix(V, at: Ru);
+            _gh.Blocked = u => u.StartsWith(R2) || u.Contains("github");
+            var (m, problem) = await HotfixChannel.CheckDetailedAsync(CancellationToken.None);
+            Assert.Equal(UpdateFailure.None, problem);
+            Assert.Equal(V, m!.ParsedVersion);
+            Assert.Equal(new[] { Ru }, m.From);
+            Assert.Equal($"{Ru}/{m.Zip}", HotfixChannel.ZipUrls(m)[0]);
+            await Updater.InstallAsync(V, new Progress<(double?, string)>(), CancellationToken.None, m);
+            Assert.Equal(NewExe, File.ReadAllBytes(Exe));
+        }
+        finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    [Fact]
+    public async Task Forged_mirror_does_not_override_signed_R2()
+    {
+        UseMirror();
+        try
+        {
+            PublishHotfix(V);
+            using var stranger = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            PublishHotfix(new Version(V.Major, V.Minor, V.Build + 5), signer: stranger, at: Ru);
+            var (m, problem) = await HotfixChannel.CheckDetailedAsync(CancellationToken.None);
+            Assert.Equal(UpdateFailure.None, problem);
+            Assert.Equal(V, m!.ParsedVersion);
+            Assert.Equal(new[] { R2 }, m.From);
+        }
+        finally { HotfixChannel.BaseUrl = RealHotfixBase; }
+    }
+
+    [Fact]
+    public async Task Release_files_come_from_mirror_before_proxies()
+    {
+        HotfixChannel.MirrorUrls = new[] { Ru };
+        Publish();
+        foreach (var url in new[] { Updater.ZipUrl(V), Updater.SigUrl(V), Updater.ShaUrl(V) })
+            _gh.Files[$"{Ru}/{url[(url.LastIndexOf('/') + 1)..]}"] = _gh.Files[url];
+        _gh.Blocked = u => u.StartsWith("https://github.com/");
+        await Install();
+        Assert.Equal(NewExe, File.ReadAllBytes(Exe));
+        Assert.Contains($"{Ru}/{Updater.ZipName(V)}", _gh.Requested);
+        Assert.DoesNotContain(_gh.Requested, u => GitHubMirrors.ReleaseProxies.Any(u.StartsWith));
+    }
+
+    [Fact]
+    public void Release_urls_order_is_github_mirror_proxies()
+    {
+        HotfixChannel.MirrorUrls = new[] { Ru, "" };
+        var urls = Updater.ReleaseFileUrls(Updater.ZipUrl(V)).ToList();
+        Assert.Equal(Updater.ZipUrl(V), urls[0]);
+        Assert.Equal($"{Ru}/{Updater.ZipName(V)}", urls[1]);
+        Assert.Equal(2 + GitHubMirrors.ReleaseProxies.Length, urls.Count);
     }
 
     [Fact]
