@@ -54,6 +54,25 @@ public class LogDigestTests
     }
 
     [Fact]
+    public void Digest_last_access_lists_only_the_latest_session()
+    {
+        // Тикет 8: 0.1.167 писала «Claude (сайт)», 0.1.180 — «Claude (claude.ai) (сайт)»; старый итог выдавался за текущий
+        var lines = LogDigest.Build(new List<(DateTime, string)>
+        {
+            L(0, "aaaa1111", "Начало сеанса; версия=0.1.167; Windows=10.0; разрядность=64"),
+            L(1, "aaaa1111", "Сервис Claude; сайт=True; облегченная=False: Доступ=✗ доступ закрыт; через Smart DNS=False"),
+            L(2, "aaaa1111", "Конец сеанса; код выхода=0"),
+            L(10, "bbbb2222", "Начало сеанса; версия=0.1.180; Windows=10.0; разрядность=64"),
+            L(11, "bbbb2222", "Сервис Claude (claude.ai); сайт=True; облегченная=False: Доступ=✓ доступен; через Smart DNS=True"),
+            L(12, "bbbb2222", "Сервис Claude; сайт=False; облегченная=False: Доступ=✓ доступен; через Smart DNS=True"),
+        });
+        var last = Assert.Single(lines, l => l.StartsWith("  последнее: "));
+        Assert.Contains("Claude (claude.ai) (сайт) ✓ доступен", last);
+        Assert.Contains("Claude (API) ✓ доступен", last);
+        Assert.DoesNotContain("Claude (сайт)", last);
+    }
+
+    [Fact]
     public void Digest_shows_access_changes_and_problem_events_only()
     {
         var text = string.Join("\n", LogDigest.Build(Sample()));

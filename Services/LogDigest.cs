@@ -51,6 +51,10 @@ public static class LogDigest
         var causes = new Dictionary<string, Dictionary<string, int>>();
         var events = new Dictionary<string, Group>();
         var access = new Dictionary<string, string>();
+        // В каком сеансе состояние записано последним: имена проверок менялись между версиями (0.1.167 писала
+        // «Claude (сайт)», 0.1.180 пишет «Claude (claude.ai) (сайт)»), и итог старого сеанса не должен выдаваться за текущий
+        var accessSession = new Dictionary<string, string?>();
+        string? lastAccessSession = null;
         var changes = new List<string>();
         int serverLines = 0, serverFailed = 0;
         var serverIds = new HashSet<string>();
@@ -106,6 +110,7 @@ public static class LogDigest
                 if (access.TryGetValue(key, out var was) && was != now)
                     changes.Add($"{time:dd.MM HH:mm:ss} {key}: {was} → {now}");
                 access[key] = now;
+                accessSession[key] = lastAccessSession = session;
             }
 
             var ev = text.StartsWith("Событие: ", StringComparison.Ordinal) ? text["Событие: ".Length..]
@@ -142,7 +147,8 @@ public static class LogDigest
         result.Add("Доступ к сервисам: изменения" + (changes.Count > 30 ? $" (последние 30 из {changes.Count})" : "") + ":");
         if (changes.Count == 0) result.Add("  не менялся");
         result.AddRange(changes.Skip(Math.Max(0, changes.Count - 30)).Select(c => "  " + c));
-        if (access.Count > 0) result.Add("  последнее: " + string.Join("; ", access.Select(x => $"{x.Key} {x.Value}")));
+        var current = access.Where(x => accessSession[x.Key] == lastAccessSession).ToList();
+        if (current.Count > 0) result.Add("  последнее: " + string.Join("; ", current.Select(x => $"{x.Key} {x.Value}")));
 
         result.Add("");
         result.Add("Предупреждения и ошибки в событиях:");
