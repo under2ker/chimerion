@@ -71,6 +71,22 @@ export function dohUrl(raw) {
   } catch { return null; }
 }
 
+/** Подсеть отправителя: IPv4 /24, IPv6 /48. Один человек с двумя адресами одной сети считается одним. */
+export function subnetOf(ip) {
+  const s = String(ip || "").trim().toLowerCase();
+  if (IPV4_RE.test(s)) return s.split(".").slice(0, 3).join(".");
+  if (!s.includes(":")) return "";
+  const [head, tail = ""] = s.split("::");
+  const a = head ? head.split(":") : [], b = s.includes("::") && tail ? tail.split(":") : [];
+  const groups = s.includes("::") ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill("0"), ...b] : a;
+  return groups.slice(0, 3).map((g) => (g || "0").replace(/^0+(?=.)/, "")).join(":");
+}
+
+// В «обнаружение» идут только проверки нейросетей и только от разных людей: иначе один человек
+// с двумя адресами и выдуманными названиями сервисов добавил бы свой сервер всем
+const DISCOVER_SERVICES = ["ChatGPT", "Claude", "Gemini"];
+const DISCOVER_REPORTERS = 3;
+
 const cleanName = (n) => typeof n === "string" ? n.replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 48) : "";
 
 async function sha256(text) {
@@ -129,6 +145,15 @@ async function report(req, env) {
   for (const [server, url] of urls) stmts.push(su.bind(url, server));
   if (asn && org) stmts.push(env.DB.prepare("INSERT INTO asns (asn, org) VALUES (?, ?) ON CONFLICT (asn) DO UPDATE SET org = excluded.org").bind(asn, org));
   await env.DB.batch(stmts);
+  // Кто сообщал о сервере: хэш подсети с солью (адрес из него не восстановить), живет двое суток.
+  // Отдельно от счетчиков: без таблицы reporters (миграция 009 не применена) отчет все равно принимается
+  const net = subnetOf(ip);
+  const ai = new Set([...agg.values()].filter((x) => DISCOVER_SERVICES.includes(x.service)).map((x) => x.server));
+  if (net && ai.size) {
+    const rk = await sha256(`net|${net}|${env.SALT || ""}`);
+    const rp = env.DB.prepare("INSERT OR IGNORE INTO reporters (server, hour, k) VALUES (?, ?, ?)");
+    await env.DB.batch([...ai].map((server) => rp.bind(server, hour, rk))).catch((e) => console.log("reporters", String(e)));
+  }
   return json({ accepted: agg.size + sites.length, asn });
 }
 
@@ -673,12 +698,15 @@ async function allow(env, req, kind, limit) {
  */
 export async function discover(env) {
   const h = nowHour();
+  const services = DISCOVER_SERVICES.map((x) => `'${x}'`).join(", ");
+  // Без таблицы reporters серверов от пользователей нет: лучше пусто, чем без проверки отправителей
   const res = await env.DB.prepare(
     `SELECT s.server AS server, MAX(n.name) AS name, MAX(n.url) AS url, SUM(ok) AS ok, SUM(fail) AS fail, COUNT(DISTINCT asn) AS nets
      FROM stats s LEFT JOIN servers n ON n.server = s.server
-     WHERE hour >= ? GROUP BY s.server
+     WHERE s.hour >= ?1 AND s.service IN (${services}) GROUP BY s.server
      HAVING SUM(ok) + SUM(fail) >= 20 AND SUM(ok) * 100 >= 70 * (SUM(ok) + SUM(fail)) AND COUNT(DISTINCT asn) >= 2
-     ORDER BY SUM(ok) DESC LIMIT 100`).bind(h - 24).all();
+       AND (SELECT COUNT(DISTINCT r.k) FROM reporters r WHERE r.server = s.server AND r.hour >= ?1) >= ?2
+     ORDER BY SUM(ok) DESC LIMIT 100`).bind(h - 24, DISCOVER_REPORTERS).all().catch((e) => { console.log("discover", String(e)); return { results: [] }; });
   const out = (res.results || []).map((r) => ({ server: r.server, name: r.name || r.server, url: r.url || null, rate: Math.round((100 * r.ok) / (r.ok + r.fail)), checks: r.ok + r.fail, nets: r.nets }));
   // Проверенные сервером: после серверов от пользователей, свежие (двое суток) и быстрые первыми
   const have = new Set(out.map((x) => x.server));
@@ -1034,5 +1062,6 @@ export default {
       env.DB.prepare("DELETE FROM tickets WHERE (status IN ('fixed', 'closed') AND updated < ?1) OR updated < ?2")
         .bind(Math.floor(Date.now() / 1000) - 90 * 86400, Math.floor(Date.now() / 1000) - 180 * 86400),
     ]);
+    await env.DB.prepare("DELETE FROM reporters WHERE hour < ?").bind(h - 48).run().catch((e) => console.log("reporters", String(e)));
   },
 };

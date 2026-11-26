@@ -124,3 +124,12 @@ CREATE TABLE IF NOT EXISTS verified (
   seen    INTEGER NOT NULL           -- час последней удачной проверки
 );
 CREATE INDEX IF NOT EXISTS verified_seen ON verified (seen);
+
+-- Кто сообщал о сервере: хэш подсети отправителя с солью, двое суток (см. migrate-009.sql)
+CREATE TABLE IF NOT EXISTS reporters (
+  server  TEXT    NOT NULL,          -- IP сервера или хост DoH
+  hour    INTEGER NOT NULL,          -- час отчета (UTC)
+  k       TEXT    NOT NULL,          -- SHA-256 от подсети отправителя (/24 или /48) с солью
+  PRIMARY KEY (server, hour, k)
+);
+CREATE INDEX IF NOT EXISTS reporters_hour ON reporters (hour);
