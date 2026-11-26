@@ -111,7 +111,7 @@ public static class Crowd
         foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail"))
         {
             q.Items.RemoveAll(i => i.Server == key && i.Service == chip.Name);
-            q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), DohOf(s)));
+            q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), ShareableUrl(DohOf(s))));
         }
         if (q.Items.Count > MaxQueue) q.Items.RemoveRange(0, q.Items.Count - MaxQueue);
     }
@@ -145,7 +145,8 @@ public static class Crowd
         var body = JsonSerializer.Serialize(new
         {
             v = 1, app = UpdateChecker.CurrentVersion.ToString(3),
-            items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = i.Url }),
+            // Адрес еще раз через фильтр: в очереди могут лежать записи старых версий с личной ссылкой
+            items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = ShareableUrl(i.Url) }),
             sites = q.Sites.Select(r => new { site = r.Site, ok = r.Ok, bypass = r.Bypass }),
         });
         using var resp = await Http.PostAsync(BaseUrl() + "/v1/report", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
@@ -207,6 +208,21 @@ public static class Crowd
     public static string? DohOf(DnsServer s) =>
         !string.IsNullOrWhiteSpace(s.DohUrl) && Uri.TryCreate(s.DohUrl.Split('{')[0], UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
             ? u.GetLeftPart(UriPartial.Path) : null;
+
+    /// <summary>Пути DoH, в которых нет ничего личного. Все остальное (например, /abc123 или /dns-query/ключ) может быть
+    /// личным ключом доступа к платному DNS.</summary>
+    private static readonly HashSet<string> PublicDohPaths = new(StringComparer.OrdinalIgnoreCase) { "", "/dns-query", "/resolve", "/query", "/dns" };
+
+    /// <summary>
+    /// Адрес DoH, который можно отдать в общую карту: https, без логина, порта и запроса, со стандартным путем. Иначе null:
+    /// в карту уходит только хост (он и так ключ сервера), а ссылка с личным ключом остается на этом компьютере
+    /// </summary>
+    internal static string? ShareableUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Split('{')[0], UriKind.Absolute, out var u)) return null;
+        if (u.Scheme != Uri.UriSchemeHttps || u.UserInfo.Length > 0 || !u.IsDefaultPort || u.Query.Length > 0 || u.Fragment.Length > 0) return null;
+        return PublicDohPaths.Contains(u.AbsolutePath.TrimEnd('/')) ? u.GetLeftPart(UriPartial.Path) : null;
+    }
 
     /// <summary>Серверы, которые у многих пользователей работают (сервер отбирает: 20+ проверок, 70%+ удачных, 2+ сети провайдеров).</summary>
     public static async Task<List<Found>> DiscoverAsync(CancellationToken ct = default)

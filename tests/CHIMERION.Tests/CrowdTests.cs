@@ -59,6 +59,35 @@ public class CrowdTests
     }
 
     [Fact]
+    public void Personal_doh_link_is_not_shared_only_host()
+    {
+        Assert.Equal("https://dns.comss.one/dns-query", Crowd.ShareableUrl("https://dns.comss.one/dns-query{?dns}"));
+        Assert.Equal("https://dns.example.net/", Crowd.ShareableUrl("https://dns.example.net/"));
+        Assert.Null(Crowd.ShareableUrl("https://dns.example.net/dns-query/a1b2c3d4e5f6a7b8")); // ключ после пути
+        Assert.Null(Crowd.ShareableUrl("https://dns.example.net/a1b2c3d4e5f6a7b8"));           // ключ вместо пути
+        Assert.Null(Crowd.ShareableUrl("https://dns.example.net/dns-query?token=secret"));
+        Assert.Null(Crowd.ShareableUrl("https://user:pass@dns.example.net/dns-query"));
+        Assert.Null(Crowd.ShareableUrl("http://dns.example.net/dns-query"));
+
+        var q = new Crowd.Queue();
+        Crowd.Enqueue(q, Srv("Платный", "", "ChatGPT ✓", "https://dns.example.net/dns-query/a1b2c3d4e5f6a7b8"));
+        var item = Assert.Single(q.Items);
+        Assert.Equal("dns.example.net", item.Server);
+        Assert.Null(item.Url);
+    }
+
+    [Fact]
+    public async Task Old_queue_entry_with_personal_link_is_sent_without_it()
+    {
+        var (h, restore) = Fake();
+        using var _ = restore;
+        var q = new Crowd.Queue();
+        q.Items.Add(new Crowd.Item("dns.example.net", "ChatGPT", true, "Платный", "https://dns.example.net/a1b2c3d4e5f6a7b8"));
+        Assert.True(await Crowd.SendAsync(q, now: new DateTime(2026, 11, 26, 12, 0, 0)));
+        Assert.DoesNotContain("a1b2c3d4e5f6a7b8", Assert.Single(h.Calls).Body);
+    }
+
+    [Fact]
     public async Task Send_posts_once_an_hour_and_clears_queue_also_on_429()
     {
         var (h, restore) = Fake();
