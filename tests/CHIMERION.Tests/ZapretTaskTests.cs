@@ -93,3 +93,62 @@ public class ZapretTaskSecurityTests
     public void Helper_refuses_to_start_winws_outside_the_protected_copy() =>
         Assert.NotEqual(0, Dnex.Services.Tools.ZapretTool.RunHelper("start"));
 }
+
+/// <summary>Параметры winws, которые помощник с правами администратора соглашается запустить.</summary>
+public class ZapretArgsSafetyTests
+{
+    private const string Bin = @"C:\Program Files\CHIMERION\helper\zapret-bin\";
+    private const string Lists = @"C:\ProgramData\DNEX\zapret\lists\";
+
+    // Строка запуска из general.bat сборки Flowseal (сокращена)
+    private const string Bat = "start \"zapret: %~n0\" /min \"%BIN%winws.exe\" --wf-tcp=80,443,%GameFilterTCP% --wf-udp=443,%GameFilterUDP% ^\n" +
+        "--filter-udp=443 --hostlist=\"%LISTS%list-general.txt\" --ipset-exclude=\"%LISTS%ipset-exclude.txt\" --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fake-quic=\"%BIN%quic_initial_www_google_com.bin\" --new ^\n" +
+        "--filter-tcp=2053,8443 --hostlist-domains=discord.media --dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern=\"%BIN%tls_clienthello_www_google_com.bin\" --new ^\n" +
+        "--filter-tcp=%GameFilterTCP% --ipset=\"%LISTS%ipset-all.txt\" --dpi-desync=multisplit --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3 --dpi-desync-fake-tls=^! --ip-id=zero";
+
+    [Fact]
+    public void Real_strategy_passes_with_and_without_games()
+    {
+        foreach (var games in new[] { false, true })
+            Assert.True(ZapretTool.SafeArgs(ZapretTool.ParseArgs(Bat, Bin, Lists, games)!, Bin, Lists));
+    }
+
+    [Fact]
+    public void Installed_strategies_pass_if_zapret_is_installed()
+    {
+        // На машине разработчика проверяются все стратегии из установленной сборки zapret
+        var dir = @"C:\ProgramData\DNEX\zapret";
+        if (!Directory.Exists(dir)) return;
+        var files = Directory.GetFiles(dir, "general*.bat");
+        foreach (var f in files)
+            foreach (var games in new[] { false, true })
+            {
+                var args = ZapretTool.ParseArgs(File.ReadAllText(f), Bin, Lists, games);
+                Assert.True(args != null && ZapretTool.SafeArgs(args, Bin, Lists), Path.GetFileName(f) + (games ? " (игры)" : ""));
+            }
+    }
+
+    [Theory]
+    [InlineData(@"--debug=@C:\Windows\System32\evil.txt")]           // запись журнала в любой файл
+    [InlineData(@"--wf-save=C:\Windows\System32\x.dll")]              // запись фильтра в файл
+    [InlineData(@"--pidfile=C:\Windows\win.ini")]
+    [InlineData(@"@C:\Users\Public\opts.txt")]                         // ключи из файла
+    [InlineData(@"--hostlist=C:\Windows\System32\config\SAM")]       // чтение чужого файла
+    [InlineData(@"--hostlist=C:\ProgramData\DNEX\zapret\lists\..\..\..\x.txt")] // выход через «..»
+    [InlineData(@"--hostlist=@C:\x.txt")]
+    [InlineData(@"--dpi-desync-fake-tls=\\server\share\a.bin")]      // сетевая папка
+    [InlineData("plain-word")]
+    public void Dangerous_or_unknown_parameters_are_refused(string extra)
+    {
+        var args = ZapretTool.ParseArgs(Bat, Bin, Lists, false)! + " " + extra;
+        Assert.False(ZapretTool.SafeArgs(args, Bin, Lists));
+    }
+
+    [Fact]
+    public void Quoted_paths_with_spaces_stay_one_word()
+    {
+        var words = ZapretTool.SplitArgs(@"--hostlist=""C:\Program Files\a b.txt"" --new");
+        Assert.Equal(new[] { @"--hostlist=C:\Program Files\a b.txt", "--new" }, words);
+        Assert.False(ZapretTool.SafeArgs("", Bin, Lists));
+    }
+}

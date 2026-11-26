@@ -5,6 +5,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
+    <!-- Помощник zapret запускается с правами администратора: .NET не должен грузить библиотеки из DOTNET_STARTUP_HOOKS пользователя -->
+    <StartupHookSupport>false</StartupHookSupport>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>CHIMERION</AssemblyName>
     <Product>CHIMERION</Product>

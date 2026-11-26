@@ -105,6 +105,67 @@ public sealed class ZapretTool : Tool
                    .Replace("%GameFilter%", range, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Ключи winws из стратегий сборки zapret (general*.bat). Других задание с правами не запускает: среди
+    /// остальных ключей есть запись файлов (--debug=@файл, --wf-save, --pidfile) и чтение ключей из файла (@файл).</summary>
+    internal static readonly HashSet<string> AllowedWinwsOptions = new(StringComparer.Ordinal)
+    {
+        "--new", "--wf-tcp", "--wf-udp", "--filter-tcp", "--filter-udp", "--filter-l3", "--filter-l7", "--ip-id",
+        "--hostlist", "--hostlist-exclude", "--hostlist-domains", "--hostlist-exclude-domains", "--ipset", "--ipset-exclude",
+        "--dpi-desync", "--dpi-desync-repeats", "--dpi-desync-fooling", "--dpi-desync-cutoff", "--dpi-desync-any-protocol",
+        "--dpi-desync-split-pos", "--dpi-desync-split-seqovl", "--dpi-desync-split-seqovl-pattern", "--dpi-desync-badseq-increment",
+        "--dpi-desync-fake-tls", "--dpi-desync-fake-tls-mod", "--dpi-desync-fake-http", "--dpi-desync-fake-quic",
+        "--dpi-desync-fake-unknown", "--dpi-desync-fake-unknown-udp", "--dpi-desync-fake-discord", "--dpi-desync-fake-stun",
+        "--dpi-desync-hostfakesplit-mod", "--dpi-desync-fakedsplit-pattern",
+    };
+
+    /// <summary>
+    /// Можно ли запустить winws с правами администратора с этими параметрами: каждый ключ из <see cref="AllowedWinwsOptions"/>,
+    /// ничего не читается из файла ключей («@»), а пути к файлам только внутри защищенной копии bin и папки списков.
+    /// </summary>
+    internal static bool SafeArgs(string args, string bin, string lists)
+    {
+        if (string.IsNullOrWhiteSpace(args)) return false;
+        string Full(string p) { try { return Path.GetFullPath(p); } catch (Exception) { return ""; } }
+        var roots = new[] { Full(bin), Full(lists) }.Where(r => r.Length > 0)
+            .Select(r => r.EndsWith(Path.DirectorySeparatorChar) ? r : r + Path.DirectorySeparatorChar).ToArray();
+        foreach (var token in SplitArgs(args))
+        {
+            if (!token.StartsWith("--", StringComparison.Ordinal)) return false;
+            var eq = token.IndexOf('=');
+            var name = eq < 0 ? token : token[..eq];
+            if (!AllowedWinwsOptions.Contains(name)) return false;
+            if (eq < 0) continue;
+            var value = token[(eq + 1)..];
+            if (value.StartsWith('@')) return false;
+            if (value.IndexOfAny(new[] { '\\', '/', ':' }) < 0) continue;
+            // Значение с путем: целиком файл внутри разрешенных папок (без «..» и чужих дисков)
+            var full = Full(value);
+            if (full.Length == 0 || !roots.Any(r => full.StartsWith(r, StringComparison.OrdinalIgnoreCase))) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Строка параметров по словам, как ее делит Windows для программы: пробелы вне кавычек, кавычки снимаются.</summary>
+    internal static List<string> SplitArgs(string args)
+    {
+        var list = new List<string>();
+        var sb = new System.Text.StringBuilder();
+        bool quoted = false, any = false;
+        foreach (var c in args)
+        {
+            if (c == '"') { quoted = !quoted; any = true; continue; }
+            if (char.IsWhiteSpace(c) && !quoted)
+            {
+                if (any) list.Add(sb.ToString());
+                sb.Clear(); any = false;
+                continue;
+            }
+            sb.Append(c); any = true;
+        }
+        if (any) list.Add(sb.ToString());
+        return list;
+    }
+
     /// <summary>Как cmd читает строку: вне кавычек «^» экранирует следующий символ («^!» дает «!»).</summary>
     private static string UnescapeCmd(string s)
     {
@@ -377,7 +438,9 @@ public sealed class ZapretTool : Tool
             var strategy = z.SavedStrategy();
             var bin = ZapretTask.HelperBin;
             var args = ParseArgs(File.ReadAllText(Path.Combine(Dir, strategy)), bin, Lists, z.State.Games);
-            if (args == null) return 1;
+            // Файл стратегии лежит в ProgramData, туда пишет любой процесс: с правами запускаются только ключи из
+            // настоящих стратегий zapret. Незнакомое: отказ, и программа включит обход обычным запуском с вопросом Windows
+            if (args == null || !SafeArgs(args, bin, Lists)) return 1;
             using var proc = Process.Start(new ProcessStartInfo(Path.Combine(bin, "winws.exe"), args) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Bin });
             Thread.Sleep(2000);
             return proc == null || proc.HasExited ? 1 : 0;
