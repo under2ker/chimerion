@@ -112,12 +112,15 @@ public static class Crowd
         // не отправляется никогда, иначе его адрес попал бы в публичный рейтинг и ответы бота
         if (s.Manual) return;
         if (KeyOf(s) is not { } key) return;
-        foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail" && (only == null || only.Contains(c.Name))))
+        lock (q)
         {
-            q.Items.RemoveAll(i => i.Server == key && i.Service == chip.Name);
-            q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), ShareableUrl(DohOf(s))));
+            foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail" && (only == null || only.Contains(c.Name))))
+            {
+                q.Items.RemoveAll(i => i.Server == key && i.Service == chip.Name);
+                q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), ShareableUrl(DohOf(s))));
+            }
+            if (q.Items.Count > MaxQueue) q.Items.RemoveRange(0, q.Items.Count - MaxQueue);
         }
-        if (q.Items.Count > MaxQueue) q.Items.RemoveRange(0, q.Items.Count - MaxQueue);
     }
 
     /// <summary>
@@ -126,11 +129,12 @@ public static class Crowd
     /// </summary>
     public static void EnqueueSites(Queue q, IEnumerable<Incidents.Report> reports)
     {
-        foreach (var r in reports)
-        {
-            q.Sites.RemoveAll(x => x.Site == r.Site);
-            q.Sites.Add(r);
-        }
+        lock (q)
+            foreach (var r in reports)
+            {
+                q.Sites.RemoveAll(x => x.Site == r.Site);
+                q.Sites.Add(r);
+            }
     }
 
     public static Queue LoadQueue()
@@ -138,27 +142,41 @@ public static class Crowd
         try { return Storage.LoadOrCreate(QueueFile, () => new Queue()); } catch (Exception) { return new Queue(); }
     }
 
-    public static void SaveQueue(Queue q) { try { Storage.Save(QueueFile, q); } catch (Exception) { } }
+    public static void SaveQueue(Queue q) { try { lock (q) Storage.Save(QueueFile, q); } catch (Exception) { } }
 
     /// <summary>Отправить очередь, если пора. true — отправлено (очередь очищена).</summary>
     public static async Task<bool> SendAsync(Queue q, CancellationToken ct = default, DateTime? now = null)
     {
         var t = now ?? DateTime.Now;
         if (Storage.NoUpload) return false; // прогон тестов на копии данных не попадает в общую карту
-        if (q.Items.Count == 0 && q.Sites.Count == 0 || q.LastSent is { } last && t - last < SendEvery) return false;
+        // Отправляется снимок очереди. Пока идет отправка (до 20 с), проверка может добавить новые итоги: раньше
+        // после ответа очередь очищалась целиком и они пропадали (аудит CR-12). Теперь удаляются только отправленные
+        List<Item> sentItems; List<Incidents.Report> sentSites;
+        lock (q)
+        {
+            if (q.Items.Count == 0 && q.Sites.Count == 0 || q.LastSent is { } last && t - last < SendEvery) return false;
+            sentItems = q.Items.ToList();
+            sentSites = q.Sites.ToList();
+        }
         var body = JsonSerializer.Serialize(new
         {
             v = 1, app = UpdateChecker.CurrentVersion.ToString(3),
             // Адрес еще раз через фильтр: в очереди могут лежать записи старых версий с личной ссылкой
-            items = q.Items.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = ShareableUrl(i.Url) }),
-            sites = q.Sites.Select(r => new { site = r.Site, ok = r.Ok, bypass = r.Bypass }),
+            items = sentItems.Select(i => new { server = i.Server, service = i.Service, ok = i.Ok, name = i.Name, url = ShareableUrl(i.Url) }),
+            sites = sentSites.Select(r => new { site = r.Site, ok = r.Ok, bypass = r.Bypass }),
         });
         using var resp = await Http.PostAsync(BaseUrl() + "/v1/report", new StringContent(body, Encoding.UTF8, "application/json"), ct).ConfigureAwait(false);
         // 429: с этого адреса уже прислали (несколько компьютеров за одним IP). Не повторяем до следующего часа
         if (!resp.IsSuccessStatusCode && (int)resp.StatusCode != 429) return false;
-        q.Items.Clear();
-        q.Sites.Clear();
-        q.LastSent = t;
+        lock (q)
+        {
+            // По ссылке, а не по значению: итог, замененный во время отправки, — новая запись, и она остается
+            var items = new HashSet<Item>(sentItems, ReferenceEqualityComparer.Instance);
+            var sites = new HashSet<Incidents.Report>(sentSites, ReferenceEqualityComparer.Instance);
+            q.Items.RemoveAll(items.Contains);
+            q.Sites.RemoveAll(sites.Contains);
+            q.LastSent = t;
+        }
         return true;
     }
 

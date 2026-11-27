@@ -54,7 +54,9 @@ public static class Updater
     private static HttpClient CreateClient()
     {
         // Файлы релиза отдаются через перенаправление на хранилище GitHub: переходы разрешены
-        var c = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        // Предел текста (сумма, подпись): чужое зеркало не забьет память бесконечным ответом (аудит U-12). Архив
+        // качается потоком, его предел — MaxDownloadBytes
+        var c = new HttpClient { Timeout = TimeSpan.FromMinutes(5), MaxResponseContentBufferSize = 1024 * 1024 };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-updater/1.0");
         return c;
     }
@@ -439,6 +441,9 @@ public static class Updater
     /// исправления): первые 15–30 КБ соединения проходят, дальше почти ничего. Тогда остаток докачивается кусками по
     /// ChunkSize, каждый в новом соединении и несколько сразу. Архив все равно проверяется суммой и подписью.
     /// </summary>
+    /// <summary>Предел архива обновления. Сейчас архив около 1–2 МБ; запас на будущее большой.</summary>
+    internal static long MaxDownloadBytes = 256L * 1024 * 1024;
+
     internal static async Task DownloadAsync(string url, string path, IProgress<(double? Part, string Stage)> progress, CancellationToken ct,
                                             IProgress<(long Done, long? Total)>? bytes = null)
     {
@@ -448,6 +453,7 @@ public static class Updater
         resp.EnsureSuccessStatusCode();
         cts.CancelAfter(Timeout.InfiniteTimeSpan); // ответ пришел: таймаут HttpClient тело не ограничивает, поэтому тишину ловит readCts ниже
         var total = resp.Content.Headers.ContentLength;
+        if (total > MaxDownloadBytes) throw new HttpRequestException($"файл обновления слишком большой ({total / 1024 / 1024} МБ)");
         bool ranges = resp.Headers.AcceptRanges.Contains("bytes") && total > 0;
         var finalUrl = resp.RequestMessage?.RequestUri?.ToString() ?? url; // после перенаправления GitHub: прямой адрес файла
         await using var src = await resp.Content.ReadAsStreamAsync(cts.Token);
@@ -478,6 +484,8 @@ public static class Updater
             if (n == 0) break;
             await dst.WriteAsync(buf.AsMemory(0, n), cts.Token);
             done += n;
+            // Без заголовка длины зеркало могло отдавать мусор бесконечно и забить диск (аудит U-12)
+            if (done > MaxDownloadBytes) throw new HttpRequestException("файл обновления слишком большой");
             Report();
             if (ranges && sw.Elapsed > SlowAfter && done < total && done / sw.Elapsed.TotalSeconds < SlowBytesPerSecond) { slow = true; break; }
         }

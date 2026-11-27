@@ -126,6 +126,9 @@ public partial class App : Application
     /// </summary>
     public static void ExitNow()
     {
+        // Запись, отложенная из-за занятого файла (настройки, серверы), иначе пропадала при выходе (аудит P-17)
+        if (Dnex.Services.Storage.HasPending && !Dnex.Services.Storage.FlushPending(TimeSpan.FromSeconds(3)))
+            Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} При выходе не удалось сохранить изменения: файл в папке данных занят другой программой\n");
         Dnex.Services.SupportTrace.Write("Запрошено завершение программы");
         Dnex.Services.SupportTrace.Flush();
         var guard = new Thread(() =>

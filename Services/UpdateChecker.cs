@@ -50,7 +50,7 @@ public static class UpdateChecker
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 4 * 1024 * 1024 }; // ответы с описанием версии (аудит U-12)
         c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-update-check/1.0");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return c;

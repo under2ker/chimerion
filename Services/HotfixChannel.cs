@@ -39,7 +39,7 @@ public static class HotfixChannel
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 1024 * 1024 }; // манифест и подпись (аудит U-12)
         c.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-hotfix/1.0");
         c.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
         return c;

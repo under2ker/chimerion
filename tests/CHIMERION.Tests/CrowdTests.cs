@@ -15,9 +15,12 @@ public class CrowdTests
         public readonly List<(string Url, string Body)> Calls = new();
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string Reply = "{}";
+        /// <summary>Что происходит, пока запрос «в пути»: например, проверка добавляет в очередь новые итоги.</summary>
+        public Action? During;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
             Calls.Add((req.RequestUri!.ToString(), req.Content == null ? "" : await req.Content.ReadAsStringAsync(ct)));
+            During?.Invoke();
             return new HttpResponseMessage(Status) { Content = new StringContent(Reply) };
         }
     }
@@ -56,6 +59,26 @@ public class CrowdTests
         mine.Manual = true;
         Crowd.Enqueue(q, mine);
         Assert.DoesNotContain(q.Items, i => i.Server == "203.0.113.77");
+    }
+
+    [Fact]
+    public async Task Results_added_while_sending_are_kept()
+    {
+        // Аудит CR-12: после ответа очередь очищалась целиком, и итоги, добавленные во время отправки, пропадали
+        var (h, restore) = Fake();
+        using var _ = restore;
+        var q = new Crowd.Queue();
+        Crowd.Enqueue(q, Srv("Старый", "203.0.113.30", "ChatGPT ✓"));
+        h.During = () =>
+        {
+            Crowd.Enqueue(q, Srv("Новый", "203.0.113.31", "Claude ✓"));       // новый сервер
+            Crowd.Enqueue(q, Srv("Старый", "203.0.113.30", "ChatGPT ✗"));      // свежий итог того же сервера
+        };
+        Assert.True(await Crowd.SendAsync(q, now: new DateTime(2026, 11, 27, 12, 0, 0)));
+        Assert.Equal(2, q.Items.Count);
+        Assert.Contains(q.Items, i => i.Server == "203.0.113.31");
+        Assert.Contains(q.Items, i => i.Server == "203.0.113.30" && !i.Ok);
+        Assert.Contains("203.0.113.30", h.Calls.Single().Body); // ушел прежний итог
     }
 
     [Fact]
