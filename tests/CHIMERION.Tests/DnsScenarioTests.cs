@@ -265,6 +265,23 @@ public class DnsScenarioTests
         }
     }
     [Fact]
+    public async Task No_suitable_adapter_is_an_error_not_connected()
+    {
+        // Аудит DNS-07: интернет только через виртуальный адаптер (мост, Hyper-V) — подключение не изображается
+        var st = OneEthernet();
+        st.adapters[0].physical = false;
+        st.adapters[0].name = "vEthernet (Внешний)";
+        using var sim = new NetSim(st);
+        var (log, write) = NewLog();
+        await Assert.ThrowsAnyAsync<Exception>(() => DnsSwitcher.ApplyAsync(Server, new AppSettings(), write));
+        Assert.Contains(log, l => l.Contains("Не найден включенный сетевой адаптер"));
+        Assert.DoesNotContain(log, l => l.Contains("Адаптер: "));
+        Assert.Null(DnsSwitcher.GetActive());
+        Assert.Equal(new[] { "192.168.1.1" }, sim["vEthernet (Внешний)"].dns4);
+        Assert.Empty(sim.Load().nrpt);
+    }
+
+    [Fact]
     public async Task Connect_and_disconnect_return_dhcp()
     {
         using var sim = new NetSim(OneEthernet());

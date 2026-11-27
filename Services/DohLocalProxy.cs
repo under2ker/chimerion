@@ -79,7 +79,25 @@ internal static class DohLocalProxy
                 var busy = new List<string>();
                 foreach (var candidate in preferred != null ? new[] { preferred } : CandidateAddresses)
                 {
-                    lock (Active) if (Active.ContainsKey(candidate)) { busy.Add(candidate + " (прежнее подключение)"); continue; }
+                    // Прокси на этом адресе перестал принимать запросы (ошибка сокета в цикле приема): его запись
+                    // считала адрес занятым, и подняться на нем было нельзя никогда (аудит DNS-08). Останавливаем
+                    // мертвый слушатель, освобождаем адрес и запускаем заново
+                    Running? dead = null;
+                    lock (Active)
+                    {
+                        if (Active.TryGetValue(candidate, out var existing))
+                        {
+                            if (!existing.Listener.Completion.IsCompleted) { busy.Add(candidate + " (прежнее подключение)"); continue; }
+                            Active.Remove(candidate);
+                            dead = existing;
+                        }
+                    }
+                    if (dead != null)
+                    {
+                        try { await dead.Listener.DisposeAsync().ConfigureAwait(false); } catch (Exception) { /* прием уже остановлен */ }
+                        dead.Http.Dispose();
+                        log($"DoH-прокси на {candidate} перестал принимать запросы, запускаю заново");
+                    }
                     DohLocalListener listener;
                     try { listener = new DohLocalListener(IPAddress.Parse(candidate), Port, transport); }
                     catch (System.Net.Sockets.SocketException ex) { busy.Add($"{candidate} ({ex.SocketErrorCode})"); continue; }

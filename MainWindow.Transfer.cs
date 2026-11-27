@@ -18,8 +18,14 @@ public partial class MainWindow
         if (dlg.ShowDialog(this) != true) return;
         try
         {
-            var favorites = _servers.Count(s => s.IsFavorite);
-            File.WriteAllText(dlg.FileName, SettingsTransfer.Export(_settings, DnsServer.ForSaving(_servers)), new System.Text.UTF8Encoding(false));
+            var saving = DnsServer.ForSaving(_servers).ToList();
+            // Личные ссылки с ключом (платный сервер): человек мог переслать файл другу и отдать ключ (аудит P-06)
+            var personal = SettingsTransfer.PersonalFavorites(saving);
+            bool withPersonal = personal == 0 || DnexDialog.Ask("Положить личные адреса в файл?",
+                $"Среди избранных есть серверы с личной ссылкой ({personal}). В ссылке ваш ключ: кто получит файл, сможет пользоваться сервером от вашего имени.\n\nКладите их, только если переносите настройки на свой компьютер. Файл не пересылайте другим.",
+                "Положить", "Без личных", DialogKind.Warn, false, "Экспорт");
+            var favorites = saving.Count(s => s.IsFavorite && (withPersonal || !SettingsTransfer.IsPersonalLink(s.DohUrl)));
+            File.WriteAllText(dlg.FileName, SettingsTransfer.Export(_settings, saving, withPersonal), new System.Text.UTF8Encoding(false));
             Log($"Настройки экспортированы: избранных серверов {favorites}");
             ShowToast($"Настройки сохранены: {Path.GetFileName(dlg.FileName)}, избранных серверов {favorites}");
         }

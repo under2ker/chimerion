@@ -387,6 +387,10 @@ public static class DnsSwitcher
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
         // Только физические адаптеры: VPN-туннели и виртуальные сети (Hyper-V, WSL) не трогаем — иначе сломаем их DNS.
         sb.AppendLine("$ifs = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' }");
+        // Ни одного подходящего адаптера: раньше скрипт ничего не менял, а программа писала «Подключено» (аудит DNS-07).
+        // Останавливаемся до любых изменений; режим «не менять DNS адаптеров» адаптеры не трогает и не проверяет
+        if (touchAdapters)
+            sb.AppendLine("if (@($ifs).Count -eq 0) { throw 'Не найден включенный сетевой адаптер (Ethernet или Wi-Fi): DNS поставить некуда. Если интернет идет через мост, Hyper-V или USB-модем, напишите об этом в «Сообщить о проблеме»' }");
         // Переход с сервера без IPv6 на сервер с IPv6: включаем IPv6 обратно до смены DNS, иначе его DNS не поставить
         // Выключенный раньше IPv6: из записи о подключении и из файла (если прошлый раз программу закрыли посередине)
         var prevV6 = (prev?.Ipv6Disabled ?? new()).Select(g => g.ToUpperInvariant()).Concat(Ipv6OffFromFile()).Distinct().ToList();

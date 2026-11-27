@@ -265,7 +265,51 @@ public static class Diagnostics
             sb.AppendLine("Журнал за 3 дня:");
             foreach (var l in tail) sb.AppendLine(l);
         }
-        return Sanitize(sb.ToString(), r.PublicIp);
+        return HideSites(Sanitize(sb.ToString(), r.PublicIp), SafeWatchedHosts(), KnownServiceHosts());
+    }
+
+    /// <summary>Сайты из наблюдения (открывавшиеся у человека и скрытые им). Тесты подставляют свой список.</summary>
+    internal static Func<IEnumerable<string>> WatchedHosts = () =>
+    {
+        var w = SiteWatch.Load();
+        return w.Sites.Keys.Concat(w.Ignored);
+    };
+
+    private static IEnumerable<string> SafeWatchedHosts()
+    {
+        try { return WatchedHosts().ToList(); } catch (Exception) { return Array.Empty<string>(); }
+    }
+
+    /// <summary>Адреса проверяемых сервисов ИИ: не личные, без них отчет о сбое бесполезен.</summary>
+    private static IEnumerable<string> KnownServiceHosts() =>
+        new AppSettings().Targets.SelectMany(t => t.ExtraHosts.Prepend(t.Host));
+
+    /// <summary>
+    /// Названия сайтов, которые открывал человек, в отчете заменяются на «[сайт 1]», «[сайт 2]» (аудит P-04): отчет
+    /// уходит в обращение и в открытый черновик на GitHub. Один сайт всегда под одним номером, его поддомены тоже;
+    /// сервисы ИИ остаются как есть.
+    /// </summary>
+    internal static string HideSites(string text, IEnumerable<string> hosts, IEnumerable<string> keep)
+    {
+        var keepSet = new HashSet<string>(keep.Select(h => h.Trim().TrimEnd('.').ToLowerInvariant()), StringComparer.OrdinalIgnoreCase);
+        var list = hosts.Select(h => (h ?? "").Trim().TrimEnd('.').ToLowerInvariant())
+            .Where(h => h.Contains('.') && h.Length <= 253 && !keepSet.Contains(h) && !keepSet.Any(k => h.EndsWith("." + k)))
+            .Distinct().OrderBy(h => h, StringComparer.Ordinal).ToList();
+        if (list.Count == 0) return text;
+        var number = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var hidden = 0;
+        // Сначала длинные имена: «a.example.org» раньше «example.org»
+        foreach (var host in list.OrderByDescending(h => h.Length))
+        {
+            var rx = new Regex($@"(?<![\w.-])(?:[\w-]+\.)*{Regex.Escape(host)}(?![\w-]|\.[\w-])", RegexOptions.IgnoreCase);
+            text = rx.Replace(text, _ =>
+            {
+                if (!number.TryGetValue(host, out var n)) number[host] = n = list.IndexOf(host) + 1;
+                hidden++;
+                return $"[сайт {n}]";
+            });
+        }
+        return hidden == 0 ? text : text + Environment.NewLine + "Названия сайтов из наблюдения заменены на [сайт N]." + Environment.NewLine;
     }
 
     /// <summary>Последние строки error.log (необработанные исключения): без них по отчету не видно, почему программа падала.</summary>

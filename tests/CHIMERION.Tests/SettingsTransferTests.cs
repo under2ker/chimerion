@@ -133,4 +133,29 @@ public class SettingsTransferTests
         Assert.DoesNotContain(clean.Name, c => char.IsControl(c));
         Assert.True(clean.Name.Length <= 100);
     }
+    [Theory]
+    [InlineData("https://dns.google/dns-query", false)]
+    [InlineData("https://cloudflare-dns.com/dns-query/", false)]
+    [InlineData("https://dns.example.test/", false)]
+    [InlineData("https://dns.example.test/dns-query/abc123secret", true)]
+    [InlineData("https://dns.example.test/abc123secret", true)]
+    [InlineData("https://dns.example.test/dns-query?token=x", true)]
+    [InlineData(null, false)]
+    public void Personal_link_is_recognized(string? url, bool personal) => Assert.Equal(personal, SettingsTransfer.IsPersonalLink(url));
+
+    [Fact]
+    public void Export_without_personal_drops_only_personal_favorites()
+    {
+        // Аудит P-06: ключ платного сервера не должен уходить в файл без согласия
+        var paid = Fav("Мой платный", "203.0.113.20"); paid.DohUrl = "https://dns.example.test/dns-query/abc123secret";
+        var pub = Fav("Google", "8.8.8.8"); pub.DohUrl = "https://dns.google/dns-query";
+        var servers = new[] { paid, pub, Fav("Амстердам", "203.0.113.11") };
+        Assert.Equal(1, SettingsTransfer.PersonalFavorites(servers));
+        var without = SettingsTransfer.Export(new AppSettings(), servers, withPersonal: false);
+        Assert.DoesNotContain("abc123secret", without);
+        Assert.DoesNotContain("Мой платный", without);
+        Assert.Contains("dns.google", without);
+        Assert.Contains("203.0.113.11", without);
+        Assert.Contains("abc123secret", SettingsTransfer.Export(new AppSettings(), servers)); // по умолчанию как раньше
+    }
 }

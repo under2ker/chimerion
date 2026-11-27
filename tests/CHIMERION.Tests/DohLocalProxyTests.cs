@@ -70,6 +70,44 @@ public class DohLocalProxyTests : IAsyncLifetime
         return (await udp.ReceiveAsync(timeout.Token)).Buffer;
     }
 
+    /// <summary>Остановить прием у работающего прокси, не убирая его запись: так выглядит упавший цикл приема.</summary>
+    private static async Task KillListener(string address)
+    {
+        var active = (System.Collections.IDictionary)typeof(DohLocalProxy)
+            .GetField("Active", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!;
+        var running = active[address]!;
+        var listener = (IAsyncDisposable)running.GetType().GetProperty("Listener")!.GetValue(running)!;
+        await listener.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Dead_proxy_is_restarted_on_the_same_address()
+    {
+        // Аудит DNS-08: мертвая запись держала адрес «занятым», сторож не мог поднять прокси
+        UseDoh(Answering());
+        var log = new List<string>();
+        var first = await DohLocalProxy.StartAsync(Endpoint, Upstream, null, log.Add);
+        await KillListener(first.ListenAddress);
+        Assert.False(DohLocalProxy.IsRunning(first.ListenAddress));
+
+        var again = await DohLocalProxy.StartAsync(Endpoint, Upstream, first.ListenAddress, log.Add);
+        Assert.Equal(first.ListenAddress, again.ListenAddress);
+        Assert.True(DohLocalProxy.IsRunning(again.ListenAddress));
+        Assert.Contains(log, l => l.Contains("перестал принимать запросы"));
+        var answer = await AskUdp(again, 4242);
+        Assert.Equal(4242, (answer[0] << 8) | answer[1]);
+    }
+
+    [Fact]
+    public async Task Live_proxy_on_the_address_is_still_busy()
+    {
+        UseDoh(Answering());
+        var first = await DohLocalProxy.StartAsync(Endpoint, Upstream, null, _ => { });
+        var error = await Assert.ThrowsAsync<DohRelayFailedException>(() => DohLocalProxy.StartAsync(Other, Upstream, first.ListenAddress, _ => { }));
+        Assert.Contains("прежнее подключение", error.Message);
+        Assert.True(DohLocalProxy.IsRunning(first.ListenAddress));
+    }
+
     [Fact]
     public async Task Started_proxy_answers_dns_through_doh_and_stops()
     {

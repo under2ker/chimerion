@@ -69,8 +69,27 @@ public static class SettingsTransfer
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
 
-    public static string Export(AppSettings s, IEnumerable<DnsServer> servers)
+    /// <summary>
+    /// Личная ссылка DoH: в пути или в запросе есть что-то кроме стандартного «/dns-query» — обычно это ключ платного
+    /// или личного сервера (аудит P-06). Общедоступные адреса вида https://dns.google/dns-query личными не считаются.
+    /// </summary>
+    public static bool IsPersonalLink(string? dohUrl)
     {
+        if (string.IsNullOrWhiteSpace(dohUrl)) return false;
+        if (!Uri.TryCreate(dohUrl, UriKind.Absolute, out var u)) return true;
+        var path = u.AbsolutePath.TrimEnd('/');
+        return !string.IsNullOrEmpty(u.UserInfo) || u.Query.Length > 1
+            || !(path.Length == 0 || path.Equals("/dns-query", StringComparison.OrdinalIgnoreCase) || path.Equals("/resolve", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Сколько избранных серверов с личной ссылкой попадет в файл.</summary>
+    public static int PersonalFavorites(IEnumerable<DnsServer> servers) =>
+        servers.Where(x => x.IsFavorite).Take(MaxFavorites).Count(x => IsPersonalLink(x.DohUrl));
+
+    /// <summary>withPersonal = false: избранные серверы с личной ссылкой в файл не кладутся совсем.</summary>
+    public static string Export(AppSettings s, IEnumerable<DnsServer> servers, bool withPersonal = true)
+    {
+        if (!withPersonal) servers = servers.Where(x => !(x.IsFavorite && IsPersonalLink(x.DohUrl))).ToList();
         var file = new TransferFile
         {
             Format = Format, App = "CHIMERION",
