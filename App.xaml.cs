@@ -124,8 +124,12 @@ public partial class App : Application
     /// Завершить программу. Страховка: если процесс не завершился за 8 секунд (зависшая операция в другом потоке),
     /// он закрывается принудительно, а в error.log остается запись для разбора.
     /// </summary>
+    /// <summary>Программа закрывается: окна не задают вопросов при закрытии.</summary>
+    internal static bool Exiting;
+
     public static void ExitNow()
     {
+        Exiting = true;
         // Запись, отложенная из-за занятого файла (настройки, серверы), иначе пропадала при выходе (аудит P-17)
         if (Dnex.Services.Storage.HasPending && !Dnex.Services.Storage.FlushPending(TimeSpan.FromSeconds(3)))
             Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} При выходе не удалось сохранить изменения: файл в папке данных занят другой программой\n");

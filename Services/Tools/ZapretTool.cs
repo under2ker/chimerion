@@ -301,8 +301,41 @@ public sealed class ZapretTool : Tool
             }
             catch (Exception) { return 0; }
         }
-        var sites = Lines(Path.Combine(Lists, "list-general.txt")) + SitesCount(catalog);
-        return (sites, State.IpSet ? Lines(Path.Combine(Lists, "ipset-all.txt")) : 0);
+        return (DistinctSites(), State.IpSet ? Lines(Path.Combine(Lists, "ipset-all.txt")) : 0);
+    }
+
+    private static (string Key, int Count)? _sitesCache;
+
+    /// <summary>
+    /// Сколько разных сайтов в списках, которые сейчас читает winws: основной список сборки и свой список. Раньше
+    /// число складывалось из двух списков, повторы считались дважды, и в счет всегда шли три адреса обновлений
+    /// CHIMERION (аудит T-15). Пересчет только при изменении файлов: списки бывают в сотни тысяч строк.
+    /// </summary>
+    private static int DistinctSites()
+    {
+        var files = new[] { Path.Combine(Lists, "list-general.txt"), Path.Combine(Lists, UserList) };
+        string key;
+        try { key = string.Join("|", files.Select(f => File.Exists(f) ? $"{new FileInfo(f).Length}:{File.GetLastWriteTimeUtc(f).Ticks}" : "-")); }
+        catch (Exception) { return 0; }
+        if (_sitesCache is { } c && c.Key == key) return c.Count;
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in files)
+        {
+            try
+            {
+                if (!File.Exists(f)) continue;
+                foreach (var raw in File.ReadLines(f))
+                {
+                    var l = raw.Trim();
+                    if (l.Length == 0 || l[0] == '#' || l.StartsWith("203.0.113.113") || l.StartsWith("domain.example") || l == Placeholder) continue;
+                    set.Add(l);
+                }
+            }
+            catch (Exception) { }
+        }
+        foreach (var h in UpdateHosts) set.Remove(h);
+        _sitesCache = (key, set.Count);
+        return set.Count;
     }
 
     /// <summary>

@@ -277,6 +277,15 @@ public partial class MainWindow : Window
                 if (r == MessageBoxResult.Cancel) { _exitRequested = false; return; }
                 _cts?.Cancel();
                 if (r == MessageBoxResult.No) _keepToolsOnExit = true;
+                else if (a != null && _busyConn)
+                {
+                    // Подключение или отключение еще идет: раньше здесь писалось «Отключиться не удалось», хотя
+                    // отключение даже не начиналось (аудит DNS-11)
+                    _exitRequested = false;
+                    DnexDialog.Show("Подождите",
+                        "Программа еще меняет DNS (подключение или отключение). Попробуйте выйти, когда это закончится. Если ожидание затянулось на несколько минут, закройте программу через Диспетчер задач и запустите reset-dns.cmd рядом с CHIMERION: он вернет исходные DNS.",
+                        DialogKind.Info, "Выход");
+                }
                 else if (a != null && !await DisconnectAsync("выход из программы", probe: false))
                 {
                     _exitRequested = false;

@@ -54,11 +54,26 @@ export function serverKey(raw) {
   if (IPV4_RE.test(s)) {
     // Частные и служебные адреса в общую карту не попадают
     const [a, b] = s.split(".").map(Number);
-    if (a === 10 || a === 127 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254) || a >= 224) return null;
+    // Аудит CR-10: еще адреса внутри провайдера (100.64/10), служебные 192.0.0/24 и стенды 198.18/15
+    const c = Number(s.split(".")[2]);
+    if (a === 10 || a === 127 || a === 0 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254) || a >= 224 ||
+        (a === 100 && b >= 64 && b <= 127) || (a === 192 && b === 0 && c === 0) || (a === 198 && (b === 18 || b === 19))) return null;
     return s;
   }
-  if (s.includes(":")) return IPV6_RE.test(s) && !s.startsWith("fe80") && !s.startsWith("fc") && !s.startsWith("fd") && s !== "::1" ? s : null;
+  if (s.includes(":")) return IPV6_RE.test(s) && isGlobal6(s) ? s : null;
   return HOST_RE.test(s) ? s : null;
+}
+
+/**
+ * Глобальный IPv6 (2000::/3). Раньше отсекались только строки fe80/fc/fd и ровно "::1": проходили
+ * 0:0:0:0:0:0:0:1 (тот же ::1), "::" и ::ffff:c0a8:101 (это 192.168.1.1) (аудит CR-10). Адрес разбирается.
+ */
+export function isGlobal6(s) {
+  let host;
+  try { host = new URL(`http://[${s}]/`).hostname.slice(1, -1); } catch { return false; }
+  if (host.startsWith("::")) return false;      // ::, ::1, ::ffff:x.x.x.x и подобные — первая группа 0
+  const first = parseInt(host.split(":")[0], 16);
+  return Number.isFinite(first) && (first & 0xe000) === 0x2000;
 }
 
 /** Адрес DoH: https, хост по правилам, путь без пробелов и кавычек, не длиннее 200 символов. */

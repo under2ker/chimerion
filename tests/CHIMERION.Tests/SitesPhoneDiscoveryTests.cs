@@ -183,6 +183,19 @@ public class DiscoveryAndStatusTests
         Assert.All(rows.Where(r => r != null), r => Assert.Equal("Общая карта", r!.Source));
     }
 
+    [Theory]
+    [InlineData("0:0:0:0:0:0:0:1")]
+    [InlineData("::ffff:192.168.1.1")]
+    [InlineData("100.64.0.1")]
+    [InlineData("192.168.1.1")]
+    [InlineData("fd00::1")]
+    public void Internal_address_from_map_is_not_a_server(string ip)
+    {
+        // Аудит CR-10: «сервер» из карты с внутренним адресом слал бы DNS на свой компьютер или в сеть провайдера
+        Assert.Null(Crowd.ToServer(new Crowd.Found(ip, "x", null, 99, 50, 5)));
+        Assert.NotNull(Crowd.ToServer(new Crowd.Found("2a00:1450:4001::1", "x", null, 99, 50, 5)));
+    }
+
     [Fact]
     public async Task Service_status_is_parsed()
     {

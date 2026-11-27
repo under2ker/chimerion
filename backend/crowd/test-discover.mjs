@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import worker, { subnetOf, limitKeyOf, readLimited } from "./worker.js";
+import worker, { subnetOf, limitKeyOf, readLimited, serverKey } from "./worker.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let failures = 0;
@@ -240,6 +240,11 @@ check(limitKeyOf("2001:db8::1") === "2001:db8:0:0::/64", "IPv6 с :: раскр�
   req.cf = { asn: 64500 };
   check((await worker.fetch(req, env, ctx)).status === 413, "отчет на 2 МБ без длины: 413");
 }
+
+// Внутренние адреса в карту не попадают (аудит CR-10)
+for (const bad of ["0:0:0:0:0:0:0:1", "::", "::ffff:c0a8:101", "100.64.1.1", "198.18.0.1", "192.0.0.9", "fd00::1"])
+  check(serverKey(bad) === null, `внутренний адрес ${bad} отброшен`);
+for (const good of ["8.8.8.8", "2a00:1450::1", "dns.google"]) check(serverKey(good) === good, `публичный ${good} принят`);
 
 console.log(failures ? `FAILED: ${failures}` : "all ok");
 process.exit(failures ? 1 : 0);

@@ -273,7 +273,9 @@ public static class Crowd
         var name = new string((f.Name ?? f.Server).Where(c => !char.IsControl(c)).ToArray()).Trim();
         if (name.Length == 0) name = f.Server;
         if (System.Net.IPAddress.TryParse(f.Server, out var ip))
-            return new DnsServer { Name = DnsServer.Clip(name, 48), Primary = ip.ToString(), Source = "Общая карта", SourceUrl = Endpoint };
+            // Только публичные адреса: «сервер» 0:0:0:0:0:0:0:1 или адрес внутри сети провайдера слал бы DNS на свой
+            // компьютер или в чужую сеть (аудит CR-10)
+            return !SourceParser.IsPublic(ip.ToString()) && !SourceParser.IsPublic6(ip.ToString()) ? null : new DnsServer { Name = DnsServer.Clip(name, 48), Primary = ip.ToString(), Source = "Общая карта", SourceUrl = Endpoint };
         if (Uri.CheckHostName(f.Server) != UriHostNameType.Dns) return null;
         var url = Uri.TryCreate(f.Url, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps && u.Host.Equals(f.Server, StringComparison.OrdinalIgnoreCase)
             ? u.GetLeftPart(UriPartial.Path) : $"https://{f.Server}/dns-query";

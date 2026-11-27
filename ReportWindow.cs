@@ -36,6 +36,7 @@ internal sealed class ReportWindow
     private Button _send = null!;
     private string _kind;
     private bool _busy;
+    private bool _sent;
 
     private ReportWindow(Func<string?> report, Action github, Action<string> log)
     {
@@ -45,6 +46,14 @@ internal sealed class ReportWindow
         _kind = _store.ContactKind is { } k && Support.ContactKinds.Contains(k) ? k : "tg";
         _w = DnexDialog.CreateWindow("Сообщить о проблеме", Ui.Wide);
         _w.Closed += (_, _) => _open = null;
+        // Esc, «Отмена» или крестик молча стирали набранный текст (аудит UI-07): с текстом сначала спрашиваем.
+        // При выходе из программы не спрашиваем
+        _w.Closing += (_, e) =>
+        {
+            if (_sent || App.Exiting || _text.Text.Trim().Length == 0) return;
+            if (!DnexDialog.Ask("Закрыть без отправки?", "Набранный текст не сохранится.", "Закрыть", "Вернуться к тексту"))
+                e.Cancel = true;
+        };
         _w.Content = Ui.WindowContent(BuildForm());
         _w.Loaded += (_, _) => _text.Focus();
     }
@@ -96,7 +105,7 @@ internal sealed class ReportWindow
         _send = Ui.Action("Отправить", "Primary", () => _ = SendAsync());
         _send.IsDefault = false;
         var cancel = Ui.Action("Отмена", "Ghost", () => _w.Close()).With(b => b.IsCancel = true);
-        var github = Ui.Action("Открытое обращение на GitHub", "Ghost", () => { _w.Close(); _github(); })
+        var github = Ui.Action("Открытое обращение на GitHub", "Ghost", () => { _w.Close(); if (!_w.IsVisible) _github(); }) // «Вернуться к тексту» — GitHub не открываем
             .With(b => b.ToolTip = "Обращение будет видно всем. Нужен аккаунт GitHub");
         _status.Margin = new Thickness(2, 12, 0, 0);
         _status.Visibility = Visibility.Collapsed;
@@ -186,6 +195,7 @@ internal sealed class ReportWindow
     /// <summary>Подтверждение вместо формы: номер обращения, что будет дальше и как получить ответ в Telegram.</summary>
     private void ShowDone(Support.Ticket ticket)
     {
+        _sent = true;
         var root = Ui.Root();
         var badge = new Border
         {
