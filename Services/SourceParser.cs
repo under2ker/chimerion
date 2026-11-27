@@ -126,10 +126,12 @@ public static partial class SourceParser
 
     private static readonly HttpClient Http = CreateHttp();
 
-    private static HttpClient CreateHttp()
+    /// <summary>proxy — для тестов; по умолчанию системный прокси, как и раньше.</summary>
+    internal static HttpClient CreateHttp(IWebProxy? proxy = null)
     {
         var h = new HttpClient(new SocketsHttpHandler
         {
+            Proxy = proxy, UseProxy = true,
             AutomaticDecompression = DecompressionMethods.All,
             AllowAutoRedirect = false, // переадресации обрабатываем сами: проверяем адрес и не отдаем Cookie чужому сайту
             MaxConnectionsPerServer = 4,
@@ -141,6 +143,28 @@ public static partial class SourceParser
             ConnectCallback = async (ctx, ct) =>
             {
                 var host = ctx.DnsEndPoint.Host;
+                // Соединение с системным прокси (адрес соединения не адрес сайта). Прокси часто локальный (127.0.0.1 у
+                // v2rayN, Clash): проверка «только публичные адреса» отказывала ему, и поиск у таких людей не работал
+                // совсем (аудит CR-08). Проверяем адрес самого сайта, а к прокси подключаемся как есть
+                // HTTPS через прокси: .NET открывает туннель служебным запросом CONNECT, сайт в его заголовке Host
+                var req = ctx.InitialRequestMessage;
+                var site = req.Method == HttpMethod.Connect
+                    ? (req.Headers.Host is { Length: > 0 } hp && Uri.TryCreate("http://" + hp, UriKind.Absolute, out var hu) ? hu.IdnHost : null)
+                    : req.RequestUri?.IdnHost;
+                if (req.Method == HttpMethod.Connect && site == null) throw new HttpRequestException("адрес сайта для прокси не известен, запрос отменен");
+                if (site != null && !string.Equals(site, host, StringComparison.OrdinalIgnoreCase))
+                {
+                    var siteAddrs = IPAddress.TryParse(site, out var siteLit) ? new[] { siteLit } : await Dns.GetHostAddressesAsync(site, ct);
+                    if (!siteAddrs.Any(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPublic(a.ToString())))
+                        throw new HttpRequestException($"адрес {site} не публичный, запрос отменен");
+                    var proxySock = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp) { NoDelay = true };
+                    try
+                    {
+                        await proxySock.ConnectAsync(ctx.DnsEndPoint, ct);
+                        return new System.Net.Sockets.NetworkStream(proxySock, ownsSocket: true);
+                    }
+                    catch { proxySock.Dispose(); throw; }
+                }
                 var addrs = IPAddress.TryParse(host, out var lit) ? new[] { lit } : await Dns.GetHostAddressesAsync(host, ct);
                 var ip = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork && IsPublic(a.ToString()))
                          ?? throw new HttpRequestException($"адрес {host} не публичный, запрос отменен");
