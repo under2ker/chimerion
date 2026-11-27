@@ -99,7 +99,9 @@ public static class BypassCatalog
                 using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
                 http.DefaultRequestHeaders.UserAgent.ParseAdd("CHIMERION-bypass/1.0");
                 // GitHub недоступен: тот же подписанный файл через jsDelivr (см. GitHubMirrors)
-                if (await GitHubMirrors.SignedRawAsync(http, Url, (j, s) => Parse(j, s) != null, ct) is var (json, sig))
+                // Более старые наборы вместо уже принятых не берем (аудит CR-16)
+                var had = cache != null ? Parse(cache.Json, cache.Sig)?.Updated : null;
+                if (await GitHubMirrors.SignedRawAsync(http, Url, (j, s) => Parse(j, s) is { } d && RemoteCatalog.NotOlder(d.Updated, had), ct) is var (json, sig))
                 {
                     cache = new Cache { Fetched = DateTime.Now, Json = json, Sig = sig };
                     try { Storage.Save(CacheFile, cache); } catch (Exception) { }

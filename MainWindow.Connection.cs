@@ -522,6 +522,19 @@ public partial class MainWindow
     /// </summary>
     private async void Watchdog_Tick(object? sender, EventArgs e)
     {
+        // Один замер может идти дольше интервала сторожа: второй, начатый поверх, посчитал бы те же неудачи дважды
+        // и сменил сервер раньше времени. Сбой одного замера не роняет программу, а пишется в журнал (аудит UI-11)
+        if (_watchdogBusy) return;
+        _watchdogBusy = true;
+        try { await WatchdogTickCoreAsync(); }
+        catch (Exception ex) { Log($"Сторож: замер прервался: {ex.Message}"); }
+        finally { _watchdogBusy = false; }
+    }
+
+    private bool _watchdogBusy;
+
+    private async Task WatchdogTickCoreAsync()
+    {
         using var cause = NetHistory.Because("сторож");
         if (NoAutoDns) return; // копия данных: подключение в ней чужое
         if (Watchdog.IsChecked != true || _busyConn || _autoPicking) return; // автоподбор сам переключает серверы

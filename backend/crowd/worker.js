@@ -786,11 +786,12 @@ export async function discover(env) {
   const h = nowHour();
   const services = DISCOVER_SERVICES.map((x) => `'${x}'`).join(", ");
   // Без таблицы reporters серверов от пользователей нет: лучше пусто, чем без проверки отправителей
+  // Сеть 0 значит «Cloudflare не назвал сеть»: второй сетью она не считается (аудит CR-22)
   const res = await env.DB.prepare(
-    `SELECT s.server AS server, MAX(n.name) AS name, MAX(n.url) AS url, SUM(ok) AS ok, SUM(fail) AS fail, COUNT(DISTINCT asn) AS nets
+    `SELECT s.server AS server, MAX(n.name) AS name, MAX(n.url) AS url, SUM(ok) AS ok, SUM(fail) AS fail, COUNT(DISTINCT CASE WHEN asn > 0 THEN asn END) AS nets
      FROM stats s LEFT JOIN servers n ON n.server = s.server
      WHERE s.hour >= ?1 AND s.service IN (${services}) GROUP BY s.server
-     HAVING SUM(ok) + SUM(fail) >= 20 AND SUM(ok) * 100 >= 70 * (SUM(ok) + SUM(fail)) AND COUNT(DISTINCT asn) >= 2
+     HAVING SUM(ok) + SUM(fail) >= 20 AND SUM(ok) * 100 >= 70 * (SUM(ok) + SUM(fail)) AND COUNT(DISTINCT CASE WHEN asn > 0 THEN asn END) >= 2
        AND (SELECT COUNT(DISTINCT r.k) FROM reporters r WHERE r.server = s.server AND r.hour >= ?1) >= ?2
      ORDER BY SUM(ok) DESC LIMIT 100`).bind(h - 24, DISCOVER_REPORTERS).all().catch((e) => { console.log("discover", String(e)); return { results: [] }; });
   const out = (res.results || []).map((r) => ({ server: r.server, name: r.name || r.server, url: r.url || null, rate: Math.round((100 * r.ok) / (r.ok + r.fail)), checks: r.ok + r.fail, nets: r.nets }));

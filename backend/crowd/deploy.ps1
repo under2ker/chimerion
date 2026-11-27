@@ -8,7 +8,13 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 $signing = 'C:\CHIMERION\Служебное\Подпись'
 
-function Random-Secret { -join ((1..40) | ForEach-Object { '{0:x}' -f (Get-Random -Maximum 16) }) }
+# 20 байт из криптографического генератора (40 шестнадцатеричных знаков). Get-Random стойкости не обещает (аудит CR-20)
+function Random-Secret {
+    $b = New-Object byte[] 20
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($b) } finally { $rng.Dispose() }
+    -join ($b | ForEach-Object { '{0:x2}' -f $_ })
+}
 function Put-Secret([string]$name, [string]$value) {
     # Через файл, а не канал: канал PowerShell дописывает к значению лишние символы, и ключ не совпадает
     $tmp = Join-Path $env:TEMP ("wr-" + [guid]::NewGuid().ToString('N') + ".json")

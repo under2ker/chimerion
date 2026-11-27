@@ -60,9 +60,10 @@ public static class DevTools
                 UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true, StandardOutputEncoding = Encoding.Unicode,
             });
             if (p == null) return null;
-            var output = p.StandardOutput.ReadToEnd();
-            if (!p.WaitForExit(5000)) { try { p.Kill(); } catch (Exception) { } return null; }
-            return ParseVersion(output);
+            // Чтение в фоне: ReadToEnd до ожидания ждал бы зависший wsl.exe без предела (аудит UI-10)
+            var read = p.StandardOutput.ReadToEndAsync();
+            if (!p.WaitForExit(5000) || !read.Wait(1000)) { try { p.Kill(); } catch (Exception) { } return null; }
+            return ParseVersion(read.Result);
         }
         catch (Exception) { return null; }
     }
