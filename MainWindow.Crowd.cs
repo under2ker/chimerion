@@ -128,7 +128,18 @@ public partial class MainWindow
     }
 
     /// <summary>Отправить накопленное (раз в час) и обновить рейтинг (раз в час). Рейтинг смотрят и без согласия: это только чтение.</summary>
+    private bool _crowdSyncing;
+
     private async Task CrowdSyncAsync()
+    {
+        // Обмен уже идет (медленная сеть дольше 10 минут таймера): вторая копия отправила бы ту же очередь (аудит CR-13)
+        if (_crowdSyncing) return;
+        _crowdSyncing = true;
+        try { await CrowdSyncCoreAsync(); }
+        finally { _crowdSyncing = false; }
+    }
+
+    private async Task CrowdSyncCoreAsync()
     {
         try
         {

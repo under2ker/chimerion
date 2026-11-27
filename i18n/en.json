@@ -1433,7 +1433,7 @@
  "автоматически": "automatic",
  "адаптер не меняется": "adapter unchanged",
  "адрес {0}: {1}": "address {0}: {1}",
- "адреса DNS-серверов остаются. Перед отправкой отчет можно поправить. Нужен аккаунт GitHub.": "DNS server addresses remain. You can edit the report before sending. A GitHub account is needed.",
+ "другие IP-адреса тоже скрыты, названия серверов остаются. Перед отправкой отчет можно поправить. Нужен аккаунт GitHub.": "other IP addresses are hidden too, server names remain. You can edit the report before sending. A GitHub account is needed.",
  "адреса не обычные, проверьте сами": "unusual addresses, check it yourself",
  "базы расходятся: ipinfo: {0}, ipwho.is: {1}": "databases disagree: ipinfo: {0}, ipwho.is: {1}",
  "блокирует провайдер": "blocked by the provider",

@@ -46,6 +46,21 @@ public class ServerListGuardTests
     }
 
     [Fact]
+    public void ManualServersSurviveOverflow()
+    {
+        // Аудит CR-15: свой сервер, добавленный вручную, но сейчас нерабочий, выпадал при переполнении списка
+        var list = Enumerable.Range(0, ServerListGuard.MaxServers + 500)
+            .Select(i => Srv($"198.51.{i / 250}.{i % 250}", "https://example.org/list", ServerStatus.Fail)).ToList();
+        var mine = Srv("203.0.113.99", null, ServerStatus.Fail);
+        mine.Manual = true;
+        mine.AddedAt = DateTime.Now.AddDays(1); // самый новый: раньше уходил первым
+        list.Add(mine);
+        ServerListGuard.Purge(list, null);
+        Assert.Contains(mine, list);
+        Assert.Equal(ServerListGuard.MaxServers, list.Count);
+    }
+
+    [Fact]
     public void SmallListUntouched()
     {
         var list = new List<DnsServer> { Srv("203.0.113.7", "https://habr.com/"), Srv("203.0.113.8", null) };

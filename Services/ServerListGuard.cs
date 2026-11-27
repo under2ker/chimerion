@@ -66,9 +66,9 @@ public static class ServerListGuard
     public static bool WouldEmptyList(IEnumerable<DnsServer> all, int junkCount) =>
         junkCount > 0 && all.Count(s => !s.IsPromo) <= junkCount;
 
-    /// <summary>Сервер, который нельзя убирать: работает, в избранном или к нему подключено.</summary>
+    /// <summary>Сервер, который нельзя убирать: работает, в избранном, к нему подключено или добавлен вручную (аудит CR-15).</summary>
     private static bool Keep(DnsServer s, Guid? connected) =>
-        s.IsPromo || s.IsFavorite || s.Id == connected || s.Status is ServerStatus.Ok or ServerStatus.Partial;
+        s.IsPromo || s.IsFavorite || s.Manual || s.Id == connected || s.Status is ServerStatus.Ok or ServerStatus.Partial;
 
     /// <summary>
     /// Убирает серверы, набранные с общих каталогов, а если список все равно раздут, лишние нерабочие (новые первыми).

@@ -501,6 +501,11 @@ public static class Updater
         for (long s = from; s < total; s += ChunkSize) parts.Add((s, Math.Min(s + ChunkSize, total) - 1));
         var results = new byte[parts.Count][];
         using var gate = new SemaphoreSlim(6);
+        // Кусок окончательно не скачался: остальные останавливаются, а не качают зря (аудит U-20). Внешний ct не трогаем
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var outer = ct;
+        ct = stop.Token;
+        Exception? failure = null;
         long got = from;
         var tasks = parts.Select(async (p, i) =>
         {
@@ -525,12 +530,23 @@ public static class Updater
                         return;
                     }
                     catch (Exception) when (attempt < 4 && !ct.IsCancellationRequested) { await Task.Delay(500 * (attempt + 1), ct).ConfigureAwait(false); }
+                    catch (Exception e) when (!ct.IsCancellationRequested) // пятая попытка не удалась
+                    {
+                        Interlocked.CompareExchange(ref failure, e, null);
+                        stop.Cancel();
+                        throw;
+                    }
                 }
             }
             finally { gate.Release(); }
         }).ToList();
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-        foreach (var part in results) await dst.WriteAsync(part, ct).ConfigureAwait(false);
+        try { await Task.WhenAll(tasks).ConfigureAwait(false); }
+        catch (Exception) when (failure != null && !outer.IsCancellationRequested)
+        {
+            // Наружу — настоящая ошибка куска, а не «отменено» у остановленных соседей
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+        foreach (var part in results) await dst.WriteAsync(part, outer).ConfigureAwait(false);
     }
 
     /// <summary>Клиент для кусков: без общих соединений, чтобы каждый кусок шел своим.</summary>
