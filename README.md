@@ -129,7 +129,7 @@
 - Проверка серверов: эталонный DoH (`1.1.1.1`, `dns.google`), API ChatGPT, Claude и Gemini, служебные страницы `chatgpt.com/cdn-cgi/trace` и `claude.ai/cdn-cgi/trace`, тест утечки `dnscheck.tools`.
 - Локация адресов: `ipinfo.io`, `ipwho.is`, `country.is`, флаги стран с `flagcdn.com`.
 - Репутация адресов выхода серверов: `proxycheck.io` (оценка риска) и черные списки DroneBL, UCEPROTECT и SpamCop через DNS-over-HTTPS. Проверяются только адреса прокси Smart DNS, ваш IP туда не уходит. Итоги хранятся три дня.
-- Cloudflare R2: проверка быстрых исправлений и их скачивание.
+- Cloudflare R2: проверка быстрых исправлений и их скачивание. Если R2 недоступен, те же подписанные файлы берутся с зеркал в России: `ru.chimerion.dev` (свой сервер) и `under2ker.gitverse.site/chimerion` (GitVerse Pages). Журнал своего сервера хранит адрес только до сети провайдера (последние цифры обнулены), без заголовков запроса.
 - GitHub (если он недоступен, то зеркала jsDelivr, ghfast.top, gh-proxy.com и ghproxy.net): новая версия, стартовый список серверов и наборы сайтов (не чаще раза в 12 часов и раз в сутки), релизы TG WS Proxy и zapret, когда вы их включаете или обновляете, большие списки Re:filter, eduard256 и RussiaFancyLists, если вы их выбрали.
 - YouTube и Discord: короткие запросы, пока подбирается стратегия zapret.
 - Тест скорости, только по кнопке: `speed.cloudflare.com`, запасные `speedtest.selectel.ru` и `fsn1-speed.hetzner.com`.
