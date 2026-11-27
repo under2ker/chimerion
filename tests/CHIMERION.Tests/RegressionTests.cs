@@ -165,6 +165,20 @@ public class RegressionTests
         Assert.DoesNotContain("83.217.211.149", r);
     }
 
+    [Fact]
+    public void Report_keeps_explanation_of_dns_reset()
+    {
+        // Аудит P-16: правило для мест съедало «DNS системы сброшен», остается только адрес
+        var r = Diagnostics.Sanitize("12:00:00 Сторож: DNS системы сброшен (192.168.0.1). Возвращаю «Comss»\n" +
+            "Подключение: DNS системы не совпадает с подключением (77.88.8.8, 192.168.0.1) или пропали правила для ИИ\n" +
+            "ИИ видят выход: Нидерланды, Dronten (83.217.211.149, AS41745 Hoster)", null, "Ivanov");
+        Assert.Contains("Сторож: DNS системы сброшен ([локальный IP]). Возвращаю", r);
+        Assert.Contains("Подключение: DNS системы не совпадает с подключением ([IP], [локальный IP]) или пропали правила", r);
+        Assert.Contains("ИИ видят выход: [место скрыто] ([IP])", r);
+        Assert.DoesNotContain("Dronten", r);
+        Assert.DoesNotContain("192.168.0.1", r);
+    }
+
     // ---------- Внешние списки и релизы инструментов ----------
 
     [Theory]

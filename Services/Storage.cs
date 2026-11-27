@@ -91,7 +91,7 @@ public static class Storage
             Trace?.Invoke($"Хранилище: {file} занят другой программой, прочитать не удалось. Запись в него отложена");
             return createDefault();
         }
-        lock (Unread) Unread.Remove(path);
+        lock (Unread) { Unread.Remove(path); RereadAsked.Remove(path); }
         try
         {
             return JsonSerializer.Deserialize<T>(text, Options) ?? createDefault();
@@ -107,6 +107,22 @@ public static class Storage
 
     /// <summary>Файлы, которые не удалось прочитать из-за блокировки: перезаписывать их нельзя (там настоящие данные).</summary>
     private static readonly HashSet<string> Unread = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Файлы из Unread, которые уже освободились и о которых программу попросили перечитать (Reread). Запрет записи
+    /// снимается только настоящим чтением (LoadOrCreate): раньше он снимался при первой записи после блокировки,
+    /// и следующая запись затирала список серверов значениями по умолчанию из памяти (аудит P-02).
+    /// </summary>
+    private static readonly HashSet<string> RereadAsked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Файл освободился, но еще не прочитан: попросить программу перечитать его (один раз на блокировку).</summary>
+    private static void AskReread(string path, string message)
+    {
+        bool first; lock (Unread) first = RereadAsked.Add(path);
+        if (!first) return;
+        Trace?.Invoke(message);
+        Reread?.Invoke(Path.GetFileName(path));
+    }
 
     /// <summary>Записи, которые не прошли из-за блокировки: путь → последний JSON. Фоновый повтор до PendingFor.</summary>
     private static readonly Dictionary<string, string> Pending = new(StringComparer.OrdinalIgnoreCase);
@@ -170,12 +186,13 @@ public static class Storage
             bool unread; lock (Unread) unread = Unread.Contains(path);
             if (unread)
             {
-                try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+                try { File.ReadAllText(path); }
                 catch (IOException) { Defer(path, json); return; }
-                // Файл снова читается, а в памяти значения по умолчанию, полученные во время блокировки: эту запись
-                // пропускаем, чтобы не затереть настоящие данные, и просим программу перечитать файл
-                Trace?.Invoke($"Хранилище: {file} освободился. Сохранение пропущено, файл перечитан, чтобы не затереть данные");
-                Reread?.Invoke(file);
+                // Файл снова читается, а в памяти значения по умолчанию, полученные во время блокировки: запись
+                // пропускаем, чтобы не затереть настоящие данные, и просим программу перечитать файл. Пока она его
+                // не перечитает (LoadOrCreate), запись так и пропускается
+                lock (Pending) Pending.Remove(path);
+                AskReread(path, $"Хранилище: {file} освободился. Сохранение пропущено, файл перечитан, чтобы не затереть данные");
                 return;
             }
             if (!TryWrite(path, json)) Defer(path, json);
@@ -218,12 +235,11 @@ public static class Storage
                     bool unread; lock (Unread) unread = Unread.Contains(path);
                     if (unread)
                     {
-                        try { File.ReadAllText(path); lock (Unread) Unread.Remove(path); }
+                        try { File.ReadAllText(path); }
                         catch (IOException) { continue; }
                         // Отложенная запись сделана из значений по умолчанию: не пишем, а перечитываем настоящий файл
                         lock (Pending) Pending.Remove(path);
-                        Trace?.Invoke($"Хранилище: {Path.GetFileName(path)} освободился и перечитан");
-                        Reread?.Invoke(Path.GetFileName(path));
+                        AskReread(path, $"Хранилище: {Path.GetFileName(path)} освободился и перечитан");
                         continue;
                     }
                     if (!TryWrite(path, json)) continue;

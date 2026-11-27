@@ -54,6 +54,34 @@ public class StorageLockTests : IDisposable
     }
 
     [Fact]
+    public void Second_Save_After_Release_Still_Does_Not_Overwrite_Until_File_Is_Reread()
+    {
+        // Аудит P-02: раньше запрет снимался при первой записи после блокировки, и вторая запись значений по умолчанию
+        // из памяти (пустой список серверов) затирала настоящий файл
+        Storage.Save(File1, new AppSettings { TrayCheckMinutes = 42 });
+        AppSettings loaded;
+        using (LockFile()) loaded = Storage.LoadOrCreate(File1, () => new AppSettings());
+        var asked = 0;
+        Storage.Reread = _ => asked++;
+        try
+        {
+            Storage.Save(File1, loaded);
+            Storage.Save(File1, loaded);
+            Storage.Save(File1, new AppSettings { TrayCheckMinutes = 5 });
+            Storage.FlushPending(TimeSpan.FromSeconds(8));
+            Assert.Equal(1, asked); // попросили перечитать один раз
+            Assert.Throws<IOException>(() => Storage.SaveRequired(File1, loaded)); // и важная запись не затирает
+            var real = Storage.LoadOrCreate(File1, () => new AppSettings()); // программа перечитала файл
+            Assert.Equal(42, real.TrayCheckMinutes);
+            real.TrayCheckMinutes = 43;
+            Storage.Save(File1, real); // после настоящего чтения запись снова идет
+            Storage.FlushPending(TimeSpan.FromSeconds(8));
+            Assert.Equal(43, Storage.LoadOrCreate(File1, () => new AppSettings()).TrayCheckMinutes);
+        }
+        finally { Storage.Reread = null; }
+    }
+
+    [Fact]
     public void Defaults_Read_During_Lock_Do_Not_Overwrite_Real_Settings()
     {
         Storage.Save(File1, new AppSettings { TrayCheckMinutes = 42 });

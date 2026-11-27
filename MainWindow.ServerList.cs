@@ -603,6 +603,30 @@ public partial class MainWindow
     /// Частые вызовы схлопываются в одну запись.</summary>
     private string? _lastServersJson;
 
+    /// <summary>
+    /// servers.json при запуске был занят (антивирус, резервная копия), и в памяти оказался пустой список. Файл
+    /// освободился: берем серверы с диска и добавляем те, что появились за время блокировки. Иначе следующее
+    /// сохранение затерло бы настоящий список (аудит P-02).
+    /// </summary>
+    private void RereadServers()
+    {
+        var disk = Storage.LoadOrCreate(ServersFile, () => new List<DnsServer>());
+        var onDisk = new HashSet<string>(disk.Select(s => s.Key), StringComparer.OrdinalIgnoreCase);
+        var added = _servers.Where(s => !onDisk.Contains(s.Key)).ToList();
+        _servers.Clear();
+        foreach (var s in disk)
+        {
+            if (s.Status == ServerStatus.Checking) s.Status = ServerStatus.Unknown;
+            s.DateLegacyEgress();
+            _servers.Add(s);
+            _known.Add(s.Key);
+        }
+        foreach (var s in added) _servers.Add(s);
+        _lastServersJson = null;
+        if (added.Count > 0) SaveServers();
+        Log($"Список серверов перечитан после блокировки файла: {disk.Count} с диска, {added.Count} добавлено за это время");
+    }
+
     private async void SaveServers()
     {
         if (_savePending) return;

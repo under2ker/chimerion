@@ -53,10 +53,25 @@ public partial class MainWindow : Window
         Storage.Trace = msg => Log(msg);
         Storage.Reread = file => Dispatcher.InvokeAsync(() =>
         {
-            if (!file.Equals(SettingsFile, StringComparison.OrdinalIgnoreCase)) return;
-            _settings = LoadSettings();
-            ApplyTimerSettings();
-            Log("Настройки перечитаны после блокировки файла");
+            if (file.Equals(SettingsFile, StringComparison.OrdinalIgnoreCase))
+            {
+                _settings = LoadSettings();
+                ApplyTimerSettings();
+                Log("Настройки перечитаны после блокировки файла");
+            }
+            else if (file.Equals(ServersFile, StringComparison.OrdinalIgnoreCase)) RereadServers();
+            else if (file.Equals(JunkFile, StringComparison.OrdinalIgnoreCase))
+            {
+                // Метки с диска плюс поставленные за время блокировки
+                foreach (var (k, v) in Storage.LoadOrCreate(JunkFile, () => new Dictionary<string, DateTime>())) _junk.TryAdd(k, v);
+                try { Storage.Save(JunkFile, _junk); } catch (Exception) { }
+                Log("Список нерабочих серверов перечитан после блокировки файла");
+            }
+            else if (file.Equals("tools.json", StringComparison.OrdinalIgnoreCase))
+            {
+                Dnex.Services.Tools.Tool.ForgetStates();
+                Log("Состояние инструментов перечитано после блокировки файла");
+            }
         });
         SiteCheck.ZapretRunning = () => _tools.OfType<ZapretTool>().FirstOrDefault()?.IsRunning() == true;
         Loc.SetLanguage(_settings.Language);
@@ -318,6 +333,8 @@ public partial class MainWindow : Window
     private static AppSettings LoadSettings()
     {
         var st = Storage.LoadOrCreate(SettingsFile, () => new AppSettings());
+        // "sources": null и подобное в файле: список становится пустым значением, и запуск падал без окна (аудит P-03)
+        SettingsRepair.FillNullCollections(st, new AppSettings());
         Catalog.Merge(st);
         // Проверка значений из файла: без отрицательных/огромных лимитов, только https для эталонного DNS.
         st.TimeoutSeconds = Math.Clamp(st.TimeoutSeconds, 2, 30);

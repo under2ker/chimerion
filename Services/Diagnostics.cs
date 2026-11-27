@@ -336,7 +336,9 @@ public static class Diagnostics
                          || (a == 100 && b is >= 64 and <= 127);
             return local ? "[локальный IP]" : "[IP]";
         });
-        text = Regex.Replace(text, @"(?<=: )[^:()\n]+ \((?:\[IP\]|\[локальный IP\])[^()\n]*\)", "[место скрыто] ([IP])");
+        // Место рядом с адресом («Нидерланды, Dronten ([IP])»). Фразы про DNS («Сторож: DNS системы сброшен ([IP])»)
+        // местом не считаются: правило съедало само объяснение сбоя (аудит P-16)
+        text = Regex.Replace(text, @"(?<=: )(?![^:()\n]*\bDNS\b)[^:()\n]+ \((?:\[IP\]|\[локальный IP\])[^()\n]*\)", "[место скрыто] ([IP])");
         text = Regex.Replace(text, @"(?:\[IP\]|\[локальный IP\]) \([^()\n]*\)", "[IP] ([место скрыто])");
         var user = userName ?? Environment.UserName;
         if (user.Length >= 1) text = Regex.Replace(text, $@"(?<=\\Users\\){Regex.Escape(user)}(?=\\|$)", "[пользователь]", RegexOptions.IgnoreCase);

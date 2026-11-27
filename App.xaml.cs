@@ -85,7 +85,20 @@ public partial class App : Application
         // забытое скрытое окно больше не держит процесс
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        var win = new MainWindow();
+        MainWindow win;
+        try { win = new MainWindow(); }
+        catch (Exception ex)
+        {
+            // Окно не создалось: без этого процесс оставался висеть без окна и без значка (аудит P-03)
+            Dnex.Services.SupportTrace.Write("Окно не создалось при запуске: " + Dnex.Services.SupportTrace.Error(ex));
+            Dnex.Services.SupportTrace.Flush();
+            try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} Запуск: {PrivacyGuard.Scrub(ex.ToString())}\n"); } catch (Exception) { }
+            System.Windows.MessageBox.Show("CHIMERION не смог запуститься: " + ex.Message + "\n\nПодробности записаны в error.log в папке "
+                + Dnex.Services.Storage.Dir + ". Если вы меняли settings.json вручную, переименуйте его: программа создаст новый.",
+                "CHIMERION", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+            return;
+        }
         MainWindow = win;
         try
         {

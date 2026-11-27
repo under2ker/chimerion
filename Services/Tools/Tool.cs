@@ -58,6 +58,9 @@ public abstract class Tool
         }
     }
 
+    /// <summary>tools.json не прочитали из-за блокировки: забыть значения по умолчанию, следующий State прочтет файл.</summary>
+    internal static void ForgetStates() { lock (Gate) _states = null; }
+
     public void SaveState()
     {
         lock (Gate) { try { if (_states != null) Storage.Save("tools.json", _states); } catch (Exception) { } }
