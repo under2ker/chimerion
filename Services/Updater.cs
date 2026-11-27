@@ -37,6 +37,13 @@ public static class Updater
     /// <summary>Открытый ключ подписи релизов (SubjectPublicKeyInfo, ECDSA P-256). Секретная часть только у автора.</summary>
     public const string PublicKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGMeOOFlFlTXLz26x62wAzDxaknOR9wH+ICzlyHrgjT/riHsbB6RVL+sk/Ds5qNxl4aYUGMx0GUbs9V4wASPb0g==";
 
+    /// <summary>
+    /// Запасной ключ (аудит U-02). Сейчас им ничего не подписывается. Если основной ключ утечет или потеряется, выпуски
+    /// переходят на запасной, и уже установленные копии примут их без ручной переустановки. Секретная часть хранится
+    /// отдельно от основной, в репозиторий не попадает.
+    /// </summary>
+    public const string ReserveKey = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyukjHknyv5Na/8Ld0OBYJM+J0W695X852YtZ6viKpO/dGloTLXb6QWLm/iJ3ZaTdwDEVtZEJHfreG5jOtSHQ1Q==";
+
     /// <summary>Сколько запусков подряд без подтверждения терпим, прежде чем вернуть старую версию.</summary>
     private const int MaxUnconfirmedStarts = 3;
 
@@ -151,7 +158,10 @@ public static class Updater
         Environment.GetCommandLineArgs().Any(a => a.Equals(RelaunchArg, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Проверка подписи архива открытым ключом. publicKey задается в тестах.</summary>
-    public static bool VerifySignature(byte[] data, string signatureBase64, string publicKey = PublicKey)
+    public static bool VerifySignature(byte[] data, string signatureBase64, string publicKey = PublicKey) =>
+        VerifyWith(data, signatureBase64, publicKey) || publicKey == PublicKey && VerifyWith(data, signatureBase64, ReserveKey);
+
+    private static bool VerifyWith(byte[] data, string signatureBase64, string publicKey)
     {
         try
         {
