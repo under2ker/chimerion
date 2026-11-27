@@ -71,15 +71,30 @@ export function dohUrl(raw) {
   } catch { return null; }
 }
 
+/** Первые n групп адреса IPv6 (с раскрытием «::»), без ведущих нулей. */
+function v6Prefix(s, n) {
+  const [head, tail = ""] = s.split("::");
+  const a = head ? head.split(":") : [], b = s.includes("::") && tail ? tail.split(":") : [];
+  const groups = s.includes("::") ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill("0"), ...b] : a;
+  return groups.slice(0, n).map((g) => (g || "0").replace(/^0+(?=.)/, "")).join(":");
+}
+
 /** Подсеть отправителя: IPv4 /24, IPv6 /48. Один человек с двумя адресами одной сети считается одним. */
 export function subnetOf(ip) {
   const s = String(ip || "").trim().toLowerCase();
   if (IPV4_RE.test(s)) return s.split(".").slice(0, 3).join(".");
   if (!s.includes(":")) return "";
-  const [head, tail = ""] = s.split("::");
-  const a = head ? head.split(":") : [], b = s.includes("::") && tail ? tail.split(":") : [];
-  const groups = s.includes("::") ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill("0"), ...b] : a;
-  return groups.slice(0, 3).map((g) => (g || "0").replace(/^0+(?=.)/, "")).join(":");
+  return v6Prefix(s, 3);
+}
+
+/**
+ * Кто для лимита «столько-то запросов в час»: IPv4 — сам адрес, как раньше; IPv6 — блок /64.
+ * Одному дому провайдер выдает целый /64 (миллиарды адресов): по одному адресу лимит обходился сменой адреса.
+ */
+export function limitKeyOf(ip) {
+  const s = String(ip || "").trim().toLowerCase();
+  if (!s.includes(":") || IPV4_RE.test(s)) return s;
+  return v6Prefix(s, 4) + "::/64";
 }
 
 // В «обнаружение» идут только проверки нейросетей и только от разных людей: иначе один человек
@@ -105,7 +120,7 @@ async function report(req, env) {
 
   const hour = nowHour();
   const ip = req.headers.get("cf-connecting-ip") || "";
-  const k = await sha256(`${ip}|${hour}|${env.SALT || ""}`);
+  const k = await sha256(`${limitKeyOf(ip)}|${hour}|${env.SALT || ""}`);
   // За одним адресом бывает несколько компьютеров (общий IP у провайдера): до REPORTS_PER_IP отчетов в час
   const seen = await env.DB.prepare("INSERT INTO seen (k, hour, n) VALUES (?, ?, 1) ON CONFLICT (k) DO UPDATE SET n = n + 1 RETURNING n")
     .bind(k, hour).first();
@@ -139,7 +154,9 @@ async function report(req, env) {
     "INSERT INTO stats (hour, server, service, asn, ok, fail) VALUES (?, ?, ?, ?, ?, ?) " +
     "ON CONFLICT (hour, server, service, asn) DO UPDATE SET ok = ok + excluded.ok, fail = fail + excluded.fail");
   for (const { server, service, ok } of agg.values()) stmts.push(up.bind(hour, server, service, asn, ok ? 1 : 0, ok ? 0 : 1));
-  const nm = env.DB.prepare("INSERT INTO servers (server, name, updated) VALUES (?, ?, ?) ON CONFLICT (server) DO UPDATE SET name = excluded.name, updated = excluded.updated");
+  // Название берется из первого отчета: любой отчет переименовывал любой сервер (на странице рейтинга видно всем)
+  const nm = env.DB.prepare("INSERT INTO servers (server, name, updated) VALUES (?, ?, ?) ON CONFLICT (server) DO UPDATE SET " +
+    "name = CASE WHEN servers.name IS NULL OR servers.name = '' THEN excluded.name ELSE servers.name END, updated = excluded.updated");
   for (const [server, name] of names) stmts.push(nm.bind(server, name, hour));
   const su = env.DB.prepare("UPDATE servers SET url = ? WHERE server = ?");
   for (const [server, url] of urls) stmts.push(su.bind(url, server));
@@ -687,7 +704,7 @@ export async function usageReport(env) {
 /** Не больше limit запросов в час с одного адреса для дорогих проверок (probe). */
 async function allow(env, req, kind, limit) {
   const hour = nowHour();
-  const k = await sha256(`${kind}|${req.headers.get("cf-connecting-ip") || ""}|${hour}|${env.SALT || ""}`);
+  const k = await sha256(`${kind}|${limitKeyOf(req.headers.get("cf-connecting-ip") || "")}|${hour}|${env.SALT || ""}`);
   const r = await env.DB.prepare("INSERT INTO seen (k, hour, n) VALUES (?, ?, 1) ON CONFLICT (k) DO UPDATE SET n = n + 1 RETURNING n").bind(k, hour).first();
   return (r?.n || 0) <= limit;
 }

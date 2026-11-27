@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import worker, { subnetOf } from "./worker.js";
+import worker, { subnetOf, limitKeyOf } from "./worker.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let failures = 0;
@@ -127,6 +127,38 @@ check(subnetOf("") === "", "пустой адрес: без подсети");
   try { await worker.scheduled({}, env); } finally { Date.now = realNow; }
   const left = env.DB.sqlite.prepare("SELECT k FROM reporters").all().map((x) => x.k);
   check(left.length === 1 && left[0] === "b", "записи старше двух суток удалены");
+}
+
+// 7. CR-02: название сервера задает первый отчет, следующие его не меняют
+{
+  const env = { DB: makeDb(), SALT: "s" };
+  const one = (name) => [{ server: "dns.named.test", service: "ChatGPT", ok: true, name }];
+  await send(env, "203.0.113.10", 64500, one("Мой DNS"));
+  await send(env, "198.18.0.10", 64501, one("НЕ РАБОТАЕТ, качайте с x.test"));
+  const nm = () => env.DB.sqlite.prepare("SELECT name FROM servers WHERE server = 'dns.named.test'").get()?.name;
+  check(nm() === "Мой DNS", "чужой отчет не переименовал сервер");
+  env.DB.sqlite.prepare("INSERT INTO servers (server, name, updated) VALUES ('dns.empty.test', '', 0)").run();
+  await send(env, "192.0.2.10", 64502, [{ server: "dns.empty.test", service: "Claude", ok: true, name: "Имя" }]);
+  check(env.DB.sqlite.prepare("SELECT name FROM servers WHERE server = 'dns.empty.test'").get().name === "Имя", "пустое название заполняется");
+  await send(env, "192.0.2.11", 64502, [{ server: "dns.noname.test", service: "Claude", ok: true }]);
+  check(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM servers WHERE server = 'dns.noname.test'").get().n === 0, "отчет без названия запись о названии не создает (как раньше)");
+}
+
+// 8. CR-03: лимит отчетов в час для IPv6 считается по блоку /64, для IPv4 по адресу (как раньше)
+check(limitKeyOf("203.0.113.7") === "203.0.113.7", "IPv4: лимит по самому адресу");
+check(limitKeyOf("2001:db8:1:2::5") === limitKeyOf("2001:db8:1:2:ffff:1:2:3"), "IPv6: адреса одного /64 считаются вместе");
+check(limitKeyOf("2001:db8:1:2::5") !== limitKeyOf("2001:db8:1:3::5"), "IPv6: соседний /64 отдельно");
+check(limitKeyOf("2001:db8::1") === "2001:db8:0:0::/64", "IPv6 с :: раскрывается");
+{
+  const env = { DB: makeDb(), SALT: "s" };
+  const item = [{ server: "dns.rate.test", service: "ChatGPT", ok: true }];
+  const codes = [];
+  for (let i = 1; i <= 7; i++) codes.push(await send(env, `2001:db8:1:2::${i.toString(16)}`, 64500, item));
+  check(codes.slice(0, 5).every((c) => c === 200) && codes.slice(5).every((c) => c === 429), "IPv6: 6-й отчет за час с того же /64 отклонен");
+  check(await send(env, "2001:db8:1:3::1", 64500, item) === 200, "IPv6: другой /64 принимается");
+  const v4 = [];
+  for (let i = 1; i <= 6; i++) v4.push(await send(env, `203.0.113.${i}`, 64501, item));
+  check(v4.every((c) => c === 200), "IPv4: разные адреса одной подсети не мешают друг другу (как раньше)");
 }
 
 console.log(failures ? `FAILED: ${failures}` : "all ok");
