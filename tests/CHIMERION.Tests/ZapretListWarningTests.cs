@@ -47,3 +47,20 @@ public class ZapretListWarningTests
         finally { ZapretTool.ListWarning = prev; File.Delete(target); }
     }
 }
+
+/// <summary>Подбор стратегии под общей блокировкой winws (аудит T-06).</summary>
+[Collection("scenarios")]
+public class ZapretPickGateTests
+{
+    [Fact]
+    public async Task Failed_pick_releases_gate_and_flag()
+    {
+        var z = new ZapretTool();
+        // Без прав администратора или без установленного zapret подбор отказывает сразу
+        await Assert.ThrowsAsync<ToolException>(() => z.PickAsync(new Progress<string>(_ => { }), CancellationToken.None));
+        Assert.False(z.Picking);
+        var gate = (Dnex.Services.AsyncGate)typeof(ZapretTool).GetField("_winws", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(z)!;
+        var next = gate.RunAsync(() => Task.CompletedTask);
+        Assert.Same(next, await Task.WhenAny(next, Task.Delay(2000))); // блокировка освободилась
+    }
+}

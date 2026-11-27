@@ -876,6 +876,7 @@ public partial class MainWindow
     private async Task DashboardToolAsync(Tool tool)
     {
         if (_dashboardToolBusy) return;
+        if (tool is ZapretTool { Picking: true }) { DashboardMessage($"{tool.Title}: подождите, идет подбор стратегии"); return; }
         bool running = tool.IsRunning();
         if (tool is TgProxyTool tg && tg.ForeignCopyRunning() || tool is ZapretTool && running && !tool.State.Enabled) return;
         _dashboardToolBusy = true; DashboardMessage($"{tool.Title}: выполняется…");

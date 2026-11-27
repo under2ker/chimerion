@@ -622,6 +622,22 @@ public sealed class ZapretTool : Tool
     /// </summary>
     public async Task<List<StrategyResult>> PickAsync(IProgress<string> progress, CancellationToken ct, IEnumerable<string>? sites = null)
     {
+        // Весь подбор под общей блокировкой запуска winws: выключение из трея или режим посреди подбора убивали его
+        // winws, подбор записывал стратегии как неработающие, а две копии winws не уживались (аудит T-06).
+        // Действия, пришедшие во время подбора, ждут его конца
+        return await _winws.RunAsync(async () =>
+        {
+            Picking = true;
+            try { return await PickCoreAsync(progress, ct, sites); }
+            finally { Picking = false; }
+        });
+    }
+
+    /// <summary>Идет подбор стратегии: трей и главное окно не включают и не выключают обход, а просят подождать.</summary>
+    public bool Picking { get; private set; }
+
+    private async Task<List<StrategyResult>> PickCoreAsync(IProgress<string> progress, CancellationToken ct, IEnumerable<string>? sites)
+    {
         // Кроме YouTube и Discord проверяются ваши сайты из «Сайты для обхода» (не больше восьми)
         var targets = (sites ?? UserDomains()).Select(Dnex.Services.SplitDns.Clean).Where(d => d.Length > 0).Distinct().Take(MaxPickSites).ToList();
         if (!DnsSwitcher.IsAdmin()) throw new ToolException("Для подбора нужны права администратора: перезапустите CHIMERION с ними");

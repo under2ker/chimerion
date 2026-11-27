@@ -329,6 +329,7 @@ public partial class MainWindow
 
     private async Task ToggleToolFromTrayAsync(Tool t)
     {
+        if (t is ZapretTool { Picking: true }) { ShowToast($"{t.Title}: подождите, идет подбор стратегии", "Warn"); return; }
         try
         {
             if (t.IsInstalled && t.IsRunning()) { await t.DisableAsync(); Log($"{t.Title}: выключено"); ShowToast($"{t.Title}: выключено"); }
