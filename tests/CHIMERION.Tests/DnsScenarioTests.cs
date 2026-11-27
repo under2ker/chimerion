@@ -605,6 +605,29 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Emergency_reset_keeps_own_static_dns_that_was_behind_the_proxy()
+    {
+        // Аудит DNS-09: статический DNS человека становится «прежним DNS сети» за прокси; аварийный сброс выкидывал его
+        using var sim = new NetSim(OneEthernet(a => { a.static4 = "198.51.100.9"; a.dns4 = new() { a.static4 }; }))
+            { NoDoh = true, Fallback = new() { "198.51.100.9" } };
+        var server = new DnsServer { Name = "DoH", DohUrl = "https://203.0.113.5/dns-query/secret-token" };
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), _ => { });
+        Assert.Contains("198.51.100.9", DnsSwitcher.GetActive()!.ProxyFallback);
+        var appData = Path.Combine(Path.GetTempPath(), $"chimerion-reset-{Guid.NewGuid():N}");
+        var dnex = Directory.CreateDirectory(Path.Combine(appData, "DNEX")).FullName;
+        foreach (var f in new[] { "active.json", "dns-backup.json", "ipv6-disabled.txt" })
+            if (File.Exists(Path.Combine(TestSetup.DataDir, f))) File.Copy(Path.Combine(TestSetup.DataDir, f), Path.Combine(dnex, f));
+        try
+        {
+            var (code, output) = await sim.RunReal($"$env:APPDATA = '{appData.Replace("'", "''")}'\n" + File.ReadAllText(RepoFile("reset-dns.ps1")));
+            Assert.True(code == 0, $"код {code}: {output}");
+            Assert.Equal("198.51.100.9", sim["Sim-Ethernet"].static4);
+            Assert.Equal(new[] { "198.51.100.9" }, sim["Sim-Ethernet"].dns4);
+        }
+        finally { Directory.Delete(appData, true); }
+    }
+
+    [Fact]
     public async Task Emergency_reset_works_without_doh_commands()
     {
         using var sim = new NetSim(OneEthernet()) { NoDoh = true };

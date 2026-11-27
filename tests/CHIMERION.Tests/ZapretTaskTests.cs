@@ -151,4 +151,27 @@ public class ZapretArgsSafetyTests
         Assert.Equal(new[] { @"--hostlist=C:\Program Files\a b.txt", "--new" }, words);
         Assert.False(ZapretTool.SafeArgs("", Bin, Lists));
     }
+
+    [Fact]
+    public void Task_xml_is_inside_the_elevated_script_not_in_user_folder()
+    {
+        // Аудит T-03: XML задания больше не лежит в папке пользователя, пока на экране окно прав
+        const string sid = "S-1-5-21-1";
+        var appDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"chimerion-t03-{Guid.NewGuid():N}")).FullName;
+        File.WriteAllText(Path.Combine(appDir, "CHIMERION.exe"), "");
+        string script;
+        try { script = ZapretTask.CreateScript(Path.Combine(appDir, "CHIMERION.exe"), sid); }
+        finally { Directory.Delete(appDir, true); }
+        Assert.DoesNotContain(Path.Combine(Dnex.Services.Storage.Dir, "tasks"), script, StringComparison.OrdinalIgnoreCase);
+        var xmlPaths = System.Text.RegularExpressions.Regex.Matches(script, @"/XML '([^']+)'").Select(m => m.Groups[1].Value).ToList();
+        Assert.Equal(2, xmlPaths.Count);
+        Assert.All(xmlPaths, x => Assert.StartsWith(ZapretTask.HelperDir, x, StringComparison.OrdinalIgnoreCase));
+        var blobs = System.Text.RegularExpressions.Regex.Matches(script, @"FromBase64String\('([^']+)'\)")
+            .Select(m => Convert.FromBase64String(m.Groups[1].Value)).ToList();
+        Assert.Equal(2, blobs.Count);
+        static byte[] Utf16(string s) => System.Text.Encoding.Unicode.GetPreamble().Concat(System.Text.Encoding.Unicode.GetBytes(s)).ToArray();
+        Assert.Equal(Utf16(ZapretTask.Xml(ZapretTask.HelperExe, "start", sid)), blobs[0]);
+        Assert.Equal(Utf16(ZapretTask.Xml(ZapretTask.HelperExe, "stop", sid)), blobs[1]);
+        Assert.True(script.IndexOf("WriteAllBytes", StringComparison.Ordinal) < script.IndexOf("/Create", StringComparison.Ordinal));
+    }
 }

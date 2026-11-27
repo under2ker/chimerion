@@ -90,17 +90,30 @@ public static class ZapretTask
         if (ExePath is not { } exe) return false;
         var user = WindowsIdentity.GetCurrent().User?.Value;
         if (user == null) return false;
-        var dir = Path.Combine(Storage.Dir, "tasks");
-        Directory.CreateDirectory(dir);
-        var start = Path.Combine(dir, "zapret-start.xml");
-        var stop = Path.Combine(dir, "zapret-stop.xml");
-        // schtasks читает XML задания в UTF-16
-        await File.WriteAllTextAsync(start, Xml(HelperExe, "start", user), Encoding.Unicode);
-        await File.WriteAllTextAsync(stop, Xml(HelperExe, "stop", user), Encoding.Unicode);
         try
         {
+            await DnsSwitcher.RunPsAsync(CreateScript(exe, user), elevated: true);
+        }
+        finally
+        {
+            _ready = null;
+        }
+        return Ready();
+    }
+
+    /// <summary>
+    /// Скрипт с правами администратора: копии программы и zapret в HelperDir и два задания. XML заданий вписан в сам
+    /// скрипт (его хеш сверяется перед запуском) и пишется уже с правами в HelperDir, куда у пользователя нет записи.
+    /// Раньше XML лежал в папке пользователя и ждал, пока человек ответит на окно прав: его можно было подменить (аудит T-03).
+    /// </summary>
+    internal static string CreateScript(string exe, string user)
+    {
             var schtasks = Path.Combine(Environment.SystemDirectory, "schtasks.exe");
             static string Q(string v) => DnsSwitcher.PsQuote(v);
+            // schtasks читает XML задания в UTF-16 (с меткой порядка байтов, как File.WriteAllText с Encoding.Unicode)
+            static string B64(string xml) => Convert.ToBase64String(Encoding.Unicode.GetPreamble().Concat(Encoding.Unicode.GetBytes(xml)).ToArray());
+            var start = Path.Combine(HelperDir, "zapret-start.xml");
+            var stop = Path.Combine(HelperDir, "zapret-stop.xml");
             // Копии делаются в том же запросе прав: папка в Program Files, запись только у администраторов
             var copy = new StringBuilder();
             copy.Append($"$h = {Q(HelperDir)}; New-Item -ItemType Directory -Force -Path $h | Out-Null; ");
@@ -109,17 +122,12 @@ public static class ZapretTask
             copy.Append($"Remove-Item -LiteralPath {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force -ErrorAction SilentlyContinue; ");
             copy.Append($"Copy-Item -LiteralPath {Q(ZapretTool.BinDir.TrimEnd(Path.DirectorySeparatorChar))} -Destination {Q(HelperBin.TrimEnd(Path.DirectorySeparatorChar))} -Recurse -Force; ");
             // Пути из папки пользователя: имя с апострофом не должно ломать или менять команду
-            var script = copy + $"& {Q(schtasks)} /Create /TN {Q(StartName)} /XML {Q(start)} /F | Out-Null; " +
-                         $"& {Q(schtasks)} /Create /TN {Q(StopName)} /XML {Q(stop)} /F | Out-Null";
-            await DnsSwitcher.RunPsAsync(script, elevated: true);
-        }
-        finally
-        {
-            try { File.Delete(start); } catch (IOException) { }
-            try { File.Delete(stop); } catch (IOException) { }
-            _ready = null;
-        }
-        return Ready();
+            return copy +
+                   $"[IO.File]::WriteAllBytes({Q(start)}, [Convert]::FromBase64String('{B64(Xml(HelperExe, "start", user))}')); " +
+                   $"[IO.File]::WriteAllBytes({Q(stop)}, [Convert]::FromBase64String('{B64(Xml(HelperExe, "stop", user))}')); " +
+                   $"& {Q(schtasks)} /Create /TN {Q(StartName)} /XML {Q(start)} /F | Out-Null; " +
+                   $"& {Q(schtasks)} /Create /TN {Q(StopName)} /XML {Q(stop)} /F | Out-Null; " +
+                   $"Remove-Item -LiteralPath {Q(start)}, {Q(stop)} -Force -ErrorAction SilentlyContinue";
     }
 
     /// <summary>Запуск задания: права не спрашиваются, задание уже с ними. False — задание не запустилось.</summary>

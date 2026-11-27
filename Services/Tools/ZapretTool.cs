@@ -321,7 +321,22 @@ public sealed class ZapretTool : Tool
             else if (State.IpSet && File.Exists(full)) File.Copy(full, target, overwrite: true);
             else File.WriteAllText(target, "203.0.113.113/32\r\n");
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* файл занят или нет прав: остается как был */ }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Файл занят или нет прав: остается как был, обход запускается. Раньше молча (аудит T-07)
+            ReportListFailure("Список адресов (ipset-all.txt) не обновлен: " + (e is UnauthorizedAccessException ? "нет прав на запись в папку " + Lists : e.Message));
+        }
+    }
+
+    /// <summary>Сообщение в журнал программы о списке, который не удалось записать. Подписывается главное окно.</summary>
+    internal static Action<string>? ListWarning;
+    private static readonly HashSet<string> ReportedFailures = new();
+
+    /// <summary>Одно и то же сообщение — один раз за сеанс: обход запускается часто.</summary>
+    internal static void ReportListFailure(string message)
+    {
+        lock (ReportedFailures) if (!ReportedFailures.Add(message)) return;
+        try { ListWarning?.Invoke(message); } catch (Exception) { }
     }
 
     /// <summary>Пользовательские списки, на которые ссылаются стратегии. Без них winws не стартует; содержимое как у service.bat.</summary>
@@ -486,7 +501,8 @@ public sealed class ZapretTool : Tool
         ApplyIpSet();
         // Наборы могли обновиться с прошлого запуска: список пересобирается из последних принятых
         // Список пишется всегда: в нем адреса обновлений CHIMERION, даже если своих сайтов нет
-        try { WriteUserList(Dnex.Services.BypassCatalog.LoadCached()); } catch (ToolException) { }
+        try { WriteUserList(Dnex.Services.BypassCatalog.LoadCached()); }
+        catch (ToolException e) { ReportListFailure("Список сайтов для обхода не обновлен, работает прежний. " + e.Message); }
         var args = ParseArgs(await File.ReadAllTextAsync(Path.Combine(Dir, strategy)), Bin, Lists, games)
                    ?? throw new ToolException($"В стратегии {strategy} не нашлась строка запуска winws.exe. Возможно, формат сборки изменился");
         EnsureUserLists();

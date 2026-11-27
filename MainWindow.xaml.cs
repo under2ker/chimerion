@@ -73,6 +73,7 @@ public partial class MainWindow : Window
                 Log("Состояние инструментов перечитано после блокировки файла");
             }
         });
+        ZapretTool.ListWarning = msg => Log("YouTube и Discord: " + msg);
         SiteCheck.ZapretRunning = () => _tools.OfType<ZapretTool>().FirstOrDefault()?.IsRunning() == true;
         Loc.SetLanguage(_settings.Language);
         Loc.Changed += OnLanguageChanged;

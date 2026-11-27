@@ -32,6 +32,12 @@ if ($active) {
     $ours += @($active.adapterAddresses)
 }
 $ours = @($ours | Where-Object { $_ } | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
+# Прежний DNS сети за DoH-прокси не наш: часто это статический DNS, который человек ставил сам. Программа при
+# отключении его тоже не считает своим (аудит DNS-09)
+if ($active -and $active.proxyFallback) {
+    $fallback = @(@($active.proxyFallback) | Where-Object { $_ } | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    $ours = @($ours | Where-Object { -not ($fallback -contains $_) })
+}
 
 $ok = $true
 
