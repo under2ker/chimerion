@@ -228,6 +228,26 @@ async function summary(env, asn) {
   return res.results || [];
 }
 
+/**
+ * Результат, одинаковый для всех, в кэше Cloudflare на ttl секунд (аудит CR-07): общий рейтинг считался заново
+ * для каждого провайдера (9 млн прочитанных строк D1 в сутки), обнаружение — на каждый запрос.
+ * Без кэша (тесты, сбой кэша) просто считается, как раньше.
+ */
+async function cachedJson(key, ttl, compute) {
+  const cache = globalThis.caches?.default;
+  if (cache) {
+    try {
+      const hit = await cache.match(key);
+      if (hit) return await hit.json();
+    } catch {}
+  }
+  const value = await compute();
+  if (cache) {
+    try { await cache.put(key, new Response(JSON.stringify(value), { headers: { "content-type": "application/json", "cache-control": `max-age=${ttl}` } })); } catch {}
+  }
+  return value;
+}
+
 async function stats(req, env, ctx) {
   const url = new URL(req.url);
   const asn = Number(url.searchParams.get("asn")) || Number(req.cf?.asn) || 0;
@@ -237,7 +257,7 @@ async function stats(req, env, ctx) {
   if (hit) return hit;
   const org = asn ? (await env.DB.prepare("SELECT org FROM asns WHERE asn = ?").bind(asn).first())?.org || null : null;
   // Таблицы site_stats может еще не быть (сервер обновили раньше миграции): рейтинг отдаем и без блокировок
-  const [provider, global, inc] = await Promise.all([asn ? summary(env, asn) : [], summary(env, null),
+  const [provider, global, inc] = await Promise.all([asn ? summary(env, asn) : [], cachedJson("https://crowd.cache/global-summary", 300, () => summary(env, null)),
     asn ? incidents(env, asn).catch(() => []) : []]);
   const resp = json({ v: 1, asn, org, updated: new Date().toISOString(), provider, global, incidents: inc }, 200, { "cache-control": "public, max-age=300" });
   ctx.waitUntil(cache.put(cacheKey, resp.clone()));
@@ -1044,7 +1064,7 @@ export default {
       if (req.method === "GET" && url.pathname === "/v1/usage" && env.ADMIN_KEY && env.OWNER_ID && req.headers.get("x-admin-key") === env.ADMIN_KEY && req.headers.get("x-device-id") === env.OWNER_ID) return json(await usageReport(env));
       if (req.method === "POST" && env.TG_WEBHOOK_SECRET && url.pathname === `/tg/${env.TG_WEBHOOK_SECRET}`) return await telegram(req, env);
       if (req.method === "POST" && url.pathname === "/tg-setup") return await setup(req, env);
-      if (req.method === "GET" && url.pathname === "/v1/discover") return json({ v: 1, servers: await discover(env) }, 200, { "cache-control": "public, max-age=900" });
+      if (req.method === "GET" && url.pathname === "/v1/discover") return json({ v: 1, servers: await cachedJson("https://crowd.cache/discover", 900, () => discover(env)) }, 200, { "cache-control": "public, max-age=900" });
       if (req.method === "GET" && url.pathname === "/v1/probe") return await probe(req, env);
       if (req.method === "GET" && url.pathname === "/v1/services") return await services(env, ctx);
       if (req.method === "GET" && url.pathname === "/v1/ios") return ios(req);
@@ -1069,6 +1089,8 @@ export default {
     if (h % 24 !== 3) return;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM stats WHERE hour < ?").bind(h - KEEP_HOURS),
+      // Названия и адреса серверов, о которых не осталось ни одной проверки: нигде не показываются, таблица только росла (CR-18)
+      env.DB.prepare("DELETE FROM servers WHERE (updated IS NULL OR updated < ?) AND server NOT IN (SELECT DISTINCT server FROM stats)").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM site_stats WHERE hour < ?").bind(h - KEEP_HOURS),
       env.DB.prepare("DELETE FROM seen WHERE hour < ?").bind(h - 48),
       env.DB.prepare("DELETE FROM devices WHERE last_day < ?").bind(today() - 180),

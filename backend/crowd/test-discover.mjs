@@ -161,5 +161,43 @@ check(limitKeyOf("2001:db8::1") === "2001:db8:0:0::/64", "IPv6 с :: раскр�
   check(v4.every((c) => c === 200), "IPv4: разные адреса одной подсети не мешают друг другу (как раньше)");
 }
 
+// 9. CR-07: обнаружение и общий рейтинг берутся из кэша Cloudflare, сбой кэша не ломает ответ
+{
+  const store = new Map();
+  const fakeCache = {
+    async match(k) { const v = store.get(String(k.url || k)); return v ? new Response(v) : undefined; },
+    async put(k, r) { store.set(String(k.url || k), await r.text()); },
+  };
+  const env = { DB: makeDb(), SALT: "s" };
+  let reads = 0; const prep = env.DB.prepare; env.DB.prepare = (sql) => { reads++; return prep(sql); };
+  globalThis.caches = { default: fakeCache };
+  try {
+    const a = await discovered(env); const r1 = reads;
+    const b = await discovered(env);
+    check(reads === r1 && JSON.stringify(a) === JSON.stringify(b), "обнаружение: второй запрос из кэша, без базы");
+    const st1 = await (await worker.fetch(Object.assign(new Request("https://crowd.test/v1/stats?asn=64500"), { cf: {} }), env, ctx)).json();
+    const r2 = reads;
+    await worker.fetch(Object.assign(new Request("https://crowd.test/v1/stats?asn=64501"), { cf: {} }), env, ctx);
+    check(store.has("https://crowd.cache/global-summary") && Array.isArray(st1.global), "общий рейтинг лег в кэш");
+    check(reads - r2 < r2 - r1, "другой провайдер: общий рейтинг не пересчитан");
+    globalThis.caches = { default: { async match() { throw new Error("down"); }, async put() { throw new Error("down"); } } };
+    check(Array.isArray(await discovered(env)), "кэш сломан: обнаружение считается как раньше");
+  } finally { delete globalThis.caches; env.DB.prepare = prep; }
+}
+
+// 10. CR-18: ночная чистка убирает серверы без единой проверки, остальные не трогает
+{
+  const env = { DB: makeDb(), SALT: "s" };
+  const h = Math.floor(Date.now() / 3600000);
+  const q = env.DB.sqlite;
+  q.prepare("INSERT INTO servers (server, name, updated) VALUES ('gone.test', 'старый', ?), ('alive.test', 'живой', ?), ('fresh.test', 'новый', ?)").run(h - 300, h - 300, h);
+  q.prepare("INSERT INTO stats (hour, server, service, asn, ok, fail) VALUES (?, 'alive.test', 'ChatGPT', 1, 1, 0)").run(h - 2);
+  const realNow = Date.now; const at3 = (Math.floor(h / 24) * 24 + 3) * 3600000 + 60000;
+  Date.now = () => at3; globalThis.fetch = async () => new Response("", { status: 503 });
+  try { await worker.scheduled({}, env); } finally { Date.now = realNow; }
+  const left = q.prepare("SELECT server FROM servers ORDER BY server").all().map((x) => x.server);
+  check(JSON.stringify(left) === JSON.stringify(["alive.test", "fresh.test"]), "без проверок и старше 8 дней удален; с проверками и свежий остались");
+}
+
 console.log(failures ? `FAILED: ${failures}` : "all ok");
 process.exit(failures ? 1 : 0);
