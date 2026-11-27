@@ -17,7 +17,7 @@ public sealed class ZapretTool : Tool
     public override string Id => "zapret";
     public override string Title => "YouTube и Discord";
     public override string Repo => "Flowseal/zapret-discord-youtube";
-    public override string Authors => "zapret-discord-youtube, авторы bol-van и Flowseal, лицензия MIT; WinDivert, basil00";
+    public override string Authors => "zapret-discord-youtube, авторы bol-van и Flowseal, лицензия MIT; WinDivert, basil00, лицензия LGPL 3 или GPL 2 на выбор";
 
     public const string DefaultStrategy = "general.bat";
     /// <summary>Игровой фильтр выключен: service.bat подставляет вместо диапазона портов заглушку 12.</summary>

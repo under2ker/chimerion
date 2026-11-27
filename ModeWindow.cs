@@ -178,7 +178,11 @@ internal sealed class ModeWindow
             .Ref(TextBlock.ForegroundProperty, "Muted"));
         DockPanel.SetDock(changes, Dock.Top);
         changes.Children.Add(Change("Smart DNS", m.Dns, s.Dns, false, s.Dns ? null : s.HasWorkingServers ? null : "нет рабочих серверов: сначала найдите их"));
-        changes.Children.Add(Change("Telegram", m.Telegram, s.Telegram || s.TelegramForeign, false, s.TelegramForeign && m.Telegram == Target.Off ? "ваша копия не выключается" : null));
+        // Работает только ваша собственная копия прокси: режим ее не выключает, и писать «выключится» было неверно (аудит UI-04)
+        bool onlyForeign = s.TelegramForeign && !s.Telegram && m.Telegram == Target.Off;
+        changes.Children.Add(Change("Telegram", m.Telegram, s.Telegram || s.TelegramForeign, false,
+            s.TelegramForeign && s.Telegram && m.Telegram == Target.Off ? "ваша копия не выключается" : null,
+            onlyForeign ? ("ваша копия останется включена", "check", "Ok") : null));
         changes.Children.Add(Change("Обход zapret", m.Zapret, s.Zapret, s.ZapretGames, null));
 
         bool runningThis = _running == m.Id;
@@ -195,9 +199,9 @@ internal sealed class ModeWindow
     }
 
     /// <summary>Строка «что изменится»: часть, значок итога и текст («включится», «останется включен», «не меняется»).</summary>
-    private static FrameworkElement Change(string part, Target t, bool on, bool games, string? note)
+    private static FrameworkElement Change(string part, Target t, bool on, bool games, string? note, (string, string, string)? fixedResult = null)
     {
-        var (text, kind, color) = t switch
+        var (text, kind, color) = fixedResult ?? t switch
         {
             Target.On when on && !games => ("останется включен", "check", "Ok"),
             Target.On => (on ? "обход для игр выключится" : "включится", "circle-arrow-up", "Accent"),

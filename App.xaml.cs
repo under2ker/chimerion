@@ -75,7 +75,11 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception error)
+            {
                 Dnex.Services.SupportTrace.Write("Аварийное завершение: " + Dnex.Services.SupportTrace.Error(error));
+                // Падение вне окна раньше попадало только в подробный журнал, а в error.log и отчет — нет (аудит P-11)
+                Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} Аварийное завершение: {PrivacyGuard.Scrub(error.ToString())}\n");
+            }
             Dnex.Services.SupportTrace.Flush();
         };
         TaskScheduler.UnobservedTaskException += (_, args) =>
@@ -92,7 +96,7 @@ public partial class App : Application
             // Окно не создалось: без этого процесс оставался висеть без окна и без значка (аудит P-03)
             Dnex.Services.SupportTrace.Write("Окно не создалось при запуске: " + Dnex.Services.SupportTrace.Error(ex));
             Dnex.Services.SupportTrace.Flush();
-            try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} Запуск: {PrivacyGuard.Scrub(ex.ToString())}\n"); } catch (Exception) { }
+            Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} Запуск: {PrivacyGuard.Scrub(ex.ToString())}\n");
             System.Windows.MessageBox.Show("CHIMERION не смог запуститься: " + ex.Message + "\n\nПодробности записаны в error.log в папке "
                 + Dnex.Services.Storage.Dir + ". Если вы меняли settings.json вручную, переименуйте его: программа создаст новый.",
                 "CHIMERION", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -127,7 +131,7 @@ public partial class App : Application
         var guard = new Thread(() =>
         {
             Thread.Sleep(TimeSpan.FromSeconds(8));
-            try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} Выход не завершился за 8 секунд, процесс закрыт принудительно\n"); } catch (Exception) { }
+            Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} Выход не завершился за 8 секунд, процесс закрыт принудительно\n");
             Environment.Exit(0);
         }) { IsBackground = true, Name = "CHIMERION exit guard" };
         guard.Start();
@@ -138,7 +142,7 @@ public partial class App : Application
     {
         Dnex.Services.SupportTrace.Write("Ошибка интерфейса: " + Dnex.Services.SupportTrace.Error(e.Exception));
         Dnex.Services.SupportTrace.Flush();
-        try { System.IO.File.AppendAllText(Dnex.Services.Storage.PathOf("error.log"), $"{DateTime.Now:u} {PrivacyGuard.Scrub(e.Exception.ToString())}\n"); } catch (Exception) { }
+        Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} {PrivacyGuard.Scrub(e.Exception.ToString())}\n");
         DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
             DialogKind.Error, "Ошибка");
         e.Handled = true;

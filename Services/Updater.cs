@@ -383,7 +383,7 @@ public static class Updater
         catch (UpdateException) { TryDelete(NewPath); throw; }
 
         var fileVer = FileVersionInfo.GetVersionInfo(NewPath).ProductVersion ?? "";
-        if (!fileVer.StartsWith(ver, StringComparison.Ordinal))
+        if (!SameVersion(fileVer, ver))
         {
             TryDelete(NewPath);
             throw new UpdateException($"В архиве программа другой версии ({fileVer}), установка отменена");
@@ -541,4 +541,23 @@ public static class Updater
         TaskCanceledException or TimeoutException => "нет ответа",
         _ => "нет соединения",
     };
+    /// <summary>
+    /// Версия exe совпадает с ожидаемой. Раньше сверялось начало строки, и 0.1.18 проходила за 0.1.180 (аудит U-09).
+    /// ProductVersion может нести хвост сборки («0.1.180+abc123») и четвертое число («0.1.180.0»): они не мешают.
+    /// </summary>
+    internal static bool SameVersion(string? fileVersion, string expected)
+    {
+        static Version? Core(string? v)
+        {
+            if (string.IsNullOrWhiteSpace(v)) return null;
+            var s = v.Trim();
+            int cut = s.IndexOfAny(new[] { '+', '-', ' ' });
+            if (cut >= 0) s = s[..cut];
+            if (!Version.TryParse(s, out var p)) return null;
+            return new Version(p.Major, p.Minor, Math.Max(p.Build, 0), Math.Max(p.Revision, 0));
+        }
+        var a = Core(fileVersion);
+        var b = Core(expected);
+        return a != null && b != null && a == b;
+    }
 }
