@@ -206,6 +206,7 @@ public class ServerChecker
             for (int i = 0; i < targets.Count; i++)
                 if (results[i].Ok) s.ServiceOk[targets[i].Name] = s.ServiceOk.GetValueOrDefault(targets[i].Name) + 1;
             if (targets.Count > 0 && ok == targets.Count) s.AllOk++;
+            s.AgeCounters();
             s.NotifyStability();
         });
     }

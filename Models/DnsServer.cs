@@ -395,6 +395,37 @@ public class DnsServer : INotifyPropertyChanged
     /// <summary>Проверки, в которых работали сразу все сервисы.</summary>
     public int AllOk { get; set; }
 
+    /// <summary>
+    /// Сколько последних проверок примерно помнит стабильность. Раньше счетчики копились за всё время: сервер,
+    /// который 200 раз работал, а потом сломался, еще долго держал 90% и оставался в «Лучших» (аудит CR-09).
+    /// </summary>
+    public const int StabilityWindow = 50;
+
+    /// <summary>
+    /// Старение счетчиков: набралось вдвое больше окна — все счетчики делятся пополам. Доля успехов не меняется,
+    /// а давние проверки весят всё меньше. Пересчет на каждой проверке копил ошибку округления (75% уплывали к 50%),
+    /// деление пополам раз в 50 проверок ее не копит. Счетчики больше 100 (за всё время) уменьшаются при первой проверке.
+    /// </summary>
+    public void AgeCounters()
+    {
+        static int Half(int v, int total, int to)
+        {
+            // Та же доля при новом итоге; половинки округляются к ближайшему
+            return (int)Math.Round((double)v * to / total, MidpointRounding.ToEven);
+        }
+        if (ChecksTotal >= 2 * StabilityWindow)
+        {
+            ChecksOk = Math.Min(StabilityWindow, Half(ChecksOk, ChecksTotal, StabilityWindow));
+            ChecksTotal = StabilityWindow;
+        }
+        if (ServiceChecks >= 2 * StabilityWindow)
+        {
+            foreach (var k in ServiceOk.Keys.ToList()) ServiceOk[k] = Math.Min(StabilityWindow, Half(ServiceOk[k], ServiceChecks, StabilityWindow));
+            AllOk = Math.Min(StabilityWindow, Half(AllOk, ServiceChecks, StabilityWindow));
+            ServiceChecks = StabilityWindow;
+        }
+    }
+
     /// <summary>Стабильность по сервису в процентах. Null, если по нему еще не было проверок.</summary>
     public int? ServiceStability(string service) =>
         ServiceChecks == 0 ? null : ServiceOk.GetValueOrDefault(service) * 100 / ServiceChecks;
