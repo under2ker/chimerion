@@ -113,8 +113,8 @@ async function sha256(text) {
 async function report(req, env) {
   const len = Number(req.headers.get("content-length") || 0);
   if (len > MAX_BODY) return json({ error: "too large" }, 413);
-  const text = await req.text();
-  if (text.length > MAX_BODY) return json({ error: "too large" }, 413);
+  const text = await readLimited(req, MAX_BODY);
+  if (text == null || text.length > MAX_BODY) return json({ error: "too large" }, 413);
   let body;
   try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
   if (!body || body.v !== 1 || !Array.isArray(body.items)) return json({ error: "bad format" }, 400);
@@ -469,8 +469,32 @@ async function notifyOwner(env, t, report) {
 // Тело запроса текстом. С 0.1.167 программа сжимает обращение (заголовок x-body: gzip): у части провайдеров
 // большие отправки на Cloudflare замирают, а сжатый отчет в разы меньше. Свой заголовок, а не Content-Encoding,
 // чтобы по дороге тело никто не распаковывал. limit ограничивает распакованный размер.
+/**
+ * Тело запроса не больше limit знаков. Раньше req.text() сначала читал всё (запрос без длины по частям — десятки
+ * мегабайт в памяти Worker), и только потом сверялась длина (аудит CR-17). Поток обрывается, как только байтов
+ * больше 3 × limit: знак в UTF-8 занимает до 3 байт, поэтому все, что раньше проходило проверку длины, проходит
+ * и теперь; сама проверка знаков остается у вызывающего. null — слишком большое.
+ */
+export async function readLimited(req, limit) {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const parts = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > 3 * limit) { await reader.cancel(); return null; }
+    parts.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const p of parts) { all.set(p, at); at += p.length; }
+  return new TextDecoder().decode(all);
+}
+
 async function bodyText(req, limit) {
-  if ((req.headers.get("x-body") || "").toLowerCase() !== "gzip") return await req.text();
+  if ((req.headers.get("x-body") || "").toLowerCase() !== "gzip") return await readLimited(req, limit);
   const reader = req.body.pipeThrough(new DecompressionStream("gzip")).getReader();
   const parts = [];
   let size = 0;
@@ -527,8 +551,8 @@ async function createTicket(req, env) {
 /** Статусы своих обращений: программа присылает токены (не больше 20), в ответе только то, что видит пользователь. */
 async function ticketStatuses(req, env) {
   if (!await allow(env, req, "tickets", 120)) return json({ error: "too many" }, 429);
-  const text = await req.text();
-  if (text.length > 4096) return json({ error: "too large" }, 413);
+  const text = await readLimited(req, 4096);
+  if (text == null || text.length > 4096) return json({ error: "too large" }, 413);
   let body;
   try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
   if (!body || body.v !== 1 || !Array.isArray(body.tokens)) return json({ error: "bad format" }, 400);
@@ -632,8 +656,8 @@ async function linkTicket(env, msg) {
 
 /** Тело запроса счетчика: { v: 1, id: 32 шестнадцатеричных знака, ver }. Null, если формат другой. */
 async function usageBody(req) {
-  const text = await req.text();
-  if (text.length > 512) return null;
+  const text = await readLimited(req, 512);
+  if (text == null || text.length > 512) return null;
   let body;
   try { body = JSON.parse(text); } catch { return null; }
   return body && body.v === 1 && typeof body.id === "string" && /^[0-9a-f]{32}$/.test(body.id) ? body : null;
@@ -770,8 +794,8 @@ const VERIFIED_HOURS = 48, VERIFIED_MAX = 80;
  * администратора. Каждый адрес проверяется по формату; запись обновляет час последней проверки.
  */
 export async function putVerified(req, env) {
-  const text = await req.text();
-  if (text.length > MAX_BODY) return json({ error: "too large" }, 413);
+  const text = await readLimited(req, MAX_BODY);
+  if (text == null || text.length > MAX_BODY) return json({ error: "too large" }, 413);
   let body;
   try { body = JSON.parse(text); } catch { return json({ error: "bad json" }, 400); }
   const list = Array.isArray(body?.servers) ? body.servers.slice(0, 200) : [];

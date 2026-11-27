@@ -4,7 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import worker, { subnetOf, limitKeyOf } from "./worker.js";
+import worker, { subnetOf, limitKeyOf, readLimited } from "./worker.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let failures = 0;
@@ -225,6 +225,20 @@ check(limitKeyOf("2001:db8::1") === "2001:db8:0:0::/64", "IPv6 с :: раскр�
   check(!/203\.0\.113\.50/.test(JSON.stringify(q.prepare("SELECT * FROM site_reporters").all())), "адреса отправителей в site_reporters нет");
   await fail("198.51.100.77");
   check((await incidentsNow()).includes("youtube.com"), "второй отправитель: блокировка показана");
+}
+
+// Тело запроса читается с пределом (аудит CR-17)
+{
+  const stream = (bytes) => new ReadableStream({ start(c) { for (let i = 0; i < bytes; i += 1000) c.enqueue(new Uint8Array(Math.min(1000, bytes - i)).fill(97)); c.close(); } });
+  const mk = (bytes) => new Request("https://crowd.test/x", { method: "POST", body: stream(bytes), duplex: "half" });
+  check((await readLimited(mk(500), 512)).length === 500, "маленькое тело читается целиком");
+  check(await readLimited(mk(5_000_000), 512) === null, "большое тело без длины обрывается");
+  const ru = "Ж".repeat(500); // 1000 байт, 500 знаков: проходило раньше, проходит и теперь
+  check((await readLimited(new Request("https://crowd.test/x", { method: "POST", body: ru }), 512)) === ru, "русский текст в пределах знаков проходит");
+  const env = { DB: makeDb(), SALT: "s" };
+  const req = new Request("https://crowd.test/v1/report", { method: "POST", headers: { "cf-connecting-ip": "203.0.113.90" }, body: stream(2_000_000), duplex: "half" });
+  req.cf = { asn: 64500 };
+  check((await worker.fetch(req, env, ctx)).status === 413, "отчет на 2 МБ без длины: 413");
 }
 
 console.log(failures ? `FAILED: ${failures}` : "all ok");
