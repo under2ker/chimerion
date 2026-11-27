@@ -207,7 +207,6 @@ dotnet publish CHIMERION.csproj -c Release -r win-x64 --self-contained false -p:
 ## Telegram
 
 - [Канал @chimeriondns](https://t.me/chimeriondns): новости о версиях. Каждый пост помечен: крупное обновление, обновление или хотфикс.
-- Вопрос или ошибка: кнопка «Сообщить о сбое» в программе, ответ придет прямо в нее.
 
 Об ошибках можно писать и в [issues на GitHub](https://github.com/under2ker/chimerion/issues): приложите отчет из «Диагностики»: кнопка «Скопировать отчет» или «Сохранить отчет».
 
