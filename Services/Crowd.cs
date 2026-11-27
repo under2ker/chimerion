@@ -102,13 +102,17 @@ public static class Crowd
     /// Итоги проверки сервера в очередь: по каждому сервису работает или нет. Желтые плашки («регион», «капча»)
     /// пропускаются: капча Google значит, что доступ есть, а по плашке их не различить.
     /// </summary>
-    public static void Enqueue(Queue q, DnsServer s)
+    /// <param name="only">
+    /// Проверялись только эти сервисы («Только ChatGPT»): плашки остальных взяты из прошлых проверок или вовсе не
+    /// проверялись, и раньше уходили в карту как свежие «не работает» (аудит CR-06). null — проверялись все.
+    /// </param>
+    public static void Enqueue(Queue q, DnsServer s, IReadOnlyCollection<string>? only = null)
     {
         // Сервер, добавленный вручную, может быть личным (свой VPS, домашний DNS) с личным названием: в общую карту
         // не отправляется никогда, иначе его адрес попал бы в публичный рейтинг и ответы бота
         if (s.Manual) return;
         if (KeyOf(s) is not { } key) return;
-        foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail"))
+        foreach (var chip in s.Chips.Where(c => c.State is "ok" or "fail" && (only == null || only.Contains(c.Name))))
         {
             q.Items.RemoveAll(i => i.Server == key && i.Service == chip.Name);
             q.Items.Add(new Item(key, chip.Name, chip.State == "ok", DnsServer.Clip(s.DisplayName, 48), ShareableUrl(DohOf(s))));

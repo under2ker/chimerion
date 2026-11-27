@@ -418,7 +418,7 @@ public partial class MainWindow
         // Проверка одного сервиса выстраивает список по нему, полная и глубокая — для всех сервисов
         var focus = opt.Only is { Count: 1 } only ? only.First() : null;
         if (focus != _rankFor) SetRankFocus(focus);
-        await FinishChecksAsync(list, before);
+        await FinishChecksAsync(list, before, opt.Only);
         if (focus != null)
         {
             // Наверх списка — лучший для этого сервиса
@@ -436,7 +436,8 @@ public partial class MainWindow
     /// это сбой сети, а не серверов. Тогда автоочистка пропускается, а счетчики стабильности этой проверки
     /// откатываются, чтобы следующая проверка не отправила рабочие серверы в мусор.
     /// </summary>
-    private async Task FinishChecksAsync(List<DnsServer> list, Dictionary<DnsServer, CheckSnapshot>? before)
+    /// <param name="only">Проверялись только эти сервисы: в общую карту уходят только они (аудит CR-06)</param>
+    private async Task FinishChecksAsync(List<DnsServer> list, Dictionary<DnsServer, CheckSnapshot>? before, IReadOnlyCollection<string>? only = null)
     {
         bool networkUp = await SystemCheck.NetworkUpAsync();
         var wereWorking = before?.Where(kv => kv.Value.Status is ServerStatus.Ok or ServerStatus.Partial).Select(kv => kv.Key).ToList() ?? new();
@@ -478,7 +479,7 @@ public partial class MainWindow
         }
 
         SaveServers();
-        if (!outage) CrowdCollect(list.Where(s => s.LastChecked > DateTime.Now.AddMinutes(-30))); // в общую карту, если согласились
+        if (!outage) CrowdCollect(list.Where(s => s.LastChecked > DateTime.Now.AddMinutes(-30)), only); // в общую карту, если согласились
         _ = ResolveLocationsAsync();      // после проверки появился адрес прокси — определим его страну
         ApplyFocusRanks();                // порядок «лучшие для сервиса» по свежим результатам
         _view?.Refresh();

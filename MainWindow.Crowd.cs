@@ -120,10 +120,10 @@ public partial class MainWindow
     }
 
     /// <summary>После проверки серверов: итоги в очередь. При VPN и сбое сети результат не про сервер, не отправляем.</summary>
-    private void CrowdCollect(IEnumerable<DnsServer> checkedServers)
+    private void CrowdCollect(IEnumerable<DnsServer> checkedServers, IReadOnlyCollection<string>? only = null)
     {
         if (_settings.CrowdConsent != true) return;
-        foreach (var s in checkedServers) Crowd.Enqueue(_crowdQueue, s);
+        foreach (var s in checkedServers) Crowd.Enqueue(_crowdQueue, s, only);
         Crowd.SaveQueue(_crowdQueue);
     }
 

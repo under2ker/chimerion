@@ -59,6 +59,19 @@ public class CrowdTests
     }
 
     [Fact]
+    public void Partial_check_sends_only_checked_services()
+    {
+        // Аудит CR-06: «Только ChatGPT» — плашки Claude и Gemini прошлые или выдуманные, в карту их не отправляем
+        var q = new Crowd.Queue();
+        Crowd.Enqueue(q, Srv("Zapret", "83.217.211.149", "ChatGPT ✓ · Claude ✗ · Gemini ✗"), new[] { "ChatGPT" });
+        var item = Assert.Single(q.Items);
+        Assert.Equal("ChatGPT", item.Service);
+        Assert.True(item.Ok);
+        Crowd.Enqueue(q, Srv("Zapret", "83.217.211.149", "ChatGPT ✓ · Claude ✗ · Gemini ✗"));
+        Assert.Equal(3, q.Items.Count); // полная проверка — как раньше
+    }
+
+    [Fact]
     public void Personal_doh_link_is_not_shared_only_host()
     {
         Assert.Equal("https://dns.comss.one/dns-query", Crowd.ShareableUrl("https://dns.comss.one/dns-query{?dns}"));
