@@ -556,6 +556,8 @@
                                             <Hyperlink Click="TgChannel_Click" Foreground="{DynamicResource Accent}">@chimeriondns</Hyperlink>
                                         </TextBlock>
                                         <TextBlock Style="{StaticResource InfoBody}" Text="Канал: новости о версиях"/>
+                                        <!-- Чат Chimerion DNS Chat пока скрыт по решению владельца (27.11.2026): чтобы вернуть, убрать Visibility="Collapsed" у этого блока -->
+                                        <StackPanel Visibility="Collapsed">
                                         <TextBlock Style="{StaticResource InfoHead}">
                                             <Hyperlink Click="TgChat_Click" Foreground="{DynamicResource Accent}">Chimerion DNS Chat</Hyperlink>
                                         </TextBlock>
@@ -569,6 +571,7 @@
                                         <Border BorderBrush="{DynamicResource ControlBorder}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,12,0,0">
                                             <TextBlock Style="{StaticResource InfoNote}" Text="Темы открываются у тех, кто уже в чате. Если еще нет, сначала вступите по ссылке выше."/>
                                         </Border>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Border>
 
