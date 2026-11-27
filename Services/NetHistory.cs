@@ -59,7 +59,8 @@ public static class NetHistory
         var path = PathOfFile;
         var lines = File.ReadAllLines(path);
         if (lines.Length <= TrimAt) return;
-        File.WriteAllLines(path, lines.Skip(lines.Length - Keep), new UTF8Encoding(false));
+        // Через временный файл: обрыв посреди обрезки больше не стирает журнал сети (аудит P-12)
+        Storage.WriteAllBytesAtomic(path, new UTF8Encoding(false).GetBytes(string.Concat(lines.Skip(lines.Length - Keep).Select(l => l + Environment.NewLine))));
     }
 
     /// <summary>Записи от старых к новым.</summary>

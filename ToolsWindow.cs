@@ -585,6 +585,13 @@ internal sealed class ToolsWindow
         }
         catch (OperationCanceledException) { SetStatus(z, "Подбор остановлен, прежняя стратегия возвращена", false); }
         catch (ToolException e) { SetStatus(z, e.Message, true); }
+        catch (Exception e)
+        {
+            // Раньше прочая ошибка терялась (вызов «_ = PickAsync»), и в карточке было пусто (аудит T-11)
+            SupportTrace.Write("zapret: сбой подбора: " + SupportTrace.Error(e));
+            SetStatus(z, "Подбор прервался: " + e.Message, true);
+            _log("zapret: подбор прервался: " + e.Message);
+        }
         finally
         {
             _busy = false;

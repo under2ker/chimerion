@@ -150,10 +150,20 @@ public partial class App : Application
         Dnex.Services.SupportTrace.Write("Ошибка интерфейса: " + Dnex.Services.SupportTrace.Error(e.Exception));
         Dnex.Services.SupportTrace.Flush();
         Dnex.Services.ErrorLog.Append($"{DateTime.Now:u} {PrivacyGuard.Scrub(e.Exception.ToString())}\n");
-        DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
-            DialogKind.Error, "Ошибка");
         e.Handled = true;
+        // Ошибка из таймера повторялась бы каждые несколько секунд и открывала пачку окон (аудит UI-13): пока окно
+        // об ошибке открыто, следующие только пишутся в error.log
+        if (_errorDialogOpen) return;
+        _errorDialogOpen = true;
+        try
+        {
+            DnexDialog.Show("Что-то пошло не так", e.Exception.Message + "\n\nПодробности записаны в error.log. Если ошибка повторяется, перезапустите программу.",
+                DialogKind.Error, "Ошибка");
+        }
+        finally { _errorDialogOpen = false; }
     }
+
+    private static bool _errorDialogOpen;
 
     protected override void OnExit(ExitEventArgs e)
     {

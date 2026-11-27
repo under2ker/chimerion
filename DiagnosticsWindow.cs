@@ -209,7 +209,8 @@ internal sealed class DiagnosticsWindow
                 Process.Start(new ProcessStartInfo(a[5..]) { UseShellExecute = true });
             else if (a == "hosts")
                 // Блокнот с правами администратора: без них hosts не сохранить
-                Process.Start(new ProcessStartInfo("notepad.exe", Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts"))
+                // Полный путь к Блокноту: короткое имя Windows ищет и в других папках (аудит T-14)
+                Process.Start(new ProcessStartInfo(Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\notepad.exe"), Environment.ExpandEnvironmentVariables(@"%SystemRoot%\System32\drivers\etc\hosts"))
                               { UseShellExecute = true, Verb = "runas" });
             else if (a == "wsl-tunnel") EnableWslTunnel(_log);
             else if (a.StartsWith("tool:") && _tools.FirstOrDefault(t => t.Id == a[5..]) is { } tool)

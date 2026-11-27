@@ -557,7 +557,7 @@ public sealed class ZapretTool : Tool
         {
             await Task.Delay(2000);
             if (proc == null || proc.HasExited)
-                throw new ToolException($"winws.exe сразу завершился (код {proc?.ExitCode}). Частая причина: антивирус удалил WinDivert. Добавьте папку {Dir} в исключения");
+                throw new ToolException($"winws.exe сразу завершился (код {proc?.ExitCode}). Частые причины: антивирус удалил WinDivert (добавьте папку {Dir} в исключения), драйвер заблокировала «Целостность памяти» Windows или уже работает другая программа обхода (GoodbyeDPI, другой zapret)");
         }
     }
 

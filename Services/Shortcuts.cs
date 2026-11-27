@@ -38,9 +38,10 @@ public static class Shortcuts
             var type = Type.GetTypeFromProgID("WScript.Shell");
             if (type == null) return;
             dynamic shell = Activator.CreateInstance(type)!;
+            dynamic? link = null;
             try
             {
-                dynamic link = shell.CreateShortcut(lnk);
+                link = shell.CreateShortcut(lnk);
                 string target = link.TargetPath;
                 if (!string.Equals(Path.GetFullPath(target), Path.GetFullPath(from), StringComparison.OrdinalIgnoreCase)) return;
                 link.TargetPath = to;
@@ -54,7 +55,12 @@ public static class Shortcuts
                     if (!File.Exists(renamed)) File.Move(lnk, renamed);
                 }
             }
-            finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell); }
+            finally
+            {
+                // Объект ярлыка тоже освобождаем: обход идет по всем ярлыкам меню «Пуск», и они копились до сборки мусора (аудит T-14)
+                if (link != null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(link);
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+            }
         }
         catch (Exception) { }
     }

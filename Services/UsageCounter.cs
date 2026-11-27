@@ -57,7 +57,8 @@ public static class UsageCounter
     private static void SaveLock(string id, string token)
     {
         var plain = JsonSerializer.SerializeToUtf8Bytes(new Lock(id, token));
-        File.WriteAllBytes(Storage.PathOf(LockFile), ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine));
+        // Через временный файл: пустой файл после обрыва питания давал ложную отметку «перенесен с другого компьютера» (аудит P-12)
+        Storage.WriteAllBytesAtomic(Storage.PathOf(LockFile), ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine));
     }
 
     /// <summary>Отметка. atStart: первая после запуска, она идет всегда. True: сервер принял.</summary>

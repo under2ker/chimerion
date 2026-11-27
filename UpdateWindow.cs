@@ -469,16 +469,34 @@ internal static class UpdateWindow
             else
             {
                 var url = m.Groups[4].Value;
+                if (!IsOwnLink(url))
+                {
+                    // Описание приходит с GitHub без подписи: ссылку на чужой сайт показываем текстом, без перехода (аудит U-21)
+                    tb.Inlines.Add(new Run(m.Groups[3].Value) { ToolTip = "Ссылка не на сайт CHIMERION, из окна не открывается: " + url });
+                    pos = m.Index + m.Length;
+                    continue;
+                }
                 var link = new Hyperlink(new Run(m.Groups[3].Value)) { TextDecorations = null, Cursor = System.Windows.Input.Cursors.Hand };
                 link.SetResourceReference(TextElement.ForegroundProperty, "Accent");
-                if (Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
-                    link.Click += (_, _) => AutoStart.OpenUrl(u.AbsoluteUri);
+                var u = new Uri(url);
+                link.Click += (_, _) => AutoStart.OpenUrl(u.AbsoluteUri);
                 tb.Inlines.Add(link);
             }
             pos = m.Index + m.Length;
         }
         if (pos < text.Length) tb.Inlines.Add(new Run(text[pos..]));
         return tb;
+    }
+
+    /// <summary>Ссылки, которые окно обновления открывает: репозиторий CHIMERION на GitHub, chimerion.dev и канал в Telegram.</summary>
+    internal static bool IsOwnLink(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp) return false;
+        var host = u.IdnHost.ToLowerInvariant();
+        var path = u.AbsolutePath.ToLowerInvariant();
+        return host == "chimerion.dev" || host.EndsWith(".chimerion.dev", StringComparison.Ordinal)
+            || host == "github.com" && (path == "/" + UpdateChecker.Repo || path.StartsWith("/" + UpdateChecker.Repo + "/", StringComparison.Ordinal))
+            || host == "t.me" && path.TrimEnd('/') == "/chimeriondns";
     }
 
     /// <summary>Убирает разметку Markdown, которую не показываем: заголовки, жирный, код.</summary>

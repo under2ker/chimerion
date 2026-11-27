@@ -268,6 +268,29 @@ public static class Storage
         return !HasPending;
     }
 
+    /// <summary>
+    /// Запись файла целиком через временный файл и замену: обрыв питания посреди записи оставляет прежний файл, а не
+    /// пустой (аудит P-12). Ошибки пробрасываются, как у File.WriteAllBytes.
+    /// </summary>
+    public static void WriteAllBytesAtomic(string path, byte[] bytes)
+    {
+        var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            using (var fs = new FileStream(tmp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                fs.Write(bytes);
+                fs.Flush(flushToDisk: true);
+            }
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch (Exception) { }
+            throw;
+        }
+    }
+
     /// <summary>Одна попытка записи с короткими повторами (до секунды). false — файл занят.</summary>
     private static bool TryWrite(string path, string json)
     {

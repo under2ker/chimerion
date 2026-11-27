@@ -342,6 +342,14 @@ public partial class MainWindow
             }
         }
         catch (ToolException ex) { Log($"{t.Title}: {ex.Message}"); ShowToast($"{t.Title}: {ex.Message}", "Bad"); }
+        catch (UacDeclinedException) { Log($"{t.Title}: отменено, права администратора не даны"); ShowToast($"{t.Title}: отменено, права администратора не даны", "Warn"); }
+        catch (Exception ex)
+        {
+            // Нет прав на папку, файл занят и прочее: раньше уходило в «Ошибку фоновой задачи» без слова человеку (аудит T-11)
+            SupportTrace.Write($"{t.Title} из трея: " + SupportTrace.Error(ex));
+            Log($"{t.Title}: не получилось: {ex.Message}");
+            ShowToast($"{t.Title}: не получилось, подробности в журнале", "Bad");
+        }
         UpdateToolsTray();
     }
 

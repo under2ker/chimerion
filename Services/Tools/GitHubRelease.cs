@@ -17,7 +17,7 @@ public sealed record Release(string Tag, Version Version, IReadOnlyList<ReleaseA
 /// </summary>
 public static class GitHubRelease
 {
-    private static readonly HttpClient Api = CreateApi();
+    internal static HttpClient Api = CreateApi(); // тесты подставляют свой
     private static readonly HttpClient Download = CreateDownload();
 
     private static HttpClient CreateApi()
@@ -56,7 +56,19 @@ public static class GitHubRelease
             if ((int)resp.StatusCode is 403 or 429)
                 throw new ToolException("GitHub временно ограничил запросы с вашего адреса. Попробуйте через час");
             if (!resp.IsSuccessStatusCode) throw new ToolException($"GitHub ответил {(int)resp.StatusCode}");
-            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            try { return Parse(repo, await resp.Content.ReadAsStringAsync(ct)); }
+            catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                // Вместо ответа GitHub пришла страница-заглушка провайдера (код 200) или в релизе нет нужного поля (аудит T-11)
+                throw new ToolException("GitHub ответил не тем: возможно, провайдер подменил страницу. Попробуйте позже");
+            }
+        }
+    }
+
+    private static Release Parse(string repo, string json)
+    {
+        {
+            using var doc = JsonDocument.Parse(json);
             var r = doc.RootElement;
             var tag = r.GetProperty("tag_name").GetString() ?? "";
             var ver = ParseTag(tag) ?? throw new ToolException($"Не понял номер версии «{tag}»");
