@@ -105,6 +105,16 @@ public class LogDigestTests
     }
 
     [Fact]
+    public void Sanitize_hides_key_without_digits_but_keeps_ordinary_paths()
+    {
+        // Аудит P-08: случайный ключ из одних букв проходил открыто
+        var text = Diagnostics.Sanitize("https://dns.example.test/dns-query/aBcDeFgHiJkLmNoPqRsTuVwX и https://example.test/Windows-Defender-Settings/dns-over-https",
+            null);
+        Assert.Contains("https://dns.example.test/dns-query/[ключ]", text);
+        Assert.Contains("https://example.test/Windows-Defender-Settings/dns-over-https", text);
+    }
+
+    [Fact]
     public void Sanitize_hides_url_queries_and_key_like_path_parts_but_keeps_domain()
     {
         var text = Diagnostics.Sanitize("DoH https://dns.example.test/dns-query/a1B2c3D4e5F6g7H8i9 и https://example.test/page?session=abc#x, статья https://habr.example/articles/123456/",

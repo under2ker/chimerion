@@ -72,6 +72,7 @@ public partial class MainWindow
         {
             Text = "по проверкам для каждого сервиса · щелчок выбирает сервер в таблице", Foreground = B("Muted"), FontSize = 12.5,
             Margin = new Thickness(0, 2, 0, 4),
+            TextWrapping = TextWrapping.Wrap, // в узком окне подпись обрезалась («...сервер в таблиц», аудит UI-06)
         });
 
         if (picks.All(p => p.Best == null))

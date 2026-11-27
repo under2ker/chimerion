@@ -4,7 +4,8 @@
 # Если CHIMERION ничего не меняла, скрипт ничего не делает.
 # Файлы CHIMERION удаляются только после успешного восстановления и проверки.
 $ErrorActionPreference = 'Stop'
-$dir = Join-Path $env:APPDATA 'DNEX'
+# Папку передает reset-dns.cmd из окна до запроса прав (аудит DNS-10); при запуске напрямую - своя папка
+$dir = if ($env:CHIMERION_DATA -and (Test-Path -LiteralPath $env:CHIMERION_DATA)) { $env:CHIMERION_DATA } else { Join-Path $env:APPDATA 'DNEX' }
 $backupPath = Join-Path $dir 'dns-backup.json'
 $activePath = Join-Path $dir 'active.json'
 $v6Path = Join-Path $dir 'ipv6-disabled.txt'

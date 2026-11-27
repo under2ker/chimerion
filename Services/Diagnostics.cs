@@ -406,7 +406,12 @@ public static class Diagnostics
 
     // Знак препинания в конце (точка, запятая, скобка) к адресу не относится
     private static readonly Regex Url = new(@"\b[a-z][a-z0-9+.-]{1,15}://[^\s""'<>«»]*[^\s""'<>«».,;:!?)\]]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex TokenSegment = new(@"(?<=/)(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{16,}(?=/|$)", RegexOptions.Compiled);
+    // Ключ: от 16 знаков с цифрой и буквой, или от 20 знаков с маленькими буквами и хотя бы тремя большими внутри
+    // слова (не после дефиса: Windows-Defender-Settings не ключ). Второе — ключи без единой цифры (у случайных
+    // 24 знаков так примерно в 1,7% случаев) раньше проходили открыто, теперь пропускается около 1 на 100 000 (аудит P-08)
+    private static readonly Regex TokenSegment = new(
+        @"(?<=/)(?:(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{16,}|(?=[A-Za-z0-9_-]*[a-z])(?=(?:[A-Za-z0-9_-]*?[A-Za-z0-9][A-Z]){3})[A-Za-z0-9_-]{20,})(?=/|$)",
+        RegexOptions.Compiled);
 
     /// <summary>
     /// Секреты в адресах: параметры после «?» (сеансы, ключи) и части пути, похожие на ключ доступа (личный адрес DoH
