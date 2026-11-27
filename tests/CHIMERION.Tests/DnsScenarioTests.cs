@@ -282,6 +282,25 @@ public class DnsScenarioTests
     }
 
     [Fact]
+    public async Task Disconnect_keeps_system_doh_entries_and_removes_only_added()
+    {
+        // Аудит DNS-01: встроенная запись Windows для адреса сервера остается, добавленная программой удаляется
+        using var sim = new NetSim(OneEthernet());
+        sim.Edit(s => s.doh.Add(new NetSim.Doh { addr = "203.0.113.10", template = "https://system.example/dns-query" }));
+        var server = new DnsServer { Name = "DoH-сервер", Primary = "203.0.113.10", Secondary = "203.0.113.11", DohUrl = "https://doh.example/dns-query" };
+        var (_, write) = NewLog();
+
+        await DnsSwitcher.ApplyAsync(server, new AppSettings(), write);
+        Assert.Contains(sim.Load().doh, d => d.addr == "203.0.113.11");
+        Assert.Equal(new[] { "203.0.113.11" }, DnsSwitcher.GetActive()!.DohAddedFor);
+
+        await DnsSwitcher.RestoreAsync(write);
+        var left = sim.Load().doh;
+        Assert.Contains(left, d => d.addr == "203.0.113.10" && d.template == "https://system.example/dns-query");
+        Assert.DoesNotContain(left, d => d.addr == "203.0.113.11");
+    }
+
+    [Fact]
     public async Task Connect_and_disconnect_return_dhcp()
     {
         using var sim = new NetSim(OneEthernet());

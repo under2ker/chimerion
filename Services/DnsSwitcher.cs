@@ -597,6 +597,10 @@ public static class DnsSwitcher
         var sb = new StringBuilder();
         sb.AppendLine("$ErrorActionPreference = 'Continue'");
         sb.AppendLine($"$ours = @({string.Join(",", ours.Select(Q))})");
+        // Системные записи DoH удаляем только те, что добавила программа (строка ADDED при подключении). Раньше удалялись
+        // все адреса из $ours, и вместе с ними встроенные записи Windows, например 1.1.1.1 (аудит DNS-01)
+        var dohOurs = (active?.DohAddedFor ?? new()).SelectMany(x => Ips(x)).Distinct().ToList();
+        sb.AppendLine($"$dohOurs = @({string.Join(",", dohOurs.Select(Q))})");
         // IPv6, выключенный на время подключения, включаем первым: иначе его DNS не вернуть
         var v6off = (active?.Ipv6Disabled ?? new()).Select(g => g.ToUpperInvariant()).Concat(Ipv6OffFromFile()).Distinct().ToList();
         sb.AppendLine($"$v6off = @({string.Join(",", v6off.Select(Q))})");
@@ -672,7 +676,7 @@ public static class DnsSwitcher
             # На Windows 10 без DoH (до сборки 19628) этой команды нет: без проверки отключение падало целиком,
             # запись о подключении оставалась, и сторож подключал снова
             if (Get-Command Remove-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {
-              foreach ($ip in $ours) { Remove-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue }
+              foreach ($ip in $dohOurs) { Remove-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue }
             }
             """);
         // Правила NRPT режима «Два DNS»: снимаем всегда, даже если запись о подключении потерялась
