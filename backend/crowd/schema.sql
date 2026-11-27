@@ -133,3 +133,14 @@ CREATE TABLE IF NOT EXISTS reporters (
   PRIMARY KEY (server, hour, k)
 );
 CREATE INDEX IF NOT EXISTS reporters_hour ON reporters (hour);
+
+-- Кто сообщал «сервис не открылся» (аудит CR-04): хэш адреса с солью, живет двое суток. Блокировка — от 2 разных
+CREATE TABLE IF NOT EXISTS site_reporters (
+  asn     INTEGER NOT NULL,
+  site    TEXT    NOT NULL,
+  bypass  INTEGER NOT NULL,
+  hour    INTEGER NOT NULL,
+  k       TEXT    NOT NULL,
+  PRIMARY KEY (asn, site, bypass, hour, k)
+);
+CREATE INDEX IF NOT EXISTS site_reporters_hour ON site_reporters (hour);

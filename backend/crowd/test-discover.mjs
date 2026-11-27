@@ -199,5 +199,33 @@ check(limitKeyOf("2001:db8::1") === "2001:db8:0:0::/64", "IPv6 с :: раскр�
   check(JSON.stringify(left) === JSON.stringify(["alive.test", "fresh.test"]), "без проверок и старше 8 дней удален; с проверками и свежий остались");
 }
 
+// Новая блокировка у провайдера только от разных отправителей (аудит CR-04)
+{
+  const env = { DB: makeDb(), SALT: "s" };
+  const h = Math.floor(Date.now() / 3600000);
+  const q = env.DB.sqlite;
+  // Неделю youtube.com открывался
+  q.prepare("INSERT INTO site_stats (hour, site, asn, bypass, ok, fail) VALUES (?, 'youtube.com', 64500, 0, 10, 0)").run(h - 48);
+  const fail = async (ip) => {
+    const req = new Request("https://crowd.test/v1/report", { method: "POST", headers: { "cf-connecting-ip": ip, "content-type": "application/json" },
+      body: JSON.stringify({ v: 1, app: "0.1.180", items: [], sites: [{ site: "youtube.com", ok: false }] }) });
+    req.cf = { asn: 64500, asOrganization: "AS64500" };
+    return (await worker.fetch(req, env, ctx)).status;
+  };
+  const incidentsNow = async () => {
+    const prevCaches = globalThis.caches;
+    globalThis.caches = { default: { match: async () => undefined, put: async () => {} } }; // без кэша: каждый раз из базы
+    try {
+      const r = await worker.fetch(new Request("https://crowd.test/v1/stats?asn=64500"), env, ctx);
+      return (await r.json()).incidents.map((x) => x.site);
+    } finally { globalThis.caches = prevCaches; }
+  };
+  for (let i = 0; i < 5; i++) await fail("203.0.113.50");
+  check(!(await incidentsNow()).includes("youtube.com"), "5 отчетов «не открылось» с одного адреса: блокировки нет");
+  check(!/203\.0\.113\.50/.test(JSON.stringify(q.prepare("SELECT * FROM site_reporters").all())), "адреса отправителей в site_reporters нет");
+  await fail("198.51.100.77");
+  check((await incidentsNow()).includes("youtube.com"), "второй отправитель: блокировка показана");
+}
+
 console.log(failures ? `FAILED: ${failures}` : "all ok");
 process.exit(failures ? 1 : 0);

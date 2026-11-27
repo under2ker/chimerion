@@ -33,10 +33,11 @@ export const SITES = new Set(["youtube.com", "discord.com", "t.me", "telegram.or
   "instagram.com", "x.com", "facebook.com", "twitch.tv", "linkedin.com"]);
 const MAX_SITES = 20;
 // Новая блокировка: за последние RECENT_HOURS не меньше MIN_RECENT проверок и FAIL_SHARE% неудачных, а в
-// какой-то из часов не открылось хотя бы у двух отчетов (один человек так блокировку не изобразит). До этого
+// какой-то из часов не открылось хотя бы у двух отчетов и всего у MIN_SENDERS разных отправителей: один адрес
+// присылает до 5 отчетов в час и без этого изображал блокировку сам (аудит CR-04). До этого
 // сервис открывался: за неделю не меньше MIN_BASE проверок и OK_SHARE% удачных. Давно закрытое (Instagram)
 // блокировкой не считается: о нем и так все знают
-const RECENT_HOURS = 6, MIN_RECENT = 4, FAIL_SHARE = 60, MIN_BASE = 5, OK_SHARE = 70, BASE_HOURS = 7 * 24;
+const RECENT_HOURS = 6, MIN_RECENT = 4, FAIL_SHARE = 60, MIN_BASE = 5, OK_SHARE = 70, BASE_HOURS = 7 * 24, MIN_SENDERS = 2;
 
 const json = (data, status = 200, extra = {}) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", ...extra } });
@@ -171,6 +172,13 @@ async function report(req, env) {
     const rp = env.DB.prepare("INSERT OR IGNORE INTO reporters (server, hour, k) VALUES (?, ?, ?)");
     await env.DB.batch([...ai].map((server) => rp.bind(server, hour, rk))).catch((e) => console.log("reporters", String(e)));
   }
+  // Кто сообщил «не открылось»: для правила «блокировка у разных отправителей» (аудит CR-04)
+  const failed = sites.filter((x) => !x.ok);
+  if (asn && failed.length && ip) {
+    const sk = await sha256(`site|${limitKeyOf(ip)}|${env.SALT || ""}`);
+    const sr = env.DB.prepare("INSERT OR IGNORE INTO site_reporters (asn, site, bypass, hour, k) VALUES (?, ?, ?, ?, ?)");
+    await env.DB.batch(failed.map((x) => sr.bind(asn, x.site, x.bypass ? 1 : 0, hour, sk))).catch((e) => console.log("site_reporters", String(e)));
+  }
   return json({ accepted: agg.size + sites.length, asn });
 }
 
@@ -195,7 +203,7 @@ export function pickIncidents(rows) {
   const out = [];
   for (const r of rows) {
     const recent = r.ok6 + r.fail6, base = r.okb + r.failb;
-    if (recent < MIN_RECENT || r.fail6 * 100 < FAIL_SHARE * recent || (r.maxfail6 || 0) < 2) continue;
+    if (recent < MIN_RECENT || r.fail6 * 100 < FAIL_SHARE * recent || (r.maxfail6 || 0) < 2 || (r.senders || 0) < MIN_SENDERS) continue;
     if (base < MIN_BASE || r.okb * 100 < OK_SHARE * base) continue;
     out.push({ site: r.site, bypass: !!r.bypass, fail: Math.round((100 * r.fail6) / recent), checks: recent, since: r.since });
   }
@@ -209,7 +217,9 @@ async function incidents(env, asn) {
             SUM(CASE WHEN hour >= ?2 THEN ok ELSE 0 END) AS ok6, SUM(CASE WHEN hour >= ?2 THEN fail ELSE 0 END) AS fail6,
             MAX(CASE WHEN hour >= ?2 THEN fail ELSE 0 END) AS maxfail6,
             SUM(CASE WHEN hour < ?2 THEN ok ELSE 0 END) AS okb, SUM(CASE WHEN hour < ?2 THEN fail ELSE 0 END) AS failb,
-            MIN(CASE WHEN hour >= ?2 AND fail > 0 THEN hour END) AS since
+            MIN(CASE WHEN hour >= ?2 AND fail > 0 THEN hour END) AS since,
+            (SELECT COUNT(DISTINCT r.k) FROM site_reporters r WHERE r.asn = ?3 AND r.site = site_stats.site
+               AND r.bypass = site_stats.bypass AND r.hour >= ?2) AS senders
      FROM site_stats WHERE asn = ?3 AND hour >= ?1 GROUP BY site, bypass`).bind(h - BASE_HOURS, h - RECENT_HOURS, asn).all();
   return pickIncidents(res.results || []);
 }
@@ -1102,5 +1112,6 @@ export default {
         .bind(Math.floor(Date.now() / 1000) - 90 * 86400, Math.floor(Date.now() / 1000) - 180 * 86400),
     ]);
     await env.DB.prepare("DELETE FROM reporters WHERE hour < ?").bind(h - 48).run().catch((e) => console.log("reporters", String(e)));
+    await env.DB.prepare("DELETE FROM site_reporters WHERE hour < ?").bind(h - 48).run().catch((e) => console.log("site_reporters", String(e)));
   },
 };
