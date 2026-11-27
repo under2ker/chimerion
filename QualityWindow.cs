@@ -181,6 +181,7 @@ internal sealed class QualityWindow
             ToolTip = s.DisplayName + " · " + Address(s), Background = Brushes.Transparent };
         if (s == _current) row.Ref(Border.BackgroundProperty, "AccentSoft");
         row.MouseLeftButtonUp += (_, _) => { _current = s; Render(); };
+        row.Keyboard(() => { _current = s; Render(); }, s.DisplayName);
         return row;
     }
 

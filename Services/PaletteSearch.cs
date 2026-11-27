@@ -38,9 +38,14 @@ public static class PaletteSearch
     {
         var tokens = Normalize(query).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0) return 0;
-        var title = Normalize(c.Title);
+        // В английском интерфейсе на экране перевод: ищем по нему, а русский оригинал остается в ключевых словах.
+        // Раньше «settings» или «servers» не находили ничего (аудит UI-01). По-русски Loc.T возвращает строку как есть
+        var shownTitle = Loc.En ? Loc.T(c.Title) : c.Title;
+        var title = Normalize(shownTitle);
         var titleWords = title.Split(' ');
-        var keys = Normalize(c.Keywords + " " + c.Group);
+        var keys = Normalize(Loc.En
+            ? $"{c.Keywords} {c.Group} {Loc.T(c.Keywords)} {Loc.T(c.Group)} {c.Title}"
+            : c.Keywords + " " + c.Group);
         var keyWords = keys.Split(' ');
         int total = 0;
         foreach (var t in tokens)

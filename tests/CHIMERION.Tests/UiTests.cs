@@ -36,6 +36,32 @@ public class UiTests
 [Collection("language")] // тесты переключают язык программы: не параллельно
 public class LocTests
 {
+    private static Dnex.Services.PaletteCommand PC(string title, string keywords, string group) =>
+        new(title, group, "zap", keywords, () => Task.CompletedTask);
+
+    [Fact]
+    public void English_interface_finds_commands_by_english_words()
+    {
+        // Аудит UI-01: по-английски Ctrl+K не находил ничего, потому что искал только по русским строкам
+        var all = new[]
+        {
+            PC("Включить защиту", "smart dns подключить отключить vpn переключатель", "Действие"),
+            PC("Настройки", "параметры опции", "Перейти"),
+            PC("Тема: светлая", "оформление цвет внешний вид dark light ночная", "Настройка"),
+        };
+        var lang = typeof(Dnex.Services.Loc).GetProperty("Lang")!;
+        lang.SetValue(null, "en");
+        try
+        {
+            Assert.Equal("Настройки", Dnex.Services.PaletteSearch.Rank("settings", all)[0].Title);
+            Assert.Equal("Включить защиту", Dnex.Services.PaletteSearch.Rank("protection", all)[0].Title);
+            Assert.Equal("Тема: светлая", Dnex.Services.PaletteSearch.Rank("theme", all)[0].Title);
+            Assert.Equal("Настройки", Dnex.Services.PaletteSearch.Rank("настройки", all)[0].Title); // русский запрос тоже работает
+        }
+        finally { lang.SetValue(null, "ru"); }
+        Assert.Empty(Dnex.Services.PaletteSearch.Rank("protection", all)); // по-русски поведение прежнее
+    }
+
     /// <summary>Английский без окон: свойство Lang ставится напрямую (SetLanguage создает элементы интерфейса).</summary>
     private static string En(string ru)
     {

@@ -378,6 +378,7 @@ internal sealed class SplitDnsWindow
         _pickRecBtn.Visibility = _selected == _recommended ? Visibility.Collapsed : Visibility.Visible;
         _pickRecBtn.Content = $"Выбрать рекомендуемый: {_recommended}";
         _presets.Children.Clear();
+        _cards.Clear();
         foreach (var p in SplitDns.Presets) _presets.Children.Add(Card(p.Name, p.Addresses.Length == 0 ? "адаптер не меняется" : string.Join(", ", p.Addresses) + (p.Doh != null ? " · DoH" : ""), p.Note, null));
         // Поля «Свой DNS» живут все время окна: при перерисовке отцепляем их от прежней карточки, иначе WPF бросает
         // «элемент уже является логическим дочерним для другого элемента» (так и было при щелчке по карточке)
@@ -430,12 +431,32 @@ internal sealed class SplitDnsWindow
         b.MouseLeftButtonUp += (_, e) =>
         {
             if (e.OriginalSource is DependencyObject d && FindParent<TextBox>(d) != null) return; // щелчок в поле ввода
-            if (_selected == name) return;
-            _selected = name;
-            RenderPresets();
-            UpdateRoutes();
+            Pick(name, focus: false);
         };
+        // С клавиатуры (аудит UI-03): Tab встает на карточку, Enter или пробел выбирают ее. Только когда фокус на самой
+        // карточке: пробел и Enter в полях «Свой DNS» остаются полям
+        b.Focusable = true;
+        System.Windows.Automation.AutomationProperties.SetName(b, name);
+        b.KeyDown += (_, e) =>
+        {
+            if (!ReferenceEquals(e.OriginalSource, b) || e.Key is not (System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)) return;
+            e.Handled = true;
+            Pick(name, focus: true);
+        };
+        _cards[name] = b;
         return b;
+    }
+
+    private readonly Dictionary<string, Border> _cards = new();
+
+    /// <summary>Выбор общего DNS. После перерисовки фокус возвращается на ту же карточку, если выбирали с клавиатуры.</summary>
+    private void Pick(string name, bool focus)
+    {
+        if (_selected == name) return;
+        _selected = name;
+        RenderPresets();
+        UpdateRoutes();
+        if (focus && _cards.TryGetValue(name, out var card)) card.Focus();
     }
 
     private static T? FindParent<T>(DependencyObject d) where T : DependencyObject

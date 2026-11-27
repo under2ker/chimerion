@@ -310,6 +310,7 @@ internal static class UpdateWindow
         p.Children.Add(new TextBlock { Text = text, FontSize = 12, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Accent"));
         p.Children.Add(new Icon { Kind = "external-link", Size = 12, Margin = new Thickness(5, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center }.Ref(Icon.ForegroundProperty, "Accent"));
         p.MouseLeftButtonUp += (_, _) => click();
+        p.Keyboard(click, text);
         return p;
     }
 

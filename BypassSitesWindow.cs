@@ -137,12 +137,14 @@ internal sealed class BypassSitesWindow
                 var section = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
                 var head = new DockPanel { Margin = new Thickness(2, 0, 4, 8) };
                 var all = new TextBlock { Text = "выбрать все", FontSize = 12, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center }.Ref(TextBlock.ForegroundProperty, "Accent");
-                all.MouseLeftButtonUp += (_, _) =>
+                void ToggleAll()
                 {
                     bool every = groups.All(g => _groups.Contains(g.Id));
                     foreach (var g in groups) { if (every) _groups.Remove(g.Id); else _groups.Add(g.Id); }
                     Refresh();
-                };
+                }
+                all.MouseLeftButtonUp += (_, _) => ToggleAll();
+                all.Keyboard(ToggleAll, cat.Key + ": выбрать все");
                 DockPanel.SetDock(all, Dock.Right); head.Children.Add(all);
                 var title = new StackPanel { Orientation = Orientation.Horizontal };
                 title.Children.Add(new TextBlock { Text = cat.Key, FontSize = 14, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });

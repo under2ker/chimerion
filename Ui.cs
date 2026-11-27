@@ -104,6 +104,25 @@ internal static class Ui
         Margin = new Thickness(2, first ? 4 : 20, 0, 8),
     }.Ref(TextBlock.ForegroundProperty, "Muted");
 
+    /// <summary>
+    /// Элемент, который раньше нажимался только мышью (надпись, рамка), становится доступен с клавиатуры: Tab встает на
+    /// него, Enter или пробел выполняют действие, экранный диктор читает название (аудит UI-03). Срабатывает, только когда
+    /// фокус на самом элементе: ввод в полях внутри него не перехватывается. Щелчок мышью работает как раньше.
+    /// </summary>
+    public static T Keyboard<T>(this T el, Action act, string? name = null) where T : FrameworkElement
+    {
+        el.Focusable = true;
+        el.SetResourceReference(FrameworkElement.FocusVisualStyleProperty, "FocusRingSmall"); // рамка фокуса, как у кнопок
+        if (!string.IsNullOrEmpty(name)) AutomationProperties.SetName(el, name);
+        el.KeyDown += (_, e) =>
+        {
+            if (!ReferenceEquals(e.OriginalSource, el) || e.Key is not (Key.Enter or Key.Space)) return;
+            e.Handled = true;
+            act();
+        };
+        return el;
+    }
+
     /// <summary>Свойство по ссылке на ресурс палитры: при смене цвета в настройках обновится само.</summary>
     public static T Ref<T>(this T el, DependencyProperty dp, string key) where T : FrameworkElement { el.SetResourceReference(dp, key); return el; }
 

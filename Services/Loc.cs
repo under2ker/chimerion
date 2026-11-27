@@ -35,7 +35,9 @@ public static class Loc
     /// <summary>Шаблоны, которые начинаются или кончаются знаком из Edge: их сверяют до обрезки краев.</summary>
     private static readonly HashSet<Regex> EdgeTemplates = new();
     private static readonly ConcurrentDictionary<string, string> Cache = new(StringComparer.Ordinal);
-    private static bool _loaded, _hooked;
+    private static volatile bool _loaded;
+    private static bool _hooked;
+    private static readonly object LoadLock = new();
     private static readonly Regex Cyr = new("[А-Яа-яЁё]", RegexOptions.Compiled);
     /// <summary>Разделители для перевода по частям, когда строка целиком в словаре не нашлась.</summary>
     private static readonly string[] Separators = { "\n", " · ", " › ", " → ", ". ", "; ", ": ", ", " };
@@ -57,10 +59,23 @@ public static class Loc
         if (ru.Length > 0 && (Array.IndexOf(Edge, ru[^1]) >= 0 || Array.IndexOf(Edge, ru[0]) >= 0)) EdgeTemplates.Add(Templates[^1].Re);
     }
 
+    /// <summary>
+    /// Словарь загружается один раз. Под замком, и «загружено» ставится только после заполнения: раньше второй поток
+    /// видел флаг раньше словаря, получал русский текст и запоминал его в кэше как перевод.
+    /// </summary>
     private static void Load()
     {
         if (_loaded) return;
-        _loaded = true;
+        lock (LoadLock)
+        {
+            if (_loaded) return;
+            try { LoadCore(); }
+            finally { _loaded = true; }
+        }
+    }
+
+    private static void LoadCore()
+    {
         try
         {
             using var s = typeof(Loc).Assembly.GetManifestResourceStream("i18n.en.json");

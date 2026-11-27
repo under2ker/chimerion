@@ -149,6 +149,7 @@ public partial class MainWindow
             row.MouseEnter += (_, _) => row.Background = B("Surface2");
             row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
             row.MouseLeftButtonUp += TopRow_Click;
+            if (p.Best != null) row.Keyboard(() => TopRow_Click(row, null!), $"{p.Title}: {p.Best.DisplayName}");
             // Тонкая линия между строками
             TopRows.Children.Add(i == 0 ? row : new Border
             {

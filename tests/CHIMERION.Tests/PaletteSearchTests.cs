@@ -3,6 +3,8 @@ using Dnex.Services;
 namespace Dnex.Tests;
 
 /// <summary>Поиск в палитре Ctrl+K: порядок, ключевые слова, ё, английская раскладка.</summary>
+// Общий набор с LocTests и другими тестами языка: они на время переключают язык программы на английский, а поиск от языка зависит
+[Collection("language")]
 public class PaletteSearchTests
 {
     private static PaletteCommand C(string title, string keywords = "", string group = "Действия") =>

@@ -86,6 +86,7 @@ internal static class ChimerionDnsWindow
         var news = new TextBlock { Text = $"Новости: {ChimerionDnsInfo.ChannelName}", FontSize = 12, Cursor = System.Windows.Input.Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, ToolTip = ChimerionDnsInfo.ChannelUrl }
             .Ref(TextBlock.ForegroundProperty, "Muted");
         news.MouseLeftButtonUp += (_, _) => AutoStart.OpenUrl(ChimerionDnsInfo.ChannelUrl);
+        news.Keyboard(() => AutoStart.OpenUrl(ChimerionDnsInfo.ChannelUrl), news.Text);
         var footer = Ui.Footer(news, close);
         footer.Margin = new Thickness(0, 14, 0, 0);
         DockPanel.SetDock(footer, Dock.Bottom);

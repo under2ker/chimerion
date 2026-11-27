@@ -260,6 +260,7 @@ public partial class MainWindow
                     var why = new TextBlock { Text = ShortReason(svc.Note) + " · подробнее", FontSize = 12, Foreground = B("Warn"), Margin = new Thickness(0, 4, 0, 0),
                                               TextTrimming = TextTrimming.CharacterEllipsis, Cursor = System.Windows.Input.Cursors.Hand, ToolTip = svc.Note ?? "Проверить по шагам, почему не открывается" };
                     why.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenHelp(HelpWindow.Tab.NotOpening); };
+                    why.Keyboard(() => OpenHelp(HelpWindow.Tab.NotOpening), svc.Name + ": почему не открывается");
                     sp.Children.Add(why);
                 }
                 geo.Margin = new Thickness(0, 8, 0, 0);
@@ -283,6 +284,7 @@ public partial class MainWindow
                 };
                 Ui.SetTextWithIcon(toggle, $"Серверы ({hostCount})", "chevron-down", size: 12);
                 toggle.MouseLeftButtonUp += ToggleHosts_Click;
+                toggle.Keyboard(() => ToggleHosts_Click(toggle, null!), $"{svc.Name}: серверы ({hostCount})");
                 sp.Children.Add(toggle);
             }
             card.Child = sp;

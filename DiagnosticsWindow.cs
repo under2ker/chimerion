@@ -278,12 +278,14 @@ internal sealed class DiagnosticsWindow
                 .Ref(TextBlock.ForegroundProperty, "Text");
             var toggle = new TextBlock { Text = "Подробнее", FontSize = 12.5, Margin = new Thickness(0, 4, 0, 0), Cursor = System.Windows.Input.Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Left }
                 .Ref(TextBlock.ForegroundProperty, "Accent");
-            toggle.MouseLeftButtonUp += (_, _) =>
+            void Flip()
             {
                 bool open = more.Visibility != Visibility.Visible;
                 more.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
                 toggle.Text = open ? "Скрыть подробности" : "Подробнее";
-            };
+            }
+            toggle.MouseLeftButtonUp += (_, _) => Flip();
+            toggle.Keyboard(Flip, "Подробнее");
             text.Children.Add(toggle);
             text.Children.Add(more);
         }

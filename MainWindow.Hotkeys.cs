@@ -52,7 +52,7 @@ public partial class MainWindow
             await ToggleProtectionAsync();
             // Окна на экране нет: итог показываем уведомлением Windows, иначе нажатие осталось бы без ответа
             if (!IsVisible || WindowState == System.Windows.WindowState.Minimized || !IsActive)
-                Balloon(2500, "CHIMERION", DnsSwitcher.GetActive() != null ? "Защита включена" : "Защита выключена", System.Windows.Forms.ToolTipIcon.Info);
+                Balloon(2500, "CHIMERION", Loc.T(DnsSwitcher.GetActive() != null ? "Защита включена" : "Защита выключена"), System.Windows.Forms.ToolTipIcon.Info);
         }
         catch (Exception ex) { Log("Сочетание клавиш: " + ex.Message); }
     }
